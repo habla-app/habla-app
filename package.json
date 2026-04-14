@@ -1,0 +1,24 @@
+{
+  "name": "habla-app",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Habla! - Torneos de predicciones deportivas para Peru",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "clean": "turbo run clean",
+    "db:migrate": "pnpm --filter @habla/db db:migrate",
+    "db:seed": "pnpm --filter @habla/db db:seed",
+    "db:studio": "pnpm --filter @habla/db db:studio",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:test": "docker-compose -f docker-compose.test.yml up -d"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.4"
+}

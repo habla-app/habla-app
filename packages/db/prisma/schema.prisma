@@ -1,0 +1,194 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// MODELOS PRINCIPALES — Habla! App
+// ==========================================
+
+model Usuario {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  nombre       String
+  telefono     String?
+  fechaNac     DateTime?
+  verificado   Boolean   @default(false)
+  rol          Rol       @default(JUGADOR)
+  balanceLukas Int       @default(0) // en centavos de Lukas
+  creadoEn     DateTime  @default(now())
+
+  tickets       Ticket[]
+  transacciones TransaccionLukas[]
+  canjes        Canje[]
+
+  @@map("usuarios")
+}
+
+enum Rol {
+  JUGADOR
+  ADMIN
+}
+
+model Partido {
+  id              String        @id @default(cuid())
+  externalId      String        @unique // ID de API-Football
+  liga            String
+  equipoLocal     String
+  equipoVisita    String
+  fechaInicio     DateTime
+  estado          EstadoPartido @default(PROGRAMADO)
+  golesLocal      Int?
+  golesVisita     Int?
+  btts            Boolean? // Ambos anotaron
+  mas25Goles      Boolean? // Mas de 2.5 goles
+  huboTarjetaRoja Boolean?
+  creadoEn        DateTime      @default(now())
+
+  torneos Torneo[]
+
+  @@map("partidos")
+}
+
+enum EstadoPartido {
+  PROGRAMADO
+  EN_VIVO
+  FINALIZADO
+  CANCELADO
+}
+
+model Torneo {
+  id             String       @id @default(cuid())
+  nombre         String
+  tipo           TipoTorneo
+  entradaLukas   Int // Costo en centavos de Lukas
+  partidoId      String
+  partido        Partido      @relation(fields: [partidoId], references: [id])
+  estado         EstadoTorneo @default(ABIERTO)
+  totalInscritos Int          @default(0)
+  pozoBruto      Int          @default(0) // Suma de todas las entradas
+  pozoNeto       Int          @default(0) // Pozo bruto - rake
+  rake           Int          @default(0) // 12% del pozo bruto
+  cierreAt       DateTime // 5 min antes del partido
+  distribPremios Json? // Snapshot de distribucion al cerrar
+  creadoEn       DateTime     @default(now())
+
+  tickets Ticket[]
+
+  @@map("torneos")
+}
+
+enum TipoTorneo {
+  EXPRESS
+  ESTANDAR
+  PREMIUM
+  GRAN_TORNEO
+}
+
+enum EstadoTorneo {
+  ABIERTO
+  CERRADO
+  EN_JUEGO
+  FINALIZADO
+  CANCELADO
+}
+
+model Ticket {
+  id                 String        @id @default(cuid())
+  usuarioId          String
+  usuario            Usuario       @relation(fields: [usuarioId], references: [id])
+  torneoId           String
+  torneo             Torneo        @relation(fields: [torneoId], references: [id])
+  // Las 5 predicciones
+  predResultado      ResultadoPred // LOCAL | EMPATE | VISITA
+  predBtts           Boolean
+  predMas25          Boolean
+  predTarjetaRoja    Boolean
+  predMarcadorLocal  Int
+  predMarcadorVisita Int
+  // Puntuacion
+  puntosTotal        Int           @default(0)
+  puntosResultado    Int           @default(0)
+  puntosBtts         Int           @default(0)
+  puntosMas25        Int           @default(0)
+  puntosTarjeta      Int           @default(0)
+  puntosMarcador     Int           @default(0)
+  // Premio
+  posicionFinal      Int?
+  premioLukas        Int           @default(0)
+  creadoEn           DateTime      @default(now())
+
+  // Un usuario no puede tener 2 tickets identicos en el mismo torneo
+  @@unique([usuarioId, torneoId, predResultado, predBtts, predMas25, predTarjetaRoja, predMarcadorLocal, predMarcadorVisita])
+  @@map("tickets")
+}
+
+enum ResultadoPred {
+  LOCAL
+  EMPATE
+  VISITA
+}
+
+model TransaccionLukas {
+  id          String          @id @default(cuid())
+  usuarioId   String
+  usuario     Usuario         @relation(fields: [usuarioId], references: [id])
+  tipo        TipoTransaccion
+  monto       Int // Positivo = ingreso, Negativo = egreso
+  descripcion String
+  refId       String? // ID de torneo, pago, canje, etc.
+  venceEn     DateTime? // Para Lukas comprados (12 meses)
+  creadoEn    DateTime        @default(now())
+
+  @@map("transacciones_lukas")
+}
+
+enum TipoTransaccion {
+  COMPRA // Usuario compra Lukas con soles
+  ENTRADA_TORNEO // Usuario paga entrada
+  PREMIO_TORNEO // Usuario recibe premio
+  CANJE // Usuario canjea en tienda
+  BONUS // Lukas gratis (referidos, promociones)
+  VENCIMIENTO // Lukas expirados
+}
+
+model Premio {
+  id          String   @id @default(cuid())
+  nombre      String
+  descripcion String
+  costeLukas  Int // Precio en Lukas
+  stock       Int      @default(0)
+  imagen      String?
+  activo      Boolean  @default(true)
+  creadoEn    DateTime @default(now())
+
+  canjes Canje[]
+
+  @@map("premios")
+}
+
+model Canje {
+  id         String      @id @default(cuid())
+  usuarioId  String
+  usuario    Usuario     @relation(fields: [usuarioId], references: [id])
+  premioId   String
+  premio     Premio      @relation(fields: [premioId], references: [id])
+  lukasUsados Int
+  estado     EstadoCanje @default(PENDIENTE)
+  direccion  Json? // Direccion de envio si aplica
+  creadoEn   DateTime    @default(now())
+
+  @@map("canjes")
+}
+
+enum EstadoCanje {
+  PENDIENTE
+  PROCESANDO
+  ENVIADO
+  ENTREGADO
+  CANCELADO
+}
