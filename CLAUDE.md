@@ -67,7 +67,7 @@ WebApp de torneos de predicciones deportivas orientada al mercado peruano. Los u
 | Cache / Tiempo real | Redis 7 | Ranking en vivo, sesiones |
 | ORM | Prisma | Schema, migraciones, type-safety |
 | WebSockets | Socket.io (sobre Fastify) | Ranking actualizado en vivo |
-| Auth | NextAuth.js v5 | Google OAuth + magic link |
+| Auth | NextAuth.js v5 (5.0.0-beta.30) | Google OAuth + magic link — v5 aún sin release estable |
 | Pagos | Culqi + Yape API | Pasarelas peruanas |
 | API deportiva | API-Football (RapidAPI) | Eventos en tiempo real, polling 30s |
 | Email | Resend | Email transaccional |
@@ -77,7 +77,8 @@ WebApp de torneos de predicciones deportivas orientada al mercado peruano. Los u
 | Monitoreo errores | Sentry | Frontend + Backend |
 | Monitoreo infra | Grafana + Prometheus | Dashboards de uso |
 | Contenedores dev | Docker + Docker Compose | Dev == Prod |
-| Gestión de paquetes | pnpm + workspaces | Monorepo |
+| Gestión de paquetes | pnpm 10.x + workspaces | Monorepo |
+| Orquestador | Turborepo (turbo) | Build/test/lint orchestration |
 | CI/CD | GitHub Actions | Tests + deploy automático |
 
 ---
@@ -95,8 +96,9 @@ habla-app/
 ├── docker-compose.test.yml      ← BD aislada para tests
 ├── .env.example                 ← Variables de entorno documentadas
 ├── .gitignore
-├── package.json                 ← Root: scripts globales
-├── pnpm-workspace.yaml          ← Define los workspaces
+├── package.json                 ← Root: scripts globales + turbo devDependency
+├── pnpm-lock.yaml               ← Lockfile de dependencias (commiteado)
+├── pnpm-workspace.yaml          ← Define los workspaces + onlyBuiltDependencies
 ├── turbo.json                   ← Turborepo: build/test/lint orchestration
 │
 ├── apps/
@@ -262,6 +264,8 @@ model Usuario {
   tickets       Ticket[]
   transacciones TransaccionLukas[]
   canjes        Canje[]
+
+  @@map("usuarios")
 }
 
 enum Rol { JUGADOR ADMIN }
@@ -282,6 +286,8 @@ model Partido {
   huboTarjetaRoja Boolean?
   torneos        Torneo[]
   creadoEn       DateTime @default(now())
+
+  @@map("partidos")
 }
 
 enum EstadoPartido { PROGRAMADO EN_VIVO FINALIZADO CANCELADO }
@@ -302,6 +308,8 @@ model Torneo {
   distribPremios Json?         // Snapshot de distribución al cerrar
   tickets        Ticket[]
   creadoEn       DateTime      @default(now())
+
+  @@map("torneos")
 }
 
 enum TipoTorneo { EXPRESS ESTANDAR PREMIUM GRAN_TORNEO }
@@ -333,6 +341,7 @@ model Ticket {
   creadoEn        DateTime @default(now())
   
   @@unique([usuarioId, torneoId, predResultado, predBtts, predMas25, predTarjetaRoja, predMarcadorLocal, predMarcadorVisita])
+  @@map("tickets")
 }
 
 enum ResultadoPred { LOCAL EMPATE VISITA }
@@ -347,6 +356,8 @@ model TransaccionLukas {
   refId       String?         // ID de torneo, pago, canje, etc.
   venceEn     DateTime?       // Para Lukas comprados (12 meses)
   creadoEn    DateTime        @default(now())
+
+  @@map("transacciones_lukas")
 }
 
 enum TipoTransaccion {
@@ -368,6 +379,8 @@ model Premio {
   activo      Boolean  @default(true)
   canjes      Canje[]
   creadoEn    DateTime @default(now())
+
+  @@map("premios")
 }
 
 model Canje {
@@ -380,6 +393,8 @@ model Canje {
   estado     EstadoCanje @default(PENDIENTE)
   direccion  Json?       // Dirección de envío si aplica
   creadoEn   DateTime    @default(now())
+
+  @@map("canjes")
 }
 
 enum EstadoCanje { PENDIENTE PROCESANDO ENVIADO ENTREGADO CANCELADO }
@@ -528,7 +543,13 @@ pnpm install
 docker-compose up -d
 
 # Generar cliente Prisma y correr migraciones
+# NOTA: Prisma busca DATABASE_URL. Si se ejecuta desde packages/db/,
+# usar: export DATABASE_URL="postgresql://habla:habla@localhost:5432/habladb"
+# antes de correr el comando, o ejecutar desde la raíz del monorepo.
 pnpm --filter @habla/db db:migrate
+
+# Generar cliente Prisma (necesario después de cambios al schema)
+cd packages/db && export DATABASE_URL="postgresql://habla:habla@localhost:5432/habladb" && pnpm exec prisma generate
 
 # Seed de datos iniciales
 pnpm --filter @habla/db db:seed
@@ -585,17 +606,17 @@ pnpm lint
 
 ## 12. PLAN DE SPRINTS
 
-| Sprint | Fechas | Entregable principal |
-|--------|--------|---------------------|
-| Sprint 0 | 11-17 Abr | Setup monorepo, CI/CD, Docker, schema BD, wireframes, contratos API-Football y Culqi |
-| Sprint 1 | 18-24 Abr | Auth (Google OAuth + magic link), perfil, landing page + lista de espera |
-| Sprint 2 | 25 Abr-1 May | Módulo Lukas: compra Culqi, balance, historial, webhook confirmación |
-| Sprint 3 | 2-8 May | Torneos: crear desde admin, listar, inscribir, cierre automático |
-| Sprint 4 | 9-15 May | Tickets: formulario 5 predicciones, validaciones, múltiples tickets, confirmación |
-| Sprint 5 | 16-22 May | API-Football: eventos tiempo real, motor de puntuación, ranking vía WebSocket |
-| Sprint 6 | 23-29 May | Cierre torneos, distribución premios, tienda básica, email notifications |
-| Sprint 7 | 30 May-5 Jun | Admin panel completo, QA, test de carga (500 usuarios simultáneos), beta |
-| Sprint 8 🚀 | 6-10 Jun | Go Live a producción, monitoreo 24/7, soporte activo |
+| Sprint | Fechas | Entregable principal | Estado |
+|--------|--------|---------------------|--------|
+| Sprint 0 | 11-17 Abr | Setup monorepo, CI/CD, Docker, schema BD, wireframes, contratos API-Football y Culqi | ✅ Completado 14 Abr |
+| Sprint 1 | 18-24 Abr | Auth (Google OAuth + magic link), perfil, landing page + lista de espera | Pendiente |
+| Sprint 2 | 25 Abr-1 May | Módulo Lukas: compra Culqi, balance, historial, webhook confirmación | Pendiente |
+| Sprint 3 | 2-8 May | Torneos: crear desde admin, listar, inscribir, cierre automático | Pendiente |
+| Sprint 4 | 9-15 May | Tickets: formulario 5 predicciones, validaciones, múltiples tickets, confirmación | Pendiente |
+| Sprint 5 | 16-22 May | API-Football: eventos tiempo real, motor de puntuación, ranking vía WebSocket | Pendiente |
+| Sprint 6 | 23-29 May | Cierre torneos, distribución premios, tienda básica, email notifications | Pendiente |
+| Sprint 7 | 30 May-5 Jun | Admin panel completo, QA, test de carga (500 usuarios simultáneos), beta | Pendiente |
+| Sprint 8 🚀 | 6-10 Jun | Go Live a producción, monitoreo 24/7, soporte activo | Pendiente |
 
 ---
 
@@ -624,3 +645,34 @@ pnpm lint
 - **Riesgo de negocio principal:** pasivo de Lukas acumulados sin canjear. Vencimiento a 12 meses + provisión del 25%.
 - **KPI más importante en lanzamiento:** inscriptos por torneo. El pozo grande es lo que hace atractivo el juego.
 - **Breakeven proyectado:** Q4 2027 (~18 meses post-lanzamiento).
+
+---
+
+## 15. ESTADO DEL SPRINT 0 (completado 14 Abr 2026)
+
+### Lo que se configuró
+- Monorepo con pnpm 10.33.0 + Turborepo 2.x
+- CI/CD con GitHub Actions (deploy.yml en push a main, ci.yml en PRs)
+- Docker Compose: PostgreSQL 16 + Redis 7 levantados y verificados
+- Prisma: migración inicial `20260414021221_init` aplicada — 7 tablas creadas
+- Estructura completa de carpetas y archivos placeholder con TODOs por sprint
+- SSH configurado para push a GitHub
+
+### Versiones instaladas (verificadas)
+- Node.js: v24.14.1
+- pnpm: 10.33.0 (packageManager en package.json)
+- Turbo: 2.9.6
+- Prisma: 5.22.0
+- next-auth: 5.0.0-beta.30 (v5 aún sin release estable)
+- Docker: 29.4.0
+
+### Decisiones técnicas tomadas
+- **pnpm 10.x en vez de 9.x:** La versión 9.15.4 originalmente planeada no era compatible con la instalación disponible. Se actualizó a 10.33.0 sin impacto funcional.
+- **next-auth beta:** NextAuth v5 no tiene versión estable publicada. Se usa `5.0.0-beta.30` que es la más reciente y funcional.
+- **CI simplificado:** Los pasos de `build`, `test` y `lint` están comentados en los workflows porque aún no hay código compilable. Se habilitarán progresivamente en los sprints siguientes.
+- **onlyBuiltDependencies:** Configurado en `pnpm-workspace.yaml` para permitir build scripts de Prisma, esbuild y unrs-resolver.
+
+### Qué falta del Sprint 0 (pendiente)
+- Wireframes de las pantallas principales
+- Contrato firmado con API-Football (RapidAPI)
+- Contrato firmado con Culqi (pasarela de pagos)
