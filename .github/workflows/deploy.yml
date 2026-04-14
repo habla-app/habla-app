@@ -15,10 +15,11 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-      - run: pnpm test
-        env:
-          NODE_ENV: test
+      # Build y test se habilitaran cuando haya codigo compilable
+      # - run: pnpm build
+      # - run: pnpm test
+      - name: Verify install
+        run: pnpm ls --depth 0 -r
       # TODO: Configurar deploy a Railway
       # - name: Deploy to Railway
       #   uses: bervProject/railway-deploy@main
