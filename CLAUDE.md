@@ -69,7 +69,7 @@ WebApp de torneos de predicciones deportivas orientada al mercado peruano. Los u
 | WebSockets | Socket.io (sobre Fastify) | Ranking actualizado en vivo |
 | Auth | NextAuth.js v5 (5.0.0-beta.30) | Google OAuth + magic link — v5 aún sin release estable |
 | Pagos | Culqi + Yape API | Pasarelas peruanas |
-| API deportiva | API-Football (RapidAPI) | Eventos en tiempo real, polling 30s |
+| API deportiva | api-football.com (directo) | Cuenta hablaplay@gmail.com, plan básico. Header: x-apisports-key |
 | Email | Resend | Email transaccional |
 | SMS/Notif. | Twilio | Alertas de torneo |
 | Hosting | Railway | Auto-scaling, deploy desde GitHub |
@@ -87,160 +87,111 @@ WebApp de torneos de predicciones deportivas orientada al mercado peruano. Los u
 
 ```
 habla-app/
-├── CLAUDE.md                    ← Este archivo
+├── CLAUDE.md
 ├── .github/
 │   └── workflows/
-│       ├── ci.yml               ← Tests en cada PR
-│       └── deploy.yml           ← Deploy a Railway en merge a main
-├── docker-compose.yml           ← PostgreSQL + Redis para desarrollo
-├── docker-compose.test.yml      ← BD aislada para tests
-├── .env.example                 ← Variables de entorno documentadas
+│       ├── ci.yml
+│       └── deploy.yml
+├── docker-compose.yml
+├── docker-compose.test.yml
+├── .env.example
 ├── .gitignore
-├── package.json                 ← Root: scripts globales + turbo devDependency
-├── pnpm-lock.yaml               ← Lockfile de dependencias (commiteado)
-├── pnpm-workspace.yaml          ← Define los workspaces + onlyBuiltDependencies
-├── turbo.json                   ← Turborepo: build/test/lint orchestration
+├── package.json
+├── pnpm-lock.yaml
+├── pnpm-workspace.yaml
+├── turbo.json
 │
 ├── apps/
 │   ├── web/                     ← Next.js 14 (Frontend)
-│   │   ├── app/                 ← App Router
-│   │   │   ├── (auth)/          ← Rutas de login/registro
-│   │   │   ├── (main)/          ← Layout principal autenticado
-│   │   │   │   ├── torneos/     ← Lista y detalle de torneos
-│   │   │   │   ├── torneo/[id]/ ← Inscripción + ticket + ranking en vivo
-│   │   │   │   ├── wallet/      ← Balance Lukas, historial, comprar
-│   │   │   │   ├── tienda/      ← Catálogo de premios, canjear
-│   │   │   │   └── perfil/      ← Datos de usuario, estadísticas
-│   │   │   ├── admin/           ← Panel de administración
-│   │   │   │   ├── torneos/     ← Crear/gestionar torneos
-│   │   │   │   ├── usuarios/    ← Gestión de usuarios
-│   │   │   │   └── reportes/    ← Métricas y reportes
-│   │   │   ├── api/             ← API Routes de Next.js (auth callbacks, webhooks)
-│   │   │   │   ├── auth/        ← NextAuth handlers
-│   │   │   │   └── webhooks/    ← Culqi webhook (confirmación de pago)
+│   │   ├── app/
+│   │   │   ├── (auth)/          ← login, registro (rutas públicas)
+│   │   │   ├── (main)/          ← layout autenticado
+│   │   │   │   ├── torneos/     ← /torneos — lista pública (ver sin login)
+│   │   │   │   ├── torneo/[id]/ ← /torneo/:id — detalle + combinada (login para inscribir)
+│   │   │   │   ├── wallet/      ← /wallet — requiere login
+│   │   │   │   ├── tienda/      ← /tienda — ver sin login, canjear requiere login
+│   │   │   │   └── perfil/      ← /perfil — requiere login
+│   │   │   ├── admin/           ← rutas de admin (rol ADMIN)
+│   │   │   ├── api/
+│   │   │   │   ├── auth/[...nextauth]/route.ts
+│   │   │   │   └── webhooks/culqi/route.ts
 │   │   │   ├── layout.tsx
-│   │   │   └── page.tsx         ← Landing page pública
+│   │   │   └── page.tsx         ← Landing pública → redirige a /torneos
 │   │   ├── components/
-│   │   │   ├── ui/              ← Componentes base (Button, Input, Modal...)
-│   │   │   ├── torneo/          ← TorneoCard, TorneoList, RankingEnVivo...
-│   │   │   ├── ticket/          ← FormularioPredicciones, TicketResumen...
-│   │   │   ├── wallet/          ← BalanceLukas, HistorialTransacciones...
-│   │   │   ├── tienda/          ← PremioCard, ModalCanje...
-│   │   │   └── layout/          ← Header, Footer, Nav, Sidebar...
+│   │   │   ├── ui/
+│   │   │   ├── torneo/
+│   │   │   ├── ticket/          ← FormularioCombinadaPrediccion (5 predicciones)
+│   │   │   ├── wallet/
+│   │   │   ├── tienda/
+│   │   │   └── layout/
 │   │   ├── lib/
-│   │   │   ├── auth.ts          ← Configuración NextAuth
-│   │   │   ├── api-client.ts    ← Cliente HTTP para llamar al backend
-│   │   │   └── socket-client.ts ← Cliente WebSocket para ranking en vivo
-│   │   ├── hooks/               ← Custom hooks React
-│   │   ├── stores/              ← Estado global (Zustand)
-│   │   ├── public/
-│   │   │   └── manifest.json    ← PWA manifest
+│   │   │   ├── auth.ts
+│   │   │   ├── api-client.ts
+│   │   │   └── socket-client.ts
+│   │   ├── hooks/
+│   │   ├── stores/
+│   │   ├── public/manifest.json
 │   │   ├── next.config.js
 │   │   ├── tailwind.config.js
 │   │   └── package.json
 │   │
 │   └── api/                     ← Node.js + Fastify (Backend)
 │       ├── src/
-│       │   ├── server.ts        ← Entry point, Fastify instance
+│       │   ├── server.ts
 │       │   ├── config/
-│       │   │   ├── env.ts       ← Validación de variables de entorno (zod)
-│       │   │   └── constants.ts ← RAKE = 0.12, MAX_TICKETS = 10, etc.
+│       │   │   ├── env.ts
+│       │   │   └── constants.ts
 │       │   ├── plugins/
-│       │   │   ├── auth.ts      ← JWT validation plugin
+│       │   │   ├── auth.ts
 │       │   │   ├── cors.ts
-│       │   │   ├── rate-limit.ts ← 60 req/min por IP
-│       │   │   ├── redis.ts     ← Plugin Redis
-│       │   │   └── socket.ts    ← Socket.io plugin
-│       │   ├── modules/         ← Un módulo por dominio de negocio
+│       │   │   ├── rate-limit.ts
+│       │   │   ├── redis.ts
+│       │   │   └── socket.ts
+│       │   ├── modules/
 │       │   │   ├── auth/
-│       │   │   │   ├── auth.routes.ts
-│       │   │   │   ├── auth.service.ts
-│       │   │   │   └── auth.schema.ts   ← Zod schemas
 │       │   │   ├── usuarios/
-│       │   │   │   ├── usuarios.routes.ts
-│       │   │   │   ├── usuarios.service.ts
-│       │   │   │   └── usuarios.schema.ts
-│       │   │   ├── lukas/               ← Wallet / moneda virtual
-│       │   │   │   ├── lukas.routes.ts
-│       │   │   │   ├── lukas.service.ts ← Lógica atómica de transacciones
-│       │   │   │   └── lukas.schema.ts
+│       │   │   ├── lukas/
 │       │   │   ├── torneos/
-│       │   │   │   ├── torneos.routes.ts
-│       │   │   │   ├── torneos.service.ts
-│       │   │   │   └── torneos.schema.ts
-│       │   │   ├── tickets/             ← Predicciones de cada usuario
-│       │   │   │   ├── tickets.routes.ts
-│       │   │   │   ├── tickets.service.ts
-│       │   │   │   └── tickets.schema.ts
-│       │   │   ├── puntuacion/          ← Motor de puntos
-│       │   │   │   ├── puntuacion.service.ts ← Cálculo de puntos por evento
-│       │   │   │   └── puntuacion.types.ts
+│       │   │   ├── tickets/
+│       │   │   ├── puntuacion/
 │       │   │   ├── ranking/
-│       │   │   │   ├── ranking.service.ts    ← Lee/escribe en Redis
-│       │   │   │   └── ranking.socket.ts     ← Emite via WebSocket
-│       │   │   ├── partidos/            ← Integración API-Football
-│       │   │   │   ├── partidos.service.ts
-│       │   │   │   ├── partidos.poller.ts    ← Polling cada 30s
-│       │   │   │   └── partidos.mapper.ts    ← Normaliza respuesta API-Football
-│       │   │   ├── premios/             ← Tienda de premios y canje
-│       │   │   │   ├── premios.routes.ts
-│       │   │   │   ├── premios.service.ts
-│       │   │   │   └── premios.schema.ts
-│       │   │   ├── pagos/               ← Integración Culqi/Yape
-│       │   │   │   ├── pagos.routes.ts
-│       │   │   │   ├── pagos.service.ts
-│       │   │   │   ├── culqi.client.ts
-│       │   │   │   └── pagos.webhook.ts ← Manejo de webhooks de Culqi
+│       │   │   ├── partidos/
+│       │   │   ├── premios/
+│       │   │   ├── pagos/
 │       │   │   └── admin/
-│       │   │       ├── admin.routes.ts
-│       │   │       └── admin.service.ts
-│       │   ├── jobs/                    ← Cron jobs / tareas programadas
-│       │   │   ├── cerrar-torneos.job.ts    ← Cierra inscripciones 5 min antes
-│       │   │   ├── distribuir-premios.job.ts ← Al finalizar el partido
-│       │   │   └── vencer-lukas.job.ts      ← Vencimiento de Lukas a 12 meses
+│       │   ├── jobs/
+│       │   │   ├── cerrar-torneos.job.ts
+│       │   │   ├── distribuir-premios.job.ts
+│       │   │   └── vencer-lukas.job.ts
 │       │   └── shared/
-│       │       ├── errors.ts        ← Custom error classes
-│       │       ├── logger.ts        ← Pino logger
-│       │       └── redis-keys.ts    ← Constantes de keys de Redis
+│       │       ├── errors.ts
+│       │       ├── logger.ts
+│       │       └── redis-keys.ts
 │       ├── Dockerfile
 │       └── package.json
 │
 ├── packages/
-│   ├── db/                      ← Prisma: schema + migraciones + client
+│   ├── db/
 │   │   ├── prisma/
-│   │   │   ├── schema.prisma    ← Fuente de verdad del modelo de datos
-│   │   │   ├── migrations/      ← Migraciones generadas por Prisma
-│   │   │   └── seed.ts          ← Datos iniciales (admin user, premios demo)
-│   │   ├── src/
-│   │   │   └── index.ts         ← Exporta PrismaClient singleton
+│   │   │   ├── schema.prisma
+│   │   │   ├── migrations/
+│   │   │   └── seed.ts
+│   │   ├── src/index.ts
 │   │   └── package.json
-│   │
-│   ├── shared/                  ← Tipos y utilidades compartidas
+│   ├── shared/
 │   │   ├── src/
 │   │   │   ├── types/
-│   │   │   │   ├── torneo.types.ts
-│   │   │   │   ├── ticket.types.ts
-│   │   │   │   ├── lukas.types.ts
-│   │   │   │   └── api.types.ts     ← Request/Response shapes compartidos
 │   │   │   ├── constants/
-│   │   │   │   ├── puntuacion.ts    ← PUNTOS_RESULTADO=3, PUNTOS_BTTS=2, etc.
-│   │   │   │   └── torneos.ts       ← Estados, tipos de torneo, rake
 │   │   │   └── utils/
-│   │   │       ├── lukas.utils.ts   ← Formateo de moneda Lukas
-│   │   │       └── fecha.utils.ts   ← Helpers de fecha para torneos
 │   │   └── package.json
-│   │
-│   └── ui/                      ← Design system compartido (futuro)
-│       ├── src/
-│       │   └── index.ts
-│       └── package.json
+│   └── ui/
 │
-└── docs/                        ← Documentación técnica
-    ├── arquitectura.md          ← Diagrama de arquitectura
-    ├── api.md                   ← Endpoints documentados
-    ├── modelo-datos.md          ← Explicación del schema
-    ├── ranking-en-vivo.md       ← Flujo técnico del ranking
-    └── deploy.md                ← Guía de deploy a Railway
+└── docs/
+    ├── arquitectura.md
+    ├── api.md
+    ├── modelo-datos.md
+    ├── ranking-en-vivo.md
+    └── deploy.md
 ```
 
 ---
@@ -258,7 +209,7 @@ model Usuario {
   fechaNac      DateTime?
   verificado    Boolean  @default(false)
   rol           Rol      @default(JUGADOR)
-  balanceLukas  Int      @default(0)       // en centavos de Lukas
+  balanceLukas  Int      @default(0)       // en unidades enteras de Lukas (1 Luka = S/1)
   creadoEn      DateTime @default(now())
   
   tickets       Ticket[]
@@ -271,21 +222,20 @@ model Usuario {
 enum Rol { JUGADOR ADMIN }
 
 model Partido {
-  id             String   @id @default(cuid())
-  externalId     String   @unique  // ID de API-Football
-  liga           String
-  equipoLocal    String
-  equipoVisita   String
-  fechaInicio    DateTime
-  estado         EstadoPartido @default(PROGRAMADO)
-  // Resultado final (se llena al terminar)
-  golesLocal     Int?
-  golesVisita    Int?
-  btts           Boolean?      // Ambos anotaron
-  mas25Goles     Boolean?      // Más de 2.5 goles
+  id              String        @id @default(cuid())
+  externalId      String        @unique  // ID de api-football.com
+  liga            String
+  equipoLocal     String
+  equipoVisita    String
+  fechaInicio     DateTime
+  estado          EstadoPartido @default(PROGRAMADO)
+  golesLocal      Int?
+  golesVisita     Int?
+  btts            Boolean?
+  mas25Goles      Boolean?
   huboTarjetaRoja Boolean?
-  torneos        Torneo[]
-  creadoEn       DateTime @default(now())
+  torneos         Torneo[]
+  creadoEn        DateTime      @default(now())
 
   @@map("partidos")
 }
@@ -296,49 +246,46 @@ model Torneo {
   id             String        @id @default(cuid())
   nombre         String
   tipo           TipoTorneo
-  entradaLukas   Int           // Costo en centavos de Lukas
+  entradaLukas   Int           // Unidades enteras de Lukas
   partidoId      String
   partido        Partido       @relation(fields: [partidoId], references: [id])
   estado         EstadoTorneo  @default(ABIERTO)
   totalInscritos Int           @default(0)
-  pozoBruto      Int           @default(0) // Suma de todas las entradas
-  pozoNeto       Int           @default(0) // Pozo bruto - rake
-  rake           Int           @default(0) // 12% del pozo bruto
-  cierreAt       DateTime      // 5 min antes del partido
-  distribPremios Json?         // Snapshot de distribución al cerrar
+  pozoBruto      Int           @default(0)
+  pozoNeto       Int           @default(0)
+  rake           Int           @default(0)
+  cierreAt       DateTime
+  distribPremios Json?
   tickets        Ticket[]
   creadoEn       DateTime      @default(now())
 
   @@map("torneos")
 }
 
-enum TipoTorneo { EXPRESS ESTANDAR PREMIUM GRAN_TORNEO }
+enum TipoTorneo   { EXPRESS ESTANDAR PREMIUM GRAN_TORNEO }
 enum EstadoTorneo { ABIERTO CERRADO EN_JUEGO FINALIZADO CANCELADO }
 
 model Ticket {
-  id              String   @id @default(cuid())
-  usuarioId       String
-  usuario         Usuario  @relation(fields: [usuarioId], references: [id])
-  torneoId        String
-  torneo          Torneo   @relation(fields: [torneoId], references: [id])
-  // Las 5 predicciones
-  predResultado   ResultadoPred  // LOCAL | EMPATE | VISITA
-  predBtts        Boolean
-  predMas25       Boolean
-  predTarjetaRoja Boolean
-  predMarcadorLocal   Int
-  predMarcadorVisita  Int
-  // Puntuación
-  puntosTotal     Int      @default(0)
-  puntosResultado Int      @default(0)
-  puntosBtts      Int      @default(0)
-  puntosMas25     Int      @default(0)
-  puntosTarjeta   Int      @default(0)
-  puntosMarcador  Int      @default(0)
-  // Premio
-  posicionFinal   Int?
-  premioLukas     Int      @default(0)
-  creadoEn        DateTime @default(now())
+  id                 String        @id @default(cuid())
+  usuarioId          String
+  usuario            Usuario       @relation(fields: [usuarioId], references: [id])
+  torneoId           String
+  torneo             Torneo        @relation(fields: [torneoId], references: [id])
+  predResultado      ResultadoPred
+  predBtts           Boolean
+  predMas25          Boolean
+  predTarjetaRoja    Boolean
+  predMarcadorLocal  Int
+  predMarcadorVisita Int
+  puntosTotal        Int           @default(0)
+  puntosResultado    Int           @default(0)
+  puntosBtts         Int           @default(0)
+  puntosMas25        Int           @default(0)
+  puntosTarjeta      Int           @default(0)
+  puntosMarcador     Int           @default(0)
+  posicionFinal      Int?
+  premioLukas        Int           @default(0)
+  creadoEn           DateTime      @default(now())
   
   @@unique([usuarioId, torneoId, predResultado, predBtts, predMas25, predTarjetaRoja, predMarcadorLocal, predMarcadorVisita])
   @@map("tickets")
@@ -351,29 +298,29 @@ model TransaccionLukas {
   usuarioId   String
   usuario     Usuario         @relation(fields: [usuarioId], references: [id])
   tipo        TipoTransaccion
-  monto       Int             // Positivo = ingreso, Negativo = egreso
+  monto       Int             // Positivo = ingreso, Negativo = egreso (unidades enteras)
   descripcion String
-  refId       String?         // ID de torneo, pago, canje, etc.
-  venceEn     DateTime?       // Para Lukas comprados (12 meses)
+  refId       String?
+  venceEn     DateTime?       // Solo Lukas de COMPRA vencen a 12 meses
   creadoEn    DateTime        @default(now())
 
   @@map("transacciones_lukas")
 }
 
 enum TipoTransaccion {
-  COMPRA          // Usuario compra Lukas con soles
-  ENTRADA_TORNEO  // Usuario paga entrada
-  PREMIO_TORNEO   // Usuario recibe premio
-  CANJE           // Usuario canjea en tienda
-  BONUS           // Lukas gratis (referidos, promociones)
-  VENCIMIENTO     // Lukas expirados
+  COMPRA
+  ENTRADA_TORNEO
+  PREMIO_TORNEO
+  CANJE
+  BONUS
+  VENCIMIENTO
 }
 
 model Premio {
   id          String   @id @default(cuid())
   nombre      String
   descripcion String
-  costeLukas  Int      // Precio en Lukas
+  costeLukas  Int
   stock       Int      @default(0)
   imagen      String?
   activo      Boolean  @default(true)
@@ -384,15 +331,15 @@ model Premio {
 }
 
 model Canje {
-  id         String      @id @default(cuid())
-  usuarioId  String
-  usuario    Usuario     @relation(fields: [usuarioId], references: [id])
-  premioId   String
-  premio     Premio      @relation(fields: [premioId], references: [id])
+  id          String      @id @default(cuid())
+  usuarioId   String
+  usuario     Usuario     @relation(fields: [usuarioId], references: [id])
+  premioId    String
+  premio      Premio      @relation(fields: [premioId], references: [id])
   lukasUsados Int
-  estado     EstadoCanje @default(PENDIENTE)
-  direccion  Json?       // Dirección de envío si aplica
-  creadoEn   DateTime    @default(now())
+  estado      EstadoCanje @default(PENDIENTE)
+  direccion   Json?
+  creadoEn    DateTime    @default(now())
 
   @@map("canjes")
 }
@@ -404,31 +351,37 @@ enum EstadoCanje { PENDIENTE PROCESANDO ENVIADO ENTREGADO CANCELADO }
 
 ## 6. REGLAS DE NEGOCIO CRÍTICAS
 
-Estas reglas son **inamovibles** y deben implementarse con exactitud:
-
 ### Lukas
+- **1 Luka = S/ 1 peruano (paridad 1:1).** `balanceLukas` se almacena en unidades enteras, no centavos.
 - Todo movimiento de Lukas es una transacción atómica. Si falla cualquier paso, se revierte todo.
 - El balance nunca puede ser negativo. Verificar balance ANTES de descontar.
-- Los Lukas comprados vencen a los 12 meses. Los ganados en torneos NO vencen.
+- Los Lukas de COMPRA vencen a los 12 meses (campo `venceEn` en TransaccionLukas).
+- Los Lukas ganados en torneos (PREMIO_TORNEO, BONUS) NO vencen — `venceEn = null`.
 - Los Lukas NO son retirables como efectivo bajo ninguna circunstancia.
-- 1 Luka = S/ 1 peruano (paridad 1:1 para simplicidad).
+- El bonus de bienvenida es 500 Lukas (tipo BONUS, sin vencimiento).
 
 ### Tickets y Torneos
-- El cierre de inscripciones es exactamente 5 minutos antes del inicio del partido. Es automático e irreversible.
+- El cierre de inscripciones es exactamente 5 minutos antes del inicio del partido. Automático e irreversible.
 - Dos tickets del mismo usuario en el mismo torneo NO pueden tener las 5 predicciones idénticas (constraint en BD).
 - Máximo 10 tickets por usuario por torneo en MVP.
 - Las predicciones enviadas son inmutables. No se pueden editar después de enviadas.
 - Un torneo necesita mínimo 2 inscritos para activarse. Si no llega, se reembolsa la entrada.
 
 ### Puntuación
-- Los puntos se calculan exclusivamente a partir de los eventos de API-Football. Cero intervención manual.
-- Si API-Football falla, los puntos quedan en "pendiente" y se calculan retroactivamente al restaurar conexión.
-- En caso de empate de puntos al final: el desempate es por marcador exacto primero, tarjeta roja después, y finalmente por orden de inscripción (primero en inscribirse gana en igualdad).
+- Los puntos se calculan exclusivamente a partir de los eventos de api-football.com. Cero intervención manual.
+- Si la API falla, los puntos quedan en "pendiente" y se calculan retroactivamente al restaurar conexión.
+- Desempate de puntos al final: marcador exacto primero → tarjeta roja → orden de inscripción (timestamp).
 
 ### Distribución de premios
-- El rake es exactamente 12% del pozo bruto. Se calcula al centavo.
+- El rake es exactamente 12% del pozo bruto, calculado al entero de Luka.
 - Los premios se acreditan automáticamente al finalizar el partido. Sin aprobación manual.
-- La distribución del pozo está en `packages/shared/src/constants/torneos.ts`.
+- La distribución está en `packages/shared/src/constants/torneos.ts`.
+
+### Navegación y acceso
+- **Cualquier usuario puede navegar sin estar registrado:** ver lista de torneos, partidos en vivo, ranking, tienda.
+- **El registro/login se solicita SOLO en el momento de inscribirse a un torneo.**
+- Tras el login, el flujo continúa automáticamente hacia la pantalla de combinada del torneo que el usuario quería.
+- Wallet y Perfil requieren login siempre.
 
 ### Seguridad
 - Rate limiting: máximo 60 requests/minuto por IP.
@@ -441,9 +394,9 @@ Estas reglas son **inamovibles** y deben implementarse con exactitud:
 ## 7. FLUJO DEL RANKING EN TIEMPO REAL
 
 ```
-API-Football (polling 30s)
+api-football.com (polling cada 30s, header: x-apisports-key)
         ↓
-partidos.poller.ts → detecta evento (gol, tarjeta, fin)
+partidos.poller.ts → detecta evento (gol, tarjeta, fin de partido)
         ↓
 puntuacion.service.ts → recalcula puntos de TODOS los tickets del torneo
         ↓
@@ -455,7 +408,7 @@ Cliente Web → recibe update y re-renderiza ranking sin reload
 ```
 
 **Keys de Redis:**
-- `ranking:{torneoId}` → sorted set con userId:ticketId y score = puntos
+- `ranking:{torneoId}` → sorted set con `usuarioId:ticketId` y score = puntosTotal
 - `partido:estado:{externalId}` → estado actual del partido (cache 25s)
 - `torneo:inscritos:{torneoId}` → contador en tiempo real de inscritos
 
@@ -476,8 +429,9 @@ NEXTAUTH_URL=http://localhost:3000
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 
-# API Deportiva
-API_FOOTBALL_KEY=        # RapidAPI key para API-Football
+# API Deportiva — cuenta directa hablaplay@gmail.com en api-football.com
+# IMPORTANTE: NO usar RapidAPI. Header es x-apisports-key (no X-RapidAPI-Key)
+API_FOOTBALL_KEY=
 API_FOOTBALL_HOST=v3.football.api-sports.io
 
 # Pagos
@@ -506,7 +460,6 @@ SENTRY_DSN=
 ## 9. DOCKER COMPOSE (DESARROLLO)
 
 ```yaml
-# docker-compose.yml (raíz del proyecto)
 services:
   postgres:
     image: postgres:16-alpine
@@ -536,71 +489,44 @@ volumes:
 ## 10. COMANDOS DE DESARROLLO
 
 ```bash
-# Instalar dependencias (desde raíz)
 pnpm install
-
-# Levantar infraestructura local
 docker-compose up -d
-
-# Generar cliente Prisma y correr migraciones
-# NOTA: Prisma busca DATABASE_URL. Si se ejecuta desde packages/db/,
-# usar: export DATABASE_URL="postgresql://habla:habla@localhost:5432/habladb"
-# antes de correr el comando, o ejecutar desde la raíz del monorepo.
 pnpm --filter @habla/db db:migrate
-
-# Generar cliente Prisma (necesario después de cambios al schema)
-cd packages/db && export DATABASE_URL="postgresql://habla:habla@localhost:5432/habladb" && pnpm exec prisma generate
-
-# Seed de datos iniciales
 pnpm --filter @habla/db db:seed
-
-# Correr todos los servicios en desarrollo
-pnpm dev
-# Equivale a: turbo run dev (corre web en :3000 y api en :3001)
-
-# Correr solo el frontend
-pnpm --filter @habla/web dev
-
-# Correr solo el backend
-pnpm --filter @habla/api dev
-
-# Tests
+pnpm dev          # web en :3000, api en :3001
 pnpm test
-
-# Build de producción
 pnpm build
-
-# Lint
 pnpm lint
 ```
 
 ---
 
-## 11. PRIORIDADES MVP — QUÉ ES Y QUÉ NO ES
+## 11. PRIORIDADES MVP
 
 ### ✅ MVP (debe estar el 11 de junio)
 - Auth completo (Google OAuth + email/magic link)
+- Navegación pública sin login (torneos, ranking, tienda)
 - Compra de Lukas vía Culqi
 - Wallet de Lukas (balance, historial)
 - Crear torneos desde admin panel
-- Inscripción a torneos
-- Envío de tickets de predicciones
-- Motor de puntuación automático (API-Football)
+- Inscripción a torneos (requiere login)
+- Formulario de combinada — 5 predicciones (ver sección 16)
+- Motor de puntuación automático (api-football.com)
 - Ranking en vivo por WebSocket
 - Distribución automática de premios al finalizar
 - Tienda de premios básica (catálogo + solicitud de canje manual)
 - Notificaciones por email (Resend)
 - Admin panel: crear torneos, ver métricas básicas, gestionar canjes
 
-### ❌ Post-MVP (no bloquea el lanzamiento)
-- Ligas privadas (grupos de amigos) → v1.1 Agosto 2026
+### ❌ Post-MVP
+- Ligas privadas → v1.1 Agosto 2026
 - Gamificación (niveles, logros, streaks) → v1.2 Septiembre 2026
 - WhatsApp Bot → v1.3 Noviembre 2026
 - App nativa iOS/Android → v2.0 Q1 2027
-- Múltiples deportes (básquet, vóley) → v1.3
+- Múltiples deportes → v1.3
 - Programa de referidos automatizado → v1.2
 - KYC avanzado → post-MVP
-- Yape API → post-MVP (Culqi primero)
+- Yape API → post-MVP
 
 ---
 
@@ -660,19 +586,818 @@ pnpm lint
 
 ### Versiones instaladas (verificadas)
 - Node.js: v24.14.1
-- pnpm: 10.33.0 (packageManager en package.json)
+- pnpm: 10.33.0
 - Turbo: 2.9.6
 - Prisma: 5.22.0
-- next-auth: 5.0.0-beta.30 (v5 aún sin release estable)
+- next-auth: 5.0.0-beta.30
 - Docker: 29.4.0
 
 ### Decisiones técnicas tomadas
-- **pnpm 10.x en vez de 9.x:** La versión 9.15.4 originalmente planeada no era compatible con la instalación disponible. Se actualizó a 10.33.0 sin impacto funcional.
-- **next-auth beta:** NextAuth v5 no tiene versión estable publicada. Se usa `5.0.0-beta.30` que es la más reciente y funcional.
-- **CI simplificado:** Los pasos de `build`, `test` y `lint` están comentados en los workflows porque aún no hay código compilable. Se habilitarán progresivamente en los sprints siguientes.
-- **onlyBuiltDependencies:** Configurado en `pnpm-workspace.yaml` para permitir build scripts de Prisma, esbuild y unrs-resolver.
+- **pnpm 10.x:** versión 9.x no era compatible. Actualizado a 10.33.0 sin impacto funcional.
+- **next-auth beta:** NextAuth v5 no tiene versión estable. Se usa `5.0.0-beta.30`.
+- **CI simplificado:** build/test/lint comentados hasta tener código compilable.
+- **onlyBuiltDependencies:** configurado para Prisma, esbuild y unrs-resolver.
+- **API-Football directo:** se usa api-football.com con cuenta hablaplay@gmail.com (plan básico). Header `x-apisports-key`, NO RapidAPI.
 
 ### Qué falta del Sprint 0 (pendiente)
-- Wireframes de las pantallas principales
-- Contrato firmado con API-Football (RapidAPI)
-- Contrato firmado con Culqi (pasarela de pagos)
+- Wireframes → reemplazados por mockup HTML interactivo completo (ver sección 16)
+- Contrato con API-Football → cuenta hablaplay@gmail.com activa con plan básico ✅
+- Contrato con Culqi → pendiente aprobación RUC SAC; sandbox disponible para desarrollo
+
+---
+
+## 16. DISEÑO UI — MAPA DE PANTALLAS Y COMPONENTES
+
+> Basado en el mockup interactivo aprobado (habla-mockup-v2.html).
+> Colores de marca: Azul `#0052CC`, Navy `#001050`, Dorado `#FFB800`, Blanco `#FFFFFF`.
+> Fuentes: Barlow Condensed (títulos, scores, números) + DM Sans (cuerpo, botones).
+
+### Paleta de colores (CSS variables)
+```css
+--blue-dark:  #001050   /* fondo principal */
+--blue-mid:   #0038B8   /* gradientes */
+--blue-main:  #0052CC   /* color primario */
+--blue-light: #1A6EFF   /* hover states */
+--blue-pale:  #0A2080   /* surface/cards */
+--gold:       #FFB800   /* acento principal, CTAs, precios */
+--gold-light: #FFD060   /* hover del gold */
+--white:      #FFFFFF
+--text:       #EEF2FF   /* texto principal */
+--muted:      #7B93D0   /* texto secundario */
+--surface:    #001570   /* superficie base */
+--card:       #0A2080   /* cards */
+--card2:      #0D2898   /* headers de cards */
+--border:     #1A3AA0   /* bordes */
+--live:       #FF3D3D   /* indicador en vivo */
+--green:      #00D68F   /* estado finalizado/éxito */
+```
+
+### Pantallas principales
+
+#### A. Home / Lista de torneos (`/torneos`)
+- **Tabs:** En vivo | Abiertos | Próximos | Finalizados
+- **Tab "En vivo":** Hero card del partido con score en tiempo real + ranking en vivo (top 5)
+- **Tab "Abiertos":** Lista de TorneoCards con filtros por liga
+- **Tab "Próximos":** Cards con countdown al cierre + "Próximamente"
+- **Tab "Finalizados":** Cards con score final y ganador del torneo
+- **Acceso:** Público, sin login
+
+#### B. Combinada / Ticket (`/torneo/:id/combinada`)
+- **Header:** Nombre del partido, liga, pozo, entrada, premio estimado 1er lugar
+- **5 predicciones en tarjetas independientes:**
+  1. Resultado → 3 botones: Local / Empate / Visita
+  2. BTTS → 2 botones: Sí / No
+  3. Más de 2.5 goles → 2 botones: Sí / No
+  4. Tarjeta roja → 2 botones: Sí / No
+  5. Marcador exacto → picker numérico (+/− por equipo)
+- **Panel de puntos en tiempo real:** muestra puntos posibles conforme se selecciona cada predicción. Parte de 8 pts (marcador) y suma hasta 21.
+- **Validación:** si el usuario intenta enviar sin completar todas, resalta en rojo las faltantes.
+- **Submit:** botón "¡Inscribir Combinada!" → descuenta Lukas → pantalla de éxito
+- **Acceso:** Requiere login. Si usuario no está logueado, muestra modal de login. Tras login, regresa automáticamente a esta pantalla con el partido pre-cargado.
+
+#### C. Modal de Login/Registro
+- Se activa SOLO al intentar inscribirse a un torneo o acceder a Wallet/Perfil
+- Muestra el partido y pozo del torneo que activó el modal (contexto motivacional)
+- Opciones: Google OAuth | Registro con email
+- Tras registro: 500 Lukas de bienvenida (BONUS) + continúa hacia la combinada pendiente
+
+#### D. Pantalla de éxito post-combinada
+- Confirma las 5 predicciones enviadas
+- Muestra puntos posibles máximos
+- CTA: "Enviar otra combinada diferente" | "Ver ranking en vivo"
+
+#### E. Ranking en vivo (`/torneo/:id/ranking`)
+- Tabla con posición, avatar, nombre, puntos actuales
+- Se actualiza en tiempo real vía WebSocket
+- Visible sin login
+
+#### F. Wallet (`/wallet`) — requiere login
+- Balance actual en Lukas
+- Botón "Comprar Lukas" → flujo Culqi
+- Historial de transacciones con tipo, monto, fecha
+
+#### G. Tienda (`/tienda`)
+- Catálogo de premios con precio en Lukas
+- Ver sin login, canjear requiere login
+
+#### H. Admin Panel (`/admin`)
+- Solo rol ADMIN
+- Crear torneo: seleccionar partido de API-Football, tipo, precio de entrada
+- Ver métricas: torneos activos, inscritos, pozo total, ingresos rake
+
+### Componentes clave a implementar (Next.js)
+
+```
+components/
+├── torneo/
+│   ├── TorneoCard.tsx          ← Card con equipos, pozo, entrada, botón Jugar
+│   ├── TorneoHeroEnVivo.tsx    ← Hero card grande para partido en vivo con score
+│   ├── TorneoTabs.tsx          ← Tabs Abiertos/En Vivo/Próximos/Finalizados
+│   └── TorneoFiltros.tsx       ← Chips de liga para filtrar
+├── ticket/
+│   ├── FormularioCombinadaPrediccion.tsx  ← Las 5 predicciones completas
+│   ├── PredResultado.tsx       ← Pregunta 1: Local/Empate/Visita
+│   ├── PredBooleana.tsx        ← Reutilizable para BTTS, +2.5, tarjeta roja
+│   ├── PredMarcadorExacto.tsx  ← Picker numérico por equipo
+│   ├── PuntosPreview.tsx       ← Panel de puntos en tiempo real
+│   └── TicketExito.tsx         ← Pantalla de confirmación
+├── ranking/
+│   └── RankingEnVivo.tsx       ← Tabla actualizada por WebSocket
+├── wallet/
+│   ├── BalanceLukas.tsx
+│   ├── ComprarLukas.tsx        ← Integra Culqi.js
+│   └── HistorialTransacciones.tsx
+├── auth/
+│   └── ModalLoginInscripcion.tsx  ← Modal contextual con info del torneo
+└── layout/
+    ├── NavBar.tsx              ← Logo + balance Lukas + avatar (si logueado) / botón Entrar
+    └── BottomNav.tsx           ← En vivo / Torneos / Próximos / Mis Lukas / Perfil
+```
+
+---
+
+## 17. CONTRATOS DE API — ENDPOINTS REST
+
+> Base URL desarrollo: `http://localhost:3001/api/v1`
+> Todos los endpoints protegidos requieren header: `Authorization: Bearer <jwt>`
+
+### Torneos
+
+```
+GET  /torneos                    → lista de torneos (público)
+     Query params: estado=ABIERTO|EN_JUEGO|FINALIZADO|CERRADO, liga=string
+     Response: { torneos: TorneoConPartido[] }
+
+GET  /torneos/:id                → detalle de un torneo (público)
+     Response: { torneo: TorneoConPartido, misPosicion?: number }
+
+POST /torneos/:id/inscribir      → inscribir usuario (requiere auth)
+     Body: { ticketData: TicketInput }
+     Response: { ticket: Ticket, nuevoBalance: number }
+     Errores: 400 TORNEO_CERRADO | 400 BALANCE_INSUFICIENTE | 400 TICKET_DUPLICADO | 400 MAX_TICKETS
+```
+
+### Tickets / Combinadas
+
+```
+POST /tickets                    → crear ticket (requiere auth)
+     Body: {
+       torneoId: string,
+       predResultado: 'LOCAL' | 'EMPATE' | 'VISITA',
+       predBtts: boolean,
+       predMas25: boolean,
+       predTarjetaRoja: boolean,
+       predMarcadorLocal: number,    // 0-9
+       predMarcadorVisita: number    // 0-9
+     }
+     Response: { ticket: Ticket, nuevoBalance: number }
+
+GET  /tickets/mis-tickets        → tickets del usuario autenticado (requiere auth)
+     Query params: torneoId?, page?
+     Response: { tickets: TicketConPuntos[] }
+```
+
+### Ranking
+
+```
+GET  /torneos/:id/ranking        → ranking actual de un torneo (público)
+     Query params: page=1, limit=50
+     Response: { ranking: RankingRow[], miPosicion?: number, totalInscritos: number }
+```
+
+### Lukas / Wallet
+
+```
+GET  /lukas/balance              → balance actual (requiere auth)
+     Response: { balance: number }
+
+GET  /lukas/historial            → historial de transacciones (requiere auth)
+     Query params: page=1, limit=20
+     Response: { transacciones: TransaccionLukas[], total: number }
+
+POST /lukas/comprar              → iniciar compra de Lukas con Culqi (requiere auth)
+     Body: { monto: number, culqiToken: string }
+     Response: { transaccion: TransaccionLukas, nuevoBalance: number }
+```
+
+### Partidos
+
+```
+GET  /partidos                   → lista de partidos disponibles (público)
+     Query params: fecha=YYYY-MM-DD, estado=PROGRAMADO|EN_VIVO|FINALIZADO
+     Response: { partidos: Partido[] }
+
+GET  /partidos/:id               → detalle de partido con estado en vivo (público)
+     Response: { partido: Partido, eventoReciente?: EventoPartido }
+```
+
+### Auth
+
+```
+POST /auth/registro              → registro con email (sin OAuth)
+     Body: { email, nombre, password, fechaNac }
+     Response: { usuario: Usuario, token: string, lukasBonus: 500 }
+
+POST /auth/login                 → login con email
+     Body: { email, password }
+     Response: { usuario: Usuario, token: string }
+
+GET  /auth/me                    → usuario actual (requiere auth)
+     Response: { usuario: Usuario }
+```
+
+### Premios / Tienda
+
+```
+GET  /premios                    → catálogo de premios (público)
+     Response: { premios: Premio[] }
+
+POST /premios/:id/canjear        → canjear premio (requiere auth)
+     Body: { direccion?: { nombre, direccion, ciudad, telefono } }
+     Response: { canje: Canje, nuevoBalance: number }
+```
+
+### Admin
+
+```
+POST /admin/torneos              → crear torneo (requiere auth + rol ADMIN)
+     Body: { partidoId, tipo, entradaLukas, nombre }
+     Response: { torneo: Torneo }
+
+GET  /admin/metricas             → métricas generales (requiere auth + rol ADMIN)
+     Response: { torneosActivos, inscritosHoy, pozosTotal, rakeTotal }
+
+GET  /admin/canjes               → lista de canjes pendientes (requiere auth + rol ADMIN)
+PATCH /admin/canjes/:id          → actualizar estado de canje
+```
+
+---
+
+## 18. EVENTOS WEBSOCKET (Socket.io)
+
+> El cliente se conecta a `ws://localhost:3001` con el JWT en el query param: `?token=<jwt>`
+> Las salas se unen por torneoId.
+
+### Cliente → Servidor
+
+```typescript
+// Unirse al ranking en vivo de un torneo
+socket.emit('join:torneo', { torneoId: string })
+
+// Salir del ranking
+socket.emit('leave:torneo', { torneoId: string })
+```
+
+### Servidor → Cliente
+
+```typescript
+// Ranking actualizado (se emite cada vez que hay un evento de partido)
+socket.on('ranking:update', (data: {
+  torneoId: string,
+  ranking: Array<{
+    posicion: number,
+    usuarioId: string,
+    nombre: string,
+    puntosTotal: number,
+    ticketId: string
+  }>,
+  totalInscritos: number,
+  minutoParto: number
+}) => { /* re-renderizar ranking */ })
+
+// Evento de partido (gol, tarjeta, fin)
+socket.on('partido:evento', (data: {
+  torneoId: string,
+  tipo: 'GOL' | 'TARJETA_AMARILLA' | 'TARJETA_ROJA' | 'FIN_PARTIDO',
+  equipo: 'LOCAL' | 'VISITA',
+  minuto: number,
+  marcadorLocal: number,
+  marcadorVisita: number
+}) => { /* mostrar notificación en UI */ })
+
+// Torneo cerrado (5 min antes del partido)
+socket.on('torneo:cerrado', (data: { torneoId: string }) => {
+  /* deshabilitar botón de inscripción */
+})
+
+// Torneo finalizado con distribución de premios
+socket.on('torneo:finalizado', (data: {
+  torneoId: string,
+  ganadores: Array<{ posicion: number, usuarioId: string, premioLukas: number }>
+}) => { /* mostrar pantalla de resultados */ })
+```
+
+---
+
+## 19. INTEGRACIÓN API-FOOTBALL (api-football.com)
+
+> **IMPORTANTE:** La cuenta es de api-football.com directo (hablaplay@gmail.com), NO de RapidAPI.
+> El header de autenticación es diferente.
+
+### Headers correctos para todas las llamadas
+
+```typescript
+// apps/api/src/modules/partidos/partidos.service.ts
+const headers = {
+  'x-apisports-key': process.env.API_FOOTBALL_KEY,
+  // NO usar X-RapidAPI-Key ni X-RapidAPI-Host
+}
+```
+
+### Endpoints que se usan
+
+```typescript
+// Partidos del día
+GET https://v3.football.api-sports.io/fixtures?date=YYYY-MM-DD&timezone=America/Lima
+
+// Eventos en vivo de un partido (para el poller cada 30s)
+GET https://v3.football.api-sports.io/fixtures/events?fixture={fixtureId}
+
+// Estado en vivo de un partido
+GET https://v3.football.api-sports.io/fixtures?id={fixtureId}&live=all
+```
+
+### Mapper de eventos API → eventos internos
+
+```typescript
+// apps/api/src/modules/partidos/partidos.mapper.ts
+// Mapear type+detail de la API a nuestros tipos internos:
+
+// Gol:
+// type: 'Goal', detail: 'Normal Goal' | 'Penalty' | 'Own Goal'
+// → EventoPartido: tipo='GOL', equipo según 'team.id'
+
+// Tarjeta roja:
+// type: 'Card', detail: 'Red Card' | 'Second Yellow Card'
+// → EventoPartido: tipo='TARJETA_ROJA'
+
+// Fin del partido:
+// fixture.status.short: 'FT' (Full Time) | 'AET' (After Extra Time) | 'PEN'
+// → EventoPartido: tipo='FIN_PARTIDO'
+```
+
+### Motor de puntuación (puntuacion.service.ts)
+
+```typescript
+// Lógica exacta de cálculo de puntos por ticket
+function calcularPuntos(ticket: Ticket, partido: Partido): PuntosDesglosados {
+  return {
+    puntosResultado: calcResultado(ticket.predResultado, partido),  // 3 o 0
+    puntosBtts:      calcBtts(ticket.predBtts, partido),            // 2 o 0
+    puntosMas25:     calcMas25(ticket.predMas25, partido),          // 2 o 0
+    puntosTarjeta:   calcTarjeta(ticket.predTarjetaRoja, partido),  // 6 o 0
+    puntosMarcador:  calcMarcador(ticket, partido),                 // 8 o 0
+    // Total: máximo 21 puntos
+  }
+}
+```
+
+---
+
+## 20. FLUJO DE PAGO CULQI
+
+> Culqi sandbox disponible para desarrollo. Claves de producción requieren aprobación RUC SAC.
+> El código no cambia entre sandbox y producción — solo las variables de entorno.
+
+### Flujo completo
+
+```
+1. Frontend: Usuario hace clic en "Comprar X Lukas"
+   ↓
+2. Frontend: Carga Culqi.js desde CDN + configura con CULQI_PUBLIC_KEY
+   ↓
+3. Frontend: Abre el checkout de Culqi (modal nativo de Culqi)
+   Usuario ingresa datos de tarjeta
+   ↓
+4. Culqi: Genera token de cargo (culqiToken) y lo devuelve al frontend
+   ↓
+5. Frontend: Envía POST /api/v1/lukas/comprar con { monto, culqiToken }
+   ↓
+6. Backend (pagos.service.ts): 
+   a. Llama a Culqi API con el token para ejecutar el cargo
+   b. Si éxito → acredita Lukas al usuario (TransaccionLukas tipo COMPRA)
+   c. Si falla → responde con error, no acredita nada
+   ↓
+7. Culqi: También envía webhook POST /api/webhooks/culqi (confirmación asíncrona)
+   Backend verifica firma CULQI_WEBHOOK_SECRET y registra el pago
+   ↓
+8. Frontend: Muestra nuevo balance de Lukas
+```
+
+### Datos de prueba (sandbox Culqi)
+```
+Tarjeta aprobada:  4111 1111 1111 1111  CVV: 123  Vence: 09/25
+Tarjeta rechazada: 4000 0000 0000 0002
+```
+
+---
+
+## 21. CONFIGURACIÓN NEXTAUTH v5 (beta)
+
+> next-auth versión 5.0.0-beta.30 — la API difiere de v4.
+
+```typescript
+// apps/web/lib/auth.ts
+import NextAuth from 'next-auth'
+import Google from 'next-auth/providers/google'
+import Resend from 'next-auth/providers/resend'
+
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  providers: [
+    Google({
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    }),
+    Resend({
+      apiKey: process.env.RESEND_API_KEY,
+      from: 'Habla! <noreply@hablaapp.pe>',
+    }),
+  ],
+  callbacks: {
+    async signIn({ user }) {
+      // Crear usuario en BD si no existe, dar bonus de 500 Lukas si es nuevo
+      return true
+    },
+    async session({ session, token }) {
+      // Agregar balance de Lukas y rol a la sesión
+      return session
+    },
+  },
+})
+
+// apps/web/app/api/auth/[...nextauth]/route.ts
+import { handlers } from '@/lib/auth'
+export const { GET, POST } = handlers
+```
+
+### Middleware de rutas protegidas
+
+```typescript
+// apps/web/middleware.ts
+import { auth } from '@/lib/auth'
+
+export default auth((req) => {
+  const isLoggedIn = !!req.auth
+  const isProtected = req.nextUrl.pathname.startsWith('/wallet') ||
+                      req.nextUrl.pathname.startsWith('/perfil') ||
+                      req.nextUrl.pathname.startsWith('/admin')
+
+  if (isProtected && !isLoggedIn) {
+    // Guardar URL de destino para redirigir tras login
+    return Response.redirect(new URL(`/auth/login?callbackUrl=${req.nextUrl.pathname}`, req.url))
+  }
+  // /torneos y /torneo/:id son públicas — NO redirigir
+})
+
+export const config = {
+  matcher: ['/wallet/:path*', '/perfil/:path*', '/admin/:path*'],
+}
+```
+
+---
+
+## 22. CLIENTE WEBSOCKET (FRONTEND)
+
+```typescript
+// apps/web/lib/socket-client.ts
+import { io, Socket } from 'socket.io-client'
+
+let socket: Socket | null = null
+
+export function getSocket(token?: string): Socket {
+  if (!socket) {
+    socket = io(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001', {
+      auth: { token },
+      transports: ['websocket'],
+    })
+  }
+  return socket
+}
+
+export function disconnectSocket() {
+  socket?.disconnect()
+  socket = null
+}
+```
+
+```typescript
+// apps/web/hooks/useRankingEnVivo.ts
+import { useEffect, useState } from 'react'
+import { getSocket } from '@/lib/socket-client'
+import { useSession } from 'next-auth/react'
+
+export function useRankingEnVivo(torneoId: string) {
+  const { data: session } = useSession()
+  const [ranking, setRanking] = useState<RankingRow[]>([])
+  const [evento, setEvento] = useState<EventoPartido | null>(null)
+
+  useEffect(() => {
+    const socket = getSocket(session?.accessToken)
+    socket.emit('join:torneo', { torneoId })
+
+    socket.on('ranking:update', (data) => {
+      setRanking(data.ranking)
+    })
+
+    socket.on('partido:evento', (data) => {
+      setEvento(data)
+      // Limpiar el evento después de 5 segundos (para notificación flotante)
+      setTimeout(() => setEvento(null), 5000)
+    })
+
+    return () => {
+      socket.emit('leave:torneo', { torneoId })
+      socket.off('ranking:update')
+      socket.off('partido:evento')
+    }
+  }, [torneoId, session])
+
+  return { ranking, evento }
+}
+```
+
+---
+
+## 23. CLIENTE API (FRONTEND)
+
+```typescript
+// apps/web/lib/api-client.ts
+const API_BASE = process.env.NEXT_PUBLIC_API_URL + '/api/v1'
+
+async function apiFetch<T>(
+  path: string,
+  options: RequestInit = {},
+  token?: string
+): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token && { Authorization: `Bearer ${token}` }),
+      ...options.headers,
+    },
+  })
+
+  if (!res.ok) {
+    const error = await res.json()
+    throw new ApiError(error.code, error.message, res.status)
+  }
+
+  return res.json()
+}
+
+// Métodos tipados para cada módulo
+export const api = {
+  torneos: {
+    listar: (params?: { estado?: string; liga?: string }) =>
+      apiFetch<{ torneos: TorneoConPartido[] }>(`/torneos?${new URLSearchParams(params)}`),
+    detalle: (id: string) =>
+      apiFetch<{ torneo: TorneoConPartido }>(`/torneos/${id}`),
+  },
+  tickets: {
+    crear: (data: TicketInput, token: string) =>
+      apiFetch<{ ticket: Ticket; nuevoBalance: number }>('/tickets', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }, token),
+    misList: (token: string) =>
+      apiFetch<{ tickets: TicketConPuntos[] }>('/tickets/mis-tickets', {}, token),
+  },
+  lukas: {
+    balance: (token: string) =>
+      apiFetch<{ balance: number }>('/lukas/balance', {}, token),
+    comprar: (data: { monto: number; culqiToken: string }, token: string) =>
+      apiFetch<{ transaccion: TransaccionLukas; nuevoBalance: number }>(
+        '/lukas/comprar', { method: 'POST', body: JSON.stringify(data) }, token
+      ),
+  },
+  ranking: {
+    get: (torneoId: string) =>
+      apiFetch<{ ranking: RankingRow[]; totalInscritos: number }>(`/torneos/${torneoId}/ranking`),
+  },
+}
+```
+
+---
+
+## 24. STORE GLOBAL (ZUSTAND)
+
+```typescript
+// apps/web/stores/lukas.store.ts
+import { create } from 'zustand'
+
+interface LukasStore {
+  balance: number
+  setBalance: (balance: number) => void
+  decrementar: (monto: number) => void
+  incrementar: (monto: number) => void
+}
+
+export const useLukasStore = create<LukasStore>((set) => ({
+  balance: 0,
+  setBalance: (balance) => set({ balance }),
+  decrementar: (monto) => set((state) => ({ balance: state.balance - monto })),
+  incrementar: (monto) => set((state) => ({ balance: state.balance + monto })),
+}))
+```
+
+```typescript
+// apps/web/stores/auth.store.ts
+// Complementa NextAuth — guarda estado derivado del usuario
+import { create } from 'zustand'
+
+interface AuthStore {
+  pendingTorneoId: string | null  // Torneo que activó el modal de login
+  setPendingTorneoId: (id: string | null) => void
+}
+
+export const useAuthStore = create<AuthStore>((set) => ({
+  pendingTorneoId: null,
+  setPendingTorneoId: (id) => set({ pendingTorneoId: id }),
+}))
+```
+
+---
+
+## 25. TIPOS COMPARTIDOS (packages/shared)
+
+```typescript
+// packages/shared/src/types/api.types.ts
+
+export interface TorneoConPartido {
+  id: string
+  nombre: string
+  tipo: 'EXPRESS' | 'ESTANDAR' | 'PREMIUM' | 'GRAN_TORNEO'
+  entradaLukas: number
+  estado: 'ABIERTO' | 'CERRADO' | 'EN_JUEGO' | 'FINALIZADO' | 'CANCELADO'
+  totalInscritos: number
+  pozoBruto: number
+  pozoNeto: number
+  cierreAt: string  // ISO 8601
+  partido: {
+    id: string
+    equipoLocal: string
+    equipoVisita: string
+    liga: string
+    fechaInicio: string
+    estado: 'PROGRAMADO' | 'EN_VIVO' | 'FINALIZADO' | 'CANCELADO'
+    golesLocal: number | null
+    golesVisita: number | null
+  }
+}
+
+export interface TicketInput {
+  torneoId: string
+  predResultado: 'LOCAL' | 'EMPATE' | 'VISITA'
+  predBtts: boolean
+  predMas25: boolean
+  predTarjetaRoja: boolean
+  predMarcadorLocal: number    // 0-9
+  predMarcadorVisita: number   // 0-9
+}
+
+export interface RankingRow {
+  posicion: number
+  usuarioId: string
+  nombre: string
+  puntosTotal: number
+  ticketId: string
+  esYo?: boolean  // Frontend marca la fila propia
+}
+```
+
+---
+
+## 26. SEED DE BASE DE DATOS
+
+```typescript
+// packages/db/prisma/seed.ts
+// Datos iniciales para desarrollo y demo
+
+const seed = async () => {
+  // 1. Usuario admin
+  await prisma.usuario.upsert({
+    where: { email: 'hablaplay@gmail.com' },
+    update: {},
+    create: {
+      email: 'hablaplay@gmail.com',
+      nombre: 'Admin Habla',
+      rol: 'ADMIN',
+      verificado: true,
+      balanceLukas: 10000,
+    },
+  })
+
+  // 2. Premios de demo para la tienda
+  await prisma.premio.createMany({
+    data: [
+      { nombre: 'Camiseta de fútbol', descripcion: 'Camiseta oficial de tu equipo favorito', costeLukas: 5000, stock: 10 },
+      { nombre: 'Gift Card S/50', descripcion: 'Gift card canjeable en tiendas asociadas', costeLukas: 4500, stock: 50 },
+      { nombre: 'Entrada al estadio', descripcion: 'Entrada para 1 partido de Liga 1', costeLukas: 1200, stock: 20 },
+    ],
+    skipDuplicates: true,
+  })
+
+  // 3. Partido de demo para desarrollo
+  await prisma.partido.upsert({
+    where: { externalId: 'demo-001' },
+    update: {},
+    create: {
+      externalId: 'demo-001',
+      liga: 'Liga 1 Perú',
+      equipoLocal: 'Alianza Lima',
+      equipoVisita: 'Universitario',
+      fechaInicio: new Date(Date.now() + 2 * 60 * 60 * 1000), // en 2 horas
+      estado: 'PROGRAMADO',
+    },
+  })
+}
+```
+
+---
+
+## 27. TESTING — CASOS CRÍTICOS A CUBRIR
+
+### Reglas de negocio (tests unitarios en packages/shared y apps/api)
+
+```typescript
+// Motor de puntuación — todas las combinaciones
+describe('calcularPuntos', () => {
+  test('acierta los 5 → 21 puntos')
+  test('solo marcador exacto → 8 puntos')
+  test('solo resultado → 3 puntos')
+  test('falla todo → 0 puntos')
+  test('tarjeta roja sí cuando hubo → 6 puntos')
+  test('tarjeta roja sí cuando NO hubo → 0 puntos')
+})
+
+// Wallet — transacciones atómicas
+describe('lukas.service', () => {
+  test('balance insuficiente → lanza error, no descuenta')
+  test('inscripción exitosa → descuenta exactamente entradaLukas')
+  test('doble inscripción con ticket idéntico → lanza TICKET_DUPLICADO')
+  test('inscripción tras cierre → lanza TORNEO_CERRADO')
+})
+
+// Distribución de premios
+describe('distribuirPremios', () => {
+  test('100 jugadores × S/10 → rake S/120, pozo neto S/880')
+  test('1er lugar recibe 35% del pozo neto')
+  test('empate de puntos → desempate por marcador exacto')
+})
+```
+
+### Tests de integración (Sprint 7)
+- Flujo completo: registro → compra Lukas → inscripción → partido finaliza → premios acreditados
+- Test de carga: 500 usuarios simultáneos en el mismo torneo durante un partido en vivo
+- WebSocket: ranking se actualiza en < 2s tras evento de gol
+
+---
+
+## 28. CHECKLIST DE VERIFICACIÓN POR SPRINT
+
+### Sprint 1 — Auth
+- [ ] Google OAuth funciona en localhost
+- [ ] Magic link por email funciona (Resend sandbox)
+- [ ] Nuevo usuario recibe 500 Lukas bonus automáticamente
+- [ ] Middleware protege /wallet y /perfil, no protege /torneos
+- [ ] `pendingTorneoId` redirige al torneo correcto tras login
+
+### Sprint 2 — Lukas / Pagos
+- [ ] Culqi checkout abre con CULQI_PUBLIC_KEY de sandbox
+- [ ] Tarjeta aprobada (4111...) → Lukas se acreditan
+- [ ] Tarjeta rechazada → error claro, sin acreditación
+- [ ] Webhook de Culqi verificado con CULQI_WEBHOOK_SECRET
+- [ ] Balance visible en NavBar en tiempo real
+
+### Sprint 3 — Torneos
+- [ ] Admin puede crear torneo desde /admin/torneos
+- [ ] Torneo se cierra automáticamente 5 min antes del partido (job)
+- [ ] Usuario sin balance suficiente ve error claro
+- [ ] Torneo con 1 inscrito se cancela y reembolsa
+
+### Sprint 4 — Tickets / Combinada
+- [ ] Las 5 predicciones son obligatorias (validación frontend + backend)
+- [ ] Marcador exacto permite 0-9 por equipo
+- [ ] Ticket duplicado rechazado (mismo usuario, mismas 5 predicciones)
+- [ ] Máximo 10 tickets por usuario por torneo
+- [ ] Panel de puntos muestra correctamente pts posibles en tiempo real
+
+### Sprint 5 — API-Football + Ranking
+- [ ] Header `x-apisports-key` (no X-RapidAPI-Key)
+- [ ] Poller corre cada 30s sin memory leaks
+- [ ] Gol detectado → puntos recalculados → ranking emitido por WS en < 2s
+- [ ] Tarjeta roja detectada correctamente (Red Card + Second Yellow)
+- [ ] FIN_PARTIDO detectado → dispara distribución de premios
+
+### Sprint 6 — Premios y Cierre
+- [ ] Premios acreditados automáticamente tras FIN_PARTIDO
+- [ ] Distribución 35/20/12/33% correcta al centavo de Luka
+- [ ] Email de resultado enviado (Resend)
+- [ ] Tienda muestra premios con stock > 0
+
+### Sprint 7 — QA
+- [ ] Test de carga: 500 WS simultáneos sin caída
+- [ ] Prisma Studio muestra datos correctos tras flujo completo
+- [ ] Sentry captura errores correctamente
+- [ ] Railway auto-scale funciona bajo carga
