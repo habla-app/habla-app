@@ -75,6 +75,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@habla/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@habla/shared':
         specifier: workspace:*
         version: link:../../packages/shared

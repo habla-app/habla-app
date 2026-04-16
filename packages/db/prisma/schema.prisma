@@ -19,14 +19,62 @@ model Usuario {
   fechaNac     DateTime?
   verificado   Boolean   @default(false)
   rol          Rol       @default(JUGADOR)
-  balanceLukas Int       @default(0) // en centavos de Lukas
+  balanceLukas Int       @default(0) // en unidades enteras de Lukas
   creadoEn     DateTime  @default(now())
+  // Campos requeridos por NextAuth Prisma Adapter
+  emailVerified DateTime?
+  image         String?
 
   tickets       Ticket[]
   transacciones TransaccionLukas[]
   canjes        Canje[]
+  cuentas       Account[]
+  sesiones      Session[]
 
   @@map("usuarios")
+}
+
+// ==========================================
+// Tablas NextAuth v5 — Prisma Adapter
+// ==========================================
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user Usuario @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("auth_accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         Usuario  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("auth_sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("auth_verification_tokens")
 }
 
 enum Rol {

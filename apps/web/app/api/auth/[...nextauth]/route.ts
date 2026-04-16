@@ -1,11 +1,4 @@
-// NextAuth API route handler
-// TODO: Sprint 1 - Configurar providers (Google + Email)
-import { NextResponse } from "next/server";
+// NextAuth v5 API route handler
+import { handlers } from "@/lib/auth";
 
-export async function GET() {
-  return NextResponse.json({ message: "Auth not configured yet" }, { status: 501 });
-}
-
-export async function POST() {
-  return NextResponse.json({ message: "Auth not configured yet" }, { status: 501 });
-}
+export const { GET, POST } = handlers;

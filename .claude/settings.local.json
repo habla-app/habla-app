@@ -1,7 +1,46 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git config:*)"
+      "Bash(git config:*)",
+      "Bash(where node:*)",
+      "Bash(where npm:*)",
+      "Bash(where pnpm:*)",
+      "Bash(where docker:*)",
+      "Bash(docker --version)",
+      "Bash(ssh-keygen -t ed25519 -C hablaplay@gmail.com -f __TRACKED_VAR__/.ssh/id_ed25519 -N '')",
+      "Bash(ssh -T git@github.com)",
+      "Bash(npm install:*)",
+      "Bash(pnpm --version)",
+      "Bash(corepack enable:*)",
+      "Bash(corepack prepare:*)",
+      "Bash(npm ls:*)",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm approve-builds:*)",
+      "Bash(docker-compose up:*)",
+      "Bash(docker info:*)",
+      "Bash(pnpm exec:*)",
+      "Bash(docker exec:*)",
+      "Bash(gh run:*)",
+      "Bash(where gh:*)",
+      "Bash(winget install:*)",
+      "Bash(export PATH=\"$PATH:/c/Program Files/GitHub CLI\")",
+      "Bash(gh --version)",
+      "Bash(gh auth:*)",
+      "Bash(pnpm build:*)",
+      "Bash(rm -rf apps/web/.next)",
+      "Bash(rm -rf node_modules/.cache)",
+      "Bash(ls node_modules/.pnpm/next@*/node_modules/next/dist/compiled/)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(pnpm --filter @habla/web exec which next)",
+      "Bash(npx next:*)",
+      "Bash(curl -s http://localhost:3000)",
+      "Bash(ls D:/habla-app/postcss.config.*)",
+      "Bash(ls D:/habla-app/apps/web/postcss.config.*)",
+      "Bash(docker build:*)",
+      "Bash(pnpm --filter @habla/db db:generate)",
+      "Bash(pnpm --filter @habla/web build)",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm remove:*)"
     ]
   }
 }

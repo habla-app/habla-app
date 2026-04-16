@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "description": "Habla! - Torneos de predicciones deportivas para Peru",
+  "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
