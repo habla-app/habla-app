@@ -80,6 +80,7 @@ WebApp de torneos de predicciones deportivas orientada al mercado peruano. Los u
 | Gestión de paquetes | pnpm 10.x + workspaces | Monorepo |
 | Orquestador | Turborepo (turbo) | Build/test/lint orchestration |
 | CI/CD | GitHub Actions | Tests + deploy automático |
+| CSS | Tailwind CSS 3.4 + PostCSS | Clases utilitarias, colores de marca con prefijo `brand-*` |
 
 ---
 
@@ -88,6 +89,9 @@ WebApp de torneos de predicciones deportivas orientada al mercado peruano. Los u
 ```
 habla-app/
 ├── CLAUDE.md
+├── .npmrc                       ← node-linker=hoisted (requerido para Windows + Node 24)
+├── .claude/
+│   └── launch.json              ← Config del dev server para Claude Preview
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml
@@ -115,8 +119,9 @@ habla-app/
 │   │   │   ├── api/
 │   │   │   │   ├── auth/[...nextauth]/route.ts
 │   │   │   │   └── webhooks/culqi/route.ts
-│   │   │   ├── layout.tsx
-│   │   │   └── page.tsx         ← Landing pública → redirige a /torneos
+│   │   │   ├── layout.tsx       ← Fonts (Barlow Condensed + DM Sans) + metadata
+│   │   │   ├── globals.css      ← Variables CSS de marca + Tailwind directives
+│   │   │   └── page.tsx         ← Landing pública con tabs (En vivo/Abiertos/Próximos/Finalizados)
 │   │   ├── components/
 │   │   │   ├── ui/
 │   │   │   ├── torneo/
@@ -124,15 +129,20 @@ habla-app/
 │   │   │   ├── wallet/
 │   │   │   ├── tienda/
 │   │   │   └── layout/
+│   │   │       ├── NavBar.tsx   ← ✅ Implementado — Logo + botón Entrar / balance Lukas
+│   │   │       └── BottomNav.tsx ← ✅ Implementado — 5 tabs de navegación inferior
 │   │   ├── lib/
 │   │   │   ├── auth.ts
 │   │   │   ├── api-client.ts
 │   │   │   └── socket-client.ts
 │   │   ├── hooks/
 │   │   ├── stores/
-│   │   ├── public/manifest.json
-│   │   ├── next.config.js
-│   │   ├── tailwind.config.js
+│   │   ├── public/
+│   │   │   ├── manifest.json
+│   │   │   └── mockup.html      ← Mockup HTML de referencia (accesible en /mockup.html)
+│   │   ├── next.config.js       ← output: standalone para Railway
+│   │   ├── tailwind.config.js   ← Colores de marca con prefijo brand-*
+│   │   ├── postcss.config.js    ← Tailwind + Autoprefixer
 │   │   └── package.json
 │   │
 │   └── api/                     ← Node.js + Fastify (Backend)
@@ -488,6 +498,9 @@ volumes:
 
 ## 10. COMANDOS DE DESARROLLO
 
+**Requisito previo:** El archivo `.npmrc` con `node-linker=hoisted` ya está en el repo.
+Es necesario para que pnpm enlace los módulos correctamente en Windows + Node 24.
+
 ```bash
 pnpm install
 docker-compose up -d
@@ -535,7 +548,7 @@ pnpm lint
 | Sprint | Fechas | Entregable principal | Estado |
 |--------|--------|---------------------|--------|
 | Sprint 0 | 11-17 Abr | Setup monorepo, CI/CD, Docker, schema BD, wireframes, contratos API-Football y Culqi | ✅ Completado 14 Abr |
-| Sprint 1 | 18-24 Abr | Auth (Google OAuth + magic link), perfil, landing page + lista de espera | Pendiente |
+| Sprint 1 | 18-24 Abr | Auth (Google OAuth + magic link), perfil, middleware rutas protegidas | Pendiente |
 | Sprint 2 | 25 Abr-1 May | Módulo Lukas: compra Culqi, balance, historial, webhook confirmación | Pendiente |
 | Sprint 3 | 2-8 May | Torneos: crear desde admin, listar, inscribir, cierre automático | Pendiente |
 | Sprint 4 | 9-15 May | Tickets: formulario 5 predicciones, validaciones, múltiples tickets, confirmación | Pendiente |
@@ -574,15 +587,33 @@ pnpm lint
 
 ---
 
-## 15. ESTADO DEL SPRINT 0 (completado 14 Abr 2026)
+## 15. ESTADO DEL SPRINT 0 (completado 15 Abr 2026)
 
-### Lo que se configuró
+### Lo que se configuró (14 Abr)
 - Monorepo con pnpm 10.33.0 + Turborepo 2.x
 - CI/CD con GitHub Actions (deploy.yml en push a main, ci.yml en PRs)
 - Docker Compose: PostgreSQL 16 + Redis 7 levantados y verificados
 - Prisma: migración inicial `20260414021221_init` aplicada — 7 tablas creadas
 - Estructura completa de carpetas y archivos placeholder con TODOs por sprint
 - SSH configurado para push a GitHub
+
+### Lo que se construyó (15 Abr)
+- **Landing page completa** (`apps/web/app/page.tsx`) con 4 tabs: En vivo, Abiertos, Próximos, Finalizados
+- **NavBar** (`components/layout/NavBar.tsx`) — Logo + botón Entrar
+- **BottomNav** (`components/layout/BottomNav.tsx`) — 5 tabs de navegación inferior
+- Mockup HTML convertido a componentes React/Next.js con datos mock estáticos
+- Fuentes Barlow Condensed + DM Sans integradas via `next/font/google` (CSS variables `--font-barlow`, `--font-dm-sans`)
+- Paleta de colores de marca en Tailwind con prefijo `brand-*` y CSS variables en `globals.css`
+- `postcss.config.js` creado (Tailwind + Autoprefixer)
+- Mockup de referencia accesible en `/mockup.html`
+- Deploy a Railway configurado y funcionando en `https://habla-app-production.up.railway.app`
+
+### Fixes de build aplicados (15 Abr)
+- `apps/web/app/api/auth/[...nextauth]/route.ts` — agregados handlers GET/POST placeholder (sin exports el build fallaba)
+- `apps/web/app/api/webhooks/culqi/route.ts` — agregado handler POST placeholder
+- `next.config.js` — eliminado `experimental.serverActions: true` (deprecated en Next.js 14.2), agregado `output: "standalone"` para Railway
+- `.npmrc` — agregado `node-linker=hoisted` (necesario para que pnpm enlace módulos correctamente en Windows + Node 24)
+- CI/CD workflows actualizados: ahora ejecutan `pnpm build` como verificación
 
 ### Versiones instaladas (verificadas)
 - Node.js: v24.14.1
@@ -595,25 +626,38 @@ pnpm lint
 ### Decisiones técnicas tomadas
 - **pnpm 10.x:** versión 9.x no era compatible. Actualizado a 10.33.0 sin impacto funcional.
 - **next-auth beta:** NextAuth v5 no tiene versión estable. Se usa `5.0.0-beta.30`.
-- **CI simplificado:** build/test/lint comentados hasta tener código compilable.
+- **node-linker=hoisted:** pnpm en Windows + Node 24 no enlaza symlinks correctamente con el linker por defecto. Se usa `node-linker=hoisted` en `.npmrc` para forzar instalación plana (estilo npm). No afecta el lockfile ni CI.
+- **output: standalone:** `next.config.js` usa `output: "standalone"` para que Railway pueda servir la app sin el monorepo completo.
 - **onlyBuiltDependencies:** configurado para Prisma, esbuild y unrs-resolver.
 - **API-Football directo:** se usa api-football.com con cuenta hablaplay@gmail.com (plan básico). Header `x-apisports-key`, NO RapidAPI.
+- **Landing page en Sprint 0:** se adelantó la landing page (originalmente Sprint 1) porque el mockup ya estaba aprobado y era necesario para verificar el deploy a Railway.
 
-### Qué falta del Sprint 0 (pendiente)
-- Wireframes → reemplazados por mockup HTML interactivo completo (ver sección 16)
-- Contrato con API-Football → cuenta hablaplay@gmail.com activa con plan básico ✅
+### Pendiente del Sprint 0
 - Contrato con Culqi → pendiente aprobación RUC SAC; sandbox disponible para desarrollo
 
 ---
 
 ## 16. DISEÑO UI — MAPA DE PANTALLAS Y COMPONENTES
 
-> Basado en el mockup interactivo aprobado (habla-mockup-v2.html).
+> Basado en el mockup interactivo aprobado (`docs/habla-mockup-completo.html`).
+> Referencia estática accesible en producción: `/mockup.html`.
 > Colores de marca: Azul `#0052CC`, Navy `#001050`, Dorado `#FFB800`, Blanco `#FFFFFF`.
 > Fuentes: Barlow Condensed (títulos, scores, números) + DM Sans (cuerpo, botones).
 
-### Paleta de colores (CSS variables)
+### Fuentes — integración con Next.js
+
+Las fuentes se importan via `next/font/google` en `apps/web/app/layout.tsx`:
+- **Barlow Condensed** → variable CSS `--font-barlow` → clase Tailwind `font-display`
+- **DM Sans** → variable CSS `--font-dm-sans` → clase Tailwind `font-body`
+
+### Paleta de colores
+
+Definidos en dos lugares (deben estar sincronizados):
+1. **CSS variables** en `apps/web/app/globals.css` — para uso directo en CSS
+2. **Tailwind theme** en `apps/web/tailwind.config.js` — con prefijo `brand-*` para clases utilitarias
+
 ```css
+/* globals.css — variables CSS */
 --blue-dark:  #001050   /* fondo principal */
 --blue-mid:   #0038B8   /* gradientes */
 --blue-main:  #0052CC   /* color primario */
@@ -630,6 +674,15 @@ pnpm lint
 --border:     #1A3AA0   /* bordes */
 --live:       #FF3D3D   /* indicador en vivo */
 --green:      #00D68F   /* estado finalizado/éxito */
+```
+
+```
+/* tailwind.config.js — clases Tailwind equivalentes */
+bg-brand-blue-dark   text-brand-gold      border-brand-border
+bg-brand-blue-main   text-brand-muted     bg-brand-card
+bg-brand-surface     text-brand-text      bg-brand-card2
+bg-brand-live        text-brand-green     bg-brand-gold
+/* etc. — prefijo brand-{nombre-variable} */
 ```
 
 ### Pantallas principales
@@ -685,34 +738,40 @@ pnpm lint
 - Crear torneo: seleccionar partido de API-Football, tipo, precio de entrada
 - Ver métricas: torneos activos, inscritos, pozo total, ingresos rake
 
-### Componentes clave a implementar (Next.js)
+### Componentes clave (Next.js)
+
+> ✅ = implementado, ⬚ = pendiente
 
 ```
 components/
 ├── torneo/
-│   ├── TorneoCard.tsx          ← Card con equipos, pozo, entrada, botón Jugar
-│   ├── TorneoHeroEnVivo.tsx    ← Hero card grande para partido en vivo con score
-│   ├── TorneoTabs.tsx          ← Tabs Abiertos/En Vivo/Próximos/Finalizados
-│   └── TorneoFiltros.tsx       ← Chips de liga para filtrar
+│   ⬚ TorneoCard.tsx            ← Card con equipos, pozo, entrada, botón Jugar
+│   ⬚ TorneoHeroEnVivo.tsx      ← Hero card grande para partido en vivo con score
+│   ⬚ TorneoTabs.tsx            ← Tabs Abiertos/En Vivo/Próximos/Finalizados
+│   ⬚ TorneoFiltros.tsx         ← Chips de liga para filtrar
 ├── ticket/
-│   ├── FormularioCombinadaPrediccion.tsx  ← Las 5 predicciones completas
-│   ├── PredResultado.tsx       ← Pregunta 1: Local/Empate/Visita
-│   ├── PredBooleana.tsx        ← Reutilizable para BTTS, +2.5, tarjeta roja
-│   ├── PredMarcadorExacto.tsx  ← Picker numérico por equipo
-│   ├── PuntosPreview.tsx       ← Panel de puntos en tiempo real
-│   └── TicketExito.tsx         ← Pantalla de confirmación
+│   ⬚ FormularioCombinadaPrediccion.tsx  ← Las 5 predicciones completas
+│   ⬚ PredResultado.tsx         ← Pregunta 1: Local/Empate/Visita
+│   ⬚ PredBooleana.tsx          ← Reutilizable para BTTS, +2.5, tarjeta roja
+│   ⬚ PredMarcadorExacto.tsx    ← Picker numérico por equipo
+│   ⬚ PuntosPreview.tsx         ← Panel de puntos en tiempo real
+│   ⬚ TicketExito.tsx           ← Pantalla de confirmación
 ├── ranking/
-│   └── RankingEnVivo.tsx       ← Tabla actualizada por WebSocket
+│   ⬚ RankingEnVivo.tsx         ← Tabla actualizada por WebSocket
 ├── wallet/
-│   ├── BalanceLukas.tsx
-│   ├── ComprarLukas.tsx        ← Integra Culqi.js
-│   └── HistorialTransacciones.tsx
+│   ⬚ BalanceLukas.tsx
+│   ⬚ ComprarLukas.tsx          ← Integra Culqi.js
+│   ⬚ HistorialTransacciones.tsx
 ├── auth/
-│   └── ModalLoginInscripcion.tsx  ← Modal contextual con info del torneo
+│   ⬚ ModalLoginInscripcion.tsx ← Modal contextual con info del torneo
 └── layout/
-    ├── NavBar.tsx              ← Logo + balance Lukas + avatar (si logueado) / botón Entrar
-    └── BottomNav.tsx           ← En vivo / Torneos / Próximos / Mis Lukas / Perfil
+    ✅ NavBar.tsx                ← Logo + botón Entrar (Sprint 0). Falta: balance Lukas + avatar
+    ✅ BottomNav.tsx             ← 5 tabs de navegación inferior (Sprint 0)
 ```
+
+**Nota:** En Sprint 0, los componentes HeroLive, RankingWidget, MatchCard, Tabs y FilterChips
+están definidos inline en `page.tsx` con datos mock. Se extraerán a archivos separados en los
+sprints correspondientes cuando se conecten a datos reales.
 
 ---
 
