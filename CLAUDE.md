@@ -90,6 +90,9 @@ WebApp de torneos de predicciones deportivas orientada al mercado peruano. Los u
 habla-app/
 ├── CLAUDE.md
 ├── .npmrc                       ← node-linker=hoisted (requerido para Windows + Node 24)
+├── Dockerfile                   ← Multi-stage build para web app (Railway usa esto)
+├── railway.toml                 ← Fuerza Railway a usar Dockerfile (builder = "DOCKERFILE")
+├── .dockerignore                ← Excluye node_modules, .git, docs del build context
 ├── .claude/
 │   └── launch.json              ← Config del dev server para Claude Preview
 ├── .github/
@@ -615,6 +618,13 @@ pnpm lint
 - `.npmrc` — agregado `node-linker=hoisted` (necesario para que pnpm enlace módulos correctamente en Windows + Node 24)
 - CI/CD workflows actualizados: ahora ejecutan `pnpm build` como verificación
 
+### Deploy a Railway (15 Abr)
+- **Dockerfile** creado en raíz — multi-stage: base (pnpm) → deps (install) → builder (next build) → runner (standalone)
+- **railway.toml** con `builder = "DOCKERFILE"` — Railpack (builder default de Railway) no detectaba pnpm y usaba `npm install` que falla con `workspace:*`
+- **Variable obligatoria en Railway:** `HOSTNAME=0.0.0.0` — sin esto, Next.js standalone solo escucha en localhost y el healthcheck falla
+- **Custom Start Command en Railway:** dejar vacío — el Dockerfile CMD (`node apps/web/server.js`) es el correcto
+- **URL en producción:** `https://habla-app-production.up.railway.app`
+
 ### Versiones instaladas (verificadas)
 - Node.js: v24.14.1
 - pnpm: 10.33.0
@@ -631,6 +641,7 @@ pnpm lint
 - **onlyBuiltDependencies:** configurado para Prisma, esbuild y unrs-resolver.
 - **API-Football directo:** se usa api-football.com con cuenta hablaplay@gmail.com (plan básico). Header `x-apisports-key`, NO RapidAPI.
 - **Landing page en Sprint 0:** se adelantó la landing page (originalmente Sprint 1) porque el mockup ya estaba aprobado y era necesario para verificar el deploy a Railway.
+- **Dockerfile sobre Railpack:** Railpack (builder default de Railway) no infiere pnpm correctamente en monorepos. Se fuerza Dockerfile via `railway.toml` con `builder = "DOCKERFILE"`.
 
 ### Pendiente del Sprint 0
 - Contrato con Culqi → pendiente aprobación RUC SAC; sandbox disponible para desarrollo
