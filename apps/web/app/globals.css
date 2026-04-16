@@ -1,3 +1,39 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --blue-dark: #001050;
+  --blue-mid: #0038B8;
+  --blue-main: #0052CC;
+  --blue-light: #1A6EFF;
+  --blue-pale: #0A2080;
+  --gold: #FFB800;
+  --gold-dim: rgba(255, 184, 0, 0.15);
+  --gold-light: #FFD060;
+  --white: #FFFFFF;
+  --text: #EEF2FF;
+  --muted: #7B93D0;
+  --surface: #001570;
+  --card: #0A2080;
+  --card2: #0D2898;
+  --border: #1A3AA0;
+  --live: #FF3D3D;
+  --green: #00D68F;
+  --green-dim: rgba(0, 214, 143, 0.12);
+  --red-dim: rgba(255, 61, 61, 0.12);
+  --orange: #FF7A00;
+}
+
+body {
+  background: #000820;
+  color: var(--text);
+}
+
+/* Hide scrollbar */
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}

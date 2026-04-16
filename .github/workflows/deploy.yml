@@ -5,23 +5,26 @@ on:
     branches: [main]
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
+
       - run: pnpm install --frozen-lockfile
-      # Build y test se habilitaran cuando haya codigo compilable
-      # - run: pnpm build
-      # - run: pnpm test
-      - name: Verify install
-        run: pnpm ls --depth 0 -r
-      # TODO: Configurar deploy a Railway
-      # - name: Deploy to Railway
-      #   uses: bervProject/railway-deploy@main
-      #   with:
-      #     railway_token: ${{ secrets.RAILWAY_TOKEN }}
+
+      - name: Build
+        run: pnpm build
+
+      - name: Deploy to Railway
+        if: success()
+        uses: bervProject/railway-deploy@main
+        with:
+          railway_token: ${{ secrets.RAILWAY_TOKEN }}
+          service: ${{ secrets.RAILWAY_SERVICE_ID }}

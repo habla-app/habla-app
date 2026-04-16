@@ -33,19 +33,23 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
       - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
+
       - run: pnpm install --frozen-lockfile
-      # Lint, build y test se habilitaran cuando haya codigo compilable
-      # - run: pnpm lint
-      # - run: pnpm build
-      # - run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      # Tests se habilitaran cuando haya tests escritos
+      # - name: Test
+      #   run: pnpm test
       #   env:
       #     DATABASE_URL: postgresql://habla_test:habla_test@localhost:5432/habladb_test
       #     REDIS_URL: redis://localhost:6379
       #     NODE_ENV: test
-      - name: Verify install
-        run: pnpm ls --depth 0 -r
