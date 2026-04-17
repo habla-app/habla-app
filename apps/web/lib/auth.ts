@@ -11,6 +11,10 @@ import { HablaPrismaAdapter } from "@/lib/auth-adapter";
 import { crearOEncontrarUsuario, obtenerBalance } from "@/lib/usuarios";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  // Railway corre la app detras de un proxy; NextAuth v5 por defecto no
+  // confia en el host. Con trustHost aceptamos el host reenviado por el
+  // proxy de Railway (habla-app-production.up.railway.app).
+  trustHost: true,
   adapter: HablaPrismaAdapter(),
   providers: [
     Resend({
