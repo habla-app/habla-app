@@ -21,10 +21,5 @@ jobs:
 
       - name: Build
         run: pnpm build
-
-      - name: Deploy to Railway
-        if: success()
-        uses: bervProject/railway-deploy@main
-        with:
-          railway_token: ${{ secrets.RAILWAY_TOKEN }}
-          service: ${{ secrets.RAILWAY_SERVICE_ID }}
+      # Railway despliega automaticamente via webhook GitHub->Railway al hacer
+      # push a main. Este workflow solo valida que el build pase en CI.
