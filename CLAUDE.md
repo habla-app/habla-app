@@ -1,7 +1,7 @@
 # CLAUDE.md — Habla! App
 
 > Este archivo es el cerebro del proyecto. Léelo completo antes de tocar cualquier código.
-> Última actualización: Abril 2026
+> Última actualización: 17 de Abril 2026 (Sprint 1 completado)
 
 ---
 
@@ -67,7 +67,7 @@ WebApp de torneos de predicciones deportivas orientada al mercado peruano. Los u
 | Cache / Tiempo real | Redis 7 | Ranking en vivo, sesiones |
 | ORM | Prisma | Schema, migraciones, type-safety |
 | WebSockets | Socket.io (sobre Fastify) | Ranking actualizado en vivo |
-| Auth | NextAuth.js v5 (5.0.0-beta.30) | Google OAuth + magic link — v5 aún sin release estable |
+| Auth | NextAuth.js v5 (5.0.0-beta.30) | MVP: solo magic link via Resend (Google OAuth post-lanzamiento). v5 aún sin release estable |
 | Pagos | Culqi + Yape API | Pasarelas peruanas |
 | API deportiva | api-football.com (directo) | Cuenta hablaplay@gmail.com, plan básico. Header: x-apisports-key |
 | Email | Resend | Email transaccional |
@@ -468,6 +468,12 @@ NODE_ENV=development
 SENTRY_DSN=
 ```
 
+### ⚠️ Notas críticas sobre Railway
+
+- **`DATABASE_URL` NO se hereda automáticamente entre servicios en Railway.** La inyecta solo en el servicio Postgres. Para el servicio web, hay que crear la variable explícitamente con valor `${{ Postgres.DATABASE_URL }}` (referencia al servicio Postgres). Sin esto, Prisma falla con `P1012 Environment variable not found: DATABASE_URL` al arrancar y el healthcheck falla infinitamente
+- **`NEXTAUTH_URL` sin `/` final:** debe ser exactamente `https://habla-app-production.up.railway.app`. Con slash final NextAuth rompe las redirects
+- **`HOSTNAME=0.0.0.0` obligatorio:** sin esto, Next.js standalone escucha solo en `localhost` y el healthcheck de Railway no lo alcanza
+
 ---
 
 ## 9. DOCKER COMPOSE (DESARROLLO)
@@ -551,7 +557,7 @@ pnpm lint
 | Sprint | Fechas | Entregable principal | Estado |
 |--------|--------|---------------------|--------|
 | Sprint 0 | 11-17 Abr | Setup monorepo, CI/CD, Docker, schema BD, wireframes, contratos API-Football y Culqi | ✅ Completado 14 Abr |
-| Sprint 1 | 18-24 Abr | Auth (Google OAuth + magic link), perfil, middleware rutas protegidas | Pendiente |
+| Sprint 1 | 18-24 Abr | Auth (magic link Resend), perfil, middleware rutas protegidas | ✅ Completado 17 Abr |
 | Sprint 2 | 25 Abr-1 May | Módulo Lukas: compra Culqi, balance, historial, webhook confirmación | Pendiente |
 | Sprint 3 | 2-8 May | Torneos: crear desde admin, listar, inscribir, cierre automático | Pendiente |
 | Sprint 4 | 9-15 May | Tickets: formulario 5 predicciones, validaciones, múltiples tickets, confirmación | Pendiente |
@@ -774,15 +780,19 @@ components/
 │   ⬚ ComprarLukas.tsx          ← Integra Culqi.js
 │   ⬚ HistorialTransacciones.tsx
 ├── auth/
-│   ⬚ ModalLoginInscripcion.tsx ← Modal contextual con info del torneo
+│   ✅ ModalLoginInscripcion.tsx ← Modal contextual con info del torneo (Sprint 1)
+│   ✅ CerrarSesionBoton.tsx    ← Client component que llama signOut() (Sprint 1)
+├── home/
+│   ✅ HomeContent.tsx           ← Client component con tabs/mock data, extraído de page.tsx (Sprint 1)
 └── layout/
-    ✅ NavBar.tsx                ← Logo + botón Entrar (Sprint 0). Falta: balance Lukas + avatar
+    ✅ NavBar.tsx                ← Server Component: balance + avatar si hay sesión / "Entrar" si no (Sprint 1)
+    ✅ UserMenu.tsx              ← Client component del avatar con menú desplegable (Sprint 1)
     ✅ BottomNav.tsx             ← 5 tabs de navegación inferior (Sprint 0)
 ```
 
 **Nota:** En Sprint 0, los componentes HeroLive, RankingWidget, MatchCard, Tabs y FilterChips
-están definidos inline en `page.tsx` con datos mock. Se extraerán a archivos separados en los
-sprints correspondientes cuando se conecten a datos reales.
+están definidos inline en `HomeContent.tsx` con datos mock. Se extraerán a archivos separados
+en los sprints correspondientes cuando se conecten a datos reales.
 
 ---
 
@@ -1062,36 +1072,63 @@ Tarjeta rechazada: 4000 0000 0000 0002
 
 ---
 
-## 21. CONFIGURACIÓN NEXTAUTH v5 (beta)
+## 21. CONFIGURACIÓN NEXTAUTH v5 (beta) — Implementado Sprint 1
 
 > next-auth versión 5.0.0-beta.30 — la API difiere de v4.
+> MVP: solo magic link via Resend. Google OAuth se agrega post-lanzamiento.
+
+### Configuración actual (apps/web/lib/auth.ts)
 
 ```typescript
-// apps/web/lib/auth.ts
 import NextAuth from 'next-auth'
-import Google from 'next-auth/providers/google'
 import Resend from 'next-auth/providers/resend'
+import { HablaPrismaAdapter } from '@/lib/auth-adapter'
+import { crearOEncontrarUsuario, obtenerBalance } from '@/lib/usuarios'
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  // Railway corre detrás de proxy; sin trustHost NextAuth rechaza con UntrustedHost
+  trustHost: true,
+  adapter: HablaPrismaAdapter(),
   providers: [
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    }),
     Resend({
       apiKey: process.env.RESEND_API_KEY,
-      from: 'Habla! <noreply@hablaapp.pe>',
+      from: 'Habla! <equipo@hablaplay.com>',
     }),
   ],
+  session: { strategy: 'jwt' },
   callbacks: {
     async signIn({ user }) {
-      // Crear usuario en BD si no existe, dar bonus de 500 Lukas si es nuevo
+      if (!user.email) return false
+      await crearOEncontrarUsuario({
+        email: user.email,
+        nombre: user.name ?? user.email.split('@')[0],
+      })
       return true
     },
+    async jwt({ token, user }) {
+      if (user?.email) {
+        const usuario = await crearOEncontrarUsuario({
+          email: user.email,
+          nombre: user.name ?? user.email.split('@')[0],
+        })
+        token.usuarioId = usuario.id
+        token.rol = usuario.rol
+      }
+      return token
+    },
     async session({ session, token }) {
-      // Agregar balance de Lukas y rol a la sesión
+      if (token.usuarioId && session.user) {
+        session.user.id = token.usuarioId as string
+        session.user.rol = (token.rol as 'JUGADOR' | 'ADMIN') ?? 'JUGADOR'
+        session.user.balanceLukas = await obtenerBalance(token.usuarioId as string)
+      }
       return session
     },
+  },
+  pages: {
+    signIn: '/auth/login',
+    verifyRequest: '/auth/verificar',
+    error: '/auth/error',
   },
 })
 
@@ -1099,6 +1136,25 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 import { handlers } from '@/lib/auth'
 export const { GET, POST } = handlers
 ```
+
+### Custom Prisma Adapter (apps/web/lib/auth-adapter.ts)
+
+El adapter oficial `@auth/prisma-adapter` espera un modelo `User` con campo `name`. Nuestro
+modelo se llama `Usuario` con campo `nombre`. En vez de renombrar todo el schema, creamos un
+adapter custom que mapea internamente. Solo implementa lo necesario para magic link + JWT session:
+
+- `createUser` → crea `Usuario` + transacción atómica con 500 Lukas bonus
+- `getUser`, `getUserByEmail`, `getUserByAccount`, `updateUser`
+- `linkAccount` (para cuando se agregue OAuth post-MVP)
+- `createVerificationToken`, `useVerificationToken` (para magic link)
+
+### Tablas NextAuth en Prisma
+
+Migración `20260416120000_add_auth_tables` agrega:
+- `auth_accounts` — para OAuth providers (Google futuro)
+- `auth_sessions` — no usado con JWT pero requerido por el adapter contract
+- `auth_verification_tokens` — tokens del magic link
+- Campos `emailVerified: DateTime?` e `image: String?` en `usuarios`
 
 ### Middleware de rutas protegidas
 
@@ -1426,12 +1482,16 @@ describe('distribuirPremios', () => {
 
 ## 28. CHECKLIST DE VERIFICACIÓN POR SPRINT
 
-### Sprint 1 — Auth
-- [ ] Google OAuth funciona en localhost
-- [ ] Magic link por email funciona (Resend sandbox)
-- [ ] Nuevo usuario recibe 500 Lukas bonus automáticamente
-- [ ] Middleware protege /wallet y /perfil, no protege /torneos
-- [ ] `pendingTorneoId` redirige al torneo correcto tras login
+### Sprint 1 — Auth ✅ Completado 17 Abr
+- [~] Google OAuth — pospuesto a post-MVP
+- [x] Magic link por email funciona end-to-end (Resend con dominio hablaplay.com verificado)
+- [x] Nuevo usuario recibe 500 Lukas bonus automáticamente (verificado en BD: tabla `usuarios` + `transacciones_lukas`)
+- [x] Middleware protege /wallet, /perfil, /admin; /admin además requiere rol ADMIN
+- [x] Rutas públicas (/, /torneos, /torneo/:id, /tienda) no redirigen
+- [x] `trustHost: true` resuelve el error UntrustedHost de Railway proxy
+- [x] NavBar dinámico: balance + avatar cuando hay sesión, botón Entrar cuando no
+- [x] Páginas auth (/auth/login, /auth/verificar, /auth/error) con estilos de marca
+- [ ] `pendingTorneoId` redirige al torneo correcto tras login — pendiente de Sprint 3 cuando se inscriba a torneos
 
 ### Sprint 2 — Lukas / Pagos
 - [ ] Culqi checkout abre con CULQI_PUBLIC_KEY de sandbox
@@ -1471,3 +1531,126 @@ describe('distribuirPremios', () => {
 - [ ] Prisma Studio muestra datos correctos tras flujo completo
 - [ ] Sentry captura errores correctamente
 - [ ] Railway auto-scale funciona bajo carga
+
+---
+
+## 29. ESTADO DEL SPRINT 1 (completado 17 Abr 2026)
+
+### Lo que se construyó
+
+**Backend / datos (Server-side en apps/web — el backend Fastify se levanta en Sprint 2):**
+- `apps/web/lib/usuarios.ts` — funciones con Prisma directo: `encontrarUsuarioPorEmail`, `crearOEncontrarUsuario` (transacción atómica que crea `Usuario` + `TransaccionLukas` BONUS de 500 Lukas sin vencimiento), `obtenerBalance`
+- `apps/web/lib/auth-adapter.ts` — custom Prisma adapter para NextAuth que mapea `Usuario/nombre` al contrato estándar `User/name`, sin renombrar el modelo del dominio
+- `apps/web/types/next-auth.d.ts` — extiende la `Session` de NextAuth con `id`, `balanceLukas`, `rol`
+- `packages/db/prisma/migrations/20260416120000_add_auth_tables/migration.sql` — agrega 3 tablas (`auth_accounts`, `auth_sessions`, `auth_verification_tokens`) + 2 columnas en `usuarios` (`emailVerified`, `image`)
+
+**Auth / NextAuth v5:**
+- `apps/web/lib/auth.ts` — configuración completa: provider Resend único, HablaPrismaAdapter, session JWT, callbacks `signIn/jwt/session`, `trustHost: true`, páginas custom
+- `apps/web/app/api/auth/[...nextauth]/route.ts` — exporta los handlers GET/POST
+
+**Middleware:**
+- `apps/web/middleware.ts` — protege `/wallet`, `/perfil`, `/admin`. Admin además requiere `rol === 'ADMIN'`. Redirige a `/auth/login?callbackUrl=...` preservando destino
+
+**Páginas de auth (bajo `/auth/*`, NO route group `(auth)`):**
+- `apps/web/app/auth/layout.tsx` — layout standalone con fondo azul oscuro, sin NavBar/BottomNav
+- `apps/web/app/auth/login/page.tsx` — form con Server Action que llama `signIn('resend', { email, redirectTo })`
+- `apps/web/app/auth/verificar/page.tsx` — pantalla "¡Revisa tu correo!"
+- `apps/web/app/auth/error/page.tsx` — mensajes de error en español según `searchParams.error`
+
+**Componentes:**
+- `apps/web/components/layout/NavBar.tsx` — async Server Component que lee sesión y renderiza balance + avatar si hay usuario, "Entrar" si no
+- `apps/web/components/layout/UserMenu.tsx` — Client Component del dropdown del avatar (perfil, wallet, cerrar sesión)
+- `apps/web/components/auth/ModalLoginInscripcion.tsx` — modal contextual para flujo de inscripción a torneos sin login (listo para usar en Sprint 3)
+- `apps/web/components/auth/CerrarSesionBoton.tsx` — Client Component que llama `signOut({ callbackUrl: '/' })`
+- `apps/web/components/home/HomeContent.tsx` — extraído del antiguo `page.tsx` para que la home sea Server Component y el NavBar pueda leer la sesión
+
+**Páginas protegidas:**
+- `apps/web/app/(main)/wallet/page.tsx` — Server Component con balance actual + placeholder para Culqi (Sprint 2)
+- `apps/web/app/(main)/perfil/page.tsx` — Server Component con avatar, datos, balance, botón cerrar sesión
+
+**Stores Zustand:**
+- `apps/web/stores/lukas.store.ts` — balance con setters (`setBalance`, `decrementar`, `incrementar`)
+- `apps/web/stores/auth.store.ts` — `pendingTorneoId` para el flujo de inscripción sin login
+
+### Deploy pipeline (Dockerfile + CI)
+
+El Dockerfile corre `prisma migrate deploy` automáticamente al arrancar el container, de modo
+que cualquier migración pendiente se aplica sola. El flujo completo del Dockerfile:
+
+1. **Stage `deps`:** `pnpm install --frozen-lockfile` — el postinstall de `packages/db` dispara `prisma generate` automáticamente
+2. **Stage `builder`:** `COPY --from=deps /app ./` (trae TODO, incluyendo node_modules distribuidos) + `COPY . .` (trae source, node_modules preservado por `.dockerignore`) → `prisma generate` → `next build`
+3. **Stage `runner`:** solo standalone + prisma CLI + schema. CMD: `npx prisma migrate deploy && node apps/web/server.js`
+
+**CI:** `.github/workflows/deploy.yml` solo valida `pnpm build`. El deploy real lo hace Railway
+por webhook GitHub→Railway (auto-deploy al push a `main`). Se eliminó el step `Deploy to Railway`
+del workflow porque usaba un secret `RAILWAY_SERVICE_ID` que nunca existió y siempre falló.
+
+### Infraestructura externa configurada
+
+- **Dominio:** `hablaplay.com` comprado en Cloudflare Registrar (~$10 USD/año, WHOIS privacy activo)
+- **Resend:** dominio `hablaplay.com` verificado via autoconfigure con Cloudflare (SPF + DKIM + MX creados automáticamente)
+- **Remitente de emails:** `Habla! <equipo@hablaplay.com>`
+- **Railway variables de entorno necesarias para el servicio web:**
+  - `DATABASE_URL` → `${{ Postgres.DATABASE_URL }}` (referencia explícita al servicio Postgres; Railway NO la inyecta automáticamente entre servicios)
+  - `NEXTAUTH_URL` → `https://habla-app-production.up.railway.app` (sin `/` final)
+  - `NEXTAUTH_SECRET` → secret generado aleatoriamente
+  - `RESEND_API_KEY` → API key de Resend
+  - `HOSTNAME=0.0.0.0` (ya existía desde Sprint 0)
+
+### Fixes aplicados durante el deploy
+
+Cinco fixes consecutivos para hacer que Railway levantara la app correctamente:
+
+1. **`postinstall: prisma generate` en `packages/db/package.json`** — CI fallaba con "Module '@habla/db' has no exported member 'Usuario'" porque Prisma Client no se generaba automáticamente al instalar. Ahora cualquier `pnpm install` dispara el generate
+2. **Eliminar step `Deploy to Railway` del workflow** — fallaba por falta de secret `RAILWAY_SERVICE_ID` sin relación con el código. Railway deploya por webhook
+3. **`@habla/db` agregado a `transpilePackages`** en `next.config.js` — junto con `@habla/shared` y `@habla/ui`. Next.js no resolvía TypeScript crudo de workspace packages sin esto
+4. **Dockerfile `COPY --from=deps /app ./`** en vez de solo `/app/node_modules` — con `pnpm 10 + node-linker=hoisted` los workspace packages viven en `apps/web/node_modules/@habla/*`, NO en el root `node_modules/`. La copia selectiva los perdía
+5. **`trustHost: true`** en la config de NextAuth — Railway actúa como proxy. NextAuth v5 por defecto rechaza con `UntrustedHost` si no se marca explícitamente
+
+### Decisiones técnicas tomadas
+
+- **Protocolo workspace explícito (`workspace:*`):** pnpm 10 no resuelve bien `"@habla/db": "*"` — lo trata como package público de npm y falla con 404. Todas las referencias cross-workspace deben usar `workspace:*`
+- **Custom adapter en lugar de `@auth/prisma-adapter`:** se escribió `HablaPrismaAdapter` para mapear el modelo `Usuario` (con campo `nombre`) al contrato que espera NextAuth (modelo `User` con campo `name`). Alternativa era renombrar todo el schema pero impactaba demasiadas relaciones. El adapter custom solo implementa lo necesario para magic link + JWT session
+- **JWT session strategy:** evita roundtrips a BD en cada request. El balance de Lukas se lee en el callback `session()` desde BD para mantenerlo al día (esto es aceptable porque son pocos requests de sesión)
+- **`/auth/*` como path real, NO route group `(auth)`:** el prompt original pedía route group pero el NextAuth config y el middleware apuntaban a URLs `/auth/login`, `/auth/verificar`, `/auth/error`. Se unificó por coherencia — los route groups (con paréntesis) no contribuyen al URL
+- **`DATABASE_URL` debe configurarse explícitamente en Railway:** inicialmente se asumió que Railway la inyectaba automáticamente, pero solo existe en el servicio Postgres. Hay que crearla en el servicio web como referencia `${{ Postgres.DATABASE_URL }}`
+
+### Verificación end-to-end
+
+Test exitoso el 17 Abr:
+1. Usuario ingresa a `/` → ve NavBar con "Entrar" (no logueado)
+2. Click "Entrar" → `/auth/login` → escribe email → submit
+3. Redirige a `/auth/verificar` → inbox recibe email desde `equipo@hablaplay.com`
+4. Click en el link → login completo, redirige a `/`
+5. NavBar muestra "🪙 500 Lukas" + avatar con iniciales
+6. **En la BD (Railway Postgres):**
+   - Tabla `usuarios`: fila nueva con email, nombre (antes del `@`), balanceLukas=500, rol='JUGADOR', emailVerified fecha
+   - Tabla `transacciones_lukas`: fila con tipo=BONUS, monto=500, descripcion='Bonus de bienvenida', venceEn=null
+   - Tabla `auth_verification_tokens`: el token se consumió al hacer click (delete ocurre en `useVerificationToken`)
+
+### Commits principales del Sprint 1
+
+- `feat(sprint-1): auth magic link (Resend) + middleware + NavBar dinamica` — implementación base
+- `fix(ci): generar Prisma Client en postinstall`
+- `chore(ci): eliminar step de deploy a Railway redundante`
+- `fix(build): agregar @habla/db a transpilePackages de Next.js`
+- `fix(docker): copiar todos los node_modules distribuidos al builder`
+- `fix(auth): trustHost en NextAuth para Railway proxy`
+- `fix(auth): enviar magic link desde equipo@hablaplay.com`
+
+### Pendiente del Sprint 1 (no bloqueante)
+
+- Conectar `pendingTorneoId` del `auth.store.ts` con el modal de inscripción — se activará en Sprint 3 cuando existan torneos reales
+- Agregar Google OAuth como segundo provider — pospuesto a post-MVP por decisión de producto
+- URL propia (`app.hablaplay.com` apuntando a Railway via CNAME) — opcional, el dominio ya es tuyo pero por ahora usamos `habla-app-production.up.railway.app`
+
+### Arranque del Sprint 2
+
+Antes del Sprint 2 (módulo Lukas + Culqi), el PO debe preparar:
+1. **Culqi sandbox keys** en Railway:
+   - `CULQI_PUBLIC_KEY` (pk_test_...)
+   - `CULQI_SECRET_KEY` (sk_test_...)
+   - `CULQI_WEBHOOK_SECRET`
+   - URL de webhook a configurar en Culqi dashboard: `https://habla-app-production.up.railway.app/api/webhooks/culqi`
+2. **Decisión de packs de Lukas:** precios base (ej. S/10 = 10 Lukas, S/50 = 55 Lukas con bonus, S/100 = 120 Lukas)
+3. Verificación del deploy de Sprint 1 en producción (✅ hecho 17 Abr)
