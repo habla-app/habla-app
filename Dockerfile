@@ -17,7 +17,10 @@ RUN pnpm install --frozen-lockfile
 # --- Build ---
 FROM base AS builder
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+# Traer TODO del stage deps: node_modules del root + de cada sub-paquete.
+# Con pnpm 10 + node-linker=hoisted los workspace packages viven en
+# apps/web/node_modules/@habla/* y packages/db/node_modules/, no en el root.
+COPY --from=deps /app ./
 COPY . .
 # Generar cliente Prisma antes del build de Next.js
 RUN pnpm --filter @habla/db exec prisma generate
