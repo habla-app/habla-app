@@ -19,7 +19,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
     Resend({
       apiKey: process.env.RESEND_API_KEY,
-      from: "Habla! <noreply@hablaplay.com>",
+      from: "Habla! <equipo@hablaplay.com>",
     }),
   ],
   session: {
