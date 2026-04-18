@@ -11,8 +11,8 @@ const config: Config = {
       colors: {
         /* ------------------------------------------------------------------
            brand.* — paleta core (azules y dorado) + estados
-           NOTA: algunas claves (surface/card/card2/border/muted/text/live)
-           son legacy de Sprint 0/1 y se migrarán a dark.* en Fase 2.
+           Para dark surfaces (header, hero, live) usar dark.* en su lugar.
+           Para "live/urgent" usar urgent.critical o pred.wrong.
         ------------------------------------------------------------------ */
         brand: {
           "blue-dark": "#001050",
@@ -23,16 +23,9 @@ const config: Config = {
           gold: "#FFB800",
           "gold-dim": "rgba(255, 184, 0, 0.15)",
           "gold-light": "#FFD060",
+          "gold-dark": "#8B6200", /* para gold numbers/icons sobre bg light */
           green: "#00D68F",
-          live: "#FF3D3D",
           orange: "#FF7A00",
-          /* legacy — migrar en Fase 2 */
-          surface: "#001570",
-          card: "#0A2080",
-          card2: "#0D2898",
-          border: "#1A3AA0",
-          muted: "#7B93D0",
-          text: "#EEF2FF",
         },
 
         /* ------------------------------------------------------------------
@@ -43,6 +36,7 @@ const config: Config = {
           "critical-bg": "#FFE5E5",
           high: "#FF7A00",
           "high-bg": "#FFEDD5",
+          "high-dark": "#9A3412", /* texto del badge urgent-high sobre high-bg */
           med: "#FFB800",
           "med-bg": "#FFF3C2",
           low: "#7B93D0",
@@ -55,10 +49,18 @@ const config: Config = {
         accent: {
           mundial: "#8B5CF6",
           "mundial-bg": "#F3E8FF",
+          "mundial-dark": "#6D28D9", /* texto del badge mundial sobre mundial-bg */
           clasico: "#DC2626",
           "clasico-bg": "#FFEBEB",
+          "clasico-dark": "#991B1B",
           libertadores: "#059669",
           "libertadores-bg": "#D1FAE5",
+          "libertadores-dark": "#065F46",
+          "champions-bg": "#E0E7FF",
+          "champions-dark": "#1E3A8A",
+          express: "#38BDF8",
+          "express-bg": "#E0F2FE",
+          "express-dark": "#0369A1",
         },
 
         /* ------------------------------------------------------------------
@@ -84,6 +86,9 @@ const config: Config = {
           pending: "rgba(0, 16, 80, 0.35)",
           "pending-bg": "#F1F4FB",
         },
+
+        /* danger — color de texto para botones tipo "Cerrar sesión" / destructivos */
+        danger: "#C9302C",
       },
 
       /* ------------------------------------------------------------------
@@ -126,7 +131,7 @@ const config: Config = {
       },
 
       /* ------------------------------------------------------------------
-         boxShadow — escala + shadow-gold / shadow-urgent
+         boxShadow — escala + shadow-gold / shadow-urgent / shadow-nav-top
       ------------------------------------------------------------------ */
       boxShadow: {
         sm: "0 1px 2px rgba(0, 16, 80, 0.06), 0 1px 3px rgba(0, 16, 80, 0.08)",
@@ -135,6 +140,26 @@ const config: Config = {
         xl: "0 24px 60px rgba(0, 16, 80, 0.25), 0 8px 16px rgba(0, 16, 80, 0.12)",
         gold: "0 8px 24px rgba(255, 184, 0, 0.3)",
         urgent: "0 8px 24px rgba(255, 46, 46, 0.25)",
+        /* sombra que emerge hacia arriba para el BottomNav fijo */
+        "nav-top": "0 -4px 12px rgba(0, 16, 80, 0.08)",
+      },
+
+      /* ------------------------------------------------------------------
+         backgroundImage — gradientes reutilizables (hero, stadium, logo)
+      ------------------------------------------------------------------ */
+      backgroundImage: {
+        /* Fondo oscuro tipo estadio para hero live y dark sections */
+        stadium:
+          "linear-gradient(180deg, #001050 0%, #000530 70%, #000420 100%)",
+        /* Gradiente azul hero usado en wallet hero, perfil hero, auth CTA cards */
+        "hero-blue":
+          "linear-gradient(135deg, #0052CC 0%, #0038B8 100%)",
+        /* Logo mark circular (radial) — dorado a naranja */
+        "gold-radial":
+          "radial-gradient(circle at 30% 30%, #FFB800, #FF8C00)",
+        /* Avatar dorado diagonal — usado en UserMenu y perfil hero */
+        "gold-diagonal":
+          "linear-gradient(135deg, #FFB800 0%, #FF8C00 100%)",
       },
 
       /* ------------------------------------------------------------------

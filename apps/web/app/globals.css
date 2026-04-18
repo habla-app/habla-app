@@ -87,26 +87,25 @@
   --radius-lg: 16px;
   --radius-xl: 20px;
 
+  /* Dark text variants — cuando gold/red/etc. debe ser legible sobre bg light */
+  --gold-dark: #8B6200;
+  --urgent-high-dark: #9A3412;
+  --accent-mundial-dark: #6D28D9;
+  --accent-clasico-dark: #991B1B;
+  --accent-libertadores-dark: #065F46;
+  --accent-champions-dark: #1E3A8A;
+  --accent-champions-bg: #E0E7FF;
+  --accent-express: #38BDF8;
+  --accent-express-bg: #E0F2FE;
+  --accent-express-dark: #0369A1;
+  --danger-text: #C9302C;
+
   /* Layout */
   --header-h: 68px;
-
-  /* ------------------------------------------------------------------
-     Legacy aliases — usados por componentes de Sprint 0/1.
-     Se eliminan cuando se migren todos los componentes en Fase 2.
-  ------------------------------------------------------------------ */
-  --text: #EEF2FF;           /* → var(--dark-text) */
-  --surface: #001570;        /* → var(--dark-surface) (tono equivalente) */
-  --card: #0A2080;           /* → var(--dark-card) */
-  --card2: #0D2898;          /* → var(--dark-card-2) */
-  --border: #1A3AA0;         /* → var(--dark-border) */
-  --green-dim: rgba(0, 214, 143, 0.12); /* → var(--pred-correct-bg) */
-  --red-dim: rgba(255, 61, 61, 0.12);   /* → var(--pred-wrong-bg) */
 }
 
 /* ==========================================================================
    BASE
-   NOTA: el body sigue con fondo oscuro heredado de Sprint 0/1. La migración
-   al light base (bg-page) se hace en Fase 2 junto con los componentes.
    ========================================================================== */
 html,
 body {
@@ -114,8 +113,8 @@ body {
 }
 
 body {
-  background: #000820;
-  color: var(--text);
+  background: var(--bg-page);
+  color: var(--text-body);
   font-family: "DM Sans", sans-serif;
 }
 

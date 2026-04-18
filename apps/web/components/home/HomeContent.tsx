@@ -1,19 +1,24 @@
 "use client";
 
-// HomeContent — toda la logica interactiva de la home.
-// Se separa del page.tsx (Server Component) para que el NavBar pueda leer la sesion.
+// HomeContent — landing simplificada previa al Sub-Sprint 3.
+// Migrada en Phase 2 al sistema light del mockup v5:
+//   - Fondo light (hereda de bg-page en el layout)
+//   - HeroLive se mantiene como card "dark stadium vibe"
+//   - Ranking, MatchCards y FilterChips pasan a light con border-light
+//   - Badges por tipo de torneo usan tokens accent.*/brand-gold tokens
+//
+// El BottomNav vive en el layout; aquí NO se renderiza.
 import { useState } from "react";
-import { BottomNav } from "@/components/layout/BottomNav";
 
-// --- Mock Data ---
+// --- Mock Data (sigue igual hasta Sub-Sprint 3) ---
 
 const LIVE_MATCH = {
-  league: "Champions League - Cuartos",
-  leagueIcon: "\uD83C\uDFC6",
+  league: "Champions League — Cuartos",
+  leagueIcon: "🏆",
   homeTeam: "Man. United",
   awayTeam: "Real Madrid",
-  homeIcon: "\uD83D\uDD34",
-  awayIcon: "\u26AA",
+  homeIcon: "🔴",
+  awayIcon: "⚪",
   homeColor: "from-red-900 to-red-600",
   awayColor: "from-blue-900 to-blue-600",
   homeScore: 1,
@@ -26,18 +31,29 @@ const LIVE_MATCH = {
 };
 
 const LIVE_RANKING = [
-  { pos: 1, name: "LeonardoPred", icon: "\uD83E\uDD81", color: "bg-orange-500", pts: 18 },
-  { pos: 2, name: "CrackPeruano", icon: "\u26A1", color: "bg-blue-500", pts: 16 },
-  { pos: 3, name: "PredictoPro99", icon: "\uD83C\uDFAF", color: "bg-purple-500", pts: 15 },
-  { pos: 4, name: "FutboleroLima", icon: "\uD83D\uDD25", color: "bg-emerald-500", pts: 14 },
-  { pos: 5, name: "GolazoTotal", icon: "\u2B50", color: "bg-red-500", pts: 13 },
+  { pos: 1, name: "LeonardoPred", icon: "🦁", color: "bg-orange-500", pts: 18 },
+  { pos: 2, name: "CrackPeruano", icon: "⚡", color: "bg-blue-500", pts: 16 },
+  { pos: 3, name: "PredictoPro99", icon: "🎯", color: "bg-purple-500", pts: 15 },
+  { pos: 4, name: "FutboleroLima", icon: "🔥", color: "bg-emerald-500", pts: 14 },
+  { pos: 5, name: "GolazoTotal", icon: "⭐", color: "bg-red-500", pts: 13 },
 ];
+
+type TipoBadge = "premium" | "express" | "estandar" | "finalizado";
+
+const BADGE_CLASSES: Record<TipoBadge, string> = {
+  premium: "border-brand-gold bg-brand-gold-dim text-brand-gold-dark",
+  express: "border-accent-express bg-accent-express-bg text-accent-express-dark",
+  estandar:
+    "border-accent-libertadores bg-accent-libertadores-bg text-accent-libertadores-dark",
+  finalizado:
+    "border-accent-libertadores bg-accent-libertadores-bg text-accent-libertadores-dark",
+};
 
 interface TorneoCard {
   id: string;
   league: string;
   leagueIcon: string;
-  badge: { label: string; className: string };
+  badge: { label: string; tipo: TipoBadge };
   homeTeam: string;
   awayTeam: string;
   homeIcon: string;
@@ -59,12 +75,12 @@ const ABIERTOS: TorneoCard[] = [
   {
     id: "1",
     league: "Champions League",
-    leagueIcon: "\uD83C\uDFC6",
-    badge: { label: "Premium", className: "border-brand-gold/30 bg-yellow-900/30 text-brand-gold" },
+    leagueIcon: "🏆",
+    badge: { label: "Premium", tipo: "premium" },
     homeTeam: "Man. United",
     awayTeam: "Real Madrid",
-    homeIcon: "\uD83D\uDD34",
-    awayIcon: "\u26AA",
+    homeIcon: "🔴",
+    awayIcon: "⚪",
     homeColor: "from-red-900 to-red-600",
     awayColor: "from-blue-900 to-blue-600",
     pot: "24,200",
@@ -74,13 +90,13 @@ const ABIERTOS: TorneoCard[] = [
   },
   {
     id: "2",
-    league: "Liga 1 Peru",
-    leagueIcon: "\u26BD",
-    badge: { label: "Express", className: "border-blue-500/30 bg-blue-900/30 text-blue-400" },
+    league: "Liga 1 Perú",
+    leagueIcon: "⚽",
+    badge: { label: "Express", tipo: "express" },
     homeTeam: "Alianza Lima",
     awayTeam: "Universitario",
-    homeIcon: "\uD83D\uDC99",
-    awayIcon: "\u2764\uFE0F",
+    homeIcon: "💙",
+    awayIcon: "❤️",
     homeColor: "from-blue-900 to-blue-600",
     awayColor: "from-red-800 to-red-500",
     pot: "3,850",
@@ -91,12 +107,12 @@ const ABIERTOS: TorneoCard[] = [
   {
     id: "3",
     league: "Copa Libertadores",
-    leagueIcon: "\uD83C\uDF0E",
-    badge: { label: "Estandar", className: "border-brand-green/30 bg-emerald-900/30 text-brand-green" },
+    leagueIcon: "🌎",
+    badge: { label: "Estándar", tipo: "estandar" },
     homeTeam: "S. Cristal",
     awayTeam: "Boca Juniors",
-    homeIcon: "\uD83D\uDD37",
-    awayIcon: "\u2B50",
+    homeIcon: "🔷",
+    awayIcon: "⭐",
     homeColor: "from-blue-800 to-blue-500",
     awayColor: "from-yellow-600 to-orange-400",
     pot: "8,120",
@@ -110,12 +126,12 @@ const PROXIMOS: TorneoCard[] = [
   {
     id: "4",
     league: "Premier League",
-    leagueIcon: "\uD83C\uDFF4\uDB40\uDC67\uDB40\uDC62\uDB40\uDC65\uDB40\uDC6E\uDB40\uDC67\uDB40\uDC7F",
-    badge: { label: "Estandar", className: "border-brand-green/30 bg-emerald-900/30 text-brand-green" },
+    leagueIcon: "🏴",
+    badge: { label: "Estándar", tipo: "estandar" },
     homeTeam: "Arsenal",
     awayTeam: "Chelsea",
-    homeIcon: "\uD83D\uDD34",
-    awayIcon: "\uD83D\uDD35",
+    homeIcon: "🔴",
+    awayIcon: "🔵",
     homeColor: "from-red-600 to-red-400",
     awayColor: "from-blue-800 to-blue-500",
     pot: "",
@@ -127,12 +143,12 @@ const PROXIMOS: TorneoCard[] = [
   {
     id: "5",
     league: "La Liga",
-    leagueIcon: "\uD83C\uDDEA\uD83C\uDDF8",
-    badge: { label: "Premium", className: "border-brand-gold/30 bg-yellow-900/30 text-brand-gold" },
+    leagueIcon: "🇪🇸",
+    badge: { label: "Premium", tipo: "premium" },
     homeTeam: "Barcelona",
-    awayTeam: "Atletico",
-    homeIcon: "\uD83D\uDD34",
-    awayIcon: "\u2B50",
+    awayTeam: "Atlético",
+    homeIcon: "🔴",
+    awayIcon: "⭐",
     homeColor: "from-red-800 to-red-500",
     awayColor: "from-red-700 to-red-900",
     pot: "",
@@ -147,42 +163,42 @@ const FINALIZADOS: TorneoCard[] = [
   {
     id: "6",
     league: "Champions League",
-    leagueIcon: "\uD83C\uDFC6",
-    badge: { label: "FINALIZADO", className: "bg-emerald-900/30 text-green-400" },
+    leagueIcon: "🏆",
+    badge: { label: "Finalizado", tipo: "finalizado" },
     homeTeam: "Juventus",
     awayTeam: "PSG",
-    homeIcon: "\u26AB",
-    awayIcon: "\uD83D\uDD34",
+    homeIcon: "⚫",
+    awayIcon: "🔴",
     homeColor: "from-gray-800 to-gray-600",
     awayColor: "from-red-700 to-red-500",
     pot: "18,900",
     entry: "S/30",
     inscritos: 630,
-    finalScore: "2 \u2014 1",
+    finalScore: "2 — 1",
     winner: "CrackPeruano",
     winnerPrize: "S/308",
   },
   {
     id: "7",
-    league: "Liga 1 Peru",
-    leagueIcon: "\u26BD",
-    badge: { label: "FINALIZADO", className: "bg-emerald-900/30 text-green-400" },
+    league: "Liga 1 Perú",
+    leagueIcon: "⚽",
+    badge: { label: "Finalizado", tipo: "finalizado" },
     homeTeam: "Melgar",
     awayTeam: "Cienciano",
-    homeIcon: "\uD83D\uDD34",
-    awayIcon: "\uD83D\uDD34",
+    homeIcon: "🔴",
+    awayIcon: "🔴",
     homeColor: "from-red-800 to-red-600",
     awayColor: "from-red-700 to-red-400",
     pot: "4,200",
     entry: "S/5",
     inscritos: 840,
-    finalScore: "0 \u2014 0",
+    finalScore: "0 — 0",
     winner: "GolazoTotal",
     winnerPrize: "S/64",
   },
 ];
 
-// --- Inline Components ---
+// --- Components ---
 
 function Tabs({
   active,
@@ -192,29 +208,27 @@ function Tabs({
   onChange: (tab: string) => void;
 }) {
   const tabs = [
-    { id: "en-vivo", label: "\u26A1 En vivo" },
+    { id: "en-vivo", label: "⚡ En vivo" },
     { id: "abiertos", label: "Abiertos" },
-    { id: "proximos", label: "Pr\u00F3ximos" },
+    { id: "proximos", label: "Próximos" },
     { id: "finalizados", label: "Finalizados" },
   ];
 
   return (
-    <div className="flex-shrink-0 px-4 pt-2.5">
-      <div className="flex gap-0.5 rounded-[10px] bg-brand-surface p-0.5">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => onChange(tab.id)}
-            className={`flex-1 rounded-[7px] py-1.5 text-center text-[11px] font-semibold transition-all ${
-              active === tab.id
-                ? "bg-brand-blue-main text-white"
-                : "text-brand-muted hover:text-brand-text"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+    <div className="scrollbar-none flex gap-2 overflow-x-auto px-4 pb-2 pt-5 md:px-6 md:pt-7">
+      {tabs.map((tab) => (
+        <button
+          key={tab.id}
+          onClick={() => onChange(tab.id)}
+          className={`flex-shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[13px] font-semibold transition-all ${
+            active === tab.id
+              ? "bg-brand-gold text-black shadow-sm"
+              : "border border-light bg-card text-muted-d hover:border-brand-gold/40 hover:text-brand-gold-dark"
+          }`}
+        >
+          {tab.label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -222,21 +236,28 @@ function Tabs({
 function HeroLive() {
   const m = LIVE_MATCH;
   return (
-    <div className="relative mx-4 mt-2.5 animate-fade-in overflow-hidden rounded-2xl border border-brand-border bg-gradient-to-br from-brand-blue-mid to-brand-blue-main">
-      <div className="absolute -right-8 -top-8 h-[120px] w-[120px] rounded-full bg-brand-gold opacity-[0.06]" />
-      <div className="flex items-center justify-between px-3.5 pb-2 pt-3">
+    <section className="relative mx-4 mt-3 animate-fade-in overflow-hidden rounded-lg border border-dark-border bg-stadium text-dark-text shadow-md md:mx-6">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-10 -top-10 h-[140px] w-[140px] rounded-full bg-brand-gold opacity-[0.06]"
+      />
+      <div className="flex items-center justify-between px-4 pb-2 pt-3.5">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-white/70">
-          {m.leagueIcon} {m.league}
+          <span aria-hidden>{m.leagueIcon}</span> {m.league}
         </span>
-        <span className="flex items-center gap-1 rounded-full bg-brand-live px-2 py-0.5 text-[10px] font-bold text-white">
-          <span className="h-1.5 w-1.5 animate-live-pulse rounded-full bg-white" />
-          EN VIVO
+        <span className="flex items-center gap-1.5 rounded-full bg-urgent-critical px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white">
+          <span
+            aria-hidden
+            className="h-1.5 w-1.5 animate-pulse-dot rounded-full bg-white"
+          />
+          En vivo
         </span>
       </div>
-      <div className="flex items-center justify-between gap-2 px-3.5 pb-3">
+      <div className="flex items-center justify-between gap-3 px-4 pb-4">
         <div className="flex-1 text-center">
           <div
-            className={`mx-auto mb-1.5 flex h-[42px] w-[42px] items-center justify-center rounded-full bg-gradient-to-br ${m.homeColor} text-xl`}
+            aria-hidden
+            className={`mx-auto mb-2 flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br text-xl shadow-sm ${m.homeColor}`}
           >
             {m.homeIcon}
           </div>
@@ -246,15 +267,16 @@ function HeroLive() {
         </div>
         <div className="flex-shrink-0 text-center">
           <div className="font-display text-4xl font-black leading-none text-brand-gold">
-            {m.homeScore} &mdash; {m.awayScore}
+            {m.homeScore} — {m.awayScore}
           </div>
-          <div className="mt-0.5 text-[11px] text-white/55">
-            &#9201; {m.minute}&apos;
+          <div className="mt-1 text-[11px] text-white/60">
+            <span aria-hidden>⏱</span> {m.minute}&apos;
           </div>
         </div>
         <div className="flex-1 text-center">
           <div
-            className={`mx-auto mb-1.5 flex h-[42px] w-[42px] items-center justify-center rounded-full bg-gradient-to-br ${m.awayColor} text-xl`}
+            aria-hidden
+            className={`mx-auto mb-2 flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br text-xl shadow-sm ${m.awayColor}`}
           >
             {m.awayIcon}
           </div>
@@ -266,13 +288,13 @@ function HeroLive() {
       <div className="flex border-t border-white/10">
         {[
           { val: m.players.toString(), lbl: "Jugadores" },
-          { val: `${m.pot}\uD83E\uDE99`, lbl: "Pozo" },
+          { val: `${m.pot}🪙`, lbl: "Pozo" },
           { val: m.firstPrize, lbl: "1er Premio" },
           { val: m.entry, lbl: "Entrada" },
         ].map((s, i) => (
           <div
             key={i}
-            className={`flex-1 py-2 text-center ${i < 3 ? "border-r border-white/[0.08]" : ""}`}
+            className={`flex-1 py-2.5 text-center ${i < 3 ? "border-r border-white/[0.08]" : ""}`}
           >
             <div className="font-display text-[15px] font-black text-brand-gold">
               {s.val}
@@ -283,63 +305,57 @@ function HeroLive() {
           </div>
         ))}
       </div>
-    </div>
+    </section>
   );
 }
 
 function RankingWidget() {
   const m = LIVE_MATCH;
-  const posColors = [
-    "text-brand-gold",
-    "text-slate-400",
-    "text-amber-700",
-    "text-brand-muted",
-    "text-brand-muted",
-  ];
-
   return (
-    <div className="mx-4 mt-2.5 overflow-hidden rounded-[14px] border border-brand-border bg-brand-card">
-      <div className="flex items-center gap-2 bg-brand-card2 px-3.5 py-2.5">
-        <span>&#127941;</span>
-        <span className="font-display text-[15px] font-extrabold uppercase">
+    <section className="mx-4 mt-3 overflow-hidden rounded-md border border-light bg-card shadow-sm md:mx-6">
+      <div className="flex items-center gap-2 border-b border-light bg-subtle px-4 py-2.5">
+        <span aria-hidden>🏅</span>
+        <span className="font-display text-[15px] font-extrabold uppercase tracking-wider text-dark">
           Ranking en vivo
         </span>
-        <span className="ml-auto text-[11px] text-brand-muted">
-          {m.minute}&apos; &middot; {m.players} inscritos
+        <span className="ml-auto text-[11px] font-semibold text-muted-d">
+          {m.minute}&apos; · {m.players} inscritos
         </span>
       </div>
       {LIVE_RANKING.map((r, i) => (
         <div
           key={r.pos}
-          className={`flex items-center gap-2.5 px-3.5 py-2 ${
-            i < LIVE_RANKING.length - 1
-              ? "border-b border-brand-border/35"
-              : ""
+          className={`flex items-center gap-2.5 px-4 py-2.5 ${
+            i < LIVE_RANKING.length - 1 ? "border-b border-light" : ""
           }`}
         >
-          <span
-            className={`w-[18px] text-center font-display text-sm font-extrabold ${posColors[i]}`}
-          >
+          <span className="w-5 text-center font-display text-sm font-extrabold text-brand-gold-dark">
             {r.pos}
           </span>
           <div
-            className={`flex h-[26px] w-[26px] flex-shrink-0 items-center justify-center rounded-full text-xs ${r.color}`}
+            aria-hidden
+            className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-xs ${r.color}`}
           >
             {r.icon}
           </div>
-          <span className="flex-1 text-[13px] font-semibold">{r.name}</span>
+          <span className="flex-1 text-[13px] font-semibold text-dark">
+            {r.name}
+          </span>
           <div className="text-right">
-            <div className="font-display text-base font-black text-brand-gold">
+            <div className="font-display text-base font-black leading-none text-brand-gold-dark">
               {r.pts}
             </div>
-            <div className="text-[9px] text-brand-muted">pts</div>
+            <div className="text-[9px] text-muted-d">pts</div>
           </div>
         </div>
       ))}
-      <div className="py-2.5 text-center text-xs text-brand-muted">
-        Ver ranking completo &rarr;
-      </div>
-    </div>
+      <button
+        type="button"
+        className="block w-full bg-subtle py-2.5 text-center text-xs font-semibold text-brand-blue-main transition-colors hover:bg-brand-blue-main/5"
+      >
+        Ver ranking completo →
+      </button>
+    </section>
   );
 }
 
@@ -351,120 +367,125 @@ function MatchCard({
   variant: "abierto" | "proximo" | "finalizado";
 }) {
   return (
-    <div className="animate-fade-in cursor-pointer overflow-hidden rounded-[14px] border border-brand-border bg-brand-card transition-all hover:-translate-y-0.5 hover:border-brand-gold/40 hover:shadow-lg hover:shadow-brand-blue-main/25">
-      <div className="px-3.5 pb-0 pt-3">
-        <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-brand-muted">
-          {torneo.leagueIcon} {torneo.league}
+    <article className="animate-fade-in cursor-pointer overflow-hidden rounded-md border border-light bg-card shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+      <div className="px-4 pb-0 pt-3.5">
+        <div className="mb-2.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-d">
+          <span aria-hidden>{torneo.leagueIcon}</span>
+          <span>{torneo.league}</span>
           <span
-            className={`ml-1.5 rounded-full border px-1.5 py-px text-[10px] font-bold ${torneo.badge.className}`}
+            className={`ml-auto rounded-full border px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider ${BADGE_CLASSES[torneo.badge.tipo]}`}
           >
             {torneo.badge.label}
           </span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex flex-1 items-center gap-1.5">
+        <div className="flex items-center gap-3">
+          <div className="flex flex-1 items-center gap-2">
             <div
-              className={`flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-[15px] ${torneo.homeColor}`}
+              aria-hidden
+              className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-[15px] shadow-sm ${torneo.homeColor}`}
             >
               {torneo.homeIcon}
             </div>
-            <span className="font-display text-[15px] font-extrabold uppercase">
+            <span className="font-display text-[15px] font-extrabold uppercase text-dark">
               {torneo.homeTeam}
             </span>
           </div>
           <span
-            className={`min-w-[44px] flex-shrink-0 text-center font-display text-xl font-black ${
+            className={`min-w-[52px] flex-shrink-0 text-center font-display ${
               variant === "finalizado"
-                ? "text-brand-gold"
-                : "text-[13px] font-semibold text-brand-muted"
+                ? "text-xl font-black text-brand-gold-dark"
+                : "text-[13px] font-semibold text-soft"
             }`}
           >
             {variant === "finalizado"
               ? torneo.finalScore
               : variant === "proximo"
-                ? ""
+                ? "vs"
                 : torneo.scoreDisplay}
           </span>
-          <div className="flex flex-1 flex-row-reverse items-center gap-1.5">
+          <div className="flex flex-1 flex-row-reverse items-center gap-2">
             <div
-              className={`flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-[15px] ${torneo.awayColor}`}
+              aria-hidden
+              className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-[15px] shadow-sm ${torneo.awayColor}`}
             >
               {torneo.awayIcon}
             </div>
-            <span className="font-display text-[15px] font-extrabold uppercase">
+            <span className="font-display text-[15px] font-extrabold uppercase text-dark">
               {torneo.awayTeam}
             </span>
           </div>
         </div>
       </div>
-      <div className="mt-3 flex items-center justify-between border-t border-brand-border bg-brand-card2 px-3.5 py-2.5">
+      <div className="mt-3 flex items-center justify-between gap-3 border-t border-light bg-subtle px-4 py-3">
         {variant === "abierto" && (
           <>
-            <div>
-              <div className="font-display text-[17px] font-black text-brand-gold">
-                {torneo.pot} &#x1FA99;
+            <div className="min-w-0">
+              <div className="font-display text-[17px] font-black leading-none text-brand-gold-dark">
+                {torneo.pot} <span aria-hidden>🪙</span>
               </div>
-              <div className="text-[10px] text-brand-muted">
-                Entrada {torneo.entry} &middot; {torneo.inscritos} inscritos
+              <div className="mt-0.5 text-[10px] text-muted-d">
+                Entrada {torneo.entry} · {torneo.inscritos} inscritos
               </div>
             </div>
-            <button className="whitespace-nowrap rounded-lg bg-brand-gold px-4 py-2 text-xs font-bold text-black transition-colors hover:bg-brand-gold-light">
-              Jugar &rarr;
+            <button
+              type="button"
+              className="whitespace-nowrap rounded-sm bg-brand-gold px-4 py-2 text-xs font-extrabold uppercase tracking-wider text-black shadow-sm transition-all hover:-translate-y-0.5 hover:bg-brand-gold-light"
+            >
+              Jugar →
             </button>
           </>
         )}
         {variant === "proximo" && (
           <>
-            <div>
-              <div className="font-display text-xs font-bold text-brand-orange">
-                &#9201; {torneo.countdown}
+            <div className="min-w-0">
+              <div className="font-display text-xs font-extrabold uppercase tracking-wider text-brand-orange">
+                <span aria-hidden>⏱</span> {torneo.countdown}
               </div>
-              <div className="mt-0.5 text-[10px] text-brand-muted">
+              <div className="mt-0.5 text-[10px] text-muted-d">
                 {torneo.entryHint}
               </div>
             </div>
-            <span className="whitespace-nowrap rounded-lg border border-brand-border px-3.5 py-2 text-xs font-semibold text-brand-muted">
-              Proximamente
+            <span className="whitespace-nowrap rounded-sm border border-strong px-3.5 py-2 text-xs font-semibold text-muted-d">
+              Próximamente
             </span>
           </>
         )}
         {variant === "finalizado" && (
           <>
-            <div>
-              <div className="text-[11px] text-brand-muted">
-                Ganador del torneo
-              </div>
-              <div className="font-display text-sm font-extrabold text-brand-gold">
-                &#127942; {torneo.winner} &middot; {torneo.winnerPrize}
+            <div className="min-w-0">
+              <div className="text-[11px] text-muted-d">Ganador del torneo</div>
+              <div className="truncate font-display text-sm font-extrabold text-brand-gold-dark">
+                <span aria-hidden>🏆</span> {torneo.winner} · {torneo.winnerPrize}
               </div>
             </div>
-            <span className="whitespace-nowrap rounded-lg border border-brand-border px-3.5 py-2 text-xs font-semibold text-brand-muted">
+            <span className="whitespace-nowrap rounded-sm border border-strong px-3.5 py-2 text-xs font-semibold text-muted-d">
               Resultados
             </span>
           </>
         )}
       </div>
-    </div>
+    </article>
   );
 }
 
 function FilterChips() {
   const filters = [
     "Todos",
-    "\uD83C\uDFC6 Champions",
-    "\u26BD Liga 1",
-    "\uD83C\uDF0E Copa Lib.",
-    "\uD83C\uDFF4\uDB40\uDC67\uDB40\uDC62\uDB40\uDC65\uDB40\uDC6E\uDB40\uDC67\uDB40\uDC7F Premier",
+    "🏆 Champions",
+    "⚽ Liga 1",
+    "🌎 Copa Lib.",
+    "🏴 Premier",
   ];
   return (
-    <div className="scrollbar-none flex gap-1.5 overflow-x-auto px-4 pb-2.5">
+    <div className="scrollbar-none flex gap-2 overflow-x-auto px-4 pb-3 md:px-6">
       {filters.map((f, i) => (
         <button
           key={f}
-          className={`flex-shrink-0 rounded-full border px-3 py-1 text-xs font-semibold transition-all ${
+          type="button"
+          className={`flex-shrink-0 whitespace-nowrap rounded-full border px-4 py-2 text-[13px] font-semibold shadow-sm transition-all ${
             i === 0
-              ? "border-brand-gold/40 bg-[var(--gold-dim)] text-brand-gold"
-              : "border-brand-border text-brand-muted hover:border-brand-gold/30 hover:text-brand-gold"
+              ? "border-brand-gold bg-brand-gold text-black"
+              : "border-light bg-card text-muted-d hover:border-brand-gold/40 hover:text-brand-gold-dark"
           }`}
         >
           {f}
@@ -474,52 +495,45 @@ function FilterChips() {
   );
 }
 
+// --- Entry ---
+
 export function HomeContent() {
   const [activeTab, setActiveTab] = useState("en-vivo");
 
-  const handleBottomNav = (tab: string) => {
-    if (tab === "en-vivo" || tab === "abiertos" || tab === "proximos") {
-      setActiveTab(tab);
-    }
-  };
-
   return (
-    <>
+    <div className="mx-auto w-full max-w-3xl">
       <Tabs active={activeTab} onChange={setActiveTab} />
-      <div className="scrollbar-none flex-1 overflow-y-auto pb-20">
-        {activeTab === "en-vivo" && (
-          <>
-            <HeroLive />
-            <RankingWidget />
-          </>
-        )}
-        {activeTab === "abiertos" && (
-          <>
-            <div className="mt-1" />
-            <FilterChips />
-            <div className="flex flex-col gap-2 px-4">
-              {ABIERTOS.map((t) => (
-                <MatchCard key={t.id} torneo={t} variant="abierto" />
-              ))}
-            </div>
-          </>
-        )}
-        {activeTab === "proximos" && (
-          <div className="mt-3 flex flex-col gap-2 px-4">
-            {PROXIMOS.map((t) => (
-              <MatchCard key={t.id} torneo={t} variant="proximo" />
+      {activeTab === "en-vivo" && (
+        <>
+          <HeroLive />
+          <RankingWidget />
+        </>
+      )}
+      {activeTab === "abiertos" && (
+        <>
+          <div className="mt-2" />
+          <FilterChips />
+          <div className="flex flex-col gap-3 px-4 pb-4 md:px-6">
+            {ABIERTOS.map((t) => (
+              <MatchCard key={t.id} torneo={t} variant="abierto" />
             ))}
           </div>
-        )}
-        {activeTab === "finalizados" && (
-          <div className="mt-3 flex flex-col gap-2 px-4">
-            {FINALIZADOS.map((t) => (
-              <MatchCard key={t.id} torneo={t} variant="finalizado" />
-            ))}
-          </div>
-        )}
-      </div>
-      <BottomNav activeTab={activeTab} onTabChange={handleBottomNav} />
-    </>
+        </>
+      )}
+      {activeTab === "proximos" && (
+        <div className="mt-3 flex flex-col gap-3 px-4 pb-4 md:px-6">
+          {PROXIMOS.map((t) => (
+            <MatchCard key={t.id} torneo={t} variant="proximo" />
+          ))}
+        </div>
+      )}
+      {activeTab === "finalizados" && (
+        <div className="mt-3 flex flex-col gap-3 px-4 pb-4 md:px-6">
+          {FINALIZADOS.map((t) => (
+            <MatchCard key={t.id} torneo={t} variant="finalizado" />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

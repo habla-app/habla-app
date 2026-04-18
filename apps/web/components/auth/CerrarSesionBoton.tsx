@@ -7,9 +7,9 @@ export function CerrarSesionBoton() {
     <button
       type="button"
       onClick={() => signOut({ callbackUrl: "/" })}
-      className="w-full rounded-lg border border-brand-live/40 bg-brand-live/10 px-4 py-3 text-sm font-semibold text-brand-live transition-colors hover:bg-brand-live/20"
+      className="w-full rounded-sm border border-urgent-critical/30 bg-urgent-critical/10 px-4 py-3 text-sm font-semibold text-brand-danger transition-colors hover:bg-urgent-critical/20"
     >
-      Cerrar sesi&oacute;n
+      🚪 Cerrar sesión
     </button>
   );
 }
