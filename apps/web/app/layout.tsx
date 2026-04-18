@@ -1,5 +1,9 @@
+// Root layout. Fuentes (Barlow Condensed + DM Sans) via next/font. ToastProvider
+// global para toasts disponibles en cualquier ruta. El resto del chrome (NavBar,
+// BottomNav) vive en los layouts hijos ((main), auth, admin).
 import type { Metadata, Viewport } from "next";
 import { Barlow_Condensed, DM_Sans } from "next/font/google";
+import { ToastProvider } from "@/components/ui";
 import "./globals.css";
 
 const barlow = Barlow_Condensed({
@@ -17,9 +21,9 @@ const dmSans = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Habla! - Torneos de Predicciones Deportivas",
+  title: "Habla! — Torneos de predicciones deportivas",
   description:
-    "Predice resultados de futbol, compite en torneos y gana premios reales. La plataforma #1 de predicciones deportivas en Peru.",
+    "Predice resultados de fútbol, compite en torneos y canjea premios reales. La plataforma de predicciones deportivas de Perú.",
   manifest: "/manifest.json",
 };
 
@@ -37,7 +41,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es" className={`${barlow.variable} ${dmSans.variable}`}>
-      <body className="font-body antialiased">{children}</body>
+      <body className="font-body antialiased">
+        <ToastProvider>{children}</ToastProvider>
+      </body>
     </html>
   );
 }

@@ -1,6 +1,8 @@
 "use client";
 
-// Menu desplegable del avatar — Client Component porque maneja estado de apertura.
+// UserMenu — avatar circular dorado (36x36 según `.avatar` del mockup) con
+// dropdown light flotante. Client Component porque maneja estado de apertura
+// y cierre por click fuera.
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
@@ -16,57 +18,71 @@ export function UserMenu({ iniciales, nombre, email }: UserMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!abierto) return;
     function cerrarAlClickFuera(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setAbierto(false);
       }
     }
-    if (abierto) {
-      document.addEventListener("mousedown", cerrarAlClickFuera);
-      return () => document.removeEventListener("mousedown", cerrarAlClickFuera);
+    function onEsc(e: KeyboardEvent) {
+      if (e.key === "Escape") setAbierto(false);
     }
+    document.addEventListener("mousedown", cerrarAlClickFuera);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", cerrarAlClickFuera);
+      document.removeEventListener("keydown", onEsc);
+    };
   }, [abierto]);
 
   return (
     <div ref={ref} className="relative">
       <button
         type="button"
-        aria-label="Menu de usuario"
+        aria-label="Menú de usuario"
+        aria-expanded={abierto}
+        aria-haspopup="menu"
         onClick={() => setAbierto((v) => !v)}
-        className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-gold text-[11px] font-black text-black transition-transform hover:scale-105"
+        className="flex h-9 w-9 items-center justify-center rounded-full bg-gold-diagonal text-[14px] font-extrabold text-black shadow-gold transition-transform hover:scale-105"
       >
         {iniciales}
       </button>
 
       {abierto && (
-        <div className="absolute right-0 top-10 z-50 w-56 overflow-hidden rounded-xl border border-brand-border bg-brand-card shadow-lg">
-          <div className="border-b border-brand-border px-4 py-3">
-            <p className="truncate text-sm font-semibold text-white">{nombre}</p>
-            <p className="truncate text-[11px] text-brand-muted">{email}</p>
+        <div
+          role="menu"
+          className="absolute right-0 top-11 z-50 w-60 overflow-hidden rounded-md border border-light bg-card shadow-lg"
+        >
+          <div className="border-b border-light px-4 py-3">
+            <p className="truncate text-sm font-semibold text-dark">{nombre}</p>
+            <p className="truncate text-[11px] text-muted-d">{email}</p>
           </div>
           <Link
             href="/perfil"
             onClick={() => setAbierto(false)}
-            className="block px-4 py-2.5 text-sm text-brand-text transition-colors hover:bg-brand-card2"
+            role="menuitem"
+            className="block px-4 py-2.5 text-sm text-body transition-colors hover:bg-subtle"
           >
             Mi perfil
           </Link>
           <Link
             href="/wallet"
             onClick={() => setAbierto(false)}
-            className="block px-4 py-2.5 text-sm text-brand-text transition-colors hover:bg-brand-card2"
+            role="menuitem"
+            className="block px-4 py-2.5 text-sm text-body transition-colors hover:bg-subtle"
           >
-            Mi wallet
+            Mi billetera
           </Link>
           <button
             type="button"
+            role="menuitem"
             onClick={() => {
               setAbierto(false);
               signOut({ callbackUrl: "/" });
             }}
-            className="block w-full border-t border-brand-border px-4 py-2.5 text-left text-sm text-brand-live transition-colors hover:bg-brand-card2"
+            className="block w-full border-t border-light px-4 py-2.5 text-left text-sm font-semibold text-danger transition-colors hover:bg-subtle"
           >
-            Cerrar sesi&oacute;n
+            Cerrar sesión
           </button>
         </div>
       )}

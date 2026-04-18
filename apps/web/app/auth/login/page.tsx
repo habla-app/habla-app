@@ -1,5 +1,9 @@
-import { signIn } from "@/lib/auth";
+// Auth login — réplica de `.auth-box` del mockup (docs/habla-mockup-completo.html
+// líneas 811-820, 3836-3849). Card centrada light + form con magic link Resend
+// (lógica heredada del Sprint 1 intacta).
 import Link from "next/link";
+import { signIn } from "@/lib/auth";
+import { Button } from "@/components/ui";
 
 interface LoginPageProps {
   searchParams: { callbackUrl?: string };
@@ -20,57 +24,58 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
   }
 
   return (
-    <div className="mx-auto w-full max-w-sm">
-      {/* Logo */}
-      <Link
-        href="/"
-        className="mb-8 flex items-center justify-center gap-1.5 font-display text-[32px] font-black text-white"
-      >
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-gold text-base font-black text-black">
-          H
-        </span>
-        Habla!
-      </Link>
-
-      {/* Card */}
-      <div className="rounded-2xl border border-brand-border bg-brand-card p-6">
-        <h1 className="mb-2 text-center font-display text-2xl font-black uppercase text-white">
-          Ingresa tu email
+    <div className="w-full max-w-[460px]">
+      <div className="rounded-lg border border-light bg-card p-10 shadow-lg">
+        <div aria-hidden className="text-center text-[56px] leading-none">
+          ⊕
+        </div>
+        <h1 className="mt-4 text-center font-display text-[34px] font-black uppercase tracking-wide text-dark">
+          Entra a Habla!
         </h1>
-        <p className="mb-6 text-center text-sm text-brand-muted">
-          Te enviamos un link de acceso. Sin contrase&ntilde;a.
+        <p className="mt-2 text-center text-sm leading-relaxed text-muted-d">
+          Te enviaremos un enlace mágico. Sin contraseñas.
         </p>
 
-        <form action={enviarMagicLink} className="flex flex-col gap-3">
-          <input
-            type="email"
-            name="email"
-            required
-            autoComplete="email"
-            placeholder="tucorreo@ejemplo.com"
-            className="w-full rounded-lg border border-brand-border bg-brand-blue-pale px-4 py-3 text-sm text-white placeholder:text-brand-muted focus:border-brand-gold focus:outline-none focus:ring-2 focus:ring-brand-gold/30"
-          />
-          <button
-            type="submit"
-            className="w-full rounded-lg bg-brand-gold px-4 py-3 text-sm font-bold text-black transition-colors hover:bg-brand-gold-light"
-          >
-            Enviar link de acceso
-          </button>
+        <form action={enviarMagicLink} className="mt-6 flex flex-col gap-4">
+          <div>
+            <label
+              htmlFor="email"
+              className="mb-1.5 block text-xs font-bold uppercase tracking-[0.06em] text-muted-d"
+            >
+              Correo electrónico
+            </label>
+            <input
+              id="email"
+              type="email"
+              name="email"
+              required
+              autoComplete="email"
+              placeholder="tu@correo.com"
+              className="w-full rounded-sm border-[1.5px] border-light bg-card px-3.5 py-[13px] text-sm text-dark outline-none placeholder:text-soft transition-all focus:border-brand-blue-main focus:ring-4 focus:ring-brand-blue-main/10"
+            />
+            <p className="mt-1.5 text-[11px] text-muted-d">
+              Revisa tu carpeta de spam si no llega en un minuto.
+            </p>
+          </div>
+
+          <Button type="submit" variant="primary" size="xl">
+            Enviar enlace mágico
+          </Button>
         </form>
 
-        <p className="mt-5 text-center text-[11px] leading-relaxed text-brand-muted">
-          Al registrarte aceptas los <span className="text-brand-gold">T&eacute;rminos</span>
-          {" "}&middot; Mayores de 18 a&ntilde;os
+        <p className="mt-5 text-center text-[11px] leading-relaxed text-muted-d">
+          Al registrarte aceptas los{" "}
+          <span className="font-semibold text-brand-blue-main">Términos</span>
+          {" · "}Mayores de 18 años
         </p>
       </div>
 
-      {/* Link volver */}
       <div className="mt-6 text-center">
         <Link
           href="/"
-          className="text-xs font-semibold text-brand-muted hover:text-brand-gold"
+          className="text-xs font-semibold text-muted-d transition-colors hover:text-brand-gold-dark"
         >
-          &larr; Volver a los torneos
+          ← Volver a los torneos
         </Link>
       </div>
     </div>
