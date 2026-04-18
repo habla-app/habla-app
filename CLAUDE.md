@@ -1,31 +1,33 @@
 # CLAUDE.md — Habla! App
 
 > Este archivo es el cerebro del proyecto. Léelo completo antes de tocar cualquier código.
-> Última actualización: 17 de Abril 2026 (Sprint 1 completado)
+> Última actualización: 18 de Abril 2026 (Sprint 1 completado, mockup de diseño aprobado, planificando Sub-Sprint 3 de Mecánica de Juego)
 
 ---
 
 ## 1. QUÉ ES HABLA!
 
-WebApp de torneos de predicciones deportivas orientada al mercado peruano. Los usuarios compran **Lukas** (moneda virtual in-app) para inscribirse en torneos sobre partidos de fútbol reales. Gana quien más puntos acumule con sus predicciones. Los premios se pagan en Lukas canjeables por productos físicos/digitales en la tienda integrada.
+WebApp de torneos de predicciones deportivas orientada al mercado peruano. Los usuarios compran **Lukas** (moneda virtual in-app, 1 Luka = S/ 1) para inscribirse en torneos sobre partidos de fútbol reales. Gana quien más puntos acumule con sus predicciones. Los premios se pagan en Lukas canjeables por productos físicos o digitales en la tienda integrada.
 
-**Posicionamiento clave:** No es una apuesta (los Lukas no se retiran como efectivo). Es un torneo de habilidad, como un torneo de ajedrez o póker de destreza.
+**Posicionamiento clave:** No es una apuesta — los Lukas no se retiran como efectivo. Es un torneo de habilidad, como un torneo de ajedrez o póker de destreza.
 
 **Fecha límite inamovible:** 11 de junio de 2026 — Día 1 del Mundial FIFA 2026.
 
 ---
 
-## 2. MECÁNICA DEL NEGOCIO
+## 2. MECÁNICA DEL JUEGO
 
-### Flujo central
+### Flujo central del usuario
 1. Usuario compra Lukas con soles peruanos (Culqi / Yape)
-2. Usuario selecciona un torneo activo y paga entrada en Lukas
-3. Usuario envía su combinada de 5 predicciones (ticket) antes del cierre (5 min antes del partido)
-4. Durante el partido, los puntos se calculan automáticamente en tiempo real
-5. Al finalizar el partido, los Lukas del pozo neto se distribuyen automáticamente a los ganadores
-6. Los ganadores canjean sus Lukas en la tienda por premios reales
+2. Usuario navega los torneos disponibles y elige uno
+3. Usuario paga entrada en Lukas y arma su combinada de 5 predicciones
+4. El torneo cierra 5 minutos antes del partido — las predicciones quedan selladas
+5. Durante el partido, los puntos se calculan automáticamente en vivo
+6. El ranking se actualiza en tiempo real mientras ocurren los eventos
+7. Al terminar el partido, los Lukas del pozo neto se distribuyen automáticamente entre el top 10
+8. El ganador canjea sus Lukas por premios reales en la tienda
 
-### Sistema de predicciones — puntuación por ticket
+### Puntuación por ticket (máximo 21 puntos)
 | # | Predicción | Puntos | Dificultad |
 |---|-----------|--------|------------|
 | 1 | Resultado: Local / Empate / Visita | 3 pts | Baja |
@@ -34,19 +36,17 @@ WebApp de torneos de predicciones deportivas orientada al mercado peruano. Los u
 | 4 | Habrá tarjeta roja | 6 pts | Alta |
 | 5 | Marcador exacto | 8 pts | Muy alta |
 
-**Máximo por ticket:** 21 puntos. Un jugador puede enviar múltiples tickets no idénticos para el mismo torneo (máximo 10 en MVP).
+Un jugador puede enviar múltiples tickets no idénticos para el mismo torneo — máximo 10 en MVP.
 
 ### Modelo económico
 - **Rake:** 12% del pozo bruto → ingreso principal de la plataforma
 - **Distribución del pozo neto (ejemplo 100 jugadores × S/10):**
-  - 1er lugar: 35%
-  - 2do lugar: 20%
-  - 3er lugar: 12%
-  - 4to–10mo: 33% repartido
-- **Margen en premios físicos:** ~30% (costo real vs Lukas emitidos)
-- Los Lukas vencen a los 12 meses desde la compra
+  - 1er lugar: 35% — 2° lugar: 20% — 3er lugar: 12% — Puestos 4° a 10°: 33% repartido
+  - **Del 11° en adelante: sin premio**
+- **Margen en premios físicos:** ~30%
+- Los Lukas **comprados** vencen a los 12 meses; los **ganados** no vencen
 
-### Tipos de torneo
+### Tipos de torneo y entradas
 | Tipo | Entrada | Partido típico |
 |------|---------|----------------|
 | Express | S/ 3–5 | Liga 1, torneos rápidos |
@@ -58,7 +58,6 @@ WebApp de torneos de predicciones deportivas orientada al mercado peruano. Los u
 
 ## 3. STACK TECNOLÓGICO
 
-### Stack completo
 | Capa | Tecnología | Notas |
 |------|-----------|-------|
 | Frontend | Next.js 14 (React) | SSR + PWA, sin app store |
@@ -67,20 +66,17 @@ WebApp de torneos de predicciones deportivas orientada al mercado peruano. Los u
 | Cache / Tiempo real | Redis 7 | Ranking en vivo, sesiones |
 | ORM | Prisma | Schema, migraciones, type-safety |
 | WebSockets | Socket.io (sobre Fastify) | Ranking actualizado en vivo |
-| Auth | NextAuth.js v5 (5.0.0-beta.30) | MVP: solo magic link via Resend (Google OAuth post-lanzamiento). v5 aún sin release estable |
+| Auth | NextAuth.js v5 (beta.30) | MVP: solo magic link via Resend |
 | Pagos | Culqi + Yape API | Pasarelas peruanas |
-| API deportiva | api-football.com (directo) | Cuenta hablaplay@gmail.com, plan básico. Header: x-apisports-key |
-| Email | Resend | Email transaccional |
-| SMS/Notif. | Twilio | Alertas de torneo |
+| API deportiva | api-football.com | Cuenta hablaplay@gmail.com · Header `x-apisports-key` |
+| Email | Resend | Dominio hablaplay.com verificado |
+| SMS | Twilio | Alertas de torneo, verificación teléfono |
 | Hosting | Railway | Auto-scaling, deploy desde GitHub |
 | CDN / DNS | Cloudflare | DDoS protection, edge caching |
-| Monitoreo errores | Sentry | Frontend + Backend |
-| Monitoreo infra | Grafana + Prometheus | Dashboards de uso |
-| Contenedores dev | Docker + Docker Compose | Dev == Prod |
-| Gestión de paquetes | pnpm 10.x + workspaces | Monorepo |
-| Orquestador | Turborepo (turbo) | Build/test/lint orchestration |
-| CI/CD | GitHub Actions | Tests + deploy automático |
-| CSS | Tailwind CSS 3.4 + PostCSS | Clases utilitarias, colores de marca con prefijo `brand-*` |
+| Monitoreo | Sentry + Grafana | Errores + dashboards de uso |
+| Monorepo | pnpm 10 + Turborepo | `.npmrc` con `node-linker=hoisted` |
+| CI/CD | GitHub Actions + Railway | Auto-deploy a main |
+| CSS | Tailwind CSS 3.4 | Colores marca con prefijo `brand-*` |
 
 ---
 
@@ -89,77 +85,52 @@ WebApp de torneos de predicciones deportivas orientada al mercado peruano. Los u
 ```
 habla-app/
 ├── CLAUDE.md
-├── .npmrc                       ← node-linker=hoisted (requerido para Windows + Node 24)
-├── Dockerfile                   ← Multi-stage build para web app (Railway usa esto)
-├── railway.toml                 ← Fuerza Railway a usar Dockerfile (builder = "DOCKERFILE")
-├── .dockerignore                ← Excluye node_modules, .git, docs del build context
-├── .claude/
-│   └── launch.json              ← Config del dev server para Claude Preview
-├── .github/
-│   └── workflows/
-│       ├── ci.yml
-│       └── deploy.yml
+├── .npmrc                       ← node-linker=hoisted (Windows + Node 24)
+├── Dockerfile                   ← Multi-stage build para Railway
+├── railway.toml                 ← builder = "DOCKERFILE"
+├── .dockerignore
 ├── docker-compose.yml
-├── docker-compose.test.yml
 ├── .env.example
-├── .gitignore
-├── package.json
-├── pnpm-lock.yaml
 ├── pnpm-workspace.yaml
 ├── turbo.json
 │
 ├── apps/
 │   ├── web/                     ← Next.js 14 (Frontend)
 │   │   ├── app/
-│   │   │   ├── (auth)/          ← login, registro (rutas públicas)
-│   │   │   ├── (main)/          ← layout autenticado
-│   │   │   │   ├── torneos/     ← /torneos — lista pública (ver sin login)
-│   │   │   │   ├── torneo/[id]/ ← /torneo/:id — detalle + combinada (login para inscribir)
-│   │   │   │   ├── wallet/      ← /wallet — requiere login
-│   │   │   │   ├── tienda/      ← /tienda — ver sin login, canjear requiere login
-│   │   │   │   └── perfil/      ← /perfil — requiere login
-│   │   │   ├── admin/           ← rutas de admin (rol ADMIN)
-│   │   │   ├── api/
-│   │   │   │   ├── auth/[...nextauth]/route.ts
-│   │   │   │   └── webhooks/culqi/route.ts
-│   │   │   ├── layout.tsx       ← Fonts (Barlow Condensed + DM Sans) + metadata
-│   │   │   ├── globals.css      ← Variables CSS de marca + Tailwind directives
-│   │   │   └── page.tsx         ← Landing pública con tabs (En vivo/Abiertos/Próximos/Finalizados)
+│   │   │   ├── (main)/
+│   │   │   │   ├── page.tsx              ← Landing/home
+│   │   │   │   ├── matches/              ← Lista de torneos
+│   │   │   │   ├── live-match/           ← Partidos en vivo (dedicado)
+│   │   │   │   ├── torneo/[id]/          ← Detalle de torneo
+│   │   │   │   ├── mis-combinadas/       ← Tickets del usuario
+│   │   │   │   ├── wallet/               ← Billetera
+│   │   │   │   ├── tienda/               ← Catálogo de premios
+│   │   │   │   ├── perfil/               ← Gestión de cuenta
+│   │   │   │   ├── como-jugar/
+│   │   │   │   └── faq/
+│   │   │   ├── auth/                     ← login, verificar, error
+│   │   │   ├── admin/                    ← Panel admin (rol ADMIN)
+│   │   │   └── api/
+│   │   │       ├── auth/[...nextauth]/
+│   │   │       └── webhooks/culqi/
 │   │   ├── components/
-│   │   │   ├── ui/
-│   │   │   ├── torneo/
-│   │   │   ├── ticket/          ← FormularioCombinadaPrediccion (5 predicciones)
-│   │   │   ├── wallet/
-│   │   │   ├── tienda/
-│   │   │   └── layout/
-│   │   │       ├── NavBar.tsx   ← ✅ Implementado — Logo + botón Entrar / balance Lukas
-│   │   │       └── BottomNav.tsx ← ✅ Implementado — 5 tabs de navegación inferior
-│   │   ├── lib/
-│   │   │   ├── auth.ts
-│   │   │   ├── api-client.ts
-│   │   │   └── socket-client.ts
-│   │   ├── hooks/
-│   │   ├── stores/
-│   │   ├── public/
-│   │   │   ├── manifest.json
-│   │   │   └── mockup.html      ← Mockup HTML de referencia (accesible en /mockup.html)
-│   │   ├── next.config.js       ← output: standalone para Railway
-│   │   ├── tailwind.config.js   ← Colores de marca con prefijo brand-*
-│   │   ├── postcss.config.js    ← Tailwind + Autoprefixer
-│   │   └── package.json
+│   │   │   ├── layout/          ← NavBar, BottomNav, UserMenu
+│   │   │   ├── matches/         ← MatchCard, FilterChips, MatchGroup
+│   │   │   ├── live/            ← LiveHero, RankingTable, StatsView, EventsView, LiveSwitcher
+│   │   │   ├── combo/           ← ComboModal, PredCard, ScorePicker
+│   │   │   ├── tickets/         ← TicketCard, StatsPill, MatchTabs
+│   │   │   ├── wallet/          ← BalanceHero, PackCard, TxList
+│   │   │   ├── tienda/          ← PrizeCardV2, FeaturedPrize, CatFilters
+│   │   │   ├── perfil/          ← ProfileHero, VerifRow, ToggleRow, LimitRow
+│   │   │   └── ui/              ← Toast, Modal, Alert, Button, Chip
+│   │   ├── lib/                 ← auth, api-client, socket-client, usuarios
+│   │   ├── hooks/               ← useRanking, useBalance, useToggle
+│   │   └── stores/              ← Zustand: lukas, auth, notifications
 │   │
 │   └── api/                     ← Node.js + Fastify (Backend)
 │       ├── src/
 │       │   ├── server.ts
-│       │   ├── config/
-│       │   │   ├── env.ts
-│       │   │   └── constants.ts
-│       │   ├── plugins/
-│       │   │   ├── auth.ts
-│       │   │   ├── cors.ts
-│       │   │   ├── rate-limit.ts
-│       │   │   ├── redis.ts
-│       │   │   └── socket.ts
+│       │   ├── plugins/         ← auth, cors, rate-limit, redis, socket
 │       │   ├── modules/
 │       │   │   ├── auth/
 │       │   │   ├── usuarios/
@@ -170,64 +141,57 @@ habla-app/
 │       │   │   ├── ranking/
 │       │   │   ├── partidos/
 │       │   │   ├── premios/
-│       │   │   ├── pagos/
+│       │   │   ├── canjes/
+│       │   │   ├── pagos/        ← Culqi
+│       │   │   ├── notificaciones/
+│       │   │   ├── verificacion/
+│       │   │   ├── limites/
 │       │   │   └── admin/
-│       │   ├── jobs/
-│       │   │   ├── cerrar-torneos.job.ts
-│       │   │   ├── distribuir-premios.job.ts
-│       │   │   └── vencer-lukas.job.ts
-│       │   └── shared/
-│       │       ├── errors.ts
-│       │       ├── logger.ts
-│       │       └── redis-keys.ts
-│       ├── Dockerfile
-│       └── package.json
+│       │   └── jobs/
+│       │       ├── cerrar-torneos.job.ts
+│       │       ├── distribuir-premios.job.ts
+│       │       ├── poller-partidos.job.ts
+│       │       └── vencer-lukas.job.ts
 │
 ├── packages/
-│   ├── db/
-│   │   ├── prisma/
-│   │   │   ├── schema.prisma
-│   │   │   ├── migrations/
-│   │   │   └── seed.ts
-│   │   ├── src/index.ts
-│   │   └── package.json
-│   ├── shared/
-│   │   ├── src/
-│   │   │   ├── types/
-│   │   │   ├── constants/
-│   │   │   └── utils/
-│   │   └── package.json
-│   └── ui/
+│   ├── db/                      ← Prisma schema, migraciones, seed
+│   ├── shared/                  ← Tipos, constantes, utils
+│   └── ui/                      ← Componentes compartidos
 │
 └── docs/
     ├── arquitectura.md
     ├── api.md
-    ├── modelo-datos.md
-    ├── ranking-en-vivo.md
     └── deploy.md
 ```
 
 ---
 
-## 5. MODELO DE DATOS (Prisma Schema — tablas principales)
+## 5. MODELO DE DATOS (Prisma Schema)
 
 ```prisma
 // packages/db/prisma/schema.prisma
 
 model Usuario {
-  id            String   @id @default(cuid())
-  email         String   @unique
-  nombre        String
-  telefono      String?
-  fechaNac      DateTime?
-  verificado    Boolean  @default(false)
-  rol           Rol      @default(JUGADOR)
-  balanceLukas  Int      @default(0)       // en unidades enteras de Lukas (1 Luka = S/1)
-  creadoEn      DateTime @default(now())
-  
-  tickets       Ticket[]
-  transacciones TransaccionLukas[]
-  canjes        Canje[]
+  id              String    @id @default(cuid())
+  email           String    @unique
+  emailVerified   DateTime?
+  nombre          String
+  username        String    @unique                  // @handle para ranking
+  telefono        String?
+  telefonoVerif   Boolean   @default(false)
+  dniVerif        Boolean   @default(false)          // para canjes >S/500
+  fechaNac        DateTime?
+  ubicacion       String?
+  image           String?
+  rol             Rol       @default(JUGADOR)
+  balanceLukas    Int       @default(0)
+  creadoEn        DateTime  @default(now())
+
+  tickets         Ticket[]
+  transacciones   TransaccionLukas[]
+  canjes          Canje[]
+  preferencias    PreferenciasNotif?
+  limites         LimitesJuego?
 
   @@map("usuarios")
 }
@@ -236,7 +200,7 @@ enum Rol { JUGADOR ADMIN }
 
 model Partido {
   id              String        @id @default(cuid())
-  externalId      String        @unique  // ID de api-football.com
+  externalId      String        @unique             // ID de api-football.com
   liga            String
   equipoLocal     String
   equipoVisita    String
@@ -247,6 +211,7 @@ model Partido {
   btts            Boolean?
   mas25Goles      Boolean?
   huboTarjetaRoja Boolean?
+  eventos         EventoPartido[]
   torneos         Torneo[]
   creadoEn        DateTime      @default(now())
 
@@ -255,11 +220,25 @@ model Partido {
 
 enum EstadoPartido { PROGRAMADO EN_VIVO FINALIZADO CANCELADO }
 
+model EventoPartido {
+  id          String   @id @default(cuid())
+  partidoId   String
+  partido     Partido  @relation(fields: [partidoId], references: [id])
+  tipo        String                                 // GOL, TARJETA_AMARILLA, TARJETA_ROJA, FIN_PARTIDO, SUSTITUCION
+  minuto      Int
+  equipo      String                                 // LOCAL o VISITA
+  jugador     String?
+  detalle     String?
+  creadoEn    DateTime @default(now())
+
+  @@map("eventos_partido")
+}
+
 model Torneo {
   id             String        @id @default(cuid())
   nombre         String
   tipo           TipoTorneo
-  entradaLukas   Int           // Unidades enteras de Lukas
+  entradaLukas   Int
   partidoId      String
   partido        Partido       @relation(fields: [partidoId], references: [id])
   estado         EstadoTorneo  @default(ABIERTO)
@@ -299,7 +278,7 @@ model Ticket {
   posicionFinal      Int?
   premioLukas        Int           @default(0)
   creadoEn           DateTime      @default(now())
-  
+
   @@unique([usuarioId, torneoId, predResultado, predBtts, predMas25, predTarjetaRoja, predMarcadorLocal, predMarcadorVisita])
   @@map("tickets")
 }
@@ -311,10 +290,10 @@ model TransaccionLukas {
   usuarioId   String
   usuario     Usuario         @relation(fields: [usuarioId], references: [id])
   tipo        TipoTransaccion
-  monto       Int             // Positivo = ingreso, Negativo = egreso (unidades enteras)
+  monto       Int                                    // Positivo ingreso, negativo egreso
   descripcion String
-  refId       String?
-  venceEn     DateTime?       // Solo Lukas de COMPRA vencen a 12 meses
+  refId       String?                                // torneoId, canjeId, culqiTxId
+  venceEn     DateTime?                              // Solo COMPRA vence a 12 meses
   creadoEn    DateTime        @default(now())
 
   @@map("transacciones_lukas")
@@ -327,18 +306,21 @@ enum TipoTransaccion {
   CANJE
   BONUS
   VENCIMIENTO
+  REEMBOLSO
 }
 
 model Premio {
-  id          String   @id @default(cuid())
+  id          String      @id @default(cuid())
   nombre      String
   descripcion String
   costeLukas  Int
-  stock       Int      @default(0)
+  stock       Int         @default(0)
+  categoria   String                                 // entrada, camiseta, gift, tech, experiencia
   imagen      String?
-  activo      Boolean  @default(true)
+  badge       String?                                // POPULAR, NEW, LIMITED
+  activo      Boolean     @default(true)
   canjes      Canje[]
-  creadoEn    DateTime @default(now())
+  creadoEn    DateTime    @default(now())
 
   @@map("premios")
 }
@@ -358,6 +340,31 @@ model Canje {
 }
 
 enum EstadoCanje { PENDIENTE PROCESANDO ENVIADO ENTREGADO CANCELADO }
+
+model PreferenciasNotif {
+  usuarioId           String   @id
+  usuario             Usuario  @relation(fields: [usuarioId], references: [id])
+  notifInicioTorneo   Boolean  @default(true)
+  notifResultados     Boolean  @default(true)
+  notifPremios        Boolean  @default(true)
+  notifSugerencias    Boolean  @default(true)
+  notifCierreTorneo   Boolean  @default(true)
+  notifPromos         Boolean  @default(false)
+  emailSemanal        Boolean  @default(false)
+
+  @@map("preferencias_notif")
+}
+
+model LimitesJuego {
+  usuarioId            String    @id
+  usuario              Usuario   @relation(fields: [usuarioId], references: [id])
+  limiteMensualCompra  Int       @default(300)
+  limiteDiarioTickets  Int       @default(10)
+  autoExclusionHasta   DateTime?
+  actualizadoEn        DateTime  @default(now()) @updatedAt
+
+  @@map("limites_juego")
+}
 ```
 
 ---
@@ -365,89 +372,65 @@ enum EstadoCanje { PENDIENTE PROCESANDO ENVIADO ENTREGADO CANCELADO }
 ## 6. REGLAS DE NEGOCIO CRÍTICAS
 
 ### Lukas
-- **1 Luka = S/ 1 peruano (paridad 1:1).** `balanceLukas` se almacena en unidades enteras, no centavos.
-- Todo movimiento de Lukas es una transacción atómica. Si falla cualquier paso, se revierte todo.
-- El balance nunca puede ser negativo. Verificar balance ANTES de descontar.
-- Los Lukas de COMPRA vencen a los 12 meses (campo `venceEn` en TransaccionLukas).
-- Los Lukas ganados en torneos (PREMIO_TORNEO, BONUS) NO vencen — `venceEn = null`.
-- Los Lukas NO son retirables como efectivo bajo ninguna circunstancia.
-- El bonus de bienvenida es 500 Lukas (tipo BONUS, sin vencimiento).
+- **1 Luka = S/ 1**. `balanceLukas` en unidades enteras, nunca centavos.
+- Todo movimiento es transacción atómica. Si falla cualquier paso, se revierte todo.
+- El balance nunca puede ser negativo. Verificar ANTES de descontar.
+- Los Lukas de COMPRA vencen a 12 meses. Los ganados (PREMIO_TORNEO, BONUS) NO vencen.
+- Los Lukas **NO son retirables como efectivo** bajo ninguna circunstancia.
+- Bonus de bienvenida: **500 Lukas** (tipo BONUS, sin vencimiento).
+- **Packs de compra con bonus:** 20 (+0), 50 (+5), 100 (+15), 250 (+50).
 
-### Tickets y Torneos
-- El cierre de inscripciones es exactamente 5 minutos antes del inicio del partido. Automático e irreversible.
-- Dos tickets del mismo usuario en el mismo torneo NO pueden tener las 5 predicciones idénticas (constraint en BD).
-- Máximo 10 tickets por usuario por torneo en MVP.
-- Las predicciones enviadas son inmutables. No se pueden editar después de enviadas.
-- Un torneo necesita mínimo 2 inscritos para activarse. Si no llega, se reembolsa la entrada.
+### Torneos y Tickets
+- Cierre de inscripciones: **exactamente 5 minutos antes del inicio** del partido. Automático e irreversible.
+- Dos tickets del mismo usuario en el mismo torneo no pueden tener las 5 predicciones idénticas (constraint en BD).
+- Máximo **10 tickets** por usuario por torneo.
+- Predicciones enviadas son **inmutables**.
+- Torneo con <2 inscritos al cierre → se cancela y reembolsa la entrada.
 
-### Puntuación
-- Los puntos se calculan exclusivamente a partir de los eventos de api-football.com. Cero intervención manual.
-- Si la API falla, los puntos quedan en "pendiente" y se calculan retroactivamente al restaurar conexión.
-- Desempate de puntos al final: marcador exacto primero → tarjeta roja → orden de inscripción (timestamp).
+### Puntuación y ranking
+- Puntos se calculan exclusivamente de eventos de **api-football.com**. Cero intervención manual.
+- Si la API falla, los puntos quedan en "pendiente" y se calculan retroactivamente al restaurarse.
+- Desempate: marcador exacto → tarjeta roja → orden de inscripción (timestamp).
+- Rake exactamente 12% del pozo bruto, al entero de Luka.
+- Distribución top 10: **35% / 20% / 12% / 33% repartido entre 4°-10°**.
+- Del **11° en adelante no reciben premio**.
 
-### Distribución de premios
-- El rake es exactamente 12% del pozo bruto, calculado al entero de Luka.
-- Los premios se acreditan automáticamente al finalizar el partido. Sin aprobación manual.
-- La distribución está en `packages/shared/src/constants/torneos.ts`.
+### Juego responsable
+- **Edad mínima: 18 años** — verificación obligatoria al registro.
+- **Límite mensual de compra**: bloqueante. Por defecto S/ 300/mes.
+- **Límite diario de tickets**: bloqueante. Por defecto 10/día.
+- **Auto-exclusión temporal**: 7, 30 o 90 días. Bloquea login y acciones.
+- Mostrar siempre rake y distribución del pozo antes de cada inscripción.
 
-### Navegación y acceso
-- **Cualquier usuario puede navegar sin estar registrado:** ver lista de torneos, partidos en vivo, ranking, tienda.
-- **El registro/login se solicita SOLO en el momento de inscribirse a un torneo.**
-- Tras el login, el flujo continúa automáticamente hacia la pantalla de combinada del torneo que el usuario quería.
-- Wallet y Perfil requieren login siempre.
+### Navegación
+- Cualquier usuario puede navegar sin estar logueado: ver torneos, ranking en vivo, tienda.
+- Login se solicita solo al intentar: inscribirse, canjear, acceder a wallet o perfil.
+- Tras login, el flujo continúa al destino original (`pendingTorneoId`, `callbackUrl`).
 
 ### Seguridad
-- Rate limiting: máximo 60 requests/minuto por IP.
-- Verificación de email obligatoria para comprar Lukas.
-- Edad mínima 18 años — verificación al registro (fecha de nacimiento).
-- Las predicciones se bloquean con timestamp en BD al enviarlas.
+- Rate limiting: 60 requests/min por IP.
+- Verificación email obligatoria para comprar Lukas.
+- Predicciones bloqueadas con timestamp al envío.
 
 ---
 
-## 7. FLUJO DEL RANKING EN TIEMPO REAL
+## 7. ENTORNO Y COMANDOS
 
-```
-api-football.com (polling cada 30s, header: x-apisports-key)
-        ↓
-partidos.poller.ts → detecta evento (gol, tarjeta, fin de partido)
-        ↓
-puntuacion.service.ts → recalcula puntos de TODOS los tickets del torneo
-        ↓
-Redis → escribe ranking actualizado (key: ranking:{torneoId})
-        ↓
-ranking.socket.ts → emite evento 'ranking:update' a sala Socket.io del torneo
-        ↓
-Cliente Web → recibe update y re-renderiza ranking sin reload
-```
-
-**Keys de Redis:**
-- `ranking:{torneoId}` → sorted set con `usuarioId:ticketId` y score = puntosTotal
-- `partido:estado:{externalId}` → estado actual del partido (cache 25s)
-- `torneo:inscritos:{torneoId}` → contador en tiempo real de inscritos
-
----
-
-## 8. VARIABLES DE ENTORNO
-
-Documentadas en `.env.example`. Nunca commitear `.env`:
-
+### Variables de entorno (.env.example)
 ```bash
-# Base de datos
+# BD
 DATABASE_URL=postgresql://habla:habla@localhost:5432/habladb
 REDIS_URL=redis://localhost:6379
 
 # Auth
 NEXTAUTH_SECRET=
 NEXTAUTH_URL=http://localhost:3000
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
 
-# API Deportiva — cuenta directa hablaplay@gmail.com en api-football.com
-# IMPORTANTE: NO usar RapidAPI. Header es x-apisports-key (no X-RapidAPI-Key)
+# API Deportiva (NO usar RapidAPI)
 API_FOOTBALL_KEY=
 API_FOOTBALL_HOST=v3.football.api-sports.io
 
-# Pagos
+# Pagos Culqi (sandbox primero)
 CULQI_PUBLIC_KEY=
 CULQI_SECRET_KEY=
 CULQI_WEBHOOK_SECRET=
@@ -462,60 +445,21 @@ TWILIO_PHONE_NUMBER=
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 API_URL=http://localhost:3001
 JWT_SECRET=
-NODE_ENV=development
-
-# Monitoreo
 SENTRY_DSN=
 ```
 
-### ⚠️ Notas críticas sobre Railway
+### Notas críticas Railway
+- `DATABASE_URL` NO se hereda entre servicios. Crear explícitamente con `${{ Postgres.DATABASE_URL }}`.
+- `NEXTAUTH_URL` sin `/` final. `HOSTNAME=0.0.0.0` obligatorio.
+- `trustHost: true` en la config de NextAuth para Railway proxy.
 
-- **`DATABASE_URL` NO se hereda automáticamente entre servicios en Railway.** La inyecta solo en el servicio Postgres. Para el servicio web, hay que crear la variable explícitamente con valor `${{ Postgres.DATABASE_URL }}` (referencia al servicio Postgres). Sin esto, Prisma falla con `P1012 Environment variable not found: DATABASE_URL` al arrancar y el healthcheck falla infinitamente
-- **`NEXTAUTH_URL` sin `/` final:** debe ser exactamente `https://habla-app-production.up.railway.app`. Con slash final NextAuth rompe las redirects
-- **`HOSTNAME=0.0.0.0` obligatorio:** sin esto, Next.js standalone escucha solo en `localhost` y el healthcheck de Railway no lo alcanza
-
----
-
-## 9. DOCKER COMPOSE (DESARROLLO)
-
-```yaml
-services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: habla
-      POSTGRES_PASSWORD: habla
-      POSTGRES_DB: habladb
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-
-volumes:
-  postgres_data:
-  redis_data:
-```
-
----
-
-## 10. COMANDOS DE DESARROLLO
-
-**Requisito previo:** El archivo `.npmrc` con `node-linker=hoisted` ya está en el repo.
-Es necesario para que pnpm enlace los módulos correctamente en Windows + Node 24.
-
+### Comandos principales
 ```bash
 pnpm install
 docker-compose up -d
 pnpm --filter @habla/db db:migrate
 pnpm --filter @habla/db db:seed
-pnpm dev          # web en :3000, api en :3001
+pnpm dev          # web :3000, api :3001
 pnpm test
 pnpm build
 pnpm lint
@@ -523,1134 +467,728 @@ pnpm lint
 
 ---
 
-## 11. PRIORIDADES MVP
+## 8. ESTADO ACTUAL — QUÉ ESTÁ HECHO
 
-### ✅ MVP (debe estar el 11 de junio)
-- Auth completo (Google OAuth + email/magic link)
-- Navegación pública sin login (torneos, ranking, tienda)
-- Compra de Lukas vía Culqi
-- Wallet de Lukas (balance, historial)
-- Crear torneos desde admin panel
-- Inscripción a torneos (requiere login)
-- Formulario de combinada — 5 predicciones (ver sección 16)
-- Motor de puntuación automático (api-football.com)
-- Ranking en vivo por WebSocket
-- Distribución automática de premios al finalizar
-- Tienda de premios básica (catálogo + solicitud de canje manual)
-- Notificaciones por email (Resend)
-- Admin panel: crear torneos, ver métricas básicas, gestionar canjes
+### ✅ Sprint 0 (11-15 Abr) — Fundamentos
+Monorepo pnpm 10 + Turborepo, Docker Compose con Postgres 16 y Redis 7, Prisma con schema inicial, CI/CD con GitHub Actions, deploy a Railway con Dockerfile multi-stage, landing page pública con tabs, NavBar, BottomNav, paleta de colores de marca en Tailwind, fuentes Barlow Condensed + DM Sans. URL producción: `https://habla-app-production.up.railway.app`.
 
-### ❌ Post-MVP
-- Ligas privadas → v1.1 Agosto 2026
-- Gamificación (niveles, logros, streaks) → v1.2 Septiembre 2026
-- WhatsApp Bot → v1.3 Noviembre 2026
-- App nativa iOS/Android → v2.0 Q1 2027
-- Múltiples deportes → v1.3
-- Programa de referidos automatizado → v1.2
-- KYC avanzado → post-MVP
-- Yape API → post-MVP
+### ✅ Sprint 1 (18-17 Abr) — Auth + base de cuentas
+NextAuth v5 con magic link vía Resend (dominio hablaplay.com verificado), custom Prisma adapter que mapea `Usuario/nombre` al contrato de NextAuth, middleware de rutas protegidas (`/wallet`, `/perfil`, `/admin`), bonus de bienvenida de 500 Lukas automático al registrarse, NavBar dinámico con balance + avatar cuando hay sesión, páginas `/auth/login`, `/auth/verificar`, `/auth/error` con estilos de marca. Migración `20260416120000_add_auth_tables` agregó `auth_accounts`, `auth_sessions`, `auth_verification_tokens`.
+
+### 🎨 Mockup — Diseño UI aprobado
+Mockup interactivo completo en `/mockup.html` y en `docs/habla-mockup-completo.html`. Cubre todas las páginas del MVP con estilos finales, paleta de marca extendida (urgencias, acentos por tipo de torneo, dark surfaces), componentes resueltos y flujos navegables. **Este mockup es la fuente de verdad del diseño** — cada sprint debe replicar lo que se ve ahí, no improvisar.
 
 ---
 
-## 12. PLAN DE SPRINTS
+## 9. SPRINT DE MECÁNICA DE JUEGO
 
-| Sprint | Fechas | Entregable principal | Estado |
-|--------|--------|---------------------|--------|
-| Sprint 0 | 11-17 Abr | Setup monorepo, CI/CD, Docker, schema BD, wireframes, contratos API-Football y Culqi | ✅ Completado 14 Abr |
-| Sprint 1 | 18-24 Abr | Auth (magic link Resend), perfil, middleware rutas protegidas | ✅ Completado 17 Abr |
-| Sprint 2 | 25 Abr-1 May | Módulo Lukas: compra Culqi, balance, historial, webhook confirmación | Pendiente |
-| Sprint 3 | 2-8 May | Torneos: crear desde admin, listar, inscribir, cierre automático | Pendiente |
-| Sprint 4 | 9-15 May | Tickets: formulario 5 predicciones, validaciones, múltiples tickets, confirmación | Pendiente |
-| Sprint 5 | 16-22 May | API-Football: eventos tiempo real, motor de puntuación, ranking vía WebSocket | Pendiente |
-| Sprint 6 | 23-29 May | Cierre torneos, distribución premios, tienda básica, email notifications | Pendiente |
-| Sprint 7 | 30 May-5 Jun | Admin panel completo, QA, test de carga (500 usuarios simultáneos), beta | Pendiente |
-| Sprint 8 🚀 | 6-10 Jun | Go Live a producción, monitoreo 24/7, soporte activo | Pendiente |
+> Bloque grande de trabajo: del 25 de abril al 5 de junio. Dividido en 6 sub-sprints semanales que van conectando todas las piezas del producto. Al final de este bloque, un usuario peruano cualquiera puede entrar a Habla!, comprar Lukas, jugar un torneo, ver el partido con ranking en vivo, y recibir su premio automáticamente.
 
----
+### Principio rector
+**Construir de afuera hacia adentro**, siguiendo el flujo del usuario real. Cada sub-sprint deja una parte del producto totalmente funcional (backend + frontend + integraciones), no features a medias.
 
-## 13. CONVENCIONES DE CÓDIGO
-
-- **Lenguaje:** TypeScript strict en todo el proyecto
-- **Nombres de archivos:** kebab-case (`torneo.service.ts`)
-- **Nombres de funciones/variables:** camelCase
-- **Nombres de tipos/clases:** PascalCase
-- **Rutas API REST:** `/api/v1/{recurso}` en plural y kebab-case
-- **Commits:** Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`)
-- **Branches:** `main` (producción), `develop` (integración), `feat/nombre-feature`
-- **PR a main:** siempre requiere pasar CI (tests + lint)
-- **Validación:** Zod en entrada de datos (API y formularios)
-- **Errores:** siempre lanzar clases de error tipadas, nunca `throw new Error('string')`
-- **Logs:** Pino logger, nunca `console.log` en producción
-
----
-
-## 14. CONTEXTO DE NEGOCIO IMPORTANTE
-
-- **Mercado:** Perú, Lima Metropolitana primera. Hombres 18-45 años.
-- **Competencia directa:** ninguna exacta. Diferente a Betsson/Inkabet (apuestas reguladas). Diferente a Sorare (fantasy complejo).
-- **Riesgo regulatorio principal:** que los Lukas sean clasificados como apuesta. Mitigación: no son retirables como efectivo, son créditos de entretenimiento.
-- **Riesgo técnico principal:** caída durante partidos en vivo con mucho tráfico. Railway tiene auto-scaling. Test de carga obligatorio en Sprint 7.
-- **Riesgo de negocio principal:** pasivo de Lukas acumulados sin canjear. Vencimiento a 12 meses + provisión del 25%.
-- **KPI más importante en lanzamiento:** inscriptos por torneo. El pozo grande es lo que hace atractivo el juego.
-- **Breakeven proyectado:** Q4 2027 (~18 meses post-lanzamiento).
-
----
-
-## 15. ESTADO DEL SPRINT 0 (completado 15 Abr 2026)
-
-### Lo que se configuró (14 Abr)
-- Monorepo con pnpm 10.33.0 + Turborepo 2.x
-- CI/CD con GitHub Actions (deploy.yml en push a main, ci.yml en PRs)
-- Docker Compose: PostgreSQL 16 + Redis 7 levantados y verificados
-- Prisma: migración inicial `20260414021221_init` aplicada — 7 tablas creadas
-- Estructura completa de carpetas y archivos placeholder con TODOs por sprint
-- SSH configurado para push a GitHub
-
-### Lo que se construyó (15 Abr)
-- **Landing page completa** (`apps/web/app/page.tsx`) con 4 tabs: En vivo, Abiertos, Próximos, Finalizados
-- **NavBar** (`components/layout/NavBar.tsx`) — Logo + botón Entrar
-- **BottomNav** (`components/layout/BottomNav.tsx`) — 5 tabs de navegación inferior
-- Mockup HTML convertido a componentes React/Next.js con datos mock estáticos
-- Fuentes Barlow Condensed + DM Sans integradas via `next/font/google` (CSS variables `--font-barlow`, `--font-dm-sans`)
-- Paleta de colores de marca en Tailwind con prefijo `brand-*` y CSS variables en `globals.css`
-- `postcss.config.js` creado (Tailwind + Autoprefixer)
-- Mockup de referencia accesible en `/mockup.html`
-- Deploy a Railway configurado y funcionando en `https://habla-app-production.up.railway.app`
-
-### Fixes de build aplicados (15 Abr)
-- `apps/web/app/api/auth/[...nextauth]/route.ts` — agregados handlers GET/POST placeholder (sin exports el build fallaba)
-- `apps/web/app/api/webhooks/culqi/route.ts` — agregado handler POST placeholder
-- `next.config.js` — eliminado `experimental.serverActions: true` (deprecated en Next.js 14.2), agregado `output: "standalone"` para Railway
-- `.npmrc` — agregado `node-linker=hoisted` (necesario para que pnpm enlace módulos correctamente en Windows + Node 24)
-- CI/CD workflows actualizados: ahora ejecutan `pnpm build` como verificación
-
-### Deploy a Railway (15 Abr)
-- **Dockerfile** creado en raíz — multi-stage: base (pnpm) → deps (install) → builder (next build) → runner (standalone)
-- **railway.toml** con `builder = "DOCKERFILE"` — Railpack (builder default de Railway) no detectaba pnpm y usaba `npm install` que falla con `workspace:*`
-- **Variable obligatoria en Railway:** `HOSTNAME=0.0.0.0` — sin esto, Next.js standalone solo escucha en localhost y el healthcheck falla
-- **Custom Start Command en Railway:** dejar vacío — el Dockerfile CMD (`node apps/web/server.js`) es el correcto
-- **URL en producción:** `https://habla-app-production.up.railway.app`
-
-### Versiones instaladas (verificadas)
-- Node.js: v24.14.1
-- pnpm: 10.33.0
-- Turbo: 2.9.6
-- Prisma: 5.22.0
-- next-auth: 5.0.0-beta.30
-- Docker: 29.4.0
-
-### Decisiones técnicas tomadas
-- **pnpm 10.x:** versión 9.x no era compatible. Actualizado a 10.33.0 sin impacto funcional.
-- **next-auth beta:** NextAuth v5 no tiene versión estable. Se usa `5.0.0-beta.30`.
-- **node-linker=hoisted:** pnpm en Windows + Node 24 no enlaza symlinks correctamente con el linker por defecto. Se usa `node-linker=hoisted` en `.npmrc` para forzar instalación plana (estilo npm). No afecta el lockfile ni CI.
-- **output: standalone:** `next.config.js` usa `output: "standalone"` para que Railway pueda servir la app sin el monorepo completo.
-- **onlyBuiltDependencies:** configurado para Prisma, esbuild y unrs-resolver.
-- **API-Football directo:** se usa api-football.com con cuenta hablaplay@gmail.com (plan básico). Header `x-apisports-key`, NO RapidAPI.
-- **Landing page en Sprint 0:** se adelantó la landing page (originalmente Sprint 1) porque el mockup ya estaba aprobado y era necesario para verificar el deploy a Railway.
-- **Dockerfile sobre Railpack:** Railpack (builder default de Railway) no infiere pnpm correctamente en monorepos. Se fuerza Dockerfile via `railway.toml` con `builder = "DOCKERFILE"`.
-
-### Pendiente del Sprint 0
-- Contrato con Culqi → pendiente aprobación RUC SAC; sandbox disponible para desarrollo
-
----
-
-## 16. DISEÑO UI — MAPA DE PANTALLAS Y COMPONENTES
-
-> Basado en el mockup interactivo aprobado (`docs/habla-mockup-completo.html`).
-> Referencia estática accesible en producción: `/mockup.html`.
-> Colores de marca: Azul `#0052CC`, Navy `#001050`, Dorado `#FFB800`, Blanco `#FFFFFF`.
-> Fuentes: Barlow Condensed (títulos, scores, números) + DM Sans (cuerpo, botones).
-
-### Fuentes — integración con Next.js
-
-Las fuentes se importan via `next/font/google` en `apps/web/app/layout.tsx`:
-- **Barlow Condensed** → variable CSS `--font-barlow` → clase Tailwind `font-display`
-- **DM Sans** → variable CSS `--font-dm-sans` → clase Tailwind `font-body`
-
-### Paleta de colores
-
-Definidos en dos lugares (deben estar sincronizados):
-1. **CSS variables** en `apps/web/app/globals.css` — para uso directo en CSS
-2. **Tailwind theme** en `apps/web/tailwind.config.js` — con prefijo `brand-*` para clases utilitarias
-
-```css
-/* globals.css — variables CSS */
---blue-dark:  #001050   /* fondo principal */
---blue-mid:   #0038B8   /* gradientes */
---blue-main:  #0052CC   /* color primario */
---blue-light: #1A6EFF   /* hover states */
---blue-pale:  #0A2080   /* surface/cards */
---gold:       #FFB800   /* acento principal, CTAs, precios */
---gold-light: #FFD060   /* hover del gold */
---white:      #FFFFFF
---text:       #EEF2FF   /* texto principal */
---muted:      #7B93D0   /* texto secundario */
---surface:    #001570   /* superficie base */
---card:       #0A2080   /* cards */
---card2:      #0D2898   /* headers de cards */
---border:     #1A3AA0   /* bordes */
---live:       #FF3D3D   /* indicador en vivo */
---green:      #00D68F   /* estado finalizado/éxito */
+### Dependencias entre sub-sprints
+```
+Sub-Sprint 2 (Lukas) ──┬──> Sub-Sprint 3 (Torneos) ──> Sub-Sprint 4 (Combinadas)
+                       │                                        │
+                       │                                        ▼
+                       │              Sub-Sprint 5 (Motor + Ranking en vivo)
+                       │                                        │
+                       │                                        ▼
+                       └──────────> Sub-Sprint 6 (Premios + Tienda + Notif)
+                                                                │
+                                                                ▼
+                                            Sub-Sprint 7 (Perfil + Juego responsable)
 ```
 
+---
+
+### 🟦 SUB-SPRINT 2 — LUKAS & PAGOS (25 Abr – 1 May)
+
+**Objetivo:** El usuario puede comprar Lukas, ver su balance en todos lados y revisar su historial.
+
+**Páginas a terminar:**
+- `/wallet` — Balance hero + mini stats + sección comprar (4 packs) + legal note + historial filtrable
+- NavBar — Badge de balance conectado a datos reales
+
+**Backend:**
+- Módulo `lukas`: service con transacciones atómicas, balance, historial
+- Módulo `pagos`: integración Culqi checkout + webhook
+- Validación de límite mensual de compra (llama módulo `limites`)
+- Cálculo de bonus por pack (20→+0, 50→+5, 100→+15, 250→+50)
+
+**Endpoints nuevos:**
 ```
-/* tailwind.config.js — clases Tailwind equivalentes */
-bg-brand-blue-dark   text-brand-gold      border-brand-border
-bg-brand-blue-main   text-brand-muted     bg-brand-card
-bg-brand-surface     text-brand-text      bg-brand-card2
-bg-brand-live        text-brand-green     bg-brand-gold
-/* etc. — prefijo brand-{nombre-variable} */
-```
-
-### Pantallas principales
-
-#### A. Home / Lista de torneos (`/torneos`)
-- **Tabs:** En vivo | Abiertos | Próximos | Finalizados
-- **Tab "En vivo":** Hero card del partido con score en tiempo real + ranking en vivo (top 5)
-- **Tab "Abiertos":** Lista de TorneoCards con filtros por liga
-- **Tab "Próximos":** Cards con countdown al cierre + "Próximamente"
-- **Tab "Finalizados":** Cards con score final y ganador del torneo
-- **Acceso:** Público, sin login
-
-#### B. Combinada / Ticket (`/torneo/:id/combinada`)
-- **Header:** Nombre del partido, liga, pozo, entrada, premio estimado 1er lugar
-- **5 predicciones en tarjetas independientes:**
-  1. Resultado → 3 botones: Local / Empate / Visita
-  2. BTTS → 2 botones: Sí / No
-  3. Más de 2.5 goles → 2 botones: Sí / No
-  4. Tarjeta roja → 2 botones: Sí / No
-  5. Marcador exacto → picker numérico (+/− por equipo)
-- **Panel de puntos en tiempo real:** muestra puntos posibles conforme se selecciona cada predicción. Parte de 8 pts (marcador) y suma hasta 21.
-- **Validación:** si el usuario intenta enviar sin completar todas, resalta en rojo las faltantes.
-- **Submit:** botón "¡Inscribir Combinada!" → descuenta Lukas → pantalla de éxito
-- **Acceso:** Requiere login. Si usuario no está logueado, muestra modal de login. Tras login, regresa automáticamente a esta pantalla con el partido pre-cargado.
-
-#### C. Modal de Login/Registro
-- Se activa SOLO al intentar inscribirse a un torneo o acceder a Wallet/Perfil
-- Muestra el partido y pozo del torneo que activó el modal (contexto motivacional)
-- Opciones: Google OAuth | Registro con email
-- Tras registro: 500 Lukas de bienvenida (BONUS) + continúa hacia la combinada pendiente
-
-#### D. Pantalla de éxito post-combinada
-- Confirma las 5 predicciones enviadas
-- Muestra puntos posibles máximos
-- CTA: "Enviar otra combinada diferente" | "Ver ranking en vivo"
-
-#### E. Ranking en vivo (`/torneo/:id/ranking`)
-- Tabla con posición, avatar, nombre, puntos actuales
-- Se actualiza en tiempo real vía WebSocket
-- Visible sin login
-
-#### F. Wallet (`/wallet`) — requiere login
-- Balance actual en Lukas
-- Botón "Comprar Lukas" → flujo Culqi
-- Historial de transacciones con tipo, monto, fecha
-
-#### G. Tienda (`/tienda`)
-- Catálogo de premios con precio en Lukas
-- Ver sin login, canjear requiere login
-
-#### H. Admin Panel (`/admin`)
-- Solo rol ADMIN
-- Crear torneo: seleccionar partido de API-Football, tipo, precio de entrada
-- Ver métricas: torneos activos, inscritos, pozo total, ingresos rake
-
-### Componentes clave (Next.js)
-
-> ✅ = implementado, ⬚ = pendiente
-
-```
-components/
-├── torneo/
-│   ⬚ TorneoCard.tsx            ← Card con equipos, pozo, entrada, botón Jugar
-│   ⬚ TorneoHeroEnVivo.tsx      ← Hero card grande para partido en vivo con score
-│   ⬚ TorneoTabs.tsx            ← Tabs Abiertos/En Vivo/Próximos/Finalizados
-│   ⬚ TorneoFiltros.tsx         ← Chips de liga para filtrar
-├── ticket/
-│   ⬚ FormularioCombinadaPrediccion.tsx  ← Las 5 predicciones completas
-│   ⬚ PredResultado.tsx         ← Pregunta 1: Local/Empate/Visita
-│   ⬚ PredBooleana.tsx          ← Reutilizable para BTTS, +2.5, tarjeta roja
-│   ⬚ PredMarcadorExacto.tsx    ← Picker numérico por equipo
-│   ⬚ PuntosPreview.tsx         ← Panel de puntos en tiempo real
-│   ⬚ TicketExito.tsx           ← Pantalla de confirmación
-├── ranking/
-│   ⬚ RankingEnVivo.tsx         ← Tabla actualizada por WebSocket
-├── wallet/
-│   ⬚ BalanceLukas.tsx
-│   ⬚ ComprarLukas.tsx          ← Integra Culqi.js
-│   ⬚ HistorialTransacciones.tsx
-├── auth/
-│   ✅ ModalLoginInscripcion.tsx ← Modal contextual con info del torneo (Sprint 1)
-│   ✅ CerrarSesionBoton.tsx    ← Client component que llama signOut() (Sprint 1)
-├── home/
-│   ✅ HomeContent.tsx           ← Client component con tabs/mock data, extraído de page.tsx (Sprint 1)
-└── layout/
-    ✅ NavBar.tsx                ← Server Component: balance + avatar si hay sesión / "Entrar" si no (Sprint 1)
-    ✅ UserMenu.tsx              ← Client component del avatar con menú desplegable (Sprint 1)
-    ✅ BottomNav.tsx             ← 5 tabs de navegación inferior (Sprint 0)
+GET  /lukas/balance                      → { balance }
+GET  /lukas/historial?tipo=&page=        → { transacciones[], total }
+POST /lukas/comprar                      → { transaccion, nuevoBalance }
+POST /webhooks/culqi                     → 200 OK (valida firma)
 ```
 
-**Nota:** En Sprint 0, los componentes HeroLive, RankingWidget, MatchCard, Tabs y FilterChips
-están definidos inline en `HomeContent.tsx` con datos mock. Se extraerán a archivos separados
-en los sprints correspondientes cuando se conecten a datos reales.
+**Frontend conecta:**
+- `useLukasStore` se hidrata con el balance al login
+- `NavBar` escucha cambios del store
+- Click en pack → abre Culqi.js → recibe token → POST /lukas/comprar
+- Filter chips del historial filtran en backend (query param)
+- Toast de éxito + refresh de balance tras compra
+
+**Criterios de aceptación:**
+- [ ] Tarjeta sandbox `4111 1111 1111 1111` acredita Lukas en BD
+- [ ] Tarjeta rechazada muestra error sin descontar
+- [ ] Webhook valida firma `CULQI_WEBHOOK_SECRET`
+- [ ] Balance visible en NavBar + /wallet + /perfil es el mismo
+- [ ] Historial muestra al menos: compra, bonus por compra, bonus bienvenida
+- [ ] Compra que excedería límite mensual → se bloquea con mensaje
 
 ---
 
-## 17. CONTRATOS DE API — ENDPOINTS REST
+### 🟦 SUB-SPRINT 3 — TORNEOS (2 May – 8 May)
 
-> Base URL desarrollo: `http://localhost:3001/api/v1`
-> Todos los endpoints protegidos requieren header: `Authorization: Bearer <jwt>`
+**Objetivo:** Admin crea torneos. Usuarios los ven, filtran por liga, y se inscriben.
+
+**Páginas a terminar:**
+- `/matches` — Filter chips funcionales, match cards por urgencia, sección finalizados, sidebar sticky
+- `/torneo/:id` — Detalle con reglas de puntaje + CTA "Crear combinada"
+- `/admin` — Crear torneo seleccionando partido de api-football + configurando tipo y entrada
+
+**Backend:**
+- Módulo `torneos`: CRUD + inscripción + listado con filtros
+- Módulo `partidos`: import de partidos programados desde api-football (admin dispara)
+- Job `cerrar-torneos.job.ts`: corre cada minuto, cierra torneos cuya fecha_cierre <= ahora
+- Job de cancelación: si un torneo cerró con <2 inscritos, se cancela y reembolsa
+- Cálculo de urgencia para el frontend (crítico: <15min, alto: <1h, med: <3h, bajo: >3h)
+
+**Endpoints nuevos:**
+```
+GET  /torneos?estado=&liga=&page=         → { torneos[], pagination }
+GET  /torneos/:id                          → { torneo, misPosicion? }
+POST /torneos/:id/inscribir                → { ticket, nuevoBalance }
+POST /admin/partidos/importar              → { partidosImportados }
+POST /admin/torneos                        → { torneo }
+GET  /admin/partidos/disponibles           → { partidos[] }
+```
+
+**Frontend conecta:**
+- `/matches` llama `GET /torneos` con filtros de chip activos
+- Filter chips usan `filterChip()` que refetchea datos
+- Contador de "cierra en X min" se calcula en frontend con `cierreAt`
+- Click en match card con CTA "Crear combinada" → abre modal (sprint 4) con torneoId pre-cargado
+- Sidebar sticky muestra top del día (query a ranking de torneo más grande del día)
+
+**Criterios de aceptación:**
+- [ ] Admin crea un torneo y aparece en `/matches` al instante
+- [ ] Filter chip "Liga 1 Perú" muestra solo torneos de esa liga
+- [ ] CTA "Inscribirme" muestra error si balance insuficiente
+- [ ] A los 5 min antes del partido, el CTA se deshabilita y dice "Cerrado"
+- [ ] Torneo con 1 solo inscrito → cancela + reembolsa + email al usuario
+- [ ] Sidebar muestra solo torneos con partidos en vivo o próximos (<2h)
+
+---
+
+### 🟦 SUB-SPRINT 4 — COMBINADAS (9 May – 15 May)
+
+**Objetivo:** Usuarios arman y envían sus tickets de 5 predicciones. Ven todos sus tickets agrupados.
+
+**Páginas a terminar:**
+- Modal centrado de combinada (desde `/matches`, `/torneo/:id`, `/live-match`)
+- `/mis-combinadas` — Stats summary (5 métricas) + 3 tabs (Activas/Ganadas/Historial) + match groups
+
+**Backend:**
+- Módulo `tickets`: crear ticket con validaciones + listar con filtros
+- Constraint de unicidad (ya en schema) + manejo de error amigable
+- Validación de límite diario de tickets
+- Job que marca tickets como CERRADOS cuando su torneo cierra
+
+**Endpoints nuevos:**
+```
+POST /tickets                              → { ticket, nuevoBalance }
+GET  /tickets/mis-tickets?estado=&page=    → { tickets[] con torneo y partido }
+GET  /tickets/stats                        → { jugadas, ganadas, acierto, neto, mejor }
+```
+
+**Frontend conecta:**
+- `ComboModal` abre centrado (desktop) o fullscreen (mobile) con animación scaleIn
+- Panel de puntos máx se calcula client-side mientras selecciona opciones
+- Submit: POST /tickets → cierra modal → toast de éxito → balance actualizado
+- `/mis-combinadas` agrupa tickets por torneo (query agrupa backend o frontend)
+- Stats summary usa `GET /tickets/stats`
+- Tab "Activas" filtra `estado IN (ABIERTO, CERRADO, EN_JUEGO)`
+- Tab "Ganadas" filtra `premioLukas > 0`
+- Tab "Historial" filtra `estado IN (FINALIZADO, CANCELADO)` con expandible por partido
+
+**Criterios de aceptación:**
+- [ ] Modal impide enviar si falta alguna de las 5 predicciones
+- [ ] Ticket idéntico a uno previo → error "Ya enviaste esta combinada"
+- [ ] Al enviar ticket 11 → error "Máximo 10 tickets por torneo"
+- [ ] Si el torneo cerró entre abrir el modal y enviar → error "Torneo cerrado"
+- [ ] Predicciones en mis-combinadas muestran estado: gris (pendiente), verde (acertó), rojo (falló)
+- [ ] Stats summary refleja la realidad: juego 3 → jugadas 3, gano 1 → ganadas 1
+- [ ] Match group enlaza al `/live-match` si el partido está en vivo
+
+---
+
+### 🟦 SUB-SPRINT 5 — MOTOR DE PUNTUACIÓN + RANKING EN VIVO (16 May – 22 May)
+
+**Objetivo:** Durante un partido, los puntos se recalculan en vivo, el ranking se actualiza y los usuarios lo ven en tiempo real sin recargar.
+
+**Páginas a terminar:**
+- `/live-match` — Hero estadio + mi ticket + 3 tabs (Ranking/Stats/Events) + switcher entre partidos live + expand "ver todos"
+- Sidebar sticky de `/matches` — Live mini cards con score en vivo
+- `/mis-combinadas` — Actualización live de puntos en tickets activos
+
+**Backend:**
+- Job `poller-partidos.job.ts`: cada 30s llama api-football para cada partido EN_VIVO o PROGRAMADO <15min
+- Mapper `partidos.mapper.ts`: traduce eventos de la API a nuestros tipos internos
+- Motor `puntuacion.service.ts`: recalcula todos los tickets de un torneo cuando hay evento nuevo
+- Servicio `ranking.service.ts`: genera ranking ordenado + calcula premios estimados por posición
+- Redis: sorted sets por torneoId con score = puntosTotal
+- WebSocket: sala por torneoId, emite `ranking:update` y `partido:evento`
+
+**Endpoints nuevos:**
+```
+GET  /torneos/:id/ranking?page=&limit=      → { ranking[], miPosicion?, totalInscritos }
+GET  /partidos/:id/eventos                  → { eventos[] en orden cronológico }
+GET  /partidos/:id/stats                    → { home: {...}, away: {...} }
+GET  /live/matches                          → { partidos en vivo }
+```
+
+**Eventos WebSocket:**
+```
+CLIENTE → SERVIDOR:
+  socket.emit('join:torneo', { torneoId })
+  socket.emit('leave:torneo', { torneoId })
+
+SERVIDOR → CLIENTE:
+  'ranking:update'     { torneoId, ranking[], totalInscritos, minutoPartido }
+  'partido:evento'     { torneoId, tipo, equipo, minuto, marcador }
+  'torneo:cerrado'     { torneoId }
+  'torneo:finalizado'  { torneoId, ganadores[] }
+```
+
+**Frontend conecta:**
+- `useRankingEnVivo(torneoId)` abre socket y suscribe al torneo
+- Cada `ranking:update` actualiza el state del ranking con animación sutil
+- Cada `partido:evento` muestra notificación flotante y actualiza chips de predicciones
+- Switcher entre live matches carga el torneo nuevo y hace join al nuevo socket
+- Tab "Stats" llama `GET /partidos/:id/stats` y refresca cada 30s
+- Tab "Events" llama `GET /partidos/:id/eventos` y actualiza con cada evento nuevo
+- Botón "Ver todos los 312 jugadores" llama `GET /torneos/:id/ranking?limit=312`
+
+**Criterios de aceptación:**
+- [ ] Al marcarse un gol, los puntos se recalculan en **<2s** y llegan al cliente vía WS
+- [ ] Si la API de fútbol falla durante un minuto, los puntos quedan "pendientes" y se resuelven al restaurar
+- [ ] El ranking muestra la posición del usuario destacada (fila azul)
+- [ ] Los chips cambian color conforme los eventos van confirmando/descartando predicciones
+- [ ] Stats del partido (posesión, tiros, tarjetas) se ven actualizados
+- [ ] Eventos se listan en cronología con nombres de jugadores
+- [ ] Switcher entre partidos live no corta la conexión (leave + join correcto)
+- [ ] Test de carga: 500 clientes en el mismo torneo sin caídas
+
+---
+
+### 🟦 SUB-SPRINT 6 — PREMIOS + TIENDA + NOTIFICACIONES (23 May – 29 May)
+
+**Objetivo:** Al finalizar el partido, los premios se distribuyen automáticamente. Los usuarios canjean sus Lukas en la tienda. Reciben emails de eventos clave.
+
+**Páginas a terminar:**
+- `/tienda` — Shop stats + featured + category filters + prize grid con progress bars + CTA
+- `/live-match` (estado finalizado) — Pantalla final con ranking de ganadores y premios
+- `/mis-combinadas` tab "Ganadas" — Cards doradas con trofeos y premios ganados
+- Email templates (Resend)
+
+**Backend:**
+- Job `distribuir-premios.job.ts`: corre al recibir evento FIN_PARTIDO del partido
+  1. Marca torneo como FINALIZADO
+  2. Calcula posiciones finales con desempates
+  3. Distribuye Lukas según `distribPremios` (35/20/12/33%)
+  4. Crea transacciones PREMIO_TORNEO atómicas
+  5. Dispara emails a ganadores
+- Módulo `premios`: catálogo con filtros por categoría
+- Módulo `canjes`: solicitud de canje + gestión desde admin
+- Módulo `notificaciones`: despacho de emails con preferencias del usuario
+
+**Endpoints nuevos:**
+```
+GET  /premios?categoria=                    → { premios[] con afordabilidad calculada }
+POST /premios/:id/canjear                   → { canje, nuevoBalance }
+GET  /canjes/mis-canjes                     → { canjes[] con estado }
+GET  /admin/canjes?estado=                  → { canjes[] pendientes }
+PATCH /admin/canjes/:id                     → { canje actualizado }
+```
+
+**Templates de email (Resend):**
+- `premio-ganado.tsx` — "🏆 ¡Ganaste 3,444 Lukas en Man U vs R. Madrid!"
+- `canje-solicitado.tsx` — "Tu canje de [Premio] está siendo procesado"
+- `torneo-cancelado.tsx` — "Tu torneo fue cancelado, te reembolsamos 5 Lukas"
+
+**Frontend conecta:**
+- `/tienda` llama `GET /premios` con categoría activa
+- Cada prize card calcula si es afordable según balance (frontend)
+- Click en "Canjear" → modal de confirmación → POST /premios/:id/canjear → toast
+- Progress bar se renderiza con `Math.min(100, balance / costeLukas * 100)`
+- Tab "Ganadas" de mis-combinadas filtra por `premioLukas > 0`
+- Al finalizar un partido, `/live-match` muestra pantalla final con top 10 + premios
+
+**Criterios de aceptación:**
+- [ ] Al marcarse FIN_PARTIDO, los premios se distribuyen en **<5s**
+- [ ] Cada ganador recibe transacción PREMIO_TORNEO en su wallet
+- [ ] Email se envía solo si `preferencias.notifPremios = true`
+- [ ] Tienda muestra todas las categorías con filtro funcional
+- [ ] Canje exitoso descuenta Lukas y crea registro PENDIENTE
+- [ ] Admin panel muestra canjes pendientes y puede cambiar a ENVIADO
+- [ ] Si usuario intenta canjear algo que no puede pagar → 400 con mensaje claro
+- [ ] Progress bar actualiza al subir el balance (post-compra o post-premio)
+
+---
+
+### 🟦 SUB-SPRINT 7 — PERFIL + JUEGO RESPONSABLE (30 May – 5 Jun)
+
+**Objetivo:** Usuario gestiona su cuenta completa. Los límites de juego responsable están vivos y bloquean acciones cuando corresponde. Las notificaciones respetan las preferencias.
+
+**Páginas a terminar:**
+- `/perfil` — Hero con nivel + stats + quick access + verificación + datos + notificaciones + juego responsable + seguridad + ayuda + legal
+- Flujo de verificación de teléfono (SMS con Twilio)
+- Flujo de verificación de DNI (subida de imagen)
+
+**Backend:**
+- Módulo `usuarios`: CRUD propio perfil, edición de datos
+- Módulo `verificacion`: envío de código SMS y confirmación
+- Módulo `limites`: CRUD de límites + enforcement en compra y tickets
+- Módulo `notificaciones`: CRUD de preferencias
+- Cálculo de **nivel** basado en torneos jugados:
+  - 0-10: 🥉 Novato
+  - 11-50: 🥈 Intermedio
+  - 51-200: 🥇 Pro
+  - 200+: 👑 Leyenda
+
+**Endpoints nuevos:**
+```
+GET   /usuarios/me                            → { usuario completo con stats y nivel }
+PATCH /usuarios/me                            → { usuario actualizado }
+POST  /verificacion/telefono/enviar           → { codigoEnviado }
+POST  /verificacion/telefono/confirmar        → { verificado: true }
+POST  /verificacion/dni/subir                 → { imagenSubida }
+GET   /notificaciones/preferencias            → { preferencias }
+PATCH /notificaciones/preferencias            → { preferencias actualizadas }
+GET   /limites                                → { limites + uso actual }
+PATCH /limites                                → { limites actualizados }
+POST  /limites/auto-exclusion                 → { bloqueadoHasta }
+POST  /usuarios/me/datos-download             → { archivoUrl } (job async)
+POST  /usuarios/me/eliminar                   → { solicitudCreada }
+```
+
+**Frontend conecta:**
+- Perfil hero calcula nivel y progreso al siguiente
+- Stats grid usa `GET /tickets/stats` + balance
+- Cada toggle hace `PATCH /notificaciones/preferencias` con debounce 500ms
+- Slider de límite edita valor y hace PATCH al soltar
+- Click en "+Agregar" de teléfono → modal con input + código SMS
+- Click en verificar DNI → input file + preview + submit
+- Click en "Descargar mis datos" → dispara job async + email con el link
+
+**Criterios de aceptación:**
+- [ ] Al cambiar un toggle, la preferencia persiste al refresh
+- [ ] Si el usuario apaga "Premios ganados", no recibe email al ganar
+- [ ] Compra que excedería límite mensual → error "Excede tu límite de S/ 300/mes"
+- [ ] Ticket 11 (si límite es 10) → error "Máximo 10 tickets por día"
+- [ ] Nivel Intermedio muestra "Llevas 24 torneos, te faltan 27 para 🥇 Pro"
+- [ ] Verificación teléfono: código llega por SMS, validar con Twilio real
+- [ ] Auto-exclusión 7 días bloquea login hasta que termine
+- [ ] Cerrar sesión limpia session y redirige a /
+- [ ] Eliminar cuenta crea solicitud y envía email de confirmación
+
+---
+
+### 🔚 SPRINT 8 — QA + TEST DE CARGA + BETA (6-10 Jun)
+
+**Objetivo:** El producto está sólido, probado y listo para el Mundial.
+
+- Testing end-to-end con Playwright: flujos críticos (registro→comprar→inscribir→jugar→canjear)
+- Test de carga con k6: 500 usuarios simultáneos en un torneo activo durante 90 min
+- Fix de bugs críticos encontrados
+- Beta cerrada con 15 influencers: cuentas con 2,000 Lukas de cortesía
+- Ajuste final de copy, imágenes, favicon
+- Verificar Sentry captura errores, Grafana muestra métricas
+- Plan de contingencia documentado (API-Football cae, Culqi rechaza, Railway se satura)
+
+### 🚀 GO LIVE (11 Jun 2026)
+
+**Día 1 del Mundial FIFA 2026.**
+- Deploy a producción verificado
+- Monitoreo 24/7 durante el primer partido
+- Torneo gratuito de bienvenida (entrada 0 Lukas) para el partido inaugural
+- Campaña de marketing activa en TikTok/Instagram
+- Canal de soporte directo por WhatsApp
+
+---
+
+## 10. DISEÑO UI — MAPA DE PANTALLAS
+
+> Referencia interactiva: `docs/habla-mockup-completo.html` (también accesible en `/mockup.html`).
+> **Este mockup es la fuente de verdad del diseño**. Cada sprint debe replicarlo fielmente.
+
+### Paleta de marca
+
+El sistema de diseño está definido en `apps/web/tailwind.config.ts` y replicado como custom properties en `apps/web/app/globals.css`. Todos los componentes deben usar estos tokens (prefijos `brand-*`, `urgent-*`, `accent-*`, `dark-*`, `pred-*`); queda prohibido hardcodear colores en JSX/CSS.
+
+**Core:** Azul `#0052CC` (`blue-main`) · Navy `#001050` (`blue-dark`) · Azul medio `#0038B8` (`blue-mid`) · Azul claro `#1A6EFF` (`blue-light`) · Dorado `#FFB800` (`gold`) · Dorado tenue `rgba(255,184,0,.15)` (`gold-dim`).
+
+**Estados:** Verde `#00D68F` (`green`) · Rojo live `#FF3D3D` (`live`) · Naranja `#FF7A00` (`orange`).
+
+**Urgencia (match cards por tiempo de cierre):** Crítico `#FF2E2E` (<15min) · Alto `#FF7A00` (<1h) · Medio `#FFB800` (<3h) · Bajo `#7B93D0` (>3h). Cada uno con su variante `-bg` pastel (`#FFE5E5`, `#FFEDD5`, `#FFF3C2`, `#EEF2FF`).
+
+**Acento por tipo de torneo:** Mundial `#8B5CF6` · Clásico `#DC2626` · Libertadores `#059669`. Cada uno con su `-bg` (`#F3E8FF`, `#FFEBEB`, `#D1FAE5`). Se usan en `type-badge type-mundial/clasico/liberta`.
+
+**Dark surfaces** (para header, heros tipo estadio, live-match): `#001050` (`dark-surface`) · `#0A2080` (`dark-card`) · `#0D2898` (`dark-card-2`) · `#1A3AA0` (`dark-border`) · `#EEF2FF` (`dark-text`) · `#7B93D0` (`dark-muted`).
+
+**Prediction results (chips):** Acierto `#00D68F` (`pred-correct`) · Fallo `#FF3D3D` (`pred-wrong`) · Pendiente `rgba(0,16,80,.35)` (`pred-pending`). Cada uno con su `-bg`.
+
+**Backgrounds:** `#F5F7FC` (`bg-page`) · `#FFFFFF` (`bg-app`, `bg-card`) · `#F1F4FB` (`bg-subtle`).
+
+**Text & borders:** Texto principal `#001050` (`text-dark`) · Cuerpo `rgba(0,16,80,.85)` (`text-body`) · Atenuado `rgba(0,16,80,.58)` (`text-muted-d`) · Suave `rgba(0,16,80,.42)` (`text-soft`) · Borde ligero `rgba(0,16,80,.08)` (`border-light`) · Borde fuerte `rgba(0,16,80,.16)` (`border-strong`).
+
+**Shadows:** `shadow-sm`, `shadow-md`, `shadow-lg`, `shadow-xl` (escala estándar) + `shadow-gold` y `shadow-urgent` (acentos). Ver valores en el config.
+
+**Radius:** `radius-sm` 8px · `radius-md` 12px · `radius-lg` 16px · `radius-xl` 20px.
+
+Fuentes: **Barlow Condensed** (títulos, scores, números — weights 400/600/700/800/900) + **DM Sans** (cuerpo, botones — weights 400/500/600/700).
+
+---
+
+### 10.1 `/matches` — Home de torneos
+
+**Layout:** 2 columnas en desktop (contenido + sidebar sticky 340px), 1 columna en mobile.
+
+**Contenido principal:**
+- Page head: "Partidos de hoy" + sub
+- Filter chips de ligas (Todas, Liga 1, Champions, Libertadores, Premier, Mundial) — click filtra backend
+- Section bar "⚡ Próximos torneos" con counter "8 abiertos"
+- Match cards por **urgencia**:
+  - **Crítico** (<15min): borde rojo animado, badge pulsante, CTA rojo
+  - **Alto** (<1h): borde naranja, badge naranja
+  - **Medio** (<3h): borde dorado sutil
+  - **Bajo** (>3h): estilo neutro
+- Match card featured (clásicos, finales): más grande, con padding extra
+- Section bar "🏆 Ya ganaron hoy" con lista compacta de finalizados con ganadores
+
+**Sidebar sticky:**
+- Widget "🔴 En vivo ahora" (hasta 2-3 cards mini con score + puntero del ranking)
+- Widget "🏅 Top del día" (4-5 jugadores con más puntos acumulados del día)
+- Widget "🪙 Tu balance" con CTAs Comprar + Tienda
+
+---
+
+### 10.2 `/live-match` — Partido en vivo (página dedicada)
+
+**Accede desde:** nav link "🔴 En vivo" en header (contador pulsante), sidebar sticky de `/matches`, bottom nav mobile.
+
+**Estructura:**
+- Page head: "🔴 Partidos en vivo" + sub
+- **Live match switcher** (tabs con los 2-3 partidos en vivo, incluye score + minuto actual)
+- **Hero oscuro tipo estadio** con score gigante en dorado, minuto con dot pulsante, 4 stats (jugadores, pozo, 1er premio, máx pts), timeline compacta de eventos
+- **Mi ticket destacado** (card dorado grande) si el usuario tiene combinada activa: posición actual, puntos, predicciones pintadas por estado, premio estimado
+- **Tabs** (funcionales): Ranking / Estadísticas / Eventos
+- **Ranking (tab default):** tabla con posición + flecha de cambio ↑↓=, avatar + nombre, 5 predicciones como chips (verde/rojo/gris), puntos actuales, premio que se llevaría ahora. Top 1/2/3 con color especial. Mi fila destacada en azul. Línea de corte con ✂️ después del top 10. Botón "Ver todos los X jugadores" que expande la tabla.
+- **Estadísticas:** comparación con barras graduadas (posesión, tiros, tarjetas, córners, faltas, offsides, pases).
+- **Eventos:** timeline cronológica con minuto, ícono coloreado (gol/amarilla/roja/sub), píldora del equipo, título + detalle.
+
+---
+
+### 10.3 `/torneo/:id` — Detalle de torneo
+
+**Uso:** Ver reglas, pozo, jugadores inscritos antes de inscribirse.
+
+- Header con score VS + meta del partido
+- Estado: Abierto / Cerrado / En vivo / Finalizado (con diferentes styling)
+- Card de reglas de puntaje (las 5 predicciones con sus pts)
+- Info del pozo: bruto, neto, distribución 35/20/12/33%
+- CTA "🎯 Crear combinada" (abre modal centrado) o "Ver ranking en vivo" si ya empezó
+
+---
+
+### 10.4 Modal combinada (centrado, grande)
+
+**Se abre desde:** `/matches`, `/torneo/:id`, `/mis-combinadas` (botón "+ Otra combinada").
+
+- Overlay con blur, panel centrado 640px max (full-screen en mobile)
+- Header azul con franja dorada animada, nombre del partido, 4 metas (entrada, pozo, 1er premio, cierre)
+- Body: 5 cards de predicción con las opciones como botones
+  - Resultado: 3 opciones (equipo local / empate / equipo visita)
+  - Ambos anotan, +2.5, tarjeta roja: Sí/No
+  - Marcador exacto: picker numérico ± por equipo
+- Footer: 2 cajas (puntos máx preview + balance después) + botón "🎯 Inscribir por X 🪙"
+
+---
+
+### 10.5 `/mis-combinadas` — Tickets del usuario
+
+- Page head + sub
+- **Stats summary** (5 pills): Jugadas, Ganadas, Acierto %, Balance neto, Mejor puesto
+- **Tabs:** 🔴 Activas (X) · 🏆 Ganadas (X) · 📜 Historial (X)
+- **Vista Activas:** match groups (1 por partido) con:
+  - Header: estado (live pulsante / cierra en X min), liga, CTA "Ver ranking" o "+ Otra combinada"
+  - Teams row con score
+  - Tickets list: cada ticket con número (2 de 2), badge de posición + puntos, 5 chips de predicciones por estado, footer con entrada + estado de premio
+- **Vista Ganadas:** match groups con borde dorado, badge "🏆 Ganaste · 1° lugar", trofeo visual, premio destacado
+- **Vista Historial:** filas compactas expandibles por click (1 row = 1 partido con X tickets), muestra neto del partido en verde/rojo, expande para ver cada ticket
+
+---
+
+### 10.6 `/tienda` — Catálogo de premios
+
+- Page head "🎁 Tienda de premios"
+- **Shop stats** (3 cards): Tu balance, Canjeables ahora, Ya canjeados
+- **Nota sutil** sobre Lukas (no efectivo, solo premios)
+- **Featured prize** (card grande oscuro con imagen, nombre, descripción, precio dorado, CTA)
+- **Category chips** (funcionales): Todos / Entradas / Camisetas / Gift Cards / Tech / Experiencias
+- **Prize grid v2:** cada card con:
+  - Imagen/emoji con fondo categoría
+  - Badge (🔥 Popular / ⭐ Nuevo / 💎 Limitado)
+  - Nombre + descripción
+  - Precio + stock (rojo si bajo)
+  - **Si afordable:** borde verde + botón dorado "✓ Canjear ahora"
+  - **Si no afordable:** progress bar dorada al X% + "Te faltan Y 🪙"
+- **CTA azul final:** "¿Necesitas más Lukas?" → [Ver partidos] [Comprar Lukas]
+
+---
+
+### 10.7 `/wallet` — Billetera
+
+- Page head "💰 Billetera"
+- **Balance hero azul-navy** con amount gigante 500 🪙 + sub "Créditos para canjear premios" + badge de vencimiento
+- **Wallet mini stats** (3): Total comprado, Total ganado, Total canjeado
+- **Buy section** con header dorado + 4 pack cards: 20 (+0), 50 (+5), 100 (+15 "🔥 Popular"), 250 (+50 "⭐ Mejor valor"). Click selecciona.
+- **Legal note** sobre Lukas (créditos, no efectivo, vencimiento 12 meses de compras)
+- **Movements section:** título + filter chips (Todos / Compras / Inscripciones / Premios / Canjes / Bonos) + tx-list con icono categorizado + descripción + fecha + amount coloreado
+- Botón "Ver los X movimientos restantes"
+
+---
+
+### 10.8 `/perfil` — Centro de control del usuario
+
+**La más densa. Estructura de arriba a abajo:**
+
+1. **Hero azul-navy** con:
+   - Avatar 100px dorado + botón 📷 edit flotante
+   - Nombre + badge "✓ Verificado"
+   - Handle @user + meta (miembro desde, ubicación, edad)
+   - **Level card:** 🥈 Intermedio + barra de progreso al siguiente nivel + "Te faltan X torneos"
+
+2. **Stats grid** (6 pills): Torneos, Ganados, Acierto, Balance, Total ganado, Mejor puesto
+
+3. **Quick access** (4 cards): Mis combinadas, Billetera, Tienda, Centro de ayuda
+
+4. **Sección Verificación** (destacada si hay pendientes):
+   - ✓ Email — Verificado
+   - ✓ Edad — Verificada
+   - ⚠ Teléfono — Botón "Agregar"
+   - ⚠ DNI — "Requerido para canjes >S/ 500" — Botón "Verificar"
+
+5. **Sección Datos personales** (editables row por row):
+   - Nombre, Usuario (@handle), Correo, Teléfono (vacío con botón agregar), Fecha nacimiento (🔒 bloqueado), Ubicación
+
+6. **Sección Notificaciones** (7 toggles):
+   - Inicio de torneos, Resultados, Premios, Sugerencias, Cierre, Novedades, Email semanal
+
+7. **Sección Juego responsable:**
+   - Límite mensual (S/ 300/mes) con barra de uso
+   - Límite diario (10 tickets/día) con barra de uso
+   - Auto-exclusión temporal (link)
+   - Recursos de ayuda (link)
+
+8. **Sección Seguridad:** Método login, Dispositivos activos, Cuentas vinculadas, Descargar mis datos
+
+9. **Sección Ayuda:** Cómo jugar, FAQ, Contáctanos, Reportar problema
+
+10. **Sección Legal:** Términos, Privacidad, Juego responsable, Sobre los Lukas, Acerca de Habla!
+
+11. **Danger zone:** Botón "🚪 Cerrar sesión" + link pequeño "Eliminar cuenta permanentemente"
+
+12. **Footer:** "Habla! v1.0 · Hecho en Perú 🇵🇪"
+
+---
+
+### 10.9 Componentes comunes (en todas las páginas)
+
+- **NavBar superior:** Logo + nav links (Partidos · 🔴 En vivo · Mis combinadas · Tienda · Billetera) + balance badge + avatar. En mobile: hamburger + bottom-nav.
+- **Bottom nav mobile:** Partidos · 🔴 En vivo · Tickets · Tienda · Wallet (5 items).
+- **Filter chips:** pattern reutilizable (dorado activo, hover dorado), usa `filterChip()`.
+- **Toast:** verde en top center, aparece 3.5s tras acciones exitosas.
+- **Alert banners:** alert-info (azul), alert-success (verde), con ícono + texto.
+- **Pred chips:** verde ✓ (acertó), rojo ✕ (falló), gris ⏳ (pendiente).
+- **Footer:** 4 columnas (Juego, Cuenta, Soporte, Legal) con enlaces.
+
+---
+
+## 11. CONTRATOS DE API — RESUMEN
+
+Base URL dev: `http://localhost:3001/api/v1`. Endpoints protegidos requieren JWT en header `Authorization: Bearer <token>`.
+
+### Auth
+```
+GET  /auth/me                   → usuario actual con stats y balance
+```
+
+### Usuarios
+```
+GET   /usuarios/me                            → perfil completo + nivel + stats
+PATCH /usuarios/me                            → editar datos
+POST  /usuarios/me/datos-download             → job async, email con ZIP
+POST  /usuarios/me/eliminar                   → solicitud de eliminación
+```
+
+### Lukas
+```
+GET   /lukas/balance                          → balance actual
+GET   /lukas/historial?tipo=&page=            → transacciones con filtros
+POST  /lukas/comprar                          → token Culqi → acredita Lukas
+```
 
 ### Torneos
-
 ```
-GET  /torneos                    → lista de torneos (público)
-     Query params: estado=ABIERTO|EN_JUEGO|FINALIZADO|CERRADO, liga=string
-     Response: { torneos: TorneoConPartido[] }
-
-GET  /torneos/:id                → detalle de un torneo (público)
-     Response: { torneo: TorneoConPartido, misPosicion?: number }
-
-POST /torneos/:id/inscribir      → inscribir usuario (requiere auth)
-     Body: { ticketData: TicketInput }
-     Response: { ticket: Ticket, nuevoBalance: number }
-     Errores: 400 TORNEO_CERRADO | 400 BALANCE_INSUFICIENTE | 400 TICKET_DUPLICADO | 400 MAX_TICKETS
+GET   /torneos?estado=&liga=&page=            → listado con filtros
+GET   /torneos/:id                            → detalle + misPosicion
+POST  /torneos/:id/inscribir                  → bloquea entrada, crea ticket
+GET   /torneos/:id/ranking?page=&limit=       → ranking paginado con premios estimados
 ```
 
-### Tickets / Combinadas
-
+### Tickets
 ```
-POST /tickets                    → crear ticket (requiere auth)
-     Body: {
-       torneoId: string,
-       predResultado: 'LOCAL' | 'EMPATE' | 'VISITA',
-       predBtts: boolean,
-       predMas25: boolean,
-       predTarjetaRoja: boolean,
-       predMarcadorLocal: number,    // 0-9
-       predMarcadorVisita: number    // 0-9
-     }
-     Response: { ticket: Ticket, nuevoBalance: number }
-
-GET  /tickets/mis-tickets        → tickets del usuario autenticado (requiere auth)
-     Query params: torneoId?, page?
-     Response: { tickets: TicketConPuntos[] }
-```
-
-### Ranking
-
-```
-GET  /torneos/:id/ranking        → ranking actual de un torneo (público)
-     Query params: page=1, limit=50
-     Response: { ranking: RankingRow[], miPosicion?: number, totalInscritos: number }
-```
-
-### Lukas / Wallet
-
-```
-GET  /lukas/balance              → balance actual (requiere auth)
-     Response: { balance: number }
-
-GET  /lukas/historial            → historial de transacciones (requiere auth)
-     Query params: page=1, limit=20
-     Response: { transacciones: TransaccionLukas[], total: number }
-
-POST /lukas/comprar              → iniciar compra de Lukas con Culqi (requiere auth)
-     Body: { monto: number, culqiToken: string }
-     Response: { transaccion: TransaccionLukas, nuevoBalance: number }
+POST  /tickets                                → crear ticket (valida todo)
+GET   /tickets/mis-tickets?estado=&page=      → mis tickets con torneo y partido
+GET   /tickets/stats                          → jugadas, ganadas, acierto, neto, mejor
 ```
 
 ### Partidos
-
 ```
-GET  /partidos                   → lista de partidos disponibles (público)
-     Query params: fecha=YYYY-MM-DD, estado=PROGRAMADO|EN_VIVO|FINALIZADO
-     Response: { partidos: Partido[] }
-
-GET  /partidos/:id               → detalle de partido con estado en vivo (público)
-     Response: { partido: Partido, eventoReciente?: EventoPartido }
+GET   /partidos?fecha=&estado=                → listado con filtros
+GET   /partidos/:id                           → detalle + último evento
+GET   /partidos/:id/eventos                   → timeline cronológica
+GET   /partidos/:id/stats                     → stats comparadas home/away
+GET   /live/matches                           → partidos actualmente en vivo
 ```
 
-### Auth
-
+### Premios y canjes
 ```
-POST /auth/registro              → registro con email (sin OAuth)
-     Body: { email, nombre, password, fechaNac }
-     Response: { usuario: Usuario, token: string, lukasBonus: 500 }
-
-POST /auth/login                 → login con email
-     Body: { email, password }
-     Response: { usuario: Usuario, token: string }
-
-GET  /auth/me                    → usuario actual (requiere auth)
-     Response: { usuario: Usuario }
+GET   /premios?categoria=                     → catálogo con afordabilidad
+POST  /premios/:id/canjear                    → solicita canje
+GET   /canjes/mis-canjes                      → estado de mis canjes
 ```
 
-### Premios / Tienda
-
+### Notificaciones y límites
 ```
-GET  /premios                    → catálogo de premios (público)
-     Response: { premios: Premio[] }
-
-POST /premios/:id/canjear        → canjear premio (requiere auth)
-     Body: { direccion?: { nombre, direccion, ciudad, telefono } }
-     Response: { canje: Canje, nuevoBalance: number }
+GET   /notificaciones/preferencias            → 7 toggles
+PATCH /notificaciones/preferencias            → actualizar toggles
+GET   /limites                                → límites + uso actual
+PATCH /limites                                → editar límites
+POST  /limites/auto-exclusion                 → activar bloqueo temporal
 ```
 
-### Admin
-
+### Verificación
 ```
-POST /admin/torneos              → crear torneo (requiere auth + rol ADMIN)
-     Body: { partidoId, tipo, entradaLukas, nombre }
-     Response: { torneo: Torneo }
+POST  /verificacion/telefono/enviar           → SMS con Twilio
+POST  /verificacion/telefono/confirmar        → valida código
+POST  /verificacion/dni/subir                 → imagen para review manual
+```
 
-GET  /admin/metricas             → métricas generales (requiere auth + rol ADMIN)
-     Response: { torneosActivos, inscritosHoy, pozosTotal, rakeTotal }
+### Admin (rol ADMIN)
+```
+POST  /admin/partidos/importar                → dispara import de api-football
+POST  /admin/torneos                          → crear torneo
+GET   /admin/metricas                         → dashboard: inscriptos, pozos, rake
+GET   /admin/canjes?estado=                   → canjes pendientes
+PATCH /admin/canjes/:id                       → cambiar estado
+```
 
-GET  /admin/canjes               → lista de canjes pendientes (requiere auth + rol ADMIN)
-PATCH /admin/canjes/:id          → actualizar estado de canje
+### Webhooks
+```
+POST  /webhooks/culqi                         → confirmación pago (valida firma)
 ```
 
 ---
 
-## 18. EVENTOS WEBSOCKET (Socket.io)
+## 12. EVENTOS WEBSOCKET
 
-> El cliente se conecta a `ws://localhost:3001` con el JWT en el query param: `?token=<jwt>`
-> Las salas se unen por torneoId.
+Socket.io montado sobre Fastify. Cliente se conecta con `?token=<jwt>`. Sala por `torneoId`.
 
-### Cliente → Servidor
+**Cliente → Servidor:**
+- `join:torneo` `{ torneoId }`
+- `leave:torneo` `{ torneoId }`
 
-```typescript
-// Unirse al ranking en vivo de un torneo
-socket.emit('join:torneo', { torneoId: string })
-
-// Salir del ranking
-socket.emit('leave:torneo', { torneoId: string })
-```
-
-### Servidor → Cliente
-
-```typescript
-// Ranking actualizado (se emite cada vez que hay un evento de partido)
-socket.on('ranking:update', (data: {
-  torneoId: string,
-  ranking: Array<{
-    posicion: number,
-    usuarioId: string,
-    nombre: string,
-    puntosTotal: number,
-    ticketId: string
-  }>,
-  totalInscritos: number,
-  minutoParto: number
-}) => { /* re-renderizar ranking */ })
-
-// Evento de partido (gol, tarjeta, fin)
-socket.on('partido:evento', (data: {
-  torneoId: string,
-  tipo: 'GOL' | 'TARJETA_AMARILLA' | 'TARJETA_ROJA' | 'FIN_PARTIDO',
-  equipo: 'LOCAL' | 'VISITA',
-  minuto: number,
-  marcadorLocal: number,
-  marcadorVisita: number
-}) => { /* mostrar notificación en UI */ })
-
-// Torneo cerrado (5 min antes del partido)
-socket.on('torneo:cerrado', (data: { torneoId: string }) => {
-  /* deshabilitar botón de inscripción */
-})
-
-// Torneo finalizado con distribución de premios
-socket.on('torneo:finalizado', (data: {
-  torneoId: string,
-  ganadores: Array<{ posicion: number, usuarioId: string, premioLukas: number }>
-}) => { /* mostrar pantalla de resultados */ })
-```
+**Servidor → Cliente:**
+- `ranking:update` `{ torneoId, ranking[], totalInscritos, minutoPartido }`
+- `partido:evento` `{ torneoId, tipo, equipo, minuto, marcadorLocal, marcadorVisita }`
+- `torneo:cerrado` `{ torneoId }`
+- `torneo:finalizado` `{ torneoId, ganadores[] }`
 
 ---
 
-## 19. INTEGRACIÓN API-FOOTBALL (api-football.com)
+## 13. INTEGRACIONES CLAVE
 
-> **IMPORTANTE:** La cuenta es de api-football.com directo (hablaplay@gmail.com), NO de RapidAPI.
-> El header de autenticación es diferente.
+### Culqi (pagos)
+- Culqi.js en frontend → token → backend ejecuta cargo con secret key
+- Webhook POST `/webhooks/culqi` valida firma con `CULQI_WEBHOOK_SECRET`
+- Sandbox: tarjeta aprobada `4111 1111 1111 1111`, rechazada `4000 0000 0000 0002`
 
-### Headers correctos para todas las llamadas
+### api-football.com (deportes)
+- **Header correcto:** `x-apisports-key` (NO `X-RapidAPI-Key`)
+- Endpoints clave: `/fixtures?date=`, `/fixtures/events?fixture=`, `/fixtures?live=all`
+- Poller cada 30s mientras el partido está EN_VIVO
+- Mapper traduce: `Goal → GOL`, `Card/Red → TARJETA_ROJA`, `fixture.status.short=FT → FIN_PARTIDO`
 
-```typescript
-// apps/api/src/modules/partidos/partidos.service.ts
-const headers = {
-  'x-apisports-key': process.env.API_FOOTBALL_KEY,
-  // NO usar X-RapidAPI-Key ni X-RapidAPI-Host
-}
-```
+### NextAuth v5 + Resend (auth)
+- Magic link vía Resend (dominio hablaplay.com)
+- Custom Prisma adapter que mapea `Usuario/nombre` al contrato de NextAuth
+- Session JWT (sin roundtrips a BD), balance se lee en callback session
+- `trustHost: true` para Railway proxy
 
-### Endpoints que se usan
-
-```typescript
-// Partidos del día
-GET https://v3.football.api-sports.io/fixtures?date=YYYY-MM-DD&timezone=America/Lima
-
-// Eventos en vivo de un partido (para el poller cada 30s)
-GET https://v3.football.api-sports.io/fixtures/events?fixture={fixtureId}
-
-// Estado en vivo de un partido
-GET https://v3.football.api-sports.io/fixtures?id={fixtureId}&live=all
-```
-
-### Mapper de eventos API → eventos internos
-
-```typescript
-// apps/api/src/modules/partidos/partidos.mapper.ts
-// Mapear type+detail de la API a nuestros tipos internos:
-
-// Gol:
-// type: 'Goal', detail: 'Normal Goal' | 'Penalty' | 'Own Goal'
-// → EventoPartido: tipo='GOL', equipo según 'team.id'
-
-// Tarjeta roja:
-// type: 'Card', detail: 'Red Card' | 'Second Yellow Card'
-// → EventoPartido: tipo='TARJETA_ROJA'
-
-// Fin del partido:
-// fixture.status.short: 'FT' (Full Time) | 'AET' (After Extra Time) | 'PEN'
-// → EventoPartido: tipo='FIN_PARTIDO'
-```
-
-### Motor de puntuación (puntuacion.service.ts)
-
-```typescript
-// Lógica exacta de cálculo de puntos por ticket
-function calcularPuntos(ticket: Ticket, partido: Partido): PuntosDesglosados {
-  return {
-    puntosResultado: calcResultado(ticket.predResultado, partido),  // 3 o 0
-    puntosBtts:      calcBtts(ticket.predBtts, partido),            // 2 o 0
-    puntosMas25:     calcMas25(ticket.predMas25, partido),          // 2 o 0
-    puntosTarjeta:   calcTarjeta(ticket.predTarjetaRoja, partido),  // 6 o 0
-    puntosMarcador:  calcMarcador(ticket, partido),                 // 8 o 0
-    // Total: máximo 21 puntos
-  }
-}
-```
+### Twilio (SMS)
+- Verificación de teléfono con código de 6 dígitos
+- Alertas urgentes (opcional, activado por preferencia)
 
 ---
 
-## 20. FLUJO DE PAGO CULQI
+## 14. CONVENCIONES DE CÓDIGO
 
-> Culqi sandbox disponible para desarrollo. Claves de producción requieren aprobación RUC SAC.
-> El código no cambia entre sandbox y producción — solo las variables de entorno.
-
-### Flujo completo
-
-```
-1. Frontend: Usuario hace clic en "Comprar X Lukas"
-   ↓
-2. Frontend: Carga Culqi.js desde CDN + configura con CULQI_PUBLIC_KEY
-   ↓
-3. Frontend: Abre el checkout de Culqi (modal nativo de Culqi)
-   Usuario ingresa datos de tarjeta
-   ↓
-4. Culqi: Genera token de cargo (culqiToken) y lo devuelve al frontend
-   ↓
-5. Frontend: Envía POST /api/v1/lukas/comprar con { monto, culqiToken }
-   ↓
-6. Backend (pagos.service.ts): 
-   a. Llama a Culqi API con el token para ejecutar el cargo
-   b. Si éxito → acredita Lukas al usuario (TransaccionLukas tipo COMPRA)
-   c. Si falla → responde con error, no acredita nada
-   ↓
-7. Culqi: También envía webhook POST /api/webhooks/culqi (confirmación asíncrona)
-   Backend verifica firma CULQI_WEBHOOK_SECRET y registra el pago
-   ↓
-8. Frontend: Muestra nuevo balance de Lukas
-```
-
-### Datos de prueba (sandbox Culqi)
-```
-Tarjeta aprobada:  4111 1111 1111 1111  CVV: 123  Vence: 09/25
-Tarjeta rechazada: 4000 0000 0000 0002
-```
+- TypeScript strict en todo el proyecto
+- Archivos: kebab-case (`torneo.service.ts`)
+- Funciones/variables: camelCase
+- Tipos/clases: PascalCase
+- Rutas API: `/api/v1/{recurso}` plural, kebab-case
+- Commits: Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`)
+- Branches: `main` (prod), `develop` (integración), `feat/nombre`
+- PR a main: requiere CI verde
+- Validación: **Zod** en entrada de datos
+- Errores: clases tipadas (nunca `throw new Error('string')`)
+- Logs: **Pino** en producción (nunca `console.log`)
 
 ---
 
-## 21. CONFIGURACIÓN NEXTAUTH v5 (beta) — Implementado Sprint 1
+## 15. RIESGOS Y DECISIONES CLAVE
 
-> next-auth versión 5.0.0-beta.30 — la API difiere de v4.
-> MVP: solo magic link via Resend. Google OAuth se agrega post-lanzamiento.
-
-### Configuración actual (apps/web/lib/auth.ts)
-
-```typescript
-import NextAuth from 'next-auth'
-import Resend from 'next-auth/providers/resend'
-import { HablaPrismaAdapter } from '@/lib/auth-adapter'
-import { crearOEncontrarUsuario, obtenerBalance } from '@/lib/usuarios'
-
-export const { handlers, auth, signIn, signOut } = NextAuth({
-  // Railway corre detrás de proxy; sin trustHost NextAuth rechaza con UntrustedHost
-  trustHost: true,
-  adapter: HablaPrismaAdapter(),
-  providers: [
-    Resend({
-      apiKey: process.env.RESEND_API_KEY,
-      from: 'Habla! <equipo@hablaplay.com>',
-    }),
-  ],
-  session: { strategy: 'jwt' },
-  callbacks: {
-    async signIn({ user }) {
-      if (!user.email) return false
-      await crearOEncontrarUsuario({
-        email: user.email,
-        nombre: user.name ?? user.email.split('@')[0],
-      })
-      return true
-    },
-    async jwt({ token, user }) {
-      if (user?.email) {
-        const usuario = await crearOEncontrarUsuario({
-          email: user.email,
-          nombre: user.name ?? user.email.split('@')[0],
-        })
-        token.usuarioId = usuario.id
-        token.rol = usuario.rol
-      }
-      return token
-    },
-    async session({ session, token }) {
-      if (token.usuarioId && session.user) {
-        session.user.id = token.usuarioId as string
-        session.user.rol = (token.rol as 'JUGADOR' | 'ADMIN') ?? 'JUGADOR'
-        session.user.balanceLukas = await obtenerBalance(token.usuarioId as string)
-      }
-      return session
-    },
-  },
-  pages: {
-    signIn: '/auth/login',
-    verifyRequest: '/auth/verificar',
-    error: '/auth/error',
-  },
-})
-
-// apps/web/app/api/auth/[...nextauth]/route.ts
-import { handlers } from '@/lib/auth'
-export const { GET, POST } = handlers
-```
-
-### Custom Prisma Adapter (apps/web/lib/auth-adapter.ts)
-
-El adapter oficial `@auth/prisma-adapter` espera un modelo `User` con campo `name`. Nuestro
-modelo se llama `Usuario` con campo `nombre`. En vez de renombrar todo el schema, creamos un
-adapter custom que mapea internamente. Solo implementa lo necesario para magic link + JWT session:
-
-- `createUser` → crea `Usuario` + transacción atómica con 500 Lukas bonus
-- `getUser`, `getUserByEmail`, `getUserByAccount`, `updateUser`
-- `linkAccount` (para cuando se agregue OAuth post-MVP)
-- `createVerificationToken`, `useVerificationToken` (para magic link)
-
-### Tablas NextAuth en Prisma
-
-Migración `20260416120000_add_auth_tables` agrega:
-- `auth_accounts` — para OAuth providers (Google futuro)
-- `auth_sessions` — no usado con JWT pero requerido por el adapter contract
-- `auth_verification_tokens` — tokens del magic link
-- Campos `emailVerified: DateTime?` e `image: String?` en `usuarios`
-
-### Middleware de rutas protegidas
-
-```typescript
-// apps/web/middleware.ts
-import { auth } from '@/lib/auth'
-
-export default auth((req) => {
-  const isLoggedIn = !!req.auth
-  const isProtected = req.nextUrl.pathname.startsWith('/wallet') ||
-                      req.nextUrl.pathname.startsWith('/perfil') ||
-                      req.nextUrl.pathname.startsWith('/admin')
-
-  if (isProtected && !isLoggedIn) {
-    // Guardar URL de destino para redirigir tras login
-    return Response.redirect(new URL(`/auth/login?callbackUrl=${req.nextUrl.pathname}`, req.url))
-  }
-  // /torneos y /torneo/:id son públicas — NO redirigir
-})
-
-export const config = {
-  matcher: ['/wallet/:path*', '/perfil/:path*', '/admin/:path*'],
-}
-```
+- **Regulatorio:** Los Lukas clasificados como apuesta. Mitigación: **no retirables** como efectivo, solo créditos. Asesoría legal pre-lanzamiento.
+- **Técnico — caída durante partidos:** Railway auto-scaling. Test de carga 500 usuarios obligatorio en Sprint 8.
+- **Pasivo de Lukas:** Vencimiento a 12 meses + provisión del 25%. Límite de balance máximo por usuario post-MVP.
+- **Post-Mundial churn:** Torneos de liga diarios + ligas privadas (v1.1) + gamificación (v1.2).
+- **Decisiones técnicas:** pnpm 10, NextAuth v5 beta, API-Football directo (no RapidAPI), Dockerfile sobre Railpack, JWT session strategy, custom Prisma adapter.
 
 ---
 
-## 22. CLIENTE WEBSOCKET (FRONTEND)
-
-```typescript
-// apps/web/lib/socket-client.ts
-import { io, Socket } from 'socket.io-client'
-
-let socket: Socket | null = null
-
-export function getSocket(token?: string): Socket {
-  if (!socket) {
-    socket = io(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001', {
-      auth: { token },
-      transports: ['websocket'],
-    })
-  }
-  return socket
-}
-
-export function disconnectSocket() {
-  socket?.disconnect()
-  socket = null
-}
-```
-
-```typescript
-// apps/web/hooks/useRankingEnVivo.ts
-import { useEffect, useState } from 'react'
-import { getSocket } from '@/lib/socket-client'
-import { useSession } from 'next-auth/react'
-
-export function useRankingEnVivo(torneoId: string) {
-  const { data: session } = useSession()
-  const [ranking, setRanking] = useState<RankingRow[]>([])
-  const [evento, setEvento] = useState<EventoPartido | null>(null)
-
-  useEffect(() => {
-    const socket = getSocket(session?.accessToken)
-    socket.emit('join:torneo', { torneoId })
-
-    socket.on('ranking:update', (data) => {
-      setRanking(data.ranking)
-    })
-
-    socket.on('partido:evento', (data) => {
-      setEvento(data)
-      // Limpiar el evento después de 5 segundos (para notificación flotante)
-      setTimeout(() => setEvento(null), 5000)
-    })
-
-    return () => {
-      socket.emit('leave:torneo', { torneoId })
-      socket.off('ranking:update')
-      socket.off('partido:evento')
-    }
-  }, [torneoId, session])
-
-  return { ranking, evento }
-}
-```
-
----
-
-## 23. CLIENTE API (FRONTEND)
-
-```typescript
-// apps/web/lib/api-client.ts
-const API_BASE = process.env.NEXT_PUBLIC_API_URL + '/api/v1'
-
-async function apiFetch<T>(
-  path: string,
-  options: RequestInit = {},
-  token?: string
-): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` }),
-      ...options.headers,
-    },
-  })
-
-  if (!res.ok) {
-    const error = await res.json()
-    throw new ApiError(error.code, error.message, res.status)
-  }
-
-  return res.json()
-}
-
-// Métodos tipados para cada módulo
-export const api = {
-  torneos: {
-    listar: (params?: { estado?: string; liga?: string }) =>
-      apiFetch<{ torneos: TorneoConPartido[] }>(`/torneos?${new URLSearchParams(params)}`),
-    detalle: (id: string) =>
-      apiFetch<{ torneo: TorneoConPartido }>(`/torneos/${id}`),
-  },
-  tickets: {
-    crear: (data: TicketInput, token: string) =>
-      apiFetch<{ ticket: Ticket; nuevoBalance: number }>('/tickets', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }, token),
-    misList: (token: string) =>
-      apiFetch<{ tickets: TicketConPuntos[] }>('/tickets/mis-tickets', {}, token),
-  },
-  lukas: {
-    balance: (token: string) =>
-      apiFetch<{ balance: number }>('/lukas/balance', {}, token),
-    comprar: (data: { monto: number; culqiToken: string }, token: string) =>
-      apiFetch<{ transaccion: TransaccionLukas; nuevoBalance: number }>(
-        '/lukas/comprar', { method: 'POST', body: JSON.stringify(data) }, token
-      ),
-  },
-  ranking: {
-    get: (torneoId: string) =>
-      apiFetch<{ ranking: RankingRow[]; totalInscritos: number }>(`/torneos/${torneoId}/ranking`),
-  },
-}
-```
-
----
-
-## 24. STORE GLOBAL (ZUSTAND)
-
-```typescript
-// apps/web/stores/lukas.store.ts
-import { create } from 'zustand'
-
-interface LukasStore {
-  balance: number
-  setBalance: (balance: number) => void
-  decrementar: (monto: number) => void
-  incrementar: (monto: number) => void
-}
-
-export const useLukasStore = create<LukasStore>((set) => ({
-  balance: 0,
-  setBalance: (balance) => set({ balance }),
-  decrementar: (monto) => set((state) => ({ balance: state.balance - monto })),
-  incrementar: (monto) => set((state) => ({ balance: state.balance + monto })),
-}))
-```
-
-```typescript
-// apps/web/stores/auth.store.ts
-// Complementa NextAuth — guarda estado derivado del usuario
-import { create } from 'zustand'
-
-interface AuthStore {
-  pendingTorneoId: string | null  // Torneo que activó el modal de login
-  setPendingTorneoId: (id: string | null) => void
-}
-
-export const useAuthStore = create<AuthStore>((set) => ({
-  pendingTorneoId: null,
-  setPendingTorneoId: (id) => set({ pendingTorneoId: id }),
-}))
-```
-
----
-
-## 25. TIPOS COMPARTIDOS (packages/shared)
-
-```typescript
-// packages/shared/src/types/api.types.ts
-
-export interface TorneoConPartido {
-  id: string
-  nombre: string
-  tipo: 'EXPRESS' | 'ESTANDAR' | 'PREMIUM' | 'GRAN_TORNEO'
-  entradaLukas: number
-  estado: 'ABIERTO' | 'CERRADO' | 'EN_JUEGO' | 'FINALIZADO' | 'CANCELADO'
-  totalInscritos: number
-  pozoBruto: number
-  pozoNeto: number
-  cierreAt: string  // ISO 8601
-  partido: {
-    id: string
-    equipoLocal: string
-    equipoVisita: string
-    liga: string
-    fechaInicio: string
-    estado: 'PROGRAMADO' | 'EN_VIVO' | 'FINALIZADO' | 'CANCELADO'
-    golesLocal: number | null
-    golesVisita: number | null
-  }
-}
-
-export interface TicketInput {
-  torneoId: string
-  predResultado: 'LOCAL' | 'EMPATE' | 'VISITA'
-  predBtts: boolean
-  predMas25: boolean
-  predTarjetaRoja: boolean
-  predMarcadorLocal: number    // 0-9
-  predMarcadorVisita: number   // 0-9
-}
-
-export interface RankingRow {
-  posicion: number
-  usuarioId: string
-  nombre: string
-  puntosTotal: number
-  ticketId: string
-  esYo?: boolean  // Frontend marca la fila propia
-}
-```
-
----
-
-## 26. SEED DE BASE DE DATOS
-
-```typescript
-// packages/db/prisma/seed.ts
-// Datos iniciales para desarrollo y demo
-
-const seed = async () => {
-  // 1. Usuario admin
-  await prisma.usuario.upsert({
-    where: { email: 'hablaplay@gmail.com' },
-    update: {},
-    create: {
-      email: 'hablaplay@gmail.com',
-      nombre: 'Admin Habla',
-      rol: 'ADMIN',
-      verificado: true,
-      balanceLukas: 10000,
-    },
-  })
-
-  // 2. Premios de demo para la tienda
-  await prisma.premio.createMany({
-    data: [
-      { nombre: 'Camiseta de fútbol', descripcion: 'Camiseta oficial de tu equipo favorito', costeLukas: 5000, stock: 10 },
-      { nombre: 'Gift Card S/50', descripcion: 'Gift card canjeable en tiendas asociadas', costeLukas: 4500, stock: 50 },
-      { nombre: 'Entrada al estadio', descripcion: 'Entrada para 1 partido de Liga 1', costeLukas: 1200, stock: 20 },
-    ],
-    skipDuplicates: true,
-  })
-
-  // 3. Partido de demo para desarrollo
-  await prisma.partido.upsert({
-    where: { externalId: 'demo-001' },
-    update: {},
-    create: {
-      externalId: 'demo-001',
-      liga: 'Liga 1 Perú',
-      equipoLocal: 'Alianza Lima',
-      equipoVisita: 'Universitario',
-      fechaInicio: new Date(Date.now() + 2 * 60 * 60 * 1000), // en 2 horas
-      estado: 'PROGRAMADO',
-    },
-  })
-}
-```
-
----
-
-## 27. TESTING — CASOS CRÍTICOS A CUBRIR
-
-### Reglas de negocio (tests unitarios en packages/shared y apps/api)
-
-```typescript
-// Motor de puntuación — todas las combinaciones
-describe('calcularPuntos', () => {
-  test('acierta los 5 → 21 puntos')
-  test('solo marcador exacto → 8 puntos')
-  test('solo resultado → 3 puntos')
-  test('falla todo → 0 puntos')
-  test('tarjeta roja sí cuando hubo → 6 puntos')
-  test('tarjeta roja sí cuando NO hubo → 0 puntos')
-})
-
-// Wallet — transacciones atómicas
-describe('lukas.service', () => {
-  test('balance insuficiente → lanza error, no descuenta')
-  test('inscripción exitosa → descuenta exactamente entradaLukas')
-  test('doble inscripción con ticket idéntico → lanza TICKET_DUPLICADO')
-  test('inscripción tras cierre → lanza TORNEO_CERRADO')
-})
-
-// Distribución de premios
-describe('distribuirPremios', () => {
-  test('100 jugadores × S/10 → rake S/120, pozo neto S/880')
-  test('1er lugar recibe 35% del pozo neto')
-  test('empate de puntos → desempate por marcador exacto')
-})
-```
-
-### Tests de integración (Sprint 7)
-- Flujo completo: registro → compra Lukas → inscripción → partido finaliza → premios acreditados
-- Test de carga: 500 usuarios simultáneos en el mismo torneo durante un partido en vivo
-- WebSocket: ranking se actualiza en < 2s tras evento de gol
-
----
-
-## 28. CHECKLIST DE VERIFICACIÓN POR SPRINT
-
-### Sprint 1 — Auth ✅ Completado 17 Abr
-- [~] Google OAuth — pospuesto a post-MVP
-- [x] Magic link por email funciona end-to-end (Resend con dominio hablaplay.com verificado)
-- [x] Nuevo usuario recibe 500 Lukas bonus automáticamente (verificado en BD: tabla `usuarios` + `transacciones_lukas`)
-- [x] Middleware protege /wallet, /perfil, /admin; /admin además requiere rol ADMIN
-- [x] Rutas públicas (/, /torneos, /torneo/:id, /tienda) no redirigen
-- [x] `trustHost: true` resuelve el error UntrustedHost de Railway proxy
-- [x] NavBar dinámico: balance + avatar cuando hay sesión, botón Entrar cuando no
-- [x] Páginas auth (/auth/login, /auth/verificar, /auth/error) con estilos de marca
-- [ ] `pendingTorneoId` redirige al torneo correcto tras login — pendiente de Sprint 3 cuando se inscriba a torneos
-
-### Sprint 2 — Lukas / Pagos
-- [ ] Culqi checkout abre con CULQI_PUBLIC_KEY de sandbox
-- [ ] Tarjeta aprobada (4111...) → Lukas se acreditan
-- [ ] Tarjeta rechazada → error claro, sin acreditación
-- [ ] Webhook de Culqi verificado con CULQI_WEBHOOK_SECRET
-- [ ] Balance visible en NavBar en tiempo real
-
-### Sprint 3 — Torneos
-- [ ] Admin puede crear torneo desde /admin/torneos
-- [ ] Torneo se cierra automáticamente 5 min antes del partido (job)
-- [ ] Usuario sin balance suficiente ve error claro
-- [ ] Torneo con 1 inscrito se cancela y reembolsa
-
-### Sprint 4 — Tickets / Combinada
-- [ ] Las 5 predicciones son obligatorias (validación frontend + backend)
-- [ ] Marcador exacto permite 0-9 por equipo
-- [ ] Ticket duplicado rechazado (mismo usuario, mismas 5 predicciones)
-- [ ] Máximo 10 tickets por usuario por torneo
-- [ ] Panel de puntos muestra correctamente pts posibles en tiempo real
-
-### Sprint 5 — API-Football + Ranking
-- [ ] Header `x-apisports-key` (no X-RapidAPI-Key)
-- [ ] Poller corre cada 30s sin memory leaks
-- [ ] Gol detectado → puntos recalculados → ranking emitido por WS en < 2s
-- [ ] Tarjeta roja detectada correctamente (Red Card + Second Yellow)
-- [ ] FIN_PARTIDO detectado → dispara distribución de premios
-
-### Sprint 6 — Premios y Cierre
-- [ ] Premios acreditados automáticamente tras FIN_PARTIDO
-- [ ] Distribución 35/20/12/33% correcta al centavo de Luka
-- [ ] Email de resultado enviado (Resend)
-- [ ] Tienda muestra premios con stock > 0
-
-### Sprint 7 — QA
-- [ ] Test de carga: 500 WS simultáneos sin caída
-- [ ] Prisma Studio muestra datos correctos tras flujo completo
-- [ ] Sentry captura errores correctamente
-- [ ] Railway auto-scale funciona bajo carga
-
----
-
-## 29. ESTADO DEL SPRINT 1 (completado 17 Abr 2026)
-
-### Lo que se construyó
-
-**Backend / datos (Server-side en apps/web — el backend Fastify se levanta en Sprint 2):**
-- `apps/web/lib/usuarios.ts` — funciones con Prisma directo: `encontrarUsuarioPorEmail`, `crearOEncontrarUsuario` (transacción atómica que crea `Usuario` + `TransaccionLukas` BONUS de 500 Lukas sin vencimiento), `obtenerBalance`
-- `apps/web/lib/auth-adapter.ts` — custom Prisma adapter para NextAuth que mapea `Usuario/nombre` al contrato estándar `User/name`, sin renombrar el modelo del dominio
-- `apps/web/types/next-auth.d.ts` — extiende la `Session` de NextAuth con `id`, `balanceLukas`, `rol`
-- `packages/db/prisma/migrations/20260416120000_add_auth_tables/migration.sql` — agrega 3 tablas (`auth_accounts`, `auth_sessions`, `auth_verification_tokens`) + 2 columnas en `usuarios` (`emailVerified`, `image`)
-
-**Auth / NextAuth v5:**
-- `apps/web/lib/auth.ts` — configuración completa: provider Resend único, HablaPrismaAdapter, session JWT, callbacks `signIn/jwt/session`, `trustHost: true`, páginas custom
-- `apps/web/app/api/auth/[...nextauth]/route.ts` — exporta los handlers GET/POST
-
-**Middleware:**
-- `apps/web/middleware.ts` — protege `/wallet`, `/perfil`, `/admin`. Admin además requiere `rol === 'ADMIN'`. Redirige a `/auth/login?callbackUrl=...` preservando destino
-
-**Páginas de auth (bajo `/auth/*`, NO route group `(auth)`):**
-- `apps/web/app/auth/layout.tsx` — layout standalone con fondo azul oscuro, sin NavBar/BottomNav
-- `apps/web/app/auth/login/page.tsx` — form con Server Action que llama `signIn('resend', { email, redirectTo })`
-- `apps/web/app/auth/verificar/page.tsx` — pantalla "¡Revisa tu correo!"
-- `apps/web/app/auth/error/page.tsx` — mensajes de error en español según `searchParams.error`
-
-**Componentes:**
-- `apps/web/components/layout/NavBar.tsx` — async Server Component que lee sesión y renderiza balance + avatar si hay usuario, "Entrar" si no
-- `apps/web/components/layout/UserMenu.tsx` — Client Component del dropdown del avatar (perfil, wallet, cerrar sesión)
-- `apps/web/components/auth/ModalLoginInscripcion.tsx` — modal contextual para flujo de inscripción a torneos sin login (listo para usar en Sprint 3)
-- `apps/web/components/auth/CerrarSesionBoton.tsx` — Client Component que llama `signOut({ callbackUrl: '/' })`
-- `apps/web/components/home/HomeContent.tsx` — extraído del antiguo `page.tsx` para que la home sea Server Component y el NavBar pueda leer la sesión
-
-**Páginas protegidas:**
-- `apps/web/app/(main)/wallet/page.tsx` — Server Component con balance actual + placeholder para Culqi (Sprint 2)
-- `apps/web/app/(main)/perfil/page.tsx` — Server Component con avatar, datos, balance, botón cerrar sesión
-
-**Stores Zustand:**
-- `apps/web/stores/lukas.store.ts` — balance con setters (`setBalance`, `decrementar`, `incrementar`)
-- `apps/web/stores/auth.store.ts` — `pendingTorneoId` para el flujo de inscripción sin login
-
-### Deploy pipeline (Dockerfile + CI)
-
-El Dockerfile corre `prisma migrate deploy` automáticamente al arrancar el container, de modo
-que cualquier migración pendiente se aplica sola. El flujo completo del Dockerfile:
-
-1. **Stage `deps`:** `pnpm install --frozen-lockfile` — el postinstall de `packages/db` dispara `prisma generate` automáticamente
-2. **Stage `builder`:** `COPY --from=deps /app ./` (trae TODO, incluyendo node_modules distribuidos) + `COPY . .` (trae source, node_modules preservado por `.dockerignore`) → `prisma generate` → `next build`
-3. **Stage `runner`:** solo standalone + prisma CLI + schema. CMD: `npx prisma migrate deploy && node apps/web/server.js`
-
-**CI:** `.github/workflows/deploy.yml` solo valida `pnpm build`. El deploy real lo hace Railway
-por webhook GitHub→Railway (auto-deploy al push a `main`). Se eliminó el step `Deploy to Railway`
-del workflow porque usaba un secret `RAILWAY_SERVICE_ID` que nunca existió y siempre falló.
-
-### Infraestructura externa configurada
-
-- **Dominio:** `hablaplay.com` comprado en Cloudflare Registrar (~$10 USD/año, WHOIS privacy activo)
-- **Resend:** dominio `hablaplay.com` verificado via autoconfigure con Cloudflare (SPF + DKIM + MX creados automáticamente)
-- **Remitente de emails:** `Habla! <equipo@hablaplay.com>`
-- **Railway variables de entorno necesarias para el servicio web:**
-  - `DATABASE_URL` → `${{ Postgres.DATABASE_URL }}` (referencia explícita al servicio Postgres; Railway NO la inyecta automáticamente entre servicios)
-  - `NEXTAUTH_URL` → `https://habla-app-production.up.railway.app` (sin `/` final)
-  - `NEXTAUTH_SECRET` → secret generado aleatoriamente
-  - `RESEND_API_KEY` → API key de Resend
-  - `HOSTNAME=0.0.0.0` (ya existía desde Sprint 0)
-
-### Fixes aplicados durante el deploy
-
-Cinco fixes consecutivos para hacer que Railway levantara la app correctamente:
-
-1. **`postinstall: prisma generate` en `packages/db/package.json`** — CI fallaba con "Module '@habla/db' has no exported member 'Usuario'" porque Prisma Client no se generaba automáticamente al instalar. Ahora cualquier `pnpm install` dispara el generate
-2. **Eliminar step `Deploy to Railway` del workflow** — fallaba por falta de secret `RAILWAY_SERVICE_ID` sin relación con el código. Railway deploya por webhook
-3. **`@habla/db` agregado a `transpilePackages`** en `next.config.js` — junto con `@habla/shared` y `@habla/ui`. Next.js no resolvía TypeScript crudo de workspace packages sin esto
-4. **Dockerfile `COPY --from=deps /app ./`** en vez de solo `/app/node_modules` — con `pnpm 10 + node-linker=hoisted` los workspace packages viven en `apps/web/node_modules/@habla/*`, NO en el root `node_modules/`. La copia selectiva los perdía
-5. **`trustHost: true`** en la config de NextAuth — Railway actúa como proxy. NextAuth v5 por defecto rechaza con `UntrustedHost` si no se marca explícitamente
-
-### Decisiones técnicas tomadas
-
-- **Protocolo workspace explícito (`workspace:*`):** pnpm 10 no resuelve bien `"@habla/db": "*"` — lo trata como package público de npm y falla con 404. Todas las referencias cross-workspace deben usar `workspace:*`
-- **Custom adapter en lugar de `@auth/prisma-adapter`:** se escribió `HablaPrismaAdapter` para mapear el modelo `Usuario` (con campo `nombre`) al contrato que espera NextAuth (modelo `User` con campo `name`). Alternativa era renombrar todo el schema pero impactaba demasiadas relaciones. El adapter custom solo implementa lo necesario para magic link + JWT session
-- **JWT session strategy:** evita roundtrips a BD en cada request. El balance de Lukas se lee en el callback `session()` desde BD para mantenerlo al día (esto es aceptable porque son pocos requests de sesión)
-- **`/auth/*` como path real, NO route group `(auth)`:** el prompt original pedía route group pero el NextAuth config y el middleware apuntaban a URLs `/auth/login`, `/auth/verificar`, `/auth/error`. Se unificó por coherencia — los route groups (con paréntesis) no contribuyen al URL
-- **`DATABASE_URL` debe configurarse explícitamente en Railway:** inicialmente se asumió que Railway la inyectaba automáticamente, pero solo existe en el servicio Postgres. Hay que crearla en el servicio web como referencia `${{ Postgres.DATABASE_URL }}`
-
-### Verificación end-to-end
-
-Test exitoso el 17 Abr:
-1. Usuario ingresa a `/` → ve NavBar con "Entrar" (no logueado)
-2. Click "Entrar" → `/auth/login` → escribe email → submit
-3. Redirige a `/auth/verificar` → inbox recibe email desde `equipo@hablaplay.com`
-4. Click en el link → login completo, redirige a `/`
-5. NavBar muestra "🪙 500 Lukas" + avatar con iniciales
-6. **En la BD (Railway Postgres):**
-   - Tabla `usuarios`: fila nueva con email, nombre (antes del `@`), balanceLukas=500, rol='JUGADOR', emailVerified fecha
-   - Tabla `transacciones_lukas`: fila con tipo=BONUS, monto=500, descripcion='Bonus de bienvenida', venceEn=null
-   - Tabla `auth_verification_tokens`: el token se consumió al hacer click (delete ocurre en `useVerificationToken`)
-
-### Commits principales del Sprint 1
-
-- `feat(sprint-1): auth magic link (Resend) + middleware + NavBar dinamica` — implementación base
-- `fix(ci): generar Prisma Client en postinstall`
-- `chore(ci): eliminar step de deploy a Railway redundante`
-- `fix(build): agregar @habla/db a transpilePackages de Next.js`
-- `fix(docker): copiar todos los node_modules distribuidos al builder`
-- `fix(auth): trustHost en NextAuth para Railway proxy`
-- `fix(auth): enviar magic link desde equipo@hablaplay.com`
-
-### Pendiente del Sprint 1 (no bloqueante)
-
-- Conectar `pendingTorneoId` del `auth.store.ts` con el modal de inscripción — se activará en Sprint 3 cuando existan torneos reales
-- Agregar Google OAuth como segundo provider — pospuesto a post-MVP por decisión de producto
-- URL propia (`app.hablaplay.com` apuntando a Railway via CNAME) — opcional, el dominio ya es tuyo pero por ahora usamos `habla-app-production.up.railway.app`
-
-### Arranque del Sprint 2
-
-Antes del Sprint 2 (módulo Lukas + Culqi), el PO debe preparar:
-1. **Culqi sandbox keys** en Railway:
-   - `CULQI_PUBLIC_KEY` (pk_test_...)
-   - `CULQI_SECRET_KEY` (sk_test_...)
-   - `CULQI_WEBHOOK_SECRET`
-   - URL de webhook a configurar en Culqi dashboard: `https://habla-app-production.up.railway.app/api/webhooks/culqi`
-2. **Decisión de packs de Lukas:** precios base (ej. S/10 = 10 Lukas, S/50 = 55 Lukas con bonus, S/100 = 120 Lukas)
-3. Verificación del deploy de Sprint 1 en producción (✅ hecho 17 Abr)
+## 16. MÉTRICA DE ÉXITO DEL SPRINT DE MECÁNICA
+
+Al terminar el Sub-Sprint 7 (5 de junio), un usuario peruano cualquiera debe poder, en una sola sesión:
+
+1. Entrar a habla-app-production.up.railway.app sin cuenta
+2. Ver los torneos disponibles
+3. Crear su cuenta por magic link, recibir 500 Lukas de bienvenida
+4. Comprar 100 Lukas más con tarjeta sandbox (→ 615 con bonus)
+5. Inscribirse en un torneo de Liga 1 (costo 10 Lukas)
+6. Armar su combinada de 5 predicciones
+7. Ver cómo durante el partido sus puntos se actualizan en vivo
+8. Al terminar el partido, si quedó en top 10, recibir sus Lukas de premio automáticamente
+9. Recibir email del premio
+10. Canjear sus Lukas por una entrada de Liga 1 en la tienda
+11. Configurar sus notificaciones y ajustar sus límites desde /perfil
+12. Cerrar sesión y volver al día siguiente a repetir
+
+Si estas 12 acciones funcionan end-to-end sin bugs críticos, **el MVP está listo para el Mundial**.
