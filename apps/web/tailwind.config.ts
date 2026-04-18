@@ -96,6 +96,14 @@ const config: Config = {
 
         /* danger — texto de botones tipo cancelar sesión / destructive */
         danger: "#C9302C",
+
+        /* medal.* — colores para posiciones 1°/2°/3° en rankings
+           (top-pos.gold/silver/bronze del mockup) */
+        medal: {
+          gold: "#B8860B",
+          silver: "#737373",
+          bronze: "#A0522D",
+        },
       },
 
       /* clases bg-page, bg-app, bg-card, bg-subtle, bg-hover */
@@ -188,6 +196,11 @@ const config: Config = {
         /* Stripe animado para mcard.urgency-critical (rojo-naranja-rojo) */
         "mcard-critical-stripe":
           "linear-gradient(90deg, #FF2E2E, #FF7A00, #FF2E2E)",
+        /* Widget head — live (dark diagonal) y top-day (pastel dorado sutil) */
+        "widget-live-head":
+          "linear-gradient(135deg, #001050, #000530)",
+        "widget-top-head":
+          "linear-gradient(90deg, #FFF9E5, transparent)",
       },
 
       keyframes: {

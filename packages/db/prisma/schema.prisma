@@ -202,6 +202,7 @@ enum TipoTransaccion {
   CANJE // Usuario canjea en tienda
   BONUS // Lukas gratis (referidos, promociones)
   VENCIMIENTO // Lukas expirados
+  REEMBOLSO // Torneo cancelado por falta de inscritos, admin refund
 }
 
 model Premio {

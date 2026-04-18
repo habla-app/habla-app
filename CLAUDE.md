@@ -478,6 +478,12 @@ NextAuth v5 con magic link vía Resend (dominio hablaplay.com verificado), custo
 ### 🎨 Mockup — Diseño UI aprobado
 Mockup interactivo completo en `/mockup.html` y en `docs/habla-mockup-completo.html`. Cubre todas las páginas del MVP con estilos finales, paleta de marca extendida (urgencias, acentos por tipo de torneo, dark surfaces), componentes resueltos y flujos navegables. **Este mockup es la fuente de verdad del diseño** — cada sprint debe replicar lo que se ve ahí, no improvisar.
 
+### ✅ Fase 2 (18 Abr) — Reescritura frontend Sprint 0-1 desde mockup v5
+Todos los componentes visuales de Sprint 0-1 fueron reescritos desde cero usando `docs/habla-mockup-completo.html` como fuente de verdad. Se crearon primitivos UI (`Button`, `Chip`, `Alert`, `Toast`, `Modal` en `components/ui/`), `NavBar` + `NavLinks` + `BottomNav` + `UserMenu` del mockup 1:1, y un `MatchCard` con 4 tiers de urgencia. La landing `/` se compone de `MatchesPageContent` que trae listado + sidebar sticky (3 widgets: En vivo ahora / Top del día / Tu balance — auth-aware). Tokens legacy eliminados; cero hex hardcodeados fuera de `tailwind.config.ts` y `globals.css`.
+
+### ✅ Sub-Sprint 3 (18 Abr) — Torneos + Partidos + Admin
+Módulos `torneos` y `partidos` con CRUD, inscripción atómica y cancelación automática. Integración api-football vía `x-apisports-key`. Cron endpoint `/api/cron/cerrar-torneos` corriendo cada minuto (requiere trigger externo + `CRON_SECRET`). Páginas `/matches` (mismo content que `/`, sidebar sticky, urgency calculada), `/torneo/:id` (detalle con reglas + distribución del pozo + CTA según estado), `/admin` (panel importar partidos + crear torneos).
+
 ---
 
 ## 9. SPRINT DE MECÁNICA DE JUEGO
@@ -1171,6 +1177,9 @@ Socket.io montado sobre Fastify. Cliente se conecta con `?token=<jwt>`. Sala por
 - **Pasivo de Lukas:** Vencimiento a 12 meses + provisión del 25%. Límite de balance máximo por usuario post-MVP.
 - **Post-Mundial churn:** Torneos de liga diarios + ligas privadas (v1.1) + gamificación (v1.2).
 - **Decisiones técnicas:** pnpm 10, NextAuth v5 beta, API-Football directo (no RapidAPI), Dockerfile sobre Railpack, JWT session strategy, custom Prisma adapter.
+- **Sub-Sprint 3 — backend en Next.js Route Handlers, no Fastify todavía:** el API del Sub-Sprint 3 (torneos, partidos, admin) vive en `apps/web/app/api/v1/*` con los servicios en `apps/web/lib/services/*` (Node runtime por defecto). El scaffold de `apps/api/` (Fastify) queda congelado como backlog post-MVP: cuando el poller de partidos en vivo del Sub-Sprint 5 pegue fuerte con WebSockets, migraremos los módulos a Fastify. Mientras tanto, Next.js corre todo en el mismo servicio Railway y la sesión de NextAuth se consume directo desde los route handlers con `auth()` — sin JWT bridge entre dos procesos.
+- **Sub-Sprint 3 — Ticket placeholder con predicciones default:** al inscribirse, se crea un `Ticket` con `predResultado=LOCAL, predBtts=false, predMas25=false, predTarjetaRoja=false, predMarcadorLocal=0, predMarcadorVisita=0`. La unique constraint `[usuarioId, torneoId, preds…]` impide la doble inscripción con defaults (1 ticket por usuario por torneo en el Sub-Sprint 3). El Sub-Sprint 4 permite que el usuario edite las predicciones y, para tickets adicionales, fuerza a que las 5 predicciones difieran (hasta 10 tickets distintos por torneo). Alternativa descartada: tabla `Inscripcion` separada, implicaba migración más cara sin beneficio MVP.
+- **Sub-Sprint 3 — REEMBOLSO agregado a `TipoTransaccion`:** migración `20260418030000_add_reembolso_tipo_transaccion` agrega el valor `REEMBOLSO` al enum; lo usa `cancelar()` cuando un torneo se cancela por no alcanzar el mínimo de inscritos (2).
 
 ---
 
