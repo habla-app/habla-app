@@ -15,6 +15,7 @@
   --gold: #FFB800;
   --gold-dim: rgba(255, 184, 0, 0.15);
   --gold-light: #FFD060;
+  --gold-dark: #8B6200;
 
   /* Utility */
   --white: #FFFFFF;
@@ -29,6 +30,7 @@
   --urgent-critical-bg: #FFE5E5;
   --urgent-high: #FF7A00;
   --urgent-high-bg: #FFEDD5;
+  --urgent-high-dark: #9A3412;
   --urgent-med: #FFB800;
   --urgent-med-bg: #FFF3C2;
   --urgent-low: #7B93D0;
@@ -37,10 +39,18 @@
   /* Accent por tipo de torneo */
   --accent-mundial: #8B5CF6;
   --accent-mundial-bg: #F3E8FF;
+  --accent-mundial-dark: #6D28D9;
   --accent-clasico: #DC2626;
   --accent-clasico-bg: #FFEBEB;
+  --accent-clasico-dark: #991B1B;
   --accent-libertadores: #059669;
   --accent-libertadores-bg: #D1FAE5;
+  --accent-libertadores-dark: #065F46;
+  --accent-champions-bg: #E0E7FF;
+  --accent-champions-dark: #1E3A8A;
+  --accent-express: #38BDF8;
+  --accent-express-bg: #E0F2FE;
+  --accent-express-dark: #0369A1;
 
   /* Backgrounds & surfaces (light base) */
   --bg-page: #F5F7FC;
@@ -81,6 +91,17 @@
   --pred-pending: rgba(0, 16, 80, 0.35);
   --pred-pending-bg: #F1F4FB;
 
+  /* Alert (info/success del mockup) */
+  --alert-info-bg: #E0EBFF;
+  --alert-info-border: #B8CAFF;
+  --alert-info-text: #1D3F8E;
+  --alert-success-bg: #D1FAE5;
+  --alert-success-border: #A6E7C5;
+  --alert-success-text: #065F46;
+
+  /* Danger — texto del botón cerrar sesión */
+  --danger: #C9302C;
+
   /* Radius */
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -89,24 +110,10 @@
 
   /* Layout */
   --header-h: 68px;
-
-  /* ------------------------------------------------------------------
-     Legacy aliases — usados por componentes de Sprint 0/1.
-     Se eliminan cuando se migren todos los componentes en Fase 2.
-  ------------------------------------------------------------------ */
-  --text: #EEF2FF;           /* → var(--dark-text) */
-  --surface: #001570;        /* → var(--dark-surface) (tono equivalente) */
-  --card: #0A2080;           /* → var(--dark-card) */
-  --card2: #0D2898;          /* → var(--dark-card-2) */
-  --border: #1A3AA0;         /* → var(--dark-border) */
-  --green-dim: rgba(0, 214, 143, 0.12); /* → var(--pred-correct-bg) */
-  --red-dim: rgba(255, 61, 61, 0.12);   /* → var(--pred-wrong-bg) */
 }
 
 /* ==========================================================================
    BASE
-   NOTA: el body sigue con fondo oscuro heredado de Sprint 0/1. La migración
-   al light base (bg-page) se hace en Fase 2 junto con los componentes.
    ========================================================================== */
 html,
 body {
@@ -114,8 +121,8 @@ body {
 }
 
 body {
-  background: #000820;
-  color: var(--text);
+  background: var(--bg-page);
+  color: var(--text-body);
   font-family: "DM Sans", sans-serif;
 }
 
@@ -128,11 +135,16 @@ h6 {
   font-family: "Barlow Condensed", sans-serif;
   letter-spacing: 0.02em;
   line-height: 1.1;
+  color: var(--text-dark);
 }
 
 a {
   color: inherit;
   text-decoration: none;
+}
+
+button {
+  font-family: inherit;
 }
 
 /* Hide scrollbar utility */
