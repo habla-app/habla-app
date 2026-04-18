@@ -66,17 +66,11 @@ export interface MatchCardData {
 
 interface MatchCardProps {
   torneo: MatchCardData;
-  /** Si null, los CTAs redirigen a /auth/login con callbackUrl al torneo. */
+  /** Destino del CTA. Default: `/torneo/{id}`. */
   href?: string;
-  /** callbackUrl cuando no hay sesión — si se deja default redirige al `/`. */
-  callbackUrl?: string;
 }
 
-export function MatchCard({
-  torneo,
-  href,
-  callbackUrl = "/",
-}: MatchCardProps) {
+export function MatchCard({ torneo, href }: MatchCardProps) {
   const isCritical = torneo.urgency === "critical";
   const isHigh = torneo.urgency === "high";
   const isMed = torneo.urgency === "med";
@@ -103,7 +97,7 @@ export function MatchCard({
       ? "h-1 bg-urgent-high"
       : "";
 
-  const destination = href ?? `/auth/login?callbackUrl=${encodeURIComponent(callbackUrl)}`;
+  const destination = href ?? `/torneo/${torneo.id}`;
 
   const ctaCritical = isCritical;
   const ctaText = ctaCritical
