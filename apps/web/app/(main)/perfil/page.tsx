@@ -1,6 +1,6 @@
-// Perfil — placeholder hasta el Sub-Sprint 7 (perfil completo con niveles,
-// verificación, notificaciones). En Fase 2 replica el pattern `profile-hero`
-// del mockup con avatar + datos + balance. El NavBar viene del layout (main).
+// Perfil — pattern `profile-hero` del mockup con avatar + datos + balance.
+// La gestión completa (verificación de teléfono/DNI, preferencias de
+// notificaciones, límites de juego responsable) llega en Sub-Sprint 7.
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { CerrarSesionBoton } from "@/components/auth/CerrarSesionBoton";
@@ -66,15 +66,14 @@ export default async function PerfilPage() {
         </div>
       </section>
 
-      {/* Placeholder Sub-Sprint 7 */}
       <section className="mt-4 rounded-md border border-light bg-card p-6 shadow-sm">
         <h2 className="font-display text-sm font-extrabold uppercase tracking-[0.06em] text-dark">
-          Próximamente: gestión completa
+          Gestión de cuenta
         </h2>
         <p className="mt-2 text-sm leading-relaxed text-body">
-          En el Sub-Sprint 7 habilitamos verificación de teléfono/DNI,
-          preferencias de notificaciones, límites de juego responsable y
-          gestión de cuenta.
+          Estamos terminando la verificación de teléfono/DNI, las preferencias
+          de notificaciones y los límites de juego responsable. En breve
+          disponibles desde este panel.
         </p>
       </section>
 
