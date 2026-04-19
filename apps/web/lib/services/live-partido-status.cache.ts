@@ -17,6 +17,13 @@
 // el set de partidos en vivo es chico (<50 simultáneos en MVP) y el
 // overhead es trivial. Se limpia solo cuando el poller marca el partido
 // como FINALIZADO más allá del TTL (o al restart).
+//
+// Hotfix #6 Ítem 3: TTL extendido de 10 a 30 minutos. Motivación: en
+// halftime largos (entretiempos de clásicos con ceremonias) el poller
+// sigue recibiendo `status.short=HT` pero si el último tick con
+// `elapsed` numérico pasó hace >10 min, el snapshot caducaba y el
+// LiveHero mostraba "—" en lugar de "ENT". Con 30 min cubrimos HT
+// + prórrogas sin comprometer memory (el cache se limpia al FT).
 
 import { formatMinutoLabel } from "../utils/minuto-label";
 
@@ -32,8 +39,10 @@ export interface LiveStatusSnapshot {
   updatedAt: number;
 }
 
-/** TTL: si pasan más de 10 min sin update, consideramos el snapshot stale. */
-export const SNAPSHOT_TTL_MS = 10 * 60 * 1000;
+/** TTL: si pasan más de 30 min sin update, consideramos el snapshot stale.
+ *  Hotfix #6 Ítem 3: extendido desde 10 min para cubrir HT largos +
+ *  prórrogas. */
+export const SNAPSHOT_TTL_MS = 30 * 60 * 1000;
 
 const cache = new Map<string, LiveStatusSnapshot>();
 
