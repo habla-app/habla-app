@@ -37,6 +37,10 @@ import { logger } from "./logger";
 import { recalcularTorneo } from "./puntuacion.service";
 import { finalizarTorneo } from "./ranking.service";
 import {
+  clearLiveStatus,
+  setLiveStatus,
+} from "./live-partido-status.cache";
+import {
   emitirPartidoEvento,
   emitirRankingUpdate,
   emitirTorneoFinalizado,
@@ -206,6 +210,16 @@ async function pollearPartido(partido: {
     return result;
   }
 
+  // Bug #9: snapshot del minuto + status para que el hero de
+  // /live-match pueda mostrar el label inmediatamente (sin esperar al
+  // primer WS). `emitirRankingUpdate` lee de este cache al construir
+  // el payload.
+  setLiveStatus(
+    partido.id,
+    fixture.fixture.status.short,
+    fixture.fixture.status.elapsed,
+  );
+
   // 1. Upsertear datos básicos del partido
   const partidoInput = fixtureToPartidoInput(fixture);
   const cambios: Partial<typeof partidoInput> & {
@@ -294,10 +308,9 @@ async function pollearPartido(partido: {
       for (const torneoId of torneoIds) {
         try {
           await recalcularTorneo(torneoId);
-          await emitirRankingUpdate(
-            torneoId,
-            fixture.fixture.status.elapsed ?? null,
-          );
+          // Bug #9: emitirRankingUpdate lee el label desde el cache
+          // que acabamos de actualizar con setLiveStatus arriba.
+          await emitirRankingUpdate(torneoId, { partidoId: partido.id });
           result.torneosRecalculados += 1;
         } catch (err) {
           logger.error({ err, torneoId }, "[poller] recalc torneo falló");
@@ -319,11 +332,24 @@ async function pollearPartido(partido: {
           logger.error({ err, torneoId }, "[poller] finalizar torneo falló");
         }
       }
+      // Tras FT definitivo, limpiamos el snapshot: el label "FIN" ya
+      // quedó capturado pero no necesitamos seguir leyéndolo en vivo.
+      if (partidoInput.estado === "FINALIZADO") {
+        setLiveStatus(
+          partido.id,
+          fixture.fixture.status.short,
+          fixture.fixture.status.elapsed,
+        );
+      }
     }
   }
 
   return result;
 }
+
+// Re-export para que otros módulos (tests) puedan limpiar el cache sin
+// importar la ruta interna.
+export { clearLiveStatus };
 
 // ---------------------------------------------------------------------------
 // procesarEventos — upsert idempotente + devuelve sólo los nuevos

@@ -52,6 +52,9 @@ export interface RankingUpdatePayload {
   totalInscritos: number;
   pozoNeto: number;
   minutoPartido: number | null;
+  /** Label renderizable del minuto (p.ej. "23'", "ENT", "FIN"). Bug #9.
+   *  Si es null, la UI debe mostrar "—". Nunca "?". */
+  minutoLabel: string | null;
   timestamp: number;
 }
 

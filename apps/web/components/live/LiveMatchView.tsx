@@ -4,10 +4,22 @@
 //   - Tab state (Ranking / Stats / Events)
 //   - Switcher entre partidos (leave + join)
 //   - Sincroniza URL (?torneoId=...) sin recarga completa
+//
+// Bug #8 (revert Hotfix #3): todo tab tiene torneoId no-nullable.
+// Bug #10: el switcher solo muestra EN_VIVO; los finalizados viven en
+//   LiveFinalizedSection abajo del contenido en vivo.
+// Bug #11: liga filter chips arriba del switcher; se renderean solo si
+//   hay ≥1 liga con partidos en vivo. Filtran el switcher (no la
+//   sección de finalizados).
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LiveSwitcher } from "./LiveSwitcher";
+import { LiveLeagueFilter, type LigaChipInfo } from "./LiveLeagueFilter";
+import {
+  LiveFinalizedSection,
+  type FinalizedMatchCard,
+} from "./LiveFinalizedSection";
 import { LiveHero } from "./LiveHero";
 import { MiTicketCard } from "./MiTicketCard";
 import { RankingTable } from "./RankingTable";
@@ -18,9 +30,7 @@ import { useEventosPartido } from "@/hooks/useEventosPartido";
 import type { RankingRowPayload } from "@/lib/realtime/events";
 
 export interface LiveMatchTab {
-  /** null si todos los torneos del partido están CANCELADO (sin
-   *  torneo activo donde competir). Hotfix #3 post-Sub-Sprint 5. */
-  torneoId: string | null;
+  torneoId: string;
   partidoId: string;
   liga: string;
   equipoLocal: string;
@@ -30,14 +40,14 @@ export interface LiveMatchTab {
   round: string | null;
   venue: string | null;
   estado: "EN_VIVO" | "FINALIZADO";
-  // ABIERTO incluido por hotfix Bug #2: el cron de cierre puede tardar
-  // hasta 1 minuto en transicionar el torneo, así que un partido EN_VIVO
-  // puede tener torneos asociados aún en ABIERTO. Se renderea igual.
-  // null si el partido no tiene torneo activo (todos cancelados).
-  torneoEstado: "ABIERTO" | "EN_JUEGO" | "FINALIZADO" | "CERRADO" | null;
+  torneoEstado: "ABIERTO" | "EN_JUEGO" | "FINALIZADO" | "CERRADO";
   pozoBruto: number;
   pozoNeto: number;
   totalInscritos: number;
+  /** Label del minuto listo para renderizar ("23'", "ENT", "FIN",
+   *  "—"). Bug #9: SSR lo setea desde el cache del poller; WS lo
+   *  sobrescribe en vivo (`live.minutoLabel` tiene preferencia). */
+  minutoLabel: string | null;
 }
 
 interface InitialSnapshot {
@@ -54,21 +64,20 @@ interface InitialSnapshot {
 
 interface LiveMatchViewProps {
   tabs: LiveMatchTab[];
-  /** null si el partido activo no tiene torneo donde competir (todos
-   *  cancelados). En ese caso el componente muestra "sin torneo activo"
-   *  en lugar del ranking pero sigue mostrando el hero + eventos. */
+  /** Null si no hay tab activo (caso: filtro deja lista vacía o
+   *  no hay partidos live). El hero/ranking/tabs no se renderean. */
   torneoIdActivo: string | null;
   rankingInicial: InitialSnapshot;
   hasSession: boolean;
   miUsuarioId: string | null;
+  ligasChips: LigaChipInfo[];
+  finalizedCards: FinalizedMatchCard[];
+  /** True si `?liga=` está activo — usado para el copy del empty
+   *  state del switcher (invita a volver a "Todas"). */
+  filtroActivo: boolean;
 }
 
 type TabKey = "ranking" | "stats" | "eventos";
-
-/** Identifica un tab unívocamente sin importar si tiene torneo activo. */
-function tabKey(t: LiveMatchTab): string {
-  return t.torneoId ?? `partido:${t.partidoId}`;
-}
 
 export function LiveMatchView({
   tabs,
@@ -76,26 +85,29 @@ export function LiveMatchView({
   rankingInicial,
   hasSession,
   miUsuarioId,
+  ligasChips,
+  finalizedCards,
+  filtroActivo,
 }: LiveMatchViewProps) {
   const router = useRouter();
-  // El key del tab activo. Si el partido no tiene torneo, usamos
-  // `partido:<id>` como identificador sintético para navegar entre tabs.
-  const initialKey =
-    torneoIdInicial ??
-    (tabs[0] ? tabKey(tabs[0]) : "");
-  const [activeKey, setActiveKey] = useState<string>(initialKey);
+  // Cuando el filtro deja tabs vacíos, torneoIdActivo es null y no
+  // se renderea hero/tabs. `activeTorneoId` arranca con el valor del
+  // server y solo se cambia via setActiveTorneoId (switcher).
+  const [activeTorneoId, setActiveTorneoId] = useState<string>(
+    torneoIdInicial ?? "",
+  );
   const [activeTab, setActiveTab] = useState<TabKey>("ranking");
   const [miPosLocal, setMiPosLocal] = useState(rankingInicial.miPosicion);
   const didFirstMount = useRef(false);
 
-  const active = tabs.find((t) => tabKey(t) === activeKey) ?? tabs[0]!;
-  const activeTorneoId = active.torneoId;
+  const active = torneoIdInicial
+    ? (tabs.find((t) => t.torneoId === activeTorneoId) ?? tabs[0] ?? null)
+    : null;
 
-  // Ranking en vivo para el torneo activo. Si no hay torneo, pasamos null
-  // y el hook no abre conexión WS ni fetchea.
-  const live = useRankingEnVivo(activeTorneoId, { initialLimit: 100 });
+  const live = useRankingEnVivo(active?.torneoId ?? null, {
+    initialLimit: 100,
+  });
 
-  // Inicial del servidor si el hook aún no trajo nada
   const ranking: RankingRowPayload[] =
     live.ranking.length > 0 ? live.ranking : rankingInicial.ranking;
   const totalInscritos = live.ranking.length > 0
@@ -103,14 +115,14 @@ export function LiveMatchView({
     : rankingInicial.totalInscritos;
   const pozoNeto = live.pozoNeto > 0 ? live.pozoNeto : rankingInicial.pozoNeto;
 
-  // Eventos en vivo (al partido, no al torneo — funciona aunque no haya torneo)
-  const eventos = useEventosPartido(activeTorneoId, active.partidoId);
+  const eventos = useEventosPartido(
+    active?.torneoId ?? null,
+    active?.partidoId ?? null,
+  );
 
-  // Score actual (live si el hook lo tiene, sino el del server)
-  const scoreLocal = eventos.marcadorLive?.local ?? active.golesLocal;
-  const scoreVisita = eventos.marcadorLive?.visita ?? active.golesVisita;
+  const scoreLocal = eventos.marcadorLive?.local ?? active?.golesLocal ?? 0;
+  const scoreVisita = eventos.marcadorLive?.visita ?? active?.golesVisita ?? 0;
 
-  // Mi posición — si hay ranking en vivo, recalcular buscando mi usuario
   useEffect(() => {
     if (!miUsuarioId) {
       setMiPosLocal(null);
@@ -126,25 +138,29 @@ export function LiveMatchView({
       });
     } else if (
       rankingInicial.miPosicion &&
-      activeTorneoId === torneoIdInicial
+      active?.torneoId === torneoIdInicial
     ) {
       setMiPosLocal(rankingInicial.miPosicion);
     } else {
       setMiPosLocal(null);
     }
-  }, [ranking, miUsuarioId, rankingInicial, activeTorneoId, torneoIdInicial]);
+  }, [ranking, miUsuarioId, rankingInicial, active, torneoIdInicial]);
 
-  // Sync URL — usa torneoId si hay, sino partidoId.
+  // Sync URL cuando cambia el tab activo (sin recarga).
   useEffect(() => {
     if (!didFirstMount.current) {
       didFirstMount.current = true;
       return;
     }
-    const qs = activeTorneoId
-      ? `torneoId=${activeTorneoId}`
-      : `partidoId=${active.partidoId}`;
-    router.replace(`/live-match?${qs}`, { scroll: false });
-  }, [activeTorneoId, active.partidoId, router]);
+    if (!active) return;
+    // Preservar el ?liga= si existe; para eso leemos la URL actual.
+    const url = new URL(window.location.href);
+    url.searchParams.set("torneoId", active.torneoId);
+    router.replace(
+      `${url.pathname}?${url.searchParams.toString()}`,
+      { scroll: false },
+    );
+  }, [active, router]);
 
   const miFilaRow: RankingRowPayload | null = miUsuarioId
     ? ranking.find((r) => r.usuarioId === miUsuarioId) ?? null
@@ -161,121 +177,135 @@ export function LiveMatchView({
         </p>
       </header>
 
-      <LiveSwitcher
-        tabs={tabs.map((t) => {
-          const key = tabKey(t);
-          const isActive = key === activeKey;
-          return {
-            torneoId: key,
-            liga: t.liga,
-            equipoLocal: t.equipoLocal,
-            equipoVisita: t.equipoVisita,
-            golesLocal: isActive ? scoreLocal : t.golesLocal,
-            golesVisita: isActive ? scoreVisita : t.golesVisita,
-            round: t.round,
-            estado: t.estado,
-          };
-        })}
-        active={activeKey}
-        onChange={setActiveKey}
-      />
+      {/* Filter chips de liga (Bug #11) — solo si hay ≥1 liga live */}
+      <LiveLeagueFilter ligas={ligasChips} />
 
-      <LiveHero
-        liga={active.liga}
-        round={active.round}
-        estado={active.estado}
-        equipoLocal={active.equipoLocal}
-        equipoVisita={active.equipoVisita}
-        golesLocal={scoreLocal}
-        golesVisita={scoreVisita}
-        minuto={live.minutoPartido}
-        totalInscritos={totalInscritos}
-        pozoNeto={pozoNeto}
-        primerPremio={Math.floor(pozoNeto * 0.35)}
-        ultimosEventos={eventos.eventos.slice(-5).reverse()}
-      />
-
-      {hasSession && miPosLocal && (
-        <MiTicketCard
-          miPosicion={miPosLocal}
-          totalInscritos={totalInscritos}
-          row={miFilaRow}
-          equipoLocal={active.equipoLocal}
-          equipoVisita={active.equipoVisita}
-          partidoEstado={active.estado}
+      {/* Switcher de partidos EN_VIVO (Bug #10) */}
+      {tabs.length > 0 && active ? (
+        <LiveSwitcher
+          tabs={tabs.map((t) => {
+            const isActive = t.torneoId === activeTorneoId;
+            return {
+              torneoId: t.torneoId,
+              liga: t.liga,
+              equipoLocal: t.equipoLocal,
+              equipoVisita: t.equipoVisita,
+              golesLocal: isActive ? scoreLocal : t.golesLocal,
+              golesVisita: isActive ? scoreVisita : t.golesVisita,
+              round: t.round,
+              estado: t.estado,
+            };
+          })}
+          active={activeTorneoId}
+          onChange={setActiveTorneoId}
         />
+      ) : (
+        <LiveSwitcherEmpty filtroActivo={filtroActivo} />
       )}
 
-      <div
-        role="tablist"
-        aria-label="Vista del partido"
-        className="mb-4 flex gap-2 overflow-x-auto border-b border-light"
-      >
-        <TabBtn
-          label="🏆 Ranking en vivo"
-          active={activeTab === "ranking"}
-          onClick={() => setActiveTab("ranking")}
-        />
-        <TabBtn
-          label="📊 Estadísticas"
-          active={activeTab === "stats"}
-          onClick={() => setActiveTab("stats")}
-        />
-        <TabBtn
-          label="⚽ Eventos"
-          active={activeTab === "eventos"}
-          onClick={() => setActiveTab("eventos")}
-        />
-      </div>
-
-      {activeTab === "ranking" && (
-        activeTorneoId ? (
-          <RankingTable
-            ranking={ranking}
-            miUsuarioId={miUsuarioId}
+      {active && (
+        <>
+          <LiveHero
+            liga={active.liga}
+            round={active.round}
+            estado={active.estado}
             equipoLocal={active.equipoLocal}
             equipoVisita={active.equipoVisita}
+            golesLocal={scoreLocal}
+            golesVisita={scoreVisita}
+            minutoLabel={live.minutoLabel ?? active.minutoLabel}
             totalInscritos={totalInscritos}
+            pozoNeto={pozoNeto}
+            primerPremio={Math.floor(pozoNeto * 0.35)}
+            ultimosEventos={eventos.eventos.slice(-5).reverse()}
           />
-        ) : (
-          <SinTorneoActivo />
-        )
-      )}
-      {activeTab === "stats" && (
-        <StatsView
-          partidoId={active.partidoId}
-          equipoLocal={active.equipoLocal}
-          equipoVisita={active.equipoVisita}
-        />
-      )}
-      {activeTab === "eventos" && (
-        <EventsView
-          eventos={eventos.eventos}
-          isLoading={eventos.isLoading}
-          equipoLocal={active.equipoLocal}
-          equipoVisita={active.equipoVisita}
-        />
+
+          {hasSession && miPosLocal && (
+            <MiTicketCard
+              miPosicion={miPosLocal}
+              totalInscritos={totalInscritos}
+              row={miFilaRow}
+              equipoLocal={active.equipoLocal}
+              equipoVisita={active.equipoVisita}
+              partidoEstado={active.estado}
+            />
+          )}
+
+          <div
+            role="tablist"
+            aria-label="Vista del partido"
+            className="mb-4 flex gap-2 overflow-x-auto border-b border-light"
+          >
+            <TabBtn
+              label="🏆 Ranking en vivo"
+              active={activeTab === "ranking"}
+              onClick={() => setActiveTab("ranking")}
+            />
+            <TabBtn
+              label="📊 Estadísticas"
+              active={activeTab === "stats"}
+              onClick={() => setActiveTab("stats")}
+            />
+            <TabBtn
+              label="⚽ Eventos"
+              active={activeTab === "eventos"}
+              onClick={() => setActiveTab("eventos")}
+            />
+          </div>
+
+          {activeTab === "ranking" && (
+            <RankingTable
+              ranking={ranking}
+              miUsuarioId={miUsuarioId}
+              equipoLocal={active.equipoLocal}
+              equipoVisita={active.equipoVisita}
+              totalInscritos={totalInscritos}
+            />
+          )}
+          {activeTab === "stats" && (
+            <StatsView
+              partidoId={active.partidoId}
+              equipoLocal={active.equipoLocal}
+              equipoVisita={active.equipoVisita}
+            />
+          )}
+          {activeTab === "eventos" && (
+            <EventsView
+              eventos={eventos.eventos}
+              isLoading={eventos.isLoading}
+              equipoLocal={active.equipoLocal}
+              equipoVisita={active.equipoVisita}
+            />
+          )}
+
+          <div className="mt-3 text-right text-[11px] text-soft">
+            {live.isConnected ? "🟢 Conectado en vivo" : "🟠 Reconectando…"}
+          </div>
+        </>
       )}
 
-      <div className="mt-3 text-right text-[11px] text-soft">
-        {live.isConnected ? "🟢 Conectado en vivo" : "🟠 Reconectando…"}
-      </div>
+      {/* Sección separada: partidos finalizados (Bug #10) */}
+      <LiveFinalizedSection matches={finalizedCards} />
     </div>
   );
 }
 
-function SinTorneoActivo() {
+function LiveSwitcherEmpty({ filtroActivo }: { filtroActivo: boolean }) {
   return (
-    <div className="rounded-md border border-light bg-card p-6 text-center shadow-sm">
-      <div aria-hidden className="mb-3 text-4xl">
-        🏟️
+    <div
+      className="mb-5 rounded-md border border-light bg-card px-5 py-8 text-center shadow-sm"
+      data-testid="live-switcher-empty"
+    >
+      <div aria-hidden className="mb-2 text-3xl">
+        🌙
       </div>
       <p className="font-display text-[18px] font-extrabold uppercase tracking-[0.02em] text-dark">
-        Este partido no tiene torneo activo
+        No hay partidos en vivo ahora mismo
       </p>
-      <p className="mt-2 text-[13px] text-muted-d">
-        Todos los torneos se cancelaron antes del cierre por no alcanzar el
-        mínimo de inscritos. El marcador y los eventos siguen en vivo.
+      <p className="mt-1 text-[13px] text-muted-d">
+        {filtroActivo
+          ? "No hay partidos de esta liga en vivo. Probá quitar el filtro."
+          : "Cuando arranque el próximo torneo, aparece acá."}
       </p>
     </div>
   );

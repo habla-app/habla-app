@@ -17,6 +17,7 @@ import {
   type TicketConTorneo,
 } from "@/lib/services/tickets.service";
 import { StatsPill } from "@/components/tickets/StatsPill";
+import { BalancePill } from "@/components/tickets/BalancePill";
 import { MisTicketsTabs, type TicketsTab } from "@/components/tickets/MisTicketsTabs";
 import { MatchGroup } from "@/components/tickets/MatchGroup";
 import type { TicketConContexto } from "@/components/tickets/adapter";
@@ -97,11 +98,11 @@ export default async function MisCombinadasPage({ searchParams }: Props) {
           label="Tasa de acierto"
           tone="green"
         />
-        <StatsPill
-          icon="💰"
-          value={`${stats.neto >= 0 ? "+" : ""}${stats.neto.toLocaleString("es-PE")} 🪙`}
-          label="Balance neto"
-          tone={stats.neto >= 0 ? "green" : "neutral"}
+        {/* Bug #7: balance ABSOLUTO del store, no el delta neto de tickets.
+            Antes mostraba stats.neto (-5 tras primera inscripción sin
+            premios), engañando al usuario al leerlo como "balance". */}
+        <BalancePill
+          initialBalance={session.user.balanceLukas ?? 0}
         />
         <StatsPill
           icon="⭐"

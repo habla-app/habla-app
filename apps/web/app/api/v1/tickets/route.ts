@@ -38,9 +38,14 @@ export async function POST(req: NextRequest) {
     // Fire-and-forget: si el partido ya empezó, un ticket nuevo modifica
     // el ranking — re-puntuarlo y emitir actualización. Lo hacemos fuera
     // del await del handler para que la respuesta HTTP sea rápida.
+    // El partidoId permite al emitter leer el label del cache (Bug #9);
+    // resolverlo aquí requiere un query extra, así que lo dejamos null
+    // y el cliente verá el último label del cache sin cambiar.
     setImmediate(() => {
       recalcularTorneo(parsed.data.torneoId)
-        .then(() => emitirRankingUpdate(parsed.data.torneoId))
+        .then(() =>
+          emitirRankingUpdate(parsed.data.torneoId, { partidoId: null }),
+        )
         .catch((err) =>
           logger.error(
             { err, torneoId: parsed.data.torneoId },

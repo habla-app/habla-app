@@ -3,22 +3,18 @@
 // izquierda con nav-links, lukas-badge + avatar (o "Entrar") a la derecha.
 //
 // Server Component que lee la sesión. Para el estado activo de los links
-// delega a NavLinks (client) porque necesita usePathname.
+// delega a NavLinks (client) porque necesita usePathname. Para el chip
+// de Lukas delega a BalanceBadge (client) porque necesita re-renderizar
+// cuando el balance cambia en el store tras una inscripción (Bug #7).
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { NavLinks } from "@/components/layout/NavLinks";
 import { UserMenu } from "@/components/layout/UserMenu";
+import { BalanceBadge } from "@/components/layout/BalanceBadge";
 
 // Placeholder hasta el Sub-Sprint 5, donde el poller de partidos alimenta
 // un endpoint GET /live/matches. Reemplazar aquí por fetch real.
 const LIVE_COUNT_PLACEHOLDER = 2;
-
-function formatearLukas(balance: number): string {
-  if (balance >= 1000) {
-    return `${(balance / 1000).toFixed(1).replace(/\.0$/, "")}K`;
-  }
-  return balance.toLocaleString("es-PE");
-}
 
 function iniciales(
   nombre: string | undefined | null,
@@ -59,18 +55,7 @@ export async function NavBar() {
         <div className="flex items-center gap-3">
           {usuario ? (
             <>
-              <Link
-                href="/wallet"
-                className="flex items-center gap-[7px] rounded-sm border border-brand-gold/25 bg-brand-gold/10 px-[13px] py-[7px] text-[13px] font-bold text-brand-gold transition-colors hover:bg-brand-gold/20"
-              >
-                <span
-                  aria-hidden
-                  className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-brand-gold text-[10px] font-black leading-none text-black"
-                >
-                  🪙
-                </span>
-                <span>{formatearLukas(usuario.balanceLukas ?? 0)} Lukas</span>
-              </Link>
+              <BalanceBadge initialBalance={usuario.balanceLukas ?? 0} />
               <UserMenu
                 iniciales={iniciales(usuario.name, usuario.email ?? "")}
                 nombre={usuario.name ?? usuario.email ?? "Usuario"}

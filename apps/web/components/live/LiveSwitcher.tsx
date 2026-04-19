@@ -21,6 +21,8 @@ interface LiveSwitcherProps {
 }
 
 export function LiveSwitcher({ tabs, active, onChange }: LiveSwitcherProps) {
+  // Bug #10: el switcher solo muestra partidos EN_VIVO. Si no hay
+  // ninguno (o solo uno, el usuario no necesita cambiar), ocultamos.
   if (tabs.length <= 1) return null;
   return (
     <div

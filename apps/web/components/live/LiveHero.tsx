@@ -1,5 +1,14 @@
 // LiveHero — hero oscuro estilo estadio con score gigante + stats.
 // Replica `.live-hero` del mockup.
+//
+// Bug #9: el minuto ya no se renderiza como número crudo (con fallback
+// literal "?" cuando era null). Ahora recibe `minutoLabel` listo para
+// mostrar — el mapper `formatMinutoLabel` del backend traduce status
+// codes de api-football (HT, ET, FT, PEN, etc.) a labels legibles.
+// Si `minutoLabel` llega null (ej. antes del primer WS, cache stale),
+// mostramos "—" — nunca "?".
+
+import { renderMinutoLabel } from "@/lib/utils/minuto-label";
 
 interface LiveHeroProps {
   liga: string;
@@ -9,7 +18,9 @@ interface LiveHeroProps {
   equipoVisita: string;
   golesLocal: number;
   golesVisita: number;
-  minuto: number | null;
+  /** Label ya renderizado ("23'", "ENT", "FIN", etc.). Si es null,
+   *  mostramos "—". El helper renderMinutoLabel garantiza el fallback. */
+  minutoLabel: string | null;
   totalInscritos: number;
   pozoNeto: number;
   primerPremio: number;
@@ -29,13 +40,14 @@ export function LiveHero({
   equipoVisita,
   golesLocal,
   golesVisita,
-  minuto,
+  minutoLabel,
   totalInscritos,
   pozoNeto,
   primerPremio,
   ultimosEventos,
 }: LiveHeroProps) {
   const isLive = estado === "EN_VIVO";
+  const labelRendered = renderMinutoLabel(minutoLabel);
   return (
     <section className="relative mb-5 overflow-hidden rounded-lg bg-stadium p-6 text-white shadow-xl">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
@@ -63,7 +75,7 @@ export function LiveHero({
         <ScoreBox
           local={golesLocal}
           visita={golesVisita}
-          minuto={minuto}
+          label={labelRendered}
           isLive={isLive}
         />
         <TeamSide name={equipoVisita} align="right" />
@@ -134,23 +146,25 @@ function TeamSide({
 function ScoreBox({
   local,
   visita,
-  minuto,
+  label,
   isLive,
 }: {
   local: number;
   visita: number;
-  minuto: number | null;
+  /** Label renderizado — "23'", "ENT", "FIN", "—". Nunca "?". */
+  label: string;
   isLive: boolean;
 }) {
   return (
-    <div className="text-center">
+    <div className="text-center" data-testid="live-score-box">
       <div className="font-display text-[56px] font-black leading-none text-brand-gold">
         {local} — {visita}
       </div>
       <div className="mt-2 text-[12px] font-bold uppercase tracking-[0.06em] text-white/70">
         {isLive ? (
           <>
-            ⏱ {minuto ?? "?"}&apos;
+            <span aria-hidden>⏱ </span>
+            <span data-testid="live-minute-label">{label}</span>
           </>
         ) : (
           "Final"
