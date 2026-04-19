@@ -186,6 +186,55 @@ export interface ApiFootballLeague {
   }>;
 }
 
+// ---------------------------------------------------------------------------
+// Sub-Sprint 5 — endpoints de live-match
+// ---------------------------------------------------------------------------
+
+/** Evento de /fixtures/events?fixture={id} */
+export interface ApiFootballEvent {
+  time: { elapsed: number; extra: number | null };
+  team: { id: number; name: string };
+  player: { id: number | null; name: string | null };
+  assist: { id: number | null; name: string | null };
+  type: string; /* "Goal" | "Card" | "subst" | "Var" */
+  detail: string | null; /* "Normal Goal" | "Yellow Card" | "Red Card" | "Second Yellow card" | ... */
+  comments: string | null;
+}
+
+/** Estadísticas de /fixtures/statistics?fixture={id} */
+export interface ApiFootballTeamStats {
+  team: { id: number; name: string };
+  statistics: Array<{ type: string; value: number | string | null }>;
+}
+
+/**
+ * Trae un fixture específico por ID. Útil para el poller de partidos
+ * en vivo: un sólo request trae estado + marcador actualizado.
+ */
+export async function fetchFixtureById(
+  fixtureId: number | string,
+): Promise<ApiFootballFixture | null> {
+  const qs = new URLSearchParams({ id: String(fixtureId) });
+  const res = await apiFetch<ApiFootballFixture>(`/fixtures?${qs.toString()}`);
+  return res[0] ?? null;
+}
+
+export async function fetchFixtureEvents(
+  fixtureId: number | string,
+): Promise<ApiFootballEvent[]> {
+  const qs = new URLSearchParams({ fixture: String(fixtureId) });
+  return apiFetch<ApiFootballEvent>(`/fixtures/events?${qs.toString()}`);
+}
+
+export async function fetchFixtureStats(
+  fixtureId: number | string,
+): Promise<ApiFootballTeamStats[]> {
+  const qs = new URLSearchParams({ fixture: String(fixtureId) });
+  return apiFetch<ApiFootballTeamStats>(
+    `/fixtures/statistics?${qs.toString()}`,
+  );
+}
+
 /**
  * Devuelve el año de la temporada `current` según api-football.
  * Lanza ApiFootballError si la liga no existe o no tiene temporada actual.
