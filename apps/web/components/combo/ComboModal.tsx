@@ -641,6 +641,10 @@ function FooterSection({
   );
 }
 
+type AnyCta =
+  | NonNullable<ReturnType<typeof computeComboModalUIState>["primaryCta"]>
+  | NonNullable<ReturnType<typeof computeComboModalUIState>["secondaryCta"]>;
+
 function CtaButton({
   cta,
   primary,
@@ -649,9 +653,7 @@ function CtaButton({
   onReset,
   onClose,
 }: {
-  cta: NonNullable<
-    ReturnType<typeof computeComboModalUIState>["primaryCta"]
-  >;
+  cta: AnyCta;
   primary?: boolean;
   disabled?: boolean;
   onSubmit: () => void;

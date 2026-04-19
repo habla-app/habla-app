@@ -1,34 +1,48 @@
-// /live-match — Sub-Sprint 5.
+// /live-match — Sub-Sprint 5 + hotfixes #1/#2/#3/#4.
 //
-// Server Component delgado: resuelve qué partido mostrar y pasa los IDs
-// al Client Component `LiveMatchView` que maneja la conexión WS, tabs,
-// y refetch.
+// Server Component delgado. Resuelve:
+//   1. Partidos EN_VIVO con al menos un torneo no cancelado (Bug #8).
+//   2. Partidos FINALIZADOS de las últimas 24h (Bug #10).
+//   3. Filtro por liga (`?liga=<slug>`) aplicado solo al switcher en
+//      vivo (Bug #11). La sección "Partidos finalizados" NO filtra.
+//
+// El switcher superior (LiveSwitcher) muestra SOLO partidos EN_VIVO
+// que coincidan con el filtro de liga. Los finalizados van en una
+// sección debajo con cards de resumen (LiveFinalizedSection).
 //
 // Params:
-//   - ?torneoId=<id>  → pantalla específica
-//   - sin param       → primer partido EN_VIVO (prioriza por estado del
-//                       torneo principal y pozoBruto del mismo)
-//
-// Bug #8 post-Hotfix #3: a diferencia de versiones previas, la página
-// ya no tolera partidos sin torneo activo. `obtenerLiveMatches` exige
-// que cada partido tenga al menos un torneo no-cancelado — el cartel
-// "sin torneo activo" del Hotfix #3 fue removido tras revisión del PO.
+//   - ?torneoId=<id>  → pantalla específica de un torneo (cualquiera,
+//                       sea EN_VIVO o FINALIZADO). Si apunta a un
+//                       FINALIZADO fuera del filtro, igual se renderea
+//                       (compat con linkeos internos y emails de
+//                       premios); el switcher lo ignora.
+//   - ?partidoId=<id> → backward compat del Hotfix #3.
+//   - ?liga=<slug>    → filtra el switcher en vivo (Bug #11).
 
 import { auth } from "@/lib/auth";
 import { listarRanking } from "@/lib/services/ranking.service";
 import {
   elegirTorneoPrincipal,
+  obtenerFinalizedMatches,
   obtenerLiveMatches,
+  type PartidoLive,
 } from "@/lib/services/live-matches.service";
 import { getLiveStatus } from "@/lib/services/live-partido-status.cache";
+import {
+  LIGA_CHIP_LABELS,
+  LIGA_SLUGS_ORDER,
+  ligaToSlug,
+  slugToLiga,
+} from "@/lib/config/liga-slugs";
 import {
   LiveMatchView,
   type LiveMatchTab,
 } from "@/components/live/LiveMatchView";
+import type { FinalizedMatchCard } from "@/components/live/LiveFinalizedSection";
+import type { LigaChipInfo } from "@/components/live/LiveLeagueFilter";
 
 interface Props {
-  /** `partidoId` se redirige a `torneoId` del principal (compat Hotfix #3). */
-  searchParams?: { torneoId?: string; partidoId?: string };
+  searchParams?: { torneoId?: string; partidoId?: string; liga?: string };
 }
 
 export const dynamic = "force-dynamic";
@@ -36,70 +50,114 @@ export const dynamic = "force-dynamic";
 export default async function LiveMatchPage({ searchParams }: Props) {
   const session = await auth();
 
-  // Bug #8: `obtenerLiveMatches` filtra out partidos cuyos torneos estén
-  // todos CANCELADO. Cada partido que llegue acá tiene al menos un
-  // torneo navegable, así que `elegirTorneoPrincipal` nunca devuelve null.
-  const liveMatchesRaw = await obtenerLiveMatches({ limit: 6 });
+  const [liveRaw, finalizadosRaw] = await Promise.all([
+    // Live-only: el switcher solo muestra EN_VIVO (Bug #10).
+    obtenerLiveMatches({ limit: 20, incluirFinalizados: false }),
+    obtenerFinalizedMatches({ sinceHours: 24, limit: 10 }),
+  ]);
 
-  if (liveMatchesRaw.length === 0) {
-    return <EmptyLive />;
-  }
+  // Derivamos la lista de ligas presentes EN_VIVO ahora — las chips
+  // son dinámicas (Bug #11). Solo ligas con ≥1 partido.
+  const ligasChips = derivarLigasPresentes(liveRaw);
 
-  const tabs: LiveMatchTab[] = [];
-  for (const p of liveMatchesRaw) {
-    const main = elegirTorneoPrincipal(p.torneos);
-    if (!main) continue; // defensive: no debería pasar post-Bug #8
-    // Bug #9: leer label del cache del poller para mostrar el minuto
-    // en el primer render (antes de que llegue el primer WS).
-    const snap = getLiveStatus(p.id);
-    tabs.push({
-      torneoId: main.id,
-      partidoId: p.id,
-      liga: p.liga,
-      equipoLocal: p.equipoLocal,
-      equipoVisita: p.equipoVisita,
-      golesLocal: p.golesLocal ?? 0,
-      golesVisita: p.golesVisita ?? 0,
-      round: p.round,
-      venue: p.venue,
-      estado: p.estado as "EN_VIVO" | "FINALIZADO",
-      torneoEstado: main.estado as
-        | "ABIERTO"
-        | "EN_JUEGO"
-        | "FINALIZADO"
-        | "CERRADO",
-      pozoBruto: main.pozoBruto,
-      pozoNeto: main.pozoNeto,
-      totalInscritos: main.totalInscritos,
-      minutoLabel: snap?.label ?? null,
-    });
-  }
+  // Filtrar liveRaw por ?liga= si aplica (Bug #11).
+  const ligaSlug = searchParams?.liga ?? null;
+  const ligaName = ligaSlug ? slugToLiga(ligaSlug) : null;
+  const liveFiltered = ligaName
+    ? liveRaw.filter((p) => p.liga === ligaName)
+    : liveRaw;
 
-  if (tabs.length === 0) {
-    return <EmptyLive />;
-  }
+  // Tabs del switcher — solo los live-filtered. Cuando el filtro
+  // deja la lista vacía pero había live-raw, LiveMatchView muestra
+  // un empty state dentro del switcher.
+  const liveTabs = buildLiveTabs(liveFiltered);
 
-  // Resolver el tab activo. Prioridad:
-  //   1. ?torneoId=<id> coincide con un tab
-  //   2. ?partidoId=<id> coincide con un tab (backward compat Hotfix #3)
-  //   3. primer tab de la lista
+  // Cards finalizadas (sin filtrar por liga por decisión del PO).
+  const finalizedCards: FinalizedMatchCard[] = await Promise.all(
+    finalizadosRaw.map(async (p) => {
+      const main = elegirTorneoPrincipal(p.torneos);
+      let ganadorNombre: string | null = null;
+      let ganadorPremio: number | null = null;
+      if (main) {
+        try {
+          const r = await listarRanking(main.id, { limit: 1 });
+          const top = r.ranking[0];
+          if (top) {
+            ganadorNombre = top.nombre;
+            ganadorPremio = top.premioEstimado;
+          }
+        } catch {
+          // Ignorar: card se renderiza sin ganador
+        }
+      }
+      return {
+        partidoId: p.id,
+        torneoId: main?.id ?? p.id,
+        liga: p.liga,
+        round: p.round,
+        equipoLocal: p.equipoLocal,
+        equipoVisita: p.equipoVisita,
+        golesLocal: p.golesLocal ?? 0,
+        golesVisita: p.golesVisita ?? 0,
+        fechaInicio: p.fechaInicio,
+        totalInscritos: main?.totalInscritos ?? 0,
+        pozoBruto: main?.pozoBruto ?? 0,
+        ganadorNombre,
+        ganadorPremio,
+      };
+    }),
+  );
+
+  // Resolver el tab activo. Orden de prioridad:
+  //   1. ?torneoId matches algún tab del switcher
+  //   2. ?torneoId matches un partido finalizado (fuera del switcher)
+  //      → lo incluimos como tab "virtual" al principio
+  //   3. ?partidoId matches algún tab del switcher (backward compat)
+  //   4. primer tab del switcher
   const torneoIdQuery = searchParams?.torneoId;
   const partidoIdQuery = searchParams?.partidoId;
+
+  let activeTabs: LiveMatchTab[] = liveTabs;
   let activeIdx = -1;
+
   if (torneoIdQuery) {
-    activeIdx = tabs.findIndex((t) => t.torneoId === torneoIdQuery);
+    activeIdx = activeTabs.findIndex((t) => t.torneoId === torneoIdQuery);
+    if (activeIdx === -1) {
+      // Buscar en finalizados: si el usuario viene de un email de
+      // premios a un torneo FINALIZADO, lo mostramos con el hero post-
+      // partido y sacamos el switcher.
+      const finTab = await tryBuildFinalizedTab(torneoIdQuery, finalizadosRaw);
+      if (finTab) {
+        activeTabs = [finTab];
+        activeIdx = 0;
+      }
+    }
   }
   if (activeIdx === -1 && partidoIdQuery) {
-    activeIdx = tabs.findIndex((t) => t.partidoId === partidoIdQuery);
+    activeIdx = activeTabs.findIndex((t) => t.partidoId === partidoIdQuery);
   }
-  if (activeIdx === -1) {
-    activeIdx = 0;
+  if (activeIdx === -1) activeIdx = 0;
+
+  if (activeTabs.length === 0) {
+    // No hay partidos en vivo (filtrados o no) ni finalizados:
+    // empty state global. Finalizados igual se muestran debajo si
+    // los hay — pero el switcher + hero están ocultos.
+    if (finalizedCards.length === 0) {
+      return <EmptyLive />;
+    }
+    // Hay finalizados pero no live: mostrar empty con la sección
+    // finalizada debajo.
+    return (
+      <EmptyLiveWithFinalized
+        finalizedCards={finalizedCards}
+        ligasChips={ligasChips}
+      />
+    );
   }
-  const activeTab = tabs[activeIdx]!;
+
+  const activeTab = activeTabs[activeIdx]!;
   const torneoIdActivo = activeTab.torneoId;
 
-  // Snapshot inicial del ranking del torneo activo. `listarRanking`
-  // funciona aún con torneos ABIERTOS (devuelve tickets con puntos=0).
   const rankingInicial = await listarRanking(torneoIdActivo, {
     limit: 100,
     usuarioId: session?.user?.id,
@@ -130,14 +188,108 @@ export default async function LiveMatchPage({ searchParams }: Props) {
 
   return (
     <LiveMatchView
-      tabs={tabs}
+      tabs={activeTabs}
       torneoIdActivo={torneoIdActivo}
       rankingInicial={initialSnapshot}
       hasSession={!!session?.user?.id}
       miUsuarioId={session?.user?.id ?? null}
+      ligasChips={ligasChips}
+      finalizedCards={finalizedCards}
+      filtroActivo={ligaSlug !== null}
     />
   );
 }
+
+// ---------------------------------------------------------------------------
+// Helpers locales
+// ---------------------------------------------------------------------------
+
+function buildLiveTabs(partidos: PartidoLive[]): LiveMatchTab[] {
+  const tabs: LiveMatchTab[] = [];
+  for (const p of partidos) {
+    const main = elegirTorneoPrincipal(p.torneos);
+    if (!main) continue;
+    const snap = getLiveStatus(p.id);
+    tabs.push({
+      torneoId: main.id,
+      partidoId: p.id,
+      liga: p.liga,
+      equipoLocal: p.equipoLocal,
+      equipoVisita: p.equipoVisita,
+      golesLocal: p.golesLocal ?? 0,
+      golesVisita: p.golesVisita ?? 0,
+      round: p.round,
+      venue: p.venue,
+      estado: p.estado as "EN_VIVO" | "FINALIZADO",
+      torneoEstado: main.estado as
+        | "ABIERTO"
+        | "EN_JUEGO"
+        | "FINALIZADO"
+        | "CERRADO",
+      pozoBruto: main.pozoBruto,
+      pozoNeto: main.pozoNeto,
+      totalInscritos: main.totalInscritos,
+      minutoLabel: snap?.label ?? null,
+    });
+  }
+  return tabs;
+}
+
+/** Si `torneoId` viene apuntando a un torneo finalizado, armamos un
+ *  tab aislado para renderizar el hero post-partido. */
+async function tryBuildFinalizedTab(
+  torneoId: string,
+  finalizadosRaw: PartidoLive[],
+): Promise<LiveMatchTab | null> {
+  for (const p of finalizadosRaw) {
+    const match = p.torneos.find((t) => t.id === torneoId);
+    if (!match) continue;
+    const snap = getLiveStatus(p.id);
+    return {
+      torneoId: match.id,
+      partidoId: p.id,
+      liga: p.liga,
+      equipoLocal: p.equipoLocal,
+      equipoVisita: p.equipoVisita,
+      golesLocal: p.golesLocal ?? 0,
+      golesVisita: p.golesVisita ?? 0,
+      round: p.round,
+      venue: p.venue,
+      estado: "FINALIZADO",
+      torneoEstado: match.estado as
+        | "ABIERTO"
+        | "EN_JUEGO"
+        | "FINALIZADO"
+        | "CERRADO",
+      pozoBruto: match.pozoBruto,
+      pozoNeto: match.pozoNeto,
+      totalInscritos: match.totalInscritos,
+      minutoLabel: snap?.label ?? "FIN",
+    };
+  }
+  return null;
+}
+
+/** Ligas presentes en el set EN_VIVO, mapeadas a (slug, label) y
+ *  ordenadas por el LIGA_SLUGS_ORDER canónico. */
+function derivarLigasPresentes(partidos: PartidoLive[]): LigaChipInfo[] {
+  const ligasSet = new Set<string>();
+  for (const p of partidos) {
+    const slug = ligaToSlug(p.liga);
+    if (slug) ligasSet.add(slug);
+  }
+  const chips: LigaChipInfo[] = [];
+  for (const slug of LIGA_SLUGS_ORDER) {
+    if (ligasSet.has(slug)) {
+      chips.push({ slug, label: LIGA_CHIP_LABELS[slug] ?? slug });
+    }
+  }
+  return chips;
+}
+
+// ---------------------------------------------------------------------------
+// Empty states
+// ---------------------------------------------------------------------------
 
 function EmptyLive() {
   return (
@@ -160,5 +312,34 @@ function EmptyLive() {
         </a>
       </div>
     </div>
+  );
+}
+
+/** Empty state del switcher + sección de finalizados visible debajo. */
+function EmptyLiveWithFinalized({
+  finalizedCards,
+  ligasChips,
+}: {
+  finalizedCards: FinalizedMatchCard[];
+  ligasChips: LigaChipInfo[];
+}) {
+  // Re-usamos el LiveMatchView con tabs vacío para que rendere el
+  // header + section de finalizados debajo. Evita duplicar el diseño.
+  return (
+    <LiveMatchView
+      tabs={[]}
+      torneoIdActivo={null}
+      rankingInicial={{
+        totalInscritos: 0,
+        pozoNeto: 0,
+        ranking: [],
+        miPosicion: null,
+      }}
+      hasSession={false}
+      miUsuarioId={null}
+      ligasChips={ligasChips}
+      finalizedCards={finalizedCards}
+      filtroActivo={false}
+    />
   );
 }

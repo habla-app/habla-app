@@ -37,3 +37,15 @@ export const LIGA_CHIP_LABELS: Record<string, string> = {
 export function slugToLiga(slug: string | null): string | null {
   return slug ? (LIGA_SLUGS[slug] ?? null) : null;
 }
+
+/**
+ * Reverso: "Liga 1 Perú" → "liga-1-peru". Devuelve null si la liga no
+ * está en el whitelist (no debería ocurrir en prod porque solo
+ * importamos ligas whitelisteadas; pero defensive para tests).
+ */
+export function ligaToSlug(liga: string): string | null {
+  for (const [slug, nombre] of Object.entries(LIGA_SLUGS)) {
+    if (nombre === liga) return slug;
+  }
+  return null;
+}
