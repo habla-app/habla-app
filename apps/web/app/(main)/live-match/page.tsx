@@ -6,12 +6,22 @@
 //
 // Params:
 //   - ?torneoId=<id>  → pantalla específica
-//   - sin param       → primer partido EN_VIVO con torneo EN_JUEGO (o CERRADO)
+//   - sin param       → primer partido EN_VIVO (prioriza torneo EN_JUEGO,
+//                       cae a CERRADO/FINALIZADO/ABIERTO según prioridad)
+//
+// Hotfix post-Sub-Sprint 5 (Bug #2): la query original tenía un filtro
+// existencial `where: { torneos: { some: { estado: { in: [...] } } } }`
+// que descartaba partidos cuyos torneos no habían transicionado. Ahora el
+// query vive en `lib/services/live-matches.service.ts` y filtra solo por
+// `partido.estado`, aceptando torneos en ABIERTO (el cron in-process
+// puede tardar hasta 1 min en transicionar).
 
-import { redirect } from "next/navigation";
-import { prisma } from "@habla/db";
 import { auth } from "@/lib/auth";
 import { listarRanking } from "@/lib/services/ranking.service";
+import {
+  elegirTorneoPrincipal,
+  obtenerLiveMatches,
+} from "@/lib/services/live-matches.service";
 import { LiveMatchView } from "@/components/live/LiveMatchView";
 
 interface Props {
@@ -21,55 +31,48 @@ interface Props {
 export default async function LiveMatchPage({ searchParams }: Props) {
   const session = await auth();
 
-  const liveMatchesRaw = await prisma.partido.findMany({
-    where: {
-      OR: [{ estado: "EN_VIVO" }, { estado: "FINALIZADO" }],
-      torneos: {
-        some: {
-          estado: { in: ["EN_JUEGO", "FINALIZADO", "CERRADO"] },
-        },
-      },
-    },
-    include: {
-      torneos: {
-        where: { estado: { in: ["EN_JUEGO", "FINALIZADO", "CERRADO"] } },
-        orderBy: { pozoBruto: "desc" },
-      },
-    },
-    orderBy: { fechaInicio: "desc" },
-    take: 6,
-  });
+  const liveMatchesRaw = await obtenerLiveMatches({ limit: 6 });
 
-  if (liveMatchesRaw.length === 0) {
+  // Filtramos partidos sin torneos no-cancelados (defensive — no debería
+  // pasar por el flow normal, pero un partido importado sin torneo aún
+  // técnicamente puede llegar acá).
+  const partidosConTorneos = liveMatchesRaw.filter(
+    (p) => elegirTorneoPrincipal(p.torneos) !== null,
+  );
+
+  if (partidosConTorneos.length === 0) {
     return <EmptyLive />;
   }
 
-  // Torneo seleccionado: del query o el primero
+  // Torneo seleccionado: del query o el principal del primer partido.
   const torneoIdQuery = searchParams?.torneoId;
   let torneoIdActivo: string | null = null;
   if (torneoIdQuery) {
-    const match = liveMatchesRaw.find((p) =>
+    const match = partidosConTorneos.find((p) =>
       p.torneos.some((t) => t.id === torneoIdQuery),
     );
     if (match) torneoIdActivo = torneoIdQuery;
   }
   if (!torneoIdActivo) {
-    torneoIdActivo = liveMatchesRaw[0]!.torneos[0]?.id ?? null;
+    const first = elegirTorneoPrincipal(partidosConTorneos[0]!.torneos);
+    torneoIdActivo = first?.id ?? null;
   }
   if (!torneoIdActivo) {
-    // No debería pasar por el where de arriba, pero defensive
     return <EmptyLive />;
   }
 
-  // Snapshot inicial del torneo activo (server-rendered)
+  // Snapshot inicial del torneo activo (server-rendered). `listarRanking`
+  // funciona aún con torneos ABIERTOS (devuelve tickets con puntos=0).
   const rankingInicial = await listarRanking(torneoIdActivo, {
     limit: 100,
     usuarioId: session?.user?.id,
   });
 
-  // Tabs del switcher — todos los partidos con sus torneos principales
-  const tabs = liveMatchesRaw.map((p) => {
-    const main = p.torneos[0]!;
+  // Tabs del switcher — todos los partidos con sus torneos principales.
+  // `elegirTorneoPrincipal` siempre devuelve algo aquí porque ya filtramos
+  // arriba, pero TypeScript no lo infiere — defensive default.
+  const tabs = partidosConTorneos.map((p) => {
+    const main = elegirTorneoPrincipal(p.torneos) ?? p.torneos[0]!;
     return {
       torneoId: main.id,
       partidoId: p.id,
@@ -81,7 +84,11 @@ export default async function LiveMatchPage({ searchParams }: Props) {
       round: p.round,
       venue: p.venue,
       estado: p.estado as "EN_VIVO" | "FINALIZADO",
-      torneoEstado: main.estado as "EN_JUEGO" | "FINALIZADO" | "CERRADO",
+      torneoEstado: main.estado as
+        | "ABIERTO"
+        | "EN_JUEGO"
+        | "FINALIZADO"
+        | "CERRADO",
       pozoBruto: main.pozoBruto,
       pozoNeto: main.pozoNeto,
       totalInscritos: main.totalInscritos,
