@@ -11,6 +11,7 @@ import {
   buildComboTorneoInfo,
   type TorneoApiResponse,
 } from "@/components/combo/combo-info.mapper";
+import { authedFetch } from "@/lib/api-client";
 import type { ComboTorneoInfo } from "@/components/combo/ComboModal";
 
 interface State {
@@ -46,9 +47,7 @@ export function useComboOpener(): ComboOpener {
   const openFor = useCallback(async (torneoId: string) => {
     setState((s) => ({ ...s, loading: true, error: null }));
     try {
-      const res = await fetch(`/api/v1/torneos/${torneoId}`, {
-        credentials: "include",
-      });
+      const res = await authedFetch(`/api/v1/torneos/${torneoId}`);
       if (!res.ok) {
         setState((s) => ({
           ...s,

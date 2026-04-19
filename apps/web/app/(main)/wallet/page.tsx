@@ -1,8 +1,13 @@
 // Wallet — hero dark azul con balance + historial básico. La compra con
 // Culqi + packs con bonus llega en Sub-Sprint 2; hasta entonces el
 // balance viene del bono de bienvenida + premios ganados.
+//
+// Hotfix Bug #3: `force-dynamic` por la misma razón que /mis-combinadas
+// — el balance debe re-leerse de la sesión en cada request.
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
+
+export const dynamic = "force-dynamic";
 
 export default async function WalletPage() {
   const session = await auth();

@@ -15,6 +15,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui";
+import { authedFetch } from "@/lib/api-client";
 
 interface InscribirButtonProps {
   torneoId: string;
@@ -73,9 +74,10 @@ export function InscribirButton({
 
     setLoading(true);
     try {
-      const res = await fetch(`/api/v1/torneos/${torneoId}/inscribir`, {
-        method: "POST",
-      });
+      const res = await authedFetch(
+        `/api/v1/torneos/${torneoId}/inscribir`,
+        { method: "POST" },
+      );
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) {
         const msg =

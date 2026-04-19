@@ -5,6 +5,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { joinTorneo, getSocket } from "@/lib/realtime/socket-client";
+import { authedFetch } from "@/lib/api-client";
 import type {
   RankingRowPayload,
   RankingUpdatePayload,
@@ -51,8 +52,9 @@ export function useRankingEnVivo(
     if (!torneoId) return;
     let cancelled = false;
 
-    // 1. Fetch inicial
-    fetch(`/api/v1/torneos/${torneoId}/ranking?limit=${limit}`)
+    // 1. Fetch inicial — `authedFetch` envía la cookie de NextAuth para
+    // que el backend pueda derivar `miPosicion` cuando hay sesión.
+    authedFetch(`/api/v1/torneos/${torneoId}/ranking?limit=${limit}`)
       .then((r) => r.json())
       .then((json) => {
         if (cancelled) return;

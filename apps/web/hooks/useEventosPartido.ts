@@ -6,6 +6,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { joinTorneo, getSocket } from "@/lib/realtime/socket-client";
+import { authedFetch } from "@/lib/api-client";
 import type { PartidoEventoPayload } from "@/lib/realtime/events";
 
 export interface EventoTimeline {
@@ -38,7 +39,7 @@ export function useEventosPartido(
     if (!partidoId) return;
     let cancelled = false;
 
-    fetch(`/api/v1/partidos/${partidoId}/eventos`)
+    authedFetch(`/api/v1/partidos/${partidoId}/eventos`)
       .then((r) => r.json())
       .then((json) => {
         if (cancelled) return;
