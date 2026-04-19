@@ -17,7 +17,7 @@
 // balance proyectado negativo: si no alcanza, bloquea submit y muestra
 // el CTA "Comprar Lukas".
 
-import { DISTRIB_PREMIOS_FE } from "./premios";
+import { PREMIO_PRIMER_LUGAR_PCT } from "./premios";
 import type { ComboTorneoInfo } from "./ComboModal";
 
 /**
@@ -58,7 +58,7 @@ export function buildComboTorneoInfo(
     equipoVisita: d.torneo.partido.equipoVisita,
     entradaLukas: d.torneo.entradaLukas,
     pozoBruto: d.torneo.pozoBruto,
-    primerPremioEstimado: Math.floor(pozoNeto * DISTRIB_PREMIOS_FE.primero),
+    primerPremioEstimado: Math.floor(pozoNeto * PREMIO_PRIMER_LUGAR_PCT),
     cierreAt: d.torneo.cierreAt,
     tienePlaceholder: d.miTicket !== null,
   };

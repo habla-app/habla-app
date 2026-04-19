@@ -205,13 +205,15 @@ export default async function TorneoDetallePage({ params, searchParams }: Props)
             />
             <Pill
               icon="🏆"
-              value={`${vm.premios.primero.toLocaleString("es-PE")} 🪙`}
+              value={`${(vm.premios[0]?.lukas ?? 0).toLocaleString("es-PE")} 🪙`}
               label="1er premio"
               tone="gold"
             />
           </div>
 
-          {/* DISTRIBUCIÓN DEL POZO (en Lukas absolutos, sin mostrar %) */}
+          {/* DISTRIBUCIÓN DEL POZO (en Lukas absolutos, sin mostrar %).
+              Hotfix #6: la curva depende de totalInscritos — mostramos
+              top 10 + indicador si hay más pagados. */}
           <section
             className="rounded-md border border-light bg-card p-5 shadow-sm"
             data-testid="torneo-distribucion"
@@ -220,22 +222,21 @@ export default async function TorneoDetallePage({ params, searchParams }: Props)
               Cómo se reparte el pozo
             </h2>
             <ul className="divide-y divide-light text-[14px]">
-              <PremioRow
-                pos="🥇 1°"
-                lukas={vm.premios.primero}
-                highlight
-              />
-              <PremioRow pos="🥈 2°" lukas={vm.premios.segundo} />
-              <PremioRow pos="🥉 3°" lukas={vm.premios.tercero} />
-              <PremioRow
-                pos="4° – 10°"
-                lukas={vm.premios.cuartoADecimo}
-                perPosition
-              />
+              {vm.premios.slice(0, 10).map((p) => (
+                <PremioRow
+                  key={p.posicion}
+                  pos={posIcon(p.posicion)}
+                  lukas={p.lukas}
+                  highlight={p.posicion === 1}
+                />
+              ))}
             </ul>
             <p className="mt-3 text-[11px] text-muted-d">
-              Del 11° en adelante no hay premio. El pozo puede crecer hasta
-              el cierre del torneo.
+              {vm.pagados === 0
+                ? "Aún no se definen pagados — el torneo necesita al menos 2 inscritos."
+                : vm.pagados > 10
+                  ? `Pagan los primeros ${vm.pagados} puestos — se muestran los 10 mejores. El pozo puede crecer hasta el cierre.`
+                  : `Pagan los primeros ${vm.pagados} puestos. El pozo puede crecer hasta el cierre.`}
             </p>
           </section>
 
@@ -399,12 +400,10 @@ function PremioRow({
   pos,
   lukas,
   highlight = false,
-  perPosition = false,
 }: {
   pos: string;
   lukas: number;
   highlight?: boolean;
-  perPosition?: boolean;
 }) {
   return (
     <li className="flex items-center justify-between py-2.5">
@@ -421,14 +420,16 @@ function PremioRow({
         }`}
       >
         {lukas.toLocaleString("es-PE")} 🪙
-        {perPosition && (
-          <span className="ml-1 text-[11px] font-semibold text-muted-d">
-            c/u
-          </span>
-        )}
       </span>
     </li>
   );
+}
+
+function posIcon(p: number): string {
+  if (p === 1) return "🥇 1°";
+  if (p === 2) return "🥈 2°";
+  if (p === 3) return "🥉 3°";
+  return `${p}°`;
 }
 
 function RulesCard() {

@@ -55,7 +55,20 @@ export interface RankingUpdatePayload {
   /** Label renderizable del minuto (p.ej. "23'", "ENT", "FIN"). Bug #9.
    *  Si es null, la UI debe mostrar "—". Nunca "?". */
   minutoLabel: string | null;
+  /** Hotfix #6: cantidad de posiciones pagadas (M). UI lo usa para
+   *  calcular el badge "En el dinero" + copy motivacional. */
+  pagados: number;
   timestamp: number;
+}
+
+/** Hotfix #6 — Ítem 2: evento invalidado (ej. gol anulado por VAR).
+ *  El cliente remueve el evento de su timeline local. */
+export interface PartidoEventoInvalidadoPayload {
+  torneoId: string;
+  partidoId: string;
+  /** Natural key del evento que se eliminó. Coincide con la clave que
+   *  el cliente usa para deduplicar eventos (tipo|minuto|equipo|jugador). */
+  naturalKey: string;
 }
 
 export interface PartidoEventoPayload {
@@ -89,6 +102,7 @@ export interface TorneoFinalizadoPayload {
 export interface ServerToClientEvents {
   "ranking:update": (payload: RankingUpdatePayload) => void;
   "partido:evento": (payload: PartidoEventoPayload) => void;
+  "partido:evento-invalidado": (payload: PartidoEventoInvalidadoPayload) => void;
   "torneo:cerrado": (payload: TorneoCerradoPayload) => void;
   "torneo:finalizado": (payload: TorneoFinalizadoPayload) => void;
 }

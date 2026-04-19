@@ -14,6 +14,7 @@ import { logger } from "../services/logger";
 import type {
   ClientToServerEvents,
   PartidoEventoPayload,
+  PartidoEventoInvalidadoPayload,
   RankingUpdatePayload,
   ServerToClientEvents,
   SocketData,
@@ -93,6 +94,7 @@ export async function emitirRankingUpdate(
       pozoNeto: r.pozoNeto,
       minutoPartido,
       minutoLabel,
+      pagados: r.pagados,
       timestamp: Date.now(),
     };
     io.to(roomTorneo(torneoId)).emit("ranking:update", payload);
@@ -105,6 +107,16 @@ export function emitirPartidoEvento(payload: PartidoEventoPayload): void {
   const io = getIO();
   if (!io) return;
   io.to(roomTorneo(payload.torneoId)).emit("partido:evento", payload);
+}
+
+/** Hotfix #6 — Ítem 2: avisa al cliente que un evento se invalidó
+ *  (ej. gol anulado por VAR). El cliente lo remueve de la timeline. */
+export function emitirPartidoEventoInvalidado(
+  payload: PartidoEventoInvalidadoPayload,
+): void {
+  const io = getIO();
+  if (!io) return;
+  io.to(roomTorneo(payload.torneoId)).emit("partido:evento-invalidado", payload);
 }
 
 export function emitirTorneoCerrado(payload: TorneoCerradoPayload): void {

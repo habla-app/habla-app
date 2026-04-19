@@ -30,7 +30,10 @@ import {
 } from "./api-football.client";
 import { fixtureToPartidoInput } from "./partidos.mapper";
 import { getSeasonForLeague } from "./seasons.cache";
-import { CIERRE_MIN_BEFORE, DISTRIB_PREMIOS } from "./torneos.service";
+import {
+  CIERRE_MIN_BEFORE,
+  DISTRIB_PREMIOS_DESCRIPTOR,
+} from "./torneos.service";
 import { logger } from "./logger";
 
 export interface ImportLigaResult {
@@ -180,7 +183,7 @@ async function procesarFixtures(
         entradaLukas: liga.entradaLukas,
         partidoId: partido.id,
         cierreAt,
-        distribPremios: DISTRIB_PREMIOS,
+        distribPremios: DISTRIB_PREMIOS_DESCRIPTOR,
       },
     });
     torneosCreados += 1;
