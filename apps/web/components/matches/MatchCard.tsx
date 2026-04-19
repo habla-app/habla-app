@@ -5,6 +5,14 @@
 // Props: MatchCardData trae los datos crudos del torneo + partido; los
 // labels de kickoff/countdown/urgencia se calculan en render. El server
 // resuelve todo en el primer pass.
+//
+// Hotfix 19 Abr (Bug #2): el CTA lateral ahora es MatchCardCTA (client),
+// que abre el ComboModal inline sin salir de /matches. El resto del card
+// (accent bar + body) va envuelto en un `<Link>` hacia `/torneo/:id` —
+// así el usuario sigue pudiendo navegar al detalle haciendo click en la
+// zona del body (para ver reglas/pozo antes de inscribirse), pero el
+// botón dorado ya no navega: abre el modal directo. Los dos targets son
+// hermanos en el árbol (no nested) para evitar `<a>` dentro de `<a>`.
 import Link from "next/link";
 import {
   formatCountdown,
@@ -13,6 +21,7 @@ import {
   type UrgencyTier,
 } from "@/lib/utils/datetime";
 import { getTeamColor, getTeamInitials } from "@/lib/utils/team-colors";
+import { MatchCardCTA } from "./MatchCardCTA";
 
 export interface MatchCardData {
   id: string;
@@ -30,8 +39,13 @@ export interface MatchCardData {
 
 interface MatchCardProps {
   torneo: MatchCardData;
-  /** Destino del CTA. Default: `/torneo/{id}`. */
-  href?: string;
+  /** Si hay sesión, el CTA abre el modal directo. Si no, va a login
+   *  con el callbackUrl armado por el caller. */
+  hasSession: boolean;
+  /** URL a la que volver post-login si el usuario sin sesión clickea el
+   *  CTA. Debe incluir `?openCombo=<torneoId>` para que
+   *  AutoOpenComboFromQuery detecte la intención al volver. */
+  ctaCallbackUrl: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,106 +86,105 @@ function getLigaAccent(liga: string): string {
 // Card
 // ---------------------------------------------------------------------------
 
-export function MatchCard({ torneo, href }: MatchCardProps) {
+export function MatchCard({ torneo, hasSession, ctaCallbackUrl }: MatchCardProps) {
   const urgency = urgencyLevel(torneo.cierreAt);
   const kickoff = formatKickoff(torneo.fechaInicio);
   const countdown = formatCountdown(torneo.cierreAt);
 
-  const destination = href ?? `/torneo/${torneo.id}`;
-
   const accentColor = getLigaAccent(torneo.liga);
+  const detalleHref = `/torneo/${torneo.id}`;
 
   return (
     <article className="group relative flex flex-col overflow-hidden rounded-md border border-light bg-card shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md sm:flex-row">
-      {/* accent bar izquierda (desktop) / superior (mobile) */}
-      <span
-        aria-hidden
-        className="h-1 w-full flex-shrink-0 sm:h-auto sm:w-1"
-        style={{ background: accentColor }}
-      />
+      {/* Body clickable → /torneo/:id. Accent bar + body viven dentro del
+          mismo Link, de modo que el click en cualquier parte del body
+          (excepto el CTA lateral que es hermano) navega al detalle. */}
+      <Link
+        href={detalleHref}
+        aria-label={`Ver detalle del torneo ${torneo.equipoLocal} vs ${torneo.equipoVisita}`}
+        className="flex min-w-0 flex-1 flex-col sm:flex-row"
+      >
+        {/* accent bar izquierda (desktop) / superior (mobile) */}
+        <span
+          aria-hidden
+          className="h-1 w-full flex-shrink-0 sm:h-auto sm:w-1"
+          style={{ background: accentColor }}
+        />
 
-      {/* body */}
-      <div className="min-w-0 flex-1 px-4 py-3 sm:px-5 sm:py-3.5">
-        {/* header: liga·round + kickoff/countdown */}
-        <header className="mb-2.5 flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[11px] font-bold uppercase tracking-[0.06em] text-muted-d">
-              {torneo.liga.toUpperCase()}
-              {torneo.round && (
-                <>
-                  <span className="mx-1.5 text-soft">·</span>
-                  <span>{torneo.round.toUpperCase()}</span>
-                </>
+        {/* body */}
+        <div className="min-w-0 flex-1 px-4 py-3 sm:px-5 sm:py-3.5">
+          {/* header: liga·round + kickoff/countdown */}
+          <header className="mb-2.5 flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[11px] font-bold uppercase tracking-[0.06em] text-muted-d">
+                {torneo.liga.toUpperCase()}
+                {torneo.round && (
+                  <>
+                    <span className="mx-1.5 text-soft">·</span>
+                    <span>{torneo.round.toUpperCase()}</span>
+                  </>
+                )}
+              </div>
+              {torneo.venue && (
+                <div className="truncate text-[11px] leading-snug text-soft">
+                  {torneo.venue}
+                </div>
               )}
             </div>
-            {torneo.venue && (
-              <div className="truncate text-[11px] leading-snug text-soft">
-                {torneo.venue}
-              </div>
-            )}
-          </div>
-          <div className="flex flex-shrink-0 flex-col items-end">
-            <span className="font-display text-[12px] font-extrabold uppercase tracking-[0.04em] text-dark">
-              {kickoff}
+            <div className="flex flex-shrink-0 flex-col items-end">
+              <span className="font-display text-[12px] font-extrabold uppercase tracking-[0.04em] text-dark">
+                {kickoff}
+              </span>
+              <span
+                className={`text-[11px] ${URGENCY_TEXT_CLASS[urgency]} ${URGENCY_WEIGHT_CLASS[urgency]}`}
+              >
+                {countdown}
+              </span>
+            </div>
+          </header>
+
+          {/* teams row */}
+          <div className="my-2 flex items-center gap-3">
+            <TeamAvatar name={torneo.equipoLocal} />
+            <span className="min-w-0 flex-1 truncate font-display text-[15px] font-extrabold uppercase text-dark">
+              {torneo.equipoLocal}
             </span>
-            <span
-              className={`text-[11px] ${URGENCY_TEXT_CLASS[urgency]} ${URGENCY_WEIGHT_CLASS[urgency]}`}
-            >
-              {countdown}
+            <span className="flex-shrink-0 font-display text-[15px] font-black text-soft">
+              VS
             </span>
+            <span className="min-w-0 flex-1 truncate text-right font-display text-[15px] font-extrabold uppercase text-dark">
+              {torneo.equipoVisita}
+            </span>
+            <TeamAvatar name={torneo.equipoVisita} />
           </div>
-        </header>
 
-        {/* teams row */}
-        <div className="my-2 flex items-center gap-3">
-          <TeamAvatar name={torneo.equipoLocal} />
-          <span className="min-w-0 flex-1 truncate font-display text-[15px] font-extrabold uppercase text-dark">
-            {torneo.equipoLocal}
-          </span>
-          <span className="flex-shrink-0 font-display text-[15px] font-black text-soft">
-            VS
-          </span>
-          <span className="min-w-0 flex-1 truncate text-right font-display text-[15px] font-extrabold uppercase text-dark">
-            {torneo.equipoVisita}
-          </span>
-          <TeamAvatar name={torneo.equipoVisita} />
+          {/* stats row: entrada | pozo (featured 1.7fr) | jugadores */}
+          <div className="mt-2.5 grid grid-cols-[1fr_1.7fr_1fr] gap-2">
+            <StatBox
+              label="ENTRADA"
+              value={`${torneo.entradaLukas.toLocaleString("es-PE")} 🪙`}
+              variant="neutral"
+            />
+            <StatBox
+              label="POZO EN JUEGO"
+              value={`${torneo.pozoBruto.toLocaleString("es-PE")} 🪙`}
+              variant="featured"
+            />
+            <StatBox
+              label="JUGADORES"
+              value={torneo.totalInscritos.toLocaleString("es-PE")}
+              variant="neutral-green"
+            />
+          </div>
         </div>
-
-        {/* stats row: entrada | pozo (featured 1.7fr) | jugadores */}
-        <div className="mt-2.5 grid grid-cols-[1fr_1.7fr_1fr] gap-2">
-          <StatBox
-            label="ENTRADA"
-            value={`${torneo.entradaLukas.toLocaleString("es-PE")} 🪙`}
-            variant="neutral"
-          />
-          <StatBox
-            label="POZO EN JUEGO"
-            value={`${torneo.pozoBruto.toLocaleString("es-PE")} 🪙`}
-            variant="featured"
-          />
-          <StatBox
-            label="JUGADORES"
-            value={torneo.totalInscritos.toLocaleString("es-PE")}
-            variant="neutral-green"
-          />
-        </div>
-      </div>
-
-      {/* CTA — lateral en desktop (110px), full-width bottom en mobile (48px) */}
-      <Link
-        href={destination}
-        aria-label="Crear combinada"
-        className="group/cta flex h-12 w-full flex-shrink-0 items-center justify-center gap-2 bg-brand-gold font-display text-[13px] font-extrabold uppercase tracking-[0.04em] text-dark transition-all duration-150 hover:bg-brand-gold-light hover:shadow-gold sm:h-auto sm:w-[110px] sm:flex-col sm:gap-1.5 sm:px-3 sm:text-[12px]"
-      >
-        <TargetIcon />
-        <span className="hidden text-center leading-tight sm:inline">
-          Crear
-          <br />
-          combinada
-        </span>
-        <span className="inline sm:hidden">Crear combinada</span>
-        <ArrowIcon />
       </Link>
+
+      {/* CTA — hermano del Link del body. Abre ComboModal directamente. */}
+      <MatchCardCTA
+        torneoId={torneo.id}
+        hasSession={hasSession}
+        callbackUrl={ctaCallbackUrl}
+      />
     </article>
   );
 }
@@ -242,44 +255,5 @@ function StatBox({
         {value}
       </span>
     </div>
-  );
-}
-
-function TargetIcon() {
-  return (
-    <svg
-      viewBox="0 0 22 22"
-      width="22"
-      height="22"
-      fill="none"
-      stroke="#001050"
-      strokeWidth="2.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <circle cx="11" cy="11" r="8" />
-      <circle cx="11" cy="11" r="4" />
-      <circle cx="11" cy="11" r="1" fill="#001050" />
-    </svg>
-  );
-}
-
-function ArrowIcon() {
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      width="14"
-      height="14"
-      fill="none"
-      stroke="#001050"
-      strokeWidth="2.4"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-      className="transition-transform duration-150 group-hover/cta:translate-x-0.5 sm:hidden"
-    >
-      <path d="M3 8h10M9 4l4 4-4 4" />
-    </svg>
   );
 }
