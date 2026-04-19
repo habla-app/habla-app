@@ -95,6 +95,8 @@ model Partido {
   btts            Boolean? // Ambos anotaron
   mas25Goles      Boolean? // Mas de 2.5 goles
   huboTarjetaRoja Boolean?
+  round           String? // "Fecha 34", "Cuartos de final", "Fase de grupos · J1"
+  venue           String? // "Goodison Park, Liverpool"
   creadoEn        DateTime      @default(now())
 
   torneos Torneo[]
