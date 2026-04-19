@@ -3,8 +3,10 @@
 // IMPORTANTE (CLAUDE.md §13): header es `x-apisports-key`, NO `X-RapidAPI-Key`.
 // Usamos api-football.com directo, no RapidAPI.
 //
-// Endpoints usados en Sub-Sprint 3:
-//   - GET /fixtures?date=YYYY-MM-DD — partidos del día
+// Endpoints usados:
+//   - GET /fixtures?date=YYYY-MM-DD — partidos del día (import manual legado)
+//   - GET /fixtures?league=&season=&from=&to= — ventana por liga (auto-import)
+//   - GET /leagues?id=&current=true — resuelve la temporada activa de una liga
 //
 // Endpoints que llegan en Sub-Sprint 5 (motor de puntuación):
 //   - GET /fixtures/events?fixture={id} — eventos en vivo (goles, tarjetas)
@@ -137,4 +139,78 @@ export async function fetchFixturesByDate(
   if (opts.timezone) qs.set("timezone", opts.timezone);
   if (opts.league) qs.set("league", String(opts.league));
   return apiFetch<ApiFootballFixture>(`/fixtures?${qs.toString()}`);
+}
+
+/**
+ * Ventana de fixtures por liga + temporada. La usa el auto-import
+ * (apps/web/lib/services/partidos-import.service.ts).
+ *
+ * api-football NO acepta `season=current` en /fixtures: hay que resolver
+ * primero la temporada activa con getCurrentSeason().
+ */
+export async function fetchFixturesByLeague(
+  leagueId: number,
+  season: number,
+  from: string, /* YYYY-MM-DD */
+  to: string,
+): Promise<ApiFootballFixture[]> {
+  const qs = new URLSearchParams({
+    league: String(leagueId),
+    season: String(season),
+    from,
+    to,
+  });
+  return apiFetch<ApiFootballFixture>(`/fixtures?${qs.toString()}`);
+}
+
+// ---------------------------------------------------------------------------
+// Leagues — resolver temporada activa dinámicamente
+// ---------------------------------------------------------------------------
+
+export interface ApiFootballLeague {
+  league: {
+    id: number;
+    name: string;
+    type: string;
+  };
+  country: {
+    name: string;
+    code: string | null;
+    flag: string | null;
+  };
+  seasons: Array<{
+    year: number;
+    start: string;
+    end: string;
+    current: boolean;
+  }>;
+}
+
+/**
+ * Devuelve el año de la temporada `current` según api-football.
+ * Lanza ApiFootballError si la liga no existe o no tiene temporada actual.
+ */
+export async function getCurrentSeason(leagueId: number): Promise<number> {
+  const qs = new URLSearchParams({
+    id: String(leagueId),
+    current: "true",
+  });
+  const response = await apiFetch<ApiFootballLeague>(
+    `/leagues?${qs.toString()}`,
+  );
+  const liga = response[0];
+  if (!liga) {
+    throw new ApiFootballError(
+      `api-football no devolvió datos para la liga ${leagueId}.`,
+      { leagueId },
+    );
+  }
+  const current = liga.seasons.find((s) => s.current);
+  if (!current) {
+    throw new ApiFootballError(
+      `La liga ${leagueId} no tiene temporada activa.`,
+      { leagueId },
+    );
+  }
+  return current.year;
 }

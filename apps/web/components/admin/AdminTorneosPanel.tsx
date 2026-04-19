@@ -4,9 +4,14 @@
 // el mockup (el mockup no tiene pantalla de admin).
 //
 // Secciones:
-//   1. Importar partidos de api-football por fecha.
+//   1. Trigger manual del auto-import de partidos (las ligas y la
+//      ventana de 14 días salen de lib/config/ligas.ts — no se elige
+//      aquí). El cron in-process lo corre cada 6h; este botón es para
+//      forzar refresh on-demand.
 //   2. Lista de partidos disponibles (PROGRAMADO, sin torneo) con form
-//      inline para crear torneo por cada uno.
+//      inline para crear torneo por cada uno. Con auto-import, la
+//      mayoría de partidos ya llegan con torneo; esta lista es fallback
+//      para crear torneos ad-hoc sobre partidos existentes.
 //
 // Usa fetch contra /api/v1/admin/... que ya valida rol ADMIN.
 import { useCallback, useEffect, useState } from "react";
@@ -21,14 +26,23 @@ interface PartidoDisponible {
   fechaInicio: string;
 }
 
+interface ImportLigaResult {
+  liga: string;
+  season: number | null;
+  partidosCreados: number;
+  partidosActualizados: number;
+  torneosCreados: number;
+  errores: number;
+}
+
 export function AdminTorneosPanel() {
   const toast = useToast();
   const [disponibles, setDisponibles] = useState<PartidoDisponible[]>([]);
   const [cargando, setCargando] = useState(true);
   const [importando, setImportando] = useState(false);
-
-  const hoy = new Date().toISOString().slice(0, 10);
-  const [fechaImport, setFechaImport] = useState(hoy);
+  const [ultimoImport, setUltimoImport] = useState<ImportLigaResult[] | null>(
+    null,
+  );
 
   const refrescarDisponibles = useCallback(async () => {
     setCargando(true);
@@ -54,17 +68,25 @@ export function AdminTorneosPanel() {
     try {
       const res = await fetch("/api/v1/admin/partidos/importar", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fecha: fechaImport }),
       });
       const payload = await res.json();
       if (!res.ok)
         throw new Error(
           payload?.error?.message ?? "Error al importar partidos.",
         );
-      const { total, importados, actualizados } = payload.data;
+      const resultados = payload.data as ImportLigaResult[];
+      setUltimoImport(resultados);
+      const totales = resultados.reduce(
+        (acc, r) => ({
+          creados: acc.creados + r.partidosCreados,
+          actualizados: acc.actualizados + r.partidosActualizados,
+          torneos: acc.torneos + r.torneosCreados,
+          errores: acc.errores + r.errores,
+        }),
+        { creados: 0, actualizados: 0, torneos: 0, errores: 0 },
+      );
       toast.show(
-        `✅ Importados ${importados} · actualizados ${actualizados} (total ${total}) desde api-football.`,
+        `✅ ${resultados.length} ligas · ${totales.creados} partidos nuevos · ${totales.torneos} torneos creados${totales.errores ? ` · ${totales.errores} con error` : ""}`,
       );
       refrescarDisponibles();
     } catch (err) {
@@ -79,31 +101,61 @@ export function AdminTorneosPanel() {
       {/* IMPORT */}
       <section className="rounded-md border border-light bg-card p-5 shadow-sm">
         <h2 className="mb-1 font-display text-[20px] font-black uppercase tracking-[0.02em] text-dark">
-          Importar partidos
+          Auto-import de partidos
         </h2>
         <p className="mb-4 text-[13px] text-muted-d">
-          Descarga los fixtures del día desde api-football y los upsertea en
-          la BD. Requiere <code className="text-brand-blue-main">API_FOOTBALL_KEY</code> configurada.
+          Trae fixtures de las ligas whitelisteadas (ventana hoy+14 días) y
+          crea el torneo por cada partido nuevo. Corre solo cada 6h; acá
+          puedes forzarlo. Requiere{" "}
+          <code className="text-brand-blue-main">API_FOOTBALL_KEY</code>.
         </p>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <label className="flex flex-col gap-1 text-[12px] font-bold uppercase tracking-[0.06em] text-muted-d">
-            Fecha (YYYY-MM-DD)
-            <input
-              type="date"
-              value={fechaImport}
-              onChange={(e) => setFechaImport(e.target.value)}
-              className="rounded-sm border-[1.5px] border-light bg-card px-3.5 py-2.5 font-body text-[14px] text-dark outline-none transition-all focus:border-brand-blue-main focus:ring-4 focus:ring-brand-blue-main/10"
-            />
-          </label>
-          <Button
-            variant="primary"
-            size="lg"
-            onClick={handleImportar}
-            disabled={importando}
-          >
-            {importando ? "Importando…" : "Importar partidos"}
-          </Button>
-        </div>
+        <Button
+          variant="primary"
+          size="lg"
+          onClick={handleImportar}
+          disabled={importando}
+        >
+          {importando ? "Importando…" : "Refrescar ahora"}
+        </Button>
+
+        {ultimoImport && (
+          <div className="mt-4 overflow-x-auto rounded-sm border border-light">
+            <table className="w-full min-w-[560px] text-[13px]">
+              <thead className="bg-subtle text-left font-body text-[11px] font-bold uppercase tracking-[0.06em] text-muted-d">
+                <tr>
+                  <th className="px-3 py-2">Liga</th>
+                  <th className="px-3 py-2">Season</th>
+                  <th className="px-3 py-2 text-right">Nuevos</th>
+                  <th className="px-3 py-2 text-right">Actualiz.</th>
+                  <th className="px-3 py-2 text-right">Torneos</th>
+                  <th className="px-3 py-2 text-right">Errores</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-light">
+                {ultimoImport.map((r) => (
+                  <tr key={r.liga} className="text-dark">
+                    <td className="px-3 py-2 font-semibold">{r.liga}</td>
+                    <td className="px-3 py-2 text-muted-d">
+                      {r.season ?? "—"}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      {r.partidosCreados}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      {r.partidosActualizados}
+                    </td>
+                    <td className="px-3 py-2 text-right">{r.torneosCreados}</td>
+                    <td
+                      className={`px-3 py-2 text-right ${r.errores > 0 ? "font-bold text-brand-live" : "text-muted-d"}`}
+                    >
+                      {r.errores}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       {/* DISPONIBLES + CREAR TORNEO */}

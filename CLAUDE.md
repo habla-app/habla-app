@@ -1,7 +1,7 @@
 # CLAUDE.md — Habla! App
 
 > Este archivo es el cerebro del proyecto. Léelo completo antes de tocar cualquier código.
-> Última actualización: 18 de Abril 2026 (Sprint 1 completado, mockup de diseño aprobado, planificando Sub-Sprint 3 de Mecánica de Juego)
+> Última actualización: 18 de Abril 2026 (Sprint 1 completado, mockup aprobado, Sub-Sprint 3 de Mecánica de Juego completado, auto-import de partidos y torneos en marcha)
 
 ---
 
@@ -483,6 +483,17 @@ Todos los componentes visuales de Sprint 0-1 fueron reescritos desde cero usando
 
 ### ✅ Sub-Sprint 3 (18 Abr) — Torneos + Partidos + Admin
 Módulos `torneos` y `partidos` con CRUD, inscripción atómica y cancelación automática. Integración api-football vía `x-apisports-key`. Cron **in-process** (vive dentro del proceso Next.js vía `apps/web/instrumentation.ts` con `setInterval`; corre cada minuto sin dependencias externas) más el endpoint `/api/cron/cerrar-torneos` opcional para trigger manual/externo. Páginas `/matches` (mismo content que `/`, sidebar sticky, urgency calculada), `/torneo/:id` (detalle con reglas + distribución del pozo + CTA según estado), `/admin` (panel importar partidos + crear torneos).
+
+### ✅ Sub-Sprint 3.5 (18 Abr) — Auto-import de partidos y torneos
+El admin ya no tiene que tocar el panel para traer partidos. Tres jobs nuevos corren en el mismo cron in-process de `apps/web/instrumentation.ts`:
+
+1. **Refresh de temporadas** — al arranque y cada 24h, `refreshAllSeasons()` (en `lib/services/seasons.cache.ts`) resuelve la temporada activa de cada liga whitelisteada llamando `/leagues?id=X&current=true` en api-football. El cache vive en memoria; la temporada **nunca** está hardcodeada por año.
+2. **Import inicial** — 30s después del boot del server corre `importarPartidosTodasLasLigas()` (en `lib/services/partidos-import.service.ts`), que recorre `LIGAS_ACTIVAS` (`lib/config/ligas.ts`) y por cada liga trae fixtures de `hoy → hoy+14d`, los upsertea por `externalId` y **crea un torneo por cada partido nuevo** con tipo + entrada tomados de `LigaConfig`.
+3. **Import periódico** — cada 6h el mismo job corre de nuevo; actualiza fecha/estado/marcador de los partidos existentes y crea torneos sólo para los partidos nuevos (idempotente: si un partido ya tiene torneo, no se duplica).
+
+Ligas whitelisteadas (editables en `apps/web/lib/config/ligas.ts`): Liga 1 Perú (EXPRESS, 5 Lukas), Champions (ESTANDAR, 10), Libertadores (ESTANDAR, 10), Premier (EXPRESS, 5), La Liga (EXPRESS, 5), Mundial 2026 (PREMIUM, 30).
+
+El endpoint `POST /api/v1/admin/partidos/importar` sigue existiendo como botón de panic desde `/admin`, pero ya no recibe `fecha`: dispara el mismo job y devuelve `ImportLigaResult[]` con 4 contadores por liga (partidosCreados, partidosActualizados, torneosCreados, errores) + la season resuelta. El panel muestra la tabla por liga tras cada refresh.
 
 ---
 
@@ -1181,6 +1192,10 @@ Socket.io montado sobre Fastify. Cliente se conecta con `?token=<jwt>`. Sala por
 - **Sub-Sprint 3 — Ticket placeholder con predicciones default:** al inscribirse, se crea un `Ticket` con `predResultado=LOCAL, predBtts=false, predMas25=false, predTarjetaRoja=false, predMarcadorLocal=0, predMarcadorVisita=0`. La unique constraint `[usuarioId, torneoId, preds…]` impide la doble inscripción con defaults (1 ticket por usuario por torneo en el Sub-Sprint 3). El Sub-Sprint 4 permite que el usuario edite las predicciones y, para tickets adicionales, fuerza a que las 5 predicciones difieran (hasta 10 tickets distintos por torneo). Alternativa descartada: tabla `Inscripcion` separada, implicaba migración más cara sin beneficio MVP.
 - **Sub-Sprint 3 — REEMBOLSO agregado a `TipoTransaccion`:** migración `20260418030000_add_reembolso_tipo_transaccion` agrega el valor `REEMBOLSO` al enum; lo usa `cancelar()` cuando un torneo se cancela por no alcanzar el mínimo de inscritos (2).
 - **Sub-Sprint 3 — Cron in-process en vez de externo:** ni Railway Cron ni GitHub Actions permiten intervalos <5min; para cerrar torneos con la precisión que pide el negocio (`cierreAt` exacto), registramos el cron **dentro del proceso Next.js** vía `apps/web/instrumentation.ts` (Next.js `register()` hook) con un `setInterval(tick, 60_000)`. Es posible porque Railway corre el contenedor 24/7 (a diferencia de Vercel serverless). Sin dependencias externas, sin `CRON_SECRET` obligatorio, granularidad arbitraria (lo subimos a 30s o menos si Sub-Sprint 5 lo pide). Caveat documentado: si escalamos `web` a >1 réplica, mover a un servicio Railway dedicado con `replicas=1` o agregar un leader-lock en Redis. El endpoint HTTP `/api/cron/cerrar-torneos` se mantiene como trigger manual opcional (protegido con `CRON_SECRET` si se setea).
+
+- **Sub-Sprint 3.5 — Temporada de liga resuelta dinámicamente, no hardcodeada:** api-football NO acepta `season=current` en `/fixtures`; hay que pedirla primero con `/leagues?id=X&current=true`. En vez de cablear el año en la config (`season: 2026` por cada liga) guardamos sólo el `apiFootballId` y dejamos que `seasons.cache.ts` resuelva y cachee la temporada (refresh cada 24h). Beneficio: cuando Liga 1 pase de 2026 a 2027, el sistema lo recoge sin deploy — lo recoge en la siguiente corrida del refresh.
+
+- **Sub-Sprint 3.5 — Auto-creación de torneo al importar partido (regla dura):** el business rule es que toda partido de liga whitelisteada tiene torneo, punto. El service `partidos-import.service.ts` hace `findFirst({ partidoId })` antes de crear; si existe, skip. Si el partido ya tiene `cierreAt` en el pasado (importado tarde, ya empezó), NO se crea torneo — un torneo con cierre vencido es basura que confunde `procesarCierreAutomatico`. La combinación `upsert partido + find/create torneo` hace al job 100% idempotente.
 
 ---
 
