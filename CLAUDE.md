@@ -1,7 +1,7 @@
 # CLAUDE.md — Habla! App
 
 > Este archivo es el cerebro del proyecto. Léelo completo antes de tocar cualquier código.
-> Última actualización: 19 de Abril 2026 (Sprint 1 completado, mockup aprobado, Sub-Sprint 3 de Mecánica de Juego completado, auto-import de partidos y torneos en marcha, Fase 3 — UX de /matches con filtros + timezone, filtro de día scrolleable que cubre la ventana completa)
+> Última actualización: 19 de Abril 2026 (Sub-Sprints 4 y 5 completados — combinadas + motor de puntuación + ranking en vivo + WebSockets en producción vía custom server)
 
 ---
 
@@ -499,6 +499,12 @@ El endpoint `POST /api/v1/admin/partidos/importar` sigue existiendo como botón 
 
 ### ✅ Fase 3 (18-19 Abr) — UX de /matches
 Migración Prisma `add_round_venue_to_partidos` agrega `round` y `venue` a `Partido`. El poller los llena al importar (mapper `round-mapper.ts` traduce inglés→español y ejecuta en `fixtureToPartidoInput`). Filtros funcionales en `/matches` con estado en URL (`?liga=&dia=`): chip activo dorado para liga, chip azul-dark para día, counts dinámicos. **Default sin filtros:** se muestran todos los torneos `ABIERTO` de la ventana (14 días) ordenados por `partido.fechaInicio ASC`; chip "Todos" aparece primero y activo. Click en "Hoy"/"Mañana"/día individual agrega `?dia=YYYY-MM-DD`, click en "Todos" lo quita. Zona horaria normalizada a `America/Lima` con fallback al browser (`getUserTimezone`). **Filtro de día scrolleable (19 Abr):** el chip row se generaba recortado a 7 días y dejaba fuera torneos reales de la ventana; ahora genera 1 chip por cada día con ≥1 torneo dentro de los 14 días y el row scrollea horizontalmente (`scroll-snap-type: x proximity`, scroll-smooth, spacer al final). Los días del mes actual muestran formato corto (`Lun 20`), los de otro mes incluyen mes abreviado (`Sáb 28 abr`, `Mié 1 ene`) para desambiguar — helper `formatDayChip` en `lib/utils/datetime.ts`. Gradientes laterales + flechas redondas `‹` / `›` aparecen según `canScrollLeft/Right` (hook `useScrollIndicators` en `hooks/useScrollIndicators.ts`); flechas ocultas en mobile vía `[@media(hover:none)]`. Navegación por teclado con ← → / Home / End + roving tabindex (container `role="toolbar"`). MatchCard rediseñada (~150px, 55% más compacta): accent bar lateral coloreado por liga, avatares hash-color con iniciales (`team-colors.ts`), stats en grid `1fr/1.7fr/1fr` con pozo dorado featured, CTA lateral 110px con SVG diana 22×22 y flecha. Responsive <640px el CTA pasa a fila inferior full-width. Empty state cubre las 4 combinaciones de `(liga, día)` con mensaje y CTAs específicos. Helpers: `lib/utils/datetime.ts`, `lib/utils/round-mapper.ts`, `lib/utils/team-colors.ts`. Endpoint `GET /api/v1/torneos` acepta `?desde=&hasta=` (ISO 8601 UTC) para filtro por rango de `partido.fechaInicio`.
+
+### ✅ Sub-Sprint 4 (19 Abr) — Combinadas
+Módulo `tickets` (`apps/web/lib/services/tickets.service.ts`) con `crear`, `listarMisTickets`, `calcularStats`. Validaciones: torneo ABIERTO + `cierreAt>now`, balance suficiente, unique-constraint compuesto de predicciones (captura `P2002` → `TICKET_DUPLICADO` 409), máximo 10 tickets/torneo, límite diario de tickets (contando últimas 24h, default 10 — el Sub-Sprint 7 leerá `LimitesJuego`). Todo el flujo atómico en `prisma.$transaction`: descuento Lukas + update torneo (pozoBruto, totalInscritos) + create `Ticket` + `TransaccionLukas ENTRADA_TORNEO`; rollback total si algún paso falla. **Reemplazo de placeholder:** si el usuario tiene un `Ticket` con las predicciones default del Sub-Sprint 3 (`LOCAL / 0-0 / todo false`), la primera `crear()` lo ACTUALIZA en vez de crear uno nuevo y NO re-descuenta la entrada (ya se cobró al inscribirse). A partir del segundo ticket, cada uno descuenta `entradaLukas` y debe tener predicciones distintas a todos los previos. Endpoints `POST /api/v1/tickets`, `GET /api/v1/tickets/mis-tickets?estado=ACTIVOS|GANADOS|HISTORIAL&page=&limit=`, `GET /api/v1/tickets/stats`. Modal centrado `ComboModal` (`components/combo/`): header `bg-hero-blue` con shimmer dorado, 4 metas live (entrada/pozo/1er premio/cierre con countdown cada 1s), body con 5 `PredCard` + `ScorePicker` para marcador exacto (±, rango 0-9), footer con preview de puntos máx (cálculo client-side) y balance después, botón primario disabled hasta completar las 5 preds. Lanzable desde `/matches` (via CTA "Crear combinada" en `/torneo/:id`), `/mis-combinadas` (botón "+ Otra combinada") y `/live-match` (ComboLauncher con session guard + fetch del torneo + resolución de placeholder). Página `/mis-combinadas` con `StatsPill` × 5 (jugadas/ganadas/acierto%/neto/mejor puesto), tabs Activas/Ganadas/Historial (URL-state `?tab=`), `MatchGroup` por partido con variantes live/scheduled/won/neutral y `TicketCard` con 3 estilos (in-top dorado, out/pending azul-left-border, winner dorado-lleno). Chips resueltos por el helper puro `tickets/adapter.ts:resolvePrediccionesChips` (pending/correct/wrong según snapshot del partido). CTA del detalle de torneo en estado ABIERTO reemplazado de `InscribirButton` → `ComboLauncher` (con `label="✏️ Editar mi combinada"` si hay placeholder).
+
+### ✅ Sub-Sprint 5 (19 Abr) — Motor de puntuación + Ranking en vivo
+**Schema:** migración `20260419120000_add_eventos_partido` agrega `EventoPartido` (tipo / minuto / equipo / jugador / detalle) con unique natural key `(partidoId, tipo, minuto, equipo, COALESCE(jugador,''))` para upsert idempotente del poller y foreign key con `onDelete: Cascade` desde `Partido`. **WebSockets:** custom server en `apps/web/server.ts` monta `Socket.io` sobre el mismo HTTP server que Next 14 (se removió `output: "standalone"` en `next.config.js`; `tsx` reemplaza `node server.js` en dev y prod, Dockerfile actualizado para correr `tsx apps/web/server.ts`). Handshake autentica con JWT HS256 de 5 min emitido por `GET /api/v1/realtime/token` (firmado con `AUTH_SECRET` vía `jose`), expuesto en `lib/realtime/socket-auth.ts`. Rooms por `torneo:{id}`. Eventos cliente→server: `join:torneo` / `leave:torneo`. Server→cliente: `ranking:update`, `partido:evento`, `torneo:cerrado`, `torneo:finalizado` (tipos compartidos en `lib/realtime/events.ts`). Cliente con ref-counting (`lib/realtime/socket-client.ts`) — varios componentes piden el mismo torneoId sin dup-joins y el último `leave` cierra el room. **Motor puro:** `puntuacion.service.ts:calcularPuntosTicket(ticket, snapshot)` aplica la tabla de §2 (3/2/2/6/8 = 21). Semántica en vivo: resultado 1X2 y marcador live se proyectan según `Partido.goles*` actuales (el ranking refleja "si terminara ahora"); BTTS y +2.5 se adjudican parcialmente (ej. 1-1 ya confirma BTTS=true); tarjeta roja se confirma true al instante y false sólo al `FINALIZADO`; marcador exacto sólo se adjudica al `FINALIZADO` (puede mutar hasta el pitazo). `recalcularTorneo(torneoId)` re-puntúa todos los tickets con diffs (sólo escribe los que cambiaron) y pushea el score al sorted set Redis `torneo:{id}:ranking` (TTL 48h). **Ranking:** `ranking.service.ts:listarRanking` ordena por `puntosTotal DESC → marcador acertado → tarjeta acertada → creadoEn ASC`, calcula `premioEstimado` según distribución 35/20/12/33% (4°-10° dividido en 7) con `pozoNeto` real o `pozoBruto×0.88` si el torneo aún está ABIERTO; devuelve `miPosicion` cuando el caller pasa `usuarioId`. `finalizarTorneo()` (llamado por el poller en FIN_PARTIDO) fija `posicionFinal` + `premioLukas` en cada ticket y cambia el torneo a FINALIZADO (la distribución real de Lukas y emails queda para Sub-Sprint 6). **Poller:** `poller-partidos.job.ts` corre cada 30s en `instrumentation.ts` junto al resto del cron in-process: filtra `estado=EN_VIVO OR (estado=PROGRAMADO AND fechaInicio<=now+15min)`, por partido hace `GET /fixtures?id=X` + `GET /fixtures/events?fixture=X`, upsertea `Partido.estado/goles/flags/huboTarjetaRoja` + inserta eventos nuevos (dedupe por natural key), recalcula todos los torneos ligados + emite `partido:evento` por cada evento nuevo + `ranking:update` si hubo cambio relevante + `torneo:finalizado` si pasó a FT. Cuando el partido arranca (PROGRAMADO→EN_VIVO), los torneos CERRADO pasan a EN_JUEGO automáticamente. Manejo de 429 con backoff exponencial (cap 5 min, reset al siguiente tick sin errores). **Endpoints nuevos:** `GET /api/v1/torneos/:id/ranking?page=&limit=` (devuelve `miPosicion` si hay sesión), `GET /api/v1/partidos/:id/eventos`, `GET /api/v1/partidos/:id/stats` (fetch en vivo de `/fixtures/statistics` con cache in-memory 15s), `GET /api/v1/live/matches`, `GET /api/v1/realtime/token`. Stats mapeadas a 7 métricas estándar por lado (posesión, tiros, tiros al arco, tarjetas, córners, faltas, offsides, pases) por `eventos.mapper.ts:parsePorcentaje/parseEntero`. **UI:** `/live-match` nuevo (server component thin + client `LiveMatchView` que orquesta WS, tabs, switcher) con `LiveSwitcher` (hasta 6 partidos), `LiveHero` (bg-stadium, score dorado 56px, 4 stats + timeline inline), `MiTicketCard` (card dorada con chips por estado), tabs `RankingTable` (top 10 + línea de corte + botón expand), `StatsView` (barras graduadas, refresh 30s), `EventsView` (timeline con íconos por tipo). Sidebar sticky de `/matches` ya consume `prisma.partido` + `listarRanking(top 1)` real (adiós mock); widget Live linkea `/live-match?torneoId=`. Hooks `useRankingEnVivo` y `useEventosPartido` gestionan fetch inicial + suscripción WS + reconexión auto + cleanup con ref-counting. **Redis:** `ioredis` opcional — si `REDIS_URL` no está seteada, el ranking degrada a lectura directa desde BD (el sistema sigue funcionando, sólo pierde el cache sub-ms). **Tests:** 54 unit tests en `apps/web/tests/` cubriendo motor de puntuación (matriz de 5 predicciones × 4 estados de partido), distribución de premios, desempate, mapper de eventos, validación Zod y adapter de chips. Integration suite con `describe.runIf(DATABASE_URL)` para los 5 casos de error del flujo `POST /tickets`. Script k6 `tests/load/ranking-500-users.js` simula 500 VUs sobre el mismo torneo 10 min con threshold `p95<500ms` para ms entre emisión del server y recepción del cliente.
 
 ---
 
@@ -1068,26 +1074,31 @@ POST  /lukas/comprar                          → token Culqi → acredita Lukas
 
 ### Torneos
 ```
-GET   /torneos?estado=&liga=&page=            → listado con filtros
-GET   /torneos/:id                            → detalle + misPosicion
-POST  /torneos/:id/inscribir                  → bloquea entrada, crea ticket
-GET   /torneos/:id/ranking?page=&limit=       → ranking paginado con premios estimados
+GET   /torneos?estado=&liga=&desde=&hasta=&page=   → listado con filtros (UTC ISO 8601)
+GET   /torneos/:id                                  → detalle + miTicket (si hay sesión)
+POST  /torneos/:id/inscribir                        → crea Ticket placeholder + descuenta entrada
+GET   /torneos/:id/ranking?page=&limit=             → ranking paginado con premios estimados + miPosicion
 ```
 
 ### Tickets
 ```
-POST  /tickets                                → crear ticket (valida todo)
-GET   /tickets/mis-tickets?estado=&page=      → mis tickets con torneo y partido
-GET   /tickets/stats                          → jugadas, ganadas, acierto, neto, mejor
+POST  /tickets                                               → crea ticket (5 predicciones)
+GET   /tickets/mis-tickets?estado=ACTIVOS|GANADOS|HISTORIAL  → mis tickets + torneo + partido
+GET   /tickets/stats                                         → jugadas, ganadas, aciertoPct, neto, mejorPuesto
 ```
 
 ### Partidos
 ```
 GET   /partidos?fecha=&estado=                → listado con filtros
 GET   /partidos/:id                           → detalle + último evento
-GET   /partidos/:id/eventos                   → timeline cronológica
-GET   /partidos/:id/stats                     → stats comparadas home/away
-GET   /live/matches                           → partidos actualmente en vivo
+GET   /partidos/:id/eventos                   → timeline cronológica (asc)
+GET   /partidos/:id/stats                     → stats comparadas home/away (cache in-memory 15s)
+GET   /live/matches                           → partidos EN_VIVO + top 3 preview por torneo
+```
+
+### Realtime
+```
+GET   /realtime/token                         → JWT HS256 de 5 min para handshake de Socket.io
 ```
 
 ### Premios y canjes
@@ -1131,17 +1142,21 @@ POST  /webhooks/culqi                         → confirmación pago (valida fir
 
 ## 12. EVENTOS WEBSOCKET
 
-Socket.io montado sobre Fastify. Cliente se conecta con `?token=<jwt>`. Sala por `torneoId`.
+Socket.io montado sobre **Next.js custom server** (`apps/web/server.ts`, no Fastify — ver §15). Corre en el mismo proceso y puerto que la app Next. Path `/socket.io`.
+
+Handshake auth: cliente hace `GET /api/v1/realtime/token` para recibir un JWT HS256 (5 min, firmado con `AUTH_SECRET`) y lo pasa como `auth.token` en el `io()`. Sin token la conexión se acepta como anónima (`socket.data.usuarioId = null`) y puede leer rankings en vivo. Con token inválido, se rechaza. Sala por `torneo:{torneoId}`.
 
 **Cliente → Servidor:**
 - `join:torneo` `{ torneoId }`
 - `leave:torneo` `{ torneoId }`
 
 **Servidor → Cliente:**
-- `ranking:update` `{ torneoId, ranking[], totalInscritos, minutoPartido }`
-- `partido:evento` `{ torneoId, tipo, equipo, minuto, marcadorLocal, marcadorVisita }`
+- `ranking:update` `{ torneoId, ranking[], totalInscritos, pozoNeto, minutoPartido, timestamp }`
+- `partido:evento` `{ torneoId, partidoId, tipo, equipo, minuto, jugador, detalle, marcadorLocal, marcadorVisita }`
 - `torneo:cerrado` `{ torneoId }`
 - `torneo:finalizado` `{ torneoId, ganadores[] }`
+
+El cliente (`lib/realtime/socket-client.ts`) implementa ref-counting sobre los rooms — si dos componentes piden el mismo `torneoId`, el segundo `leave` es el único que efectivamente abandona el room. Reconexión automática con backoff (1s → 10s).
 
 ---
 
@@ -1214,6 +1229,16 @@ Socket.io montado sobre Fastify. Cliente se conecta con `?token=<jwt>`. Sala por
 - **Fase 3 — filtro de día scrollea horizontalmente, NO wrappea:** la segunda iteración (19 Abr) topeaba los chips a los próximos 7 días y dejaba torneos de la ventana 2 (días 8-14) sin filtro accesible. Probamos dos alternativas descartadas: (a) wrappear chips a segunda línea — se come layout vertical y se ve mal en desktop con 10+ días; (b) mostrar solo los próximos N días relevantes — re-introduce el problema original de ventana incompleta. Adoptamos scroll horizontal con `scroll-snap-type: x proximity` + gradientes laterales + flechas (hover-capable only, ocultas en mobile por `@media (hover: none)`) + roving tabindex. Mostrar 14 chips en desktop sin wrap y sin cortar el contenido principal de `/matches` solo es viable con scroll. El hook `useScrollIndicators` queda disponible para otras filas scrolleables futuras.
 
 - **Fase 3 — `formatDayChip` varía formato por mes, NO por cercanía:** consideramos mostrar el mes solo para días lejanos (>7 días), pero esa regla es visualmente inconsistente cuando el chip "Jue 30" (mes actual) queda junto al chip "Vie 1" (mes siguiente) sin diferencia visible — el usuario no distingue el salto de mes. La regla final: el chip lleva mes si y solo si cae fuera del mes-en-curso del navegador, independiente de la distancia. Efecto neto: los chips del mes actual comparten formato corto, los que caen en el mes siguiente (o en año siguiente, para el caso diciembre→enero) muestran el mes abreviado para desambiguar. Esto deja claro el "salto" visualmente sin inventar un treshold de días arbitrario.
+
+- **Sub-Sprint 5 — WebSockets en custom Next.js server (Opción B), NO en Fastify separado (Opción A):** la decisión estaba en el aire desde el Sub-Sprint 3 (se había anotado: "cuando el poller de partidos en vivo del Sub-Sprint 5 pegue fuerte con WebSockets, migraremos los módulos a Fastify"). Este fue ese momento y la decisión cayó del lado opuesto al plan original. Opción A (apps/api + Fastify + Socket.io) hubiera requerido un segundo servicio Railway, un JWT bridge para compartir sesión con NextAuth v5 (cuyas internals de JWE son frágiles en beta.30), y duplicar el `instrumentation.ts` cron en dos procesos. Opción B (custom `apps/web/server.ts` que monta `Socket.io` sobre el HTTP server de Next): 1 proceso, 1 puerto, session sharing trivial — reusamos `AUTH_SECRET` para firmar un JWT HS256 de 5 min emitido por un route handler que sí tiene `auth()`, y el server WS lo verifica con `jose`. El trade-off es perder `output: "standalone"` en `next.config.js` (el standalone output está cableado al `server.js` por defecto de Next y no es compatible con el custom). Cambiamos el entry a `tsx server.ts` tanto en dev como en prod, Dockerfile copia el workspace completo (más peso vs. standalone, aceptable para MVP). Cuando el Sprint 8 (QA/carga) o métricas post-Mundial muestren saturación del event-loop del proceso de Next, la migración a `apps/api` Fastify queda viva pero ya desde una base de pruebas reales, no especulativa.
+
+- **Sub-Sprint 5 — Poller idempotente con natural key en `EventoPartido`:** el poller corre cada 30s y hace N requests al API externo. Una re-corrida accidental o una latencia de red que dispare dos ticks simultáneos podría duplicar eventos y puntos. Defensa: la tabla `eventos_partido` tiene unique `(partidoId, tipo, minuto, equipo, COALESCE(jugador,''))` — insertar un evento idéntico revienta con `P2002` que atrapamos y descartamos como dup. El motor de puntuación es una función pura `(ticket, snapshot) → PuntosDetalle`, así que re-correrlo sobre el mismo partido escribe los mismos números. `recalcularTorneo` además diffea antes de escribir y sólo toca los tickets que cambiaron, reduciendo presión sobre Postgres cuando un gol no mueve el pick de muchos tickets. Consecuencia: si por un 502 de api-football los puntos quedan "pendientes" durante un minuto, el siguiente tick los resuelve sin intervención ni duplicados — la recuperación es automática.
+
+- **Sub-Sprint 5 — Backoff 429 por partido vs. global:** el free tier de api-football es ~100 req/día. Un torneo con 30 partidos en vivo nos fuma el budget en un tick. Decisión: si cualquier llamada devuelve 429, activamos backoff GLOBAL (no por partido) con cap 5 min y abortamos el tick — preferimos perder 30s de latencia en el ranking antes que seguir bombardeando y quemar la cuota del día entero. Reset al siguiente tick sin errores. El plan de negocio pre-Mundial es upgradear a plan paid (750k req/día) cuando salgamos de beta; hasta entonces, el backoff protege el servicio.
+
+- **Sub-Sprint 5 — Redis opcional (degradación a BD):** el ranking en vivo vive en un sorted set Redis `torneo:{id}:ranking` con `score=puntosTotal`. `ZREVRANGE` es O(log N) y sirve un top 10 sub-ms aún con 500 tickets. Pero `REDIS_URL` en Railway requiere service-link explícito que a veces falla en deploy. En lugar de bloquear el sistema si Redis no está, `getRedis()` devuelve `null` y el `ranking.service` degrada a lectura directa de BD (`findMany` + sort en memoria). Para 500 tickets por torneo el overhead es ~50ms vs. sub-ms de Redis, aceptable. Consecuencia: Redis es nice-to-have, no crítico; no bloquea deploys. Cuando el test de carga del Sprint 8 muestre degradación, forzamos Redis a "obligatorio".
+
+- **Sub-Sprint 5 — Ranking como proyección, no confirmación:** el motor adjudica los 3 pts de Resultado 1X2 cuando el marcador actual coincide con el pick, aunque el partido siga en vivo. Razón: el usuario ve "si terminara ahora, ¿dónde quedo?" — el ranking debe reflejar esa pregunta. Si el marcador cambia (ej. 1-0 → 1-1), el motor re-adjudica en la próxima corrida (la función es pura). Excepción: el marcador exacto SÓLO se adjudica en FINALIZADO — durante EN_VIVO coincidir momentáneamente con el score no garantiza la confirmación, y los 8 pts son demasiado peso para ser volátiles en cada segundo del ranking.
 
 ---
 
