@@ -1,8 +1,15 @@
 // Tests del helper `live-matches.service`. Cubre:
-//   - elegirTorneoPrincipal: prioridad por estado y pozoBruto.
-//   - obtenerLiveMatches: integration con DB — partidos EN_VIVO con
-//     torneos solo en ABIERTO (cron atrasado) siguen apareciendo. Esto
-//     era el Bug #2 del hotfix post-Sub-Sprint 5.
+//   - elegirTorneoPrincipal: prioridad por estado y pozoBruto, ignora CANCELADO.
+//   - obtenerLiveMatches: integration con DB — Bug #8 exige que cada
+//     partido tenga al menos un torneo NO-CANCELADO; los partidos con
+//     todos sus torneos cancelados NO aparecen (revert del Hotfix #3).
+//
+// Historia breve:
+//   - Hotfix #1 Bug #2: filtro de partido.estado (no del torneo) para
+//     tolerar jitter del cron cuando el torneo queda en ABIERTO.
+//   - Hotfix #3: toleraba partidos con todos los torneos CANCELADO,
+//     mostrándolos con "sin torneo activo". Revertido por Bug #8.
+//   - Bug #8: obtenerLiveMatches ahora exige torneos.some(estado != CANCELADO).
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@habla/db";
@@ -12,8 +19,11 @@ import {
 } from "@/lib/services/live-matches.service";
 
 describe("elegirTorneoPrincipal", () => {
-  it("retorna null cuando no hay torneos no-cancelados", () => {
+  it("retorna null cuando la lista está vacía", () => {
     expect(elegirTorneoPrincipal([])).toBeNull();
+  });
+
+  it("retorna null cuando solo hay torneos CANCELADO (defensive, pre-filter del service ya excluye esto)", () => {
     expect(
       elegirTorneoPrincipal([
         fakeTorneo({ estado: "CANCELADO", pozoBruto: 1000 }),
@@ -40,11 +50,10 @@ describe("elegirTorneoPrincipal", () => {
     expect(t?.id).toBe("big");
   });
 
-  it("BUG REPRO: partido con todos los torneos en ABIERTO igual elige uno", () => {
-    // Antes del hotfix Bug #2: si todos los torneos estaban ABIERTOS, el
-    // filtro `where: { torneos: { some: { estado: { in: [EN_JUEGO,...] } } } }`
-    // descartaba el partido entero. Ahora elegirTorneoPrincipal elige el
-    // de mayor pozoBruto entre los ABIERTOS.
+  it("BUG REPRO (Hotfix #1): partido con todos los torneos en ABIERTO igual elige uno", () => {
+    // Cron atrasado: el partido ya está EN_VIVO pero los torneos no
+    // transicionaron aún ABIERTO → CERRADO/EN_JUEGO. Debe elegir el
+    // ABIERTO con mayor pozo (vs el alternativo de fallar y no mostrar).
     const t = elegirTorneoPrincipal([
       fakeTorneo({ id: "a", estado: "ABIERTO", pozoBruto: 50 }),
       fakeTorneo({ id: "b", estado: "ABIERTO", pozoBruto: 200 }),
@@ -60,19 +69,6 @@ describe("elegirTorneoPrincipal", () => {
     ]);
     expect(t?.id).toBe("open");
   });
-
-  it("HOTFIX #3 BUG REPRO: todos los torneos CANCELADO → retorna null (partido sin torneo activo)", () => {
-    // Caso real en prod: Manchester City vs Arsenal con 3 torneos
-    // cancelados por <2 inscritos. elegirTorneoPrincipal retorna null,
-    // la página /live-match muestra el partido con un cartel "sin torneo
-    // activo" en lugar de esconderlo con un empty state global.
-    const t = elegirTorneoPrincipal([
-      fakeTorneo({ id: "c1", estado: "CANCELADO", pozoBruto: 10 }),
-      fakeTorneo({ id: "c2", estado: "CANCELADO", pozoBruto: 20 }),
-      fakeTorneo({ id: "c3", estado: "CANCELADO", pozoBruto: 5 }),
-    ]);
-    expect(t).toBeNull();
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -82,50 +78,86 @@ describe("elegirTorneoPrincipal", () => {
 const hasDb = Boolean(process.env.DATABASE_URL);
 
 describe.runIf(hasDb)("obtenerLiveMatches — integration", () => {
-  let partidoId: string;
+  let partidoVivoConAbiertoId: string;
   let torneoAbiertoId: string;
+  let partidoVivoSoloCanceladosId: string;
+  let torneoCanceladoId: string;
 
   beforeAll(async () => {
-    // Sembrar: 1 partido EN_VIVO con su torneo aún en ABIERTO (cron
-    // atrasado). Este es el escenario del Bug #2.
     const suffix = Date.now().toString(36);
-    const partido = await prisma.partido.create({
+
+    // Caso A (Hotfix #1 Bug #2): partido EN_VIVO con torneo aún ABIERTO.
+    const partidoA = await prisma.partido.create({
       data: {
-        externalId: `live-test-${suffix}`,
+        externalId: `bug8-live-a-${suffix}`,
         liga: "Liga 1 Perú",
-        equipoLocal: "Test Live FC",
-        equipoVisita: "Otro Live FC",
+        equipoLocal: "Test Live FC A",
+        equipoVisita: "Otro Live FC A",
         fechaInicio: new Date(Date.now() - 10 * 60 * 1000),
         estado: "EN_VIVO",
         golesLocal: 1,
         golesVisita: 0,
       },
     });
-    partidoId = partido.id;
-
-    const torneo = await prisma.torneo.create({
+    partidoVivoConAbiertoId = partidoA.id;
+    const torneoA = await prisma.torneo.create({
       data: {
-        nombre: "Live Test Torneo",
+        nombre: "Live Test Torneo Abierto",
         tipo: "EXPRESS",
         entradaLukas: 5,
-        partidoId,
+        partidoId: partidoA.id,
         cierreAt: new Date(Date.now() - 5 * 60 * 1000),
-        estado: "ABIERTO", // ← intencional: cron no llegó a cerrar
+        estado: "ABIERTO",
         pozoBruto: 50,
       },
     });
-    torneoAbiertoId = torneo.id;
+    torneoAbiertoId = torneoA.id;
+
+    // Caso B (Bug #8 REPRO): partido EN_VIVO pero TODOS los torneos
+    // cancelados. Antes del Bug #8 aparecía con cartel "sin torneo
+    // activo"; ahora NO debe aparecer en obtenerLiveMatches.
+    const partidoB = await prisma.partido.create({
+      data: {
+        externalId: `bug8-live-b-${suffix}`,
+        liga: "Liga 1 Perú",
+        equipoLocal: "Cancelled FC",
+        equipoVisita: "Zero Inscritos FC",
+        fechaInicio: new Date(Date.now() - 10 * 60 * 1000),
+        estado: "EN_VIVO",
+        golesLocal: 0,
+        golesVisita: 0,
+      },
+    });
+    partidoVivoSoloCanceladosId = partidoB.id;
+    const torneoB = await prisma.torneo.create({
+      data: {
+        nombre: "Live Test Torneo Cancelado",
+        tipo: "EXPRESS",
+        entradaLukas: 5,
+        partidoId: partidoB.id,
+        cierreAt: new Date(Date.now() - 60 * 60 * 1000),
+        estado: "CANCELADO",
+        pozoBruto: 0,
+      },
+    });
+    torneoCanceladoId = torneoB.id;
   });
 
   afterAll(async () => {
-    await prisma.torneo.deleteMany({ where: { id: torneoAbiertoId } });
-    await prisma.partido.deleteMany({ where: { id: partidoId } });
+    await prisma.torneo.deleteMany({
+      where: { id: { in: [torneoAbiertoId, torneoCanceladoId] } },
+    });
+    await prisma.partido.deleteMany({
+      where: {
+        id: { in: [partidoVivoConAbiertoId, partidoVivoSoloCanceladosId] },
+      },
+    });
     await prisma.$disconnect();
   });
 
-  it("BUG REPRO: incluye partido EN_VIVO cuyo torneo aún está ABIERTO", async () => {
+  it("incluye partido EN_VIVO cuyo torneo aún está ABIERTO (Hotfix #1)", async () => {
     const partidos = await obtenerLiveMatches({ limit: 50 });
-    const matched = partidos.find((p) => p.id === partidoId);
+    const matched = partidos.find((p) => p.id === partidoVivoConAbiertoId);
     expect(matched).toBeDefined();
     expect(matched!.estado).toBe("EN_VIVO");
     expect(matched!.torneos.length).toBe(1);
@@ -133,11 +165,20 @@ describe.runIf(hasDb)("obtenerLiveMatches — integration", () => {
     expect(matched!.torneos[0]!.estado).toBe("ABIERTO");
   });
 
-  it("elegirTorneoPrincipal devuelve el torneo ABIERTO (único candidato)", async () => {
+  it("BUG #8 REPRO: partido EN_VIVO con TODOS los torneos CANCELADO NO aparece", async () => {
     const partidos = await obtenerLiveMatches({ limit: 50 });
-    const matched = partidos.find((p) => p.id === partidoId);
-    const principal = elegirTorneoPrincipal(matched!.torneos);
-    expect(principal?.id).toBe(torneoAbiertoId);
+    const matched = partidos.find((p) => p.id === partidoVivoSoloCanceladosId);
+    // Revertido Hotfix #3: el partido ya NO es navegable desde /live-match.
+    expect(matched).toBeUndefined();
+  });
+
+  it("el `include.torneos` excluye CANCELADO — el caller solo ve torneos jugables", async () => {
+    const partidos = await obtenerLiveMatches({ limit: 50 });
+    for (const p of partidos) {
+      for (const t of p.torneos) {
+        expect(t.estado).not.toBe("CANCELADO");
+      }
+    }
   });
 });
 

@@ -7,21 +7,12 @@
 // Params:
 //   - ?torneoId=<id>  → pantalla específica
 //   - sin param       → primer partido EN_VIVO (prioriza por estado del
-//                       torneo principal; partidos sin torneo activo van
-//                       último pero igual aparecen)
+//                       torneo principal y pozoBruto del mismo)
 //
-// Hotfix post-Sub-Sprint 5 (Bug #2): la query original tenía un filtro
-// existencial `where: { torneos: { some: { estado: { in: [...] } } } }`
-// que descartaba partidos cuyos torneos no habían transicionado.
-//
-// Hotfix #3 post-Sub-Sprint 5 (re-fix Bug #2): el filtro se quitó pero
-// la página seguía descartando partidos cuyo `elegirTorneoPrincipal`
-// retornaba null (todos los torneos en CANCELADO por <2 inscritos), que
-// es exactamente el caso de Manchester City vs Arsenal en producción
-// (`/api/v1/live/matches` devolvía `torneos: []`). Ahora la página
-// muestra esos partidos también, con un cartel "Este partido no tiene
-// torneo activo" en lugar del ranking. El usuario sigue viendo el
-// score + eventos del partido aunque no haya un torneo donde competir.
+// Bug #8 post-Hotfix #3: a diferencia de versiones previas, la página
+// ya no tolera partidos sin torneo activo. `obtenerLiveMatches` exige
+// que cada partido tenga al menos un torneo no-cancelado — el cartel
+// "sin torneo activo" del Hotfix #3 fue removido tras revisión del PO.
 
 import { auth } from "@/lib/auth";
 import { listarRanking } from "@/lib/services/ranking.service";
@@ -35,6 +26,7 @@ import {
 } from "@/components/live/LiveMatchView";
 
 interface Props {
+  /** `partidoId` se redirige a `torneoId` del principal (compat Hotfix #3). */
   searchParams?: { torneoId?: string; partidoId?: string };
 }
 
@@ -43,19 +35,21 @@ export const dynamic = "force-dynamic";
 export default async function LiveMatchPage({ searchParams }: Props) {
   const session = await auth();
 
+  // Bug #8: `obtenerLiveMatches` filtra out partidos cuyos torneos estén
+  // todos CANCELADO. Cada partido que llegue acá tiene al menos un
+  // torneo navegable, así que `elegirTorneoPrincipal` nunca devuelve null.
   const liveMatchesRaw = await obtenerLiveMatches({ limit: 6 });
 
   if (liveMatchesRaw.length === 0) {
     return <EmptyLive />;
   }
 
-  // Construimos los tabs primero, sin filtrar partidos sin torneo activo:
-  // si Manchester vs Arsenal está EN_VIVO con todos sus torneos en
-  // CANCELADO (caso real reportado en prod), igual debe aparecer.
-  const tabs: LiveMatchTab[] = liveMatchesRaw.map((p) => {
+  const tabs: LiveMatchTab[] = [];
+  for (const p of liveMatchesRaw) {
     const main = elegirTorneoPrincipal(p.torneos);
-    return {
-      torneoId: main?.id ?? null,
+    if (!main) continue; // defensive: no debería pasar post-Bug #8
+    tabs.push({
+      torneoId: main.id,
       partidoId: p.id,
       liga: p.liga,
       equipoLocal: p.equipoLocal,
@@ -65,18 +59,25 @@ export default async function LiveMatchPage({ searchParams }: Props) {
       round: p.round,
       venue: p.venue,
       estado: p.estado as "EN_VIVO" | "FINALIZADO",
-      // `elegirTorneoPrincipal` ya excluye CANCELADO — el cast es seguro.
-      torneoEstado:
-        (main?.estado as "ABIERTO" | "EN_JUEGO" | "FINALIZADO" | "CERRADO") ??
-        null,
-      pozoBruto: main?.pozoBruto ?? 0,
-      pozoNeto: main?.pozoNeto ?? 0,
-      totalInscritos: main?.totalInscritos ?? 0,
-    };
-  });
+      torneoEstado: main.estado as
+        | "ABIERTO"
+        | "EN_JUEGO"
+        | "FINALIZADO"
+        | "CERRADO",
+      pozoBruto: main.pozoBruto,
+      pozoNeto: main.pozoNeto,
+      totalInscritos: main.totalInscritos,
+    });
+  }
 
-  // Tab activo: del query (?torneoId o ?partidoId), o el primero con
-  // torneo activo, o si no hay ninguno con torneo activo, el primero.
+  if (tabs.length === 0) {
+    return <EmptyLive />;
+  }
+
+  // Resolver el tab activo. Prioridad:
+  //   1. ?torneoId=<id> coincide con un tab
+  //   2. ?partidoId=<id> coincide con un tab (backward compat Hotfix #3)
+  //   3. primer tab de la lista
   const torneoIdQuery = searchParams?.torneoId;
   const partidoIdQuery = searchParams?.partidoId;
   let activeIdx = -1;
@@ -87,51 +88,40 @@ export default async function LiveMatchPage({ searchParams }: Props) {
     activeIdx = tabs.findIndex((t) => t.partidoId === partidoIdQuery);
   }
   if (activeIdx === -1) {
-    activeIdx = tabs.findIndex((t) => t.torneoId !== null);
-  }
-  if (activeIdx === -1) {
     activeIdx = 0;
   }
   const activeTab = tabs[activeIdx]!;
   const torneoIdActivo = activeTab.torneoId;
 
-  // Snapshot inicial del ranking solo si hay torneo activo. `listarRanking`
-  // funciona aún con torneos ABIERTOS (devuelve tickets con puntos=0); si
-  // no hay torneo, el frontend muestra "sin torneo activo" en lugar.
-  const rankingInicial = torneoIdActivo
-    ? await listarRanking(torneoIdActivo, {
-        limit: 100,
-        usuarioId: session?.user?.id,
-      })
-    : null;
+  // Snapshot inicial del ranking del torneo activo. `listarRanking`
+  // funciona aún con torneos ABIERTOS (devuelve tickets con puntos=0).
+  const rankingInicial = await listarRanking(torneoIdActivo, {
+    limit: 100,
+    usuarioId: session?.user?.id,
+  });
 
-  // Payload inicial: si hay torneo activo + ranking lo armamos; si no,
-  // pasamos un snapshot vacío. El componente muestra "sin torneo activo"
-  // cuando el tab activo tiene torneoId=null.
-  const initialSnapshot = rankingInicial
-    ? {
-        totalInscritos: rankingInicial.totalInscritos,
-        pozoNeto: rankingInicial.pozoNeto,
-        ranking: rankingInicial.ranking.map((r) => ({
-          rank: r.rank,
-          ticketId: r.ticketId,
-          usuarioId: r.usuarioId,
-          nombre: r.nombre,
-          puntosTotal: r.puntosTotal,
-          puntosDetalle: r.puntosDetalle,
-          predicciones: r.predicciones,
-          premioEstimado: r.premioEstimado,
-        })),
-        miPosicion: rankingInicial.miPosicion
-          ? {
-              posicion: rankingInicial.miPosicion.posicion,
-              ticketId: rankingInicial.miPosicion.ticketId,
-              puntosTotal: rankingInicial.miPosicion.puntosTotal,
-              premioEstimado: rankingInicial.miPosicion.premioEstimado,
-            }
-          : null,
-      }
-    : { totalInscritos: 0, pozoNeto: 0, ranking: [], miPosicion: null };
+  const initialSnapshot = {
+    totalInscritos: rankingInicial.totalInscritos,
+    pozoNeto: rankingInicial.pozoNeto,
+    ranking: rankingInicial.ranking.map((r) => ({
+      rank: r.rank,
+      ticketId: r.ticketId,
+      usuarioId: r.usuarioId,
+      nombre: r.nombre,
+      puntosTotal: r.puntosTotal,
+      puntosDetalle: r.puntosDetalle,
+      predicciones: r.predicciones,
+      premioEstimado: r.premioEstimado,
+    })),
+    miPosicion: rankingInicial.miPosicion
+      ? {
+          posicion: rankingInicial.miPosicion.posicion,
+          ticketId: rankingInicial.miPosicion.ticketId,
+          puntosTotal: rankingInicial.miPosicion.puntosTotal,
+          premioEstimado: rankingInicial.miPosicion.premioEstimado,
+        }
+      : null,
+  };
 
   return (
     <LiveMatchView
