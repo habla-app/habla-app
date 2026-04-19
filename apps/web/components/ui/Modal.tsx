@@ -4,7 +4,16 @@
 // Overlay con blur + panel centrado con animate-scale-in + shadow-xl.
 // API: controlado por el padre via `isOpen` + `onClose`. Slots para el
 // header (título con stripe dorado shimmer), body, y footer opcional.
-import { useEffect } from "react";
+//
+// Hotfix #3 post-Sub-Sprint 5: el modal se renderiza vía `createPortal` a
+// `document.body` para que `position: fixed` se ancle siempre al viewport.
+// Sin portal, cualquier ancestor con `transform` (incluso `transform:
+// translate-y-0.5` del hover de MatchCard) crea un nuevo containing block
+// para fixed descendants — el modal quedaba atrapado dentro del card,
+// superpuesto a su contenido y "congelando" la página visualmente.
+// Spec CSS: https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_positioned_layout/Understanding_z-index/The_stacking_context
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 
 interface ModalProps {
@@ -28,6 +37,14 @@ export function Modal({
   children,
   className,
 }: ModalProps) {
+  // Mounted guard para SSR — `document` no existe del lado server.
+  // Usamos un useState + useEffect en vez de typeof window check inline
+  // para que React no se queje de hydration mismatch.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   useEffect(() => {
     if (!isOpen) return;
     function onEsc(e: KeyboardEvent) {
@@ -43,15 +60,16 @@ export function Modal({
     };
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
-  return (
+  const overlay = (
     <div
       className="fixed inset-0 z-[500] flex items-center justify-center bg-brand-blue-dark/65 p-5 backdrop-blur-md"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-label={label}
+      data-testid="modal-overlay"
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -62,6 +80,8 @@ export function Modal({
       </div>
     </div>
   );
+
+  return createPortal(overlay, document.body);
 }
 
 interface ModalHeaderProps {

@@ -60,6 +60,19 @@ describe("elegirTorneoPrincipal", () => {
     ]);
     expect(t?.id).toBe("open");
   });
+
+  it("HOTFIX #3 BUG REPRO: todos los torneos CANCELADO → retorna null (partido sin torneo activo)", () => {
+    // Caso real en prod: Manchester City vs Arsenal con 3 torneos
+    // cancelados por <2 inscritos. elegirTorneoPrincipal retorna null,
+    // la página /live-match muestra el partido con un cartel "sin torneo
+    // activo" en lugar de esconderlo con un empty state global.
+    const t = elegirTorneoPrincipal([
+      fakeTorneo({ id: "c1", estado: "CANCELADO", pozoBruto: 10 }),
+      fakeTorneo({ id: "c2", estado: "CANCELADO", pozoBruto: 20 }),
+      fakeTorneo({ id: "c3", estado: "CANCELADO", pozoBruto: 5 }),
+    ]);
+    expect(t).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------
