@@ -163,6 +163,181 @@ export async function obtener(
 }
 
 // ---------------------------------------------------------------------------
+// listarInscritos — Hotfix #5 Bug #13.
+//
+// Devuelve los jugadores inscritos en un torneo + cuántos tickets tienen
+// cada uno + su nivel (calculado sobre el total de torneos jugados en la
+// plataforma). Si el torneo NO está ABIERTO, también incluye las
+// predicciones + puntos de cada ticket — antes del cierre las predicciones
+// se ocultan por privacidad competitiva (evita que otros copien las
+// combinadas de quienes ya se inscribieron).
+// ---------------------------------------------------------------------------
+
+export interface InscritoTicket {
+  ticketId: string;
+  /** Predicciones: solo presentes si torneo.estado !== 'ABIERTO'. */
+  predicciones: {
+    predResultado: "LOCAL" | "EMPATE" | "VISITA";
+    predBtts: boolean;
+    predMas25: boolean;
+    predTarjetaRoja: boolean;
+    predMarcadorLocal: number;
+    predMarcadorVisita: number;
+  } | null;
+  puntosTotal: number;
+  puntosDetalle: {
+    resultado: number;
+    btts: number;
+    mas25: number;
+    tarjeta: number;
+    marcador: number;
+  };
+  posicionFinal: number | null;
+  premioLukas: number;
+  creadoEn: Date;
+}
+
+export interface InscritoInfo {
+  usuarioId: string;
+  /** "@handle" para mostrar en ranking/inscritos. Sin arroba; la UI lo
+   *  prefija. */
+  handle: string;
+  /** Cantidad total de torneos (únicos) en los que el usuario jugó.
+   *  Alimenta el cálculo de nivel. */
+  torneosJugados: number;
+  /** Tickets de este usuario dentro de ESTE torneo. Al menos 1. */
+  tickets: InscritoTicket[];
+}
+
+export interface ListarInscritosResult {
+  inscritos: InscritoInfo[];
+  total: number;
+  /** Si el torneo está ABIERTO, forzamos a no exponer predicciones aún
+   *  (defensa en profundidad: aunque el caller ignore el campo
+   *  `predicciones`, el service lo devuelve siempre null hasta que
+   *  cierre el torneo). */
+  mostrarPredicciones: boolean;
+}
+
+/**
+ * Handle derivado del usuario. Prioridad:
+ *   1. `nombre` si no parece un email
+ *   2. prefijo del email (antes del @)
+ *   3. primeros 8 chars del id
+ *
+ * Coincide con `nombreDisplay` de ranking.service para que el handle
+ * que aparece en /torneo/:id sea el mismo que en /live-match.
+ */
+function handleFromUsuario(u: {
+  id: string;
+  nombre: string;
+  email: string;
+}): string {
+  if (u.nombre && !u.nombre.includes("@")) return u.nombre;
+  return u.email.split("@")[0] ?? u.id.slice(0, 8);
+}
+
+export interface ListarInscritosInput {
+  page?: number;
+  limit?: number;
+}
+
+export async function listarInscritos(
+  torneoId: string,
+  input: ListarInscritosInput = {},
+): Promise<ListarInscritosResult> {
+  const torneo = await prisma.torneo.findUnique({
+    where: { id: torneoId },
+    select: { id: true, estado: true },
+  });
+  if (!torneo) throw new TorneoNoEncontrado(torneoId);
+
+  const mostrarPredicciones = torneo.estado !== "ABIERTO";
+
+  const tickets = await prisma.ticket.findMany({
+    where: { torneoId },
+    include: {
+      usuario: { select: { id: true, nombre: true, email: true } },
+    },
+    orderBy: { creadoEn: "asc" },
+  });
+
+  // Agrupa tickets por usuarioId preservando orden de inscripción.
+  const porUsuario = new Map<string, InscritoInfo>();
+  for (const t of tickets) {
+    let info = porUsuario.get(t.usuarioId);
+    if (!info) {
+      info = {
+        usuarioId: t.usuarioId,
+        handle: handleFromUsuario(t.usuario),
+        torneosJugados: 0,
+        tickets: [],
+      };
+      porUsuario.set(t.usuarioId, info);
+    }
+    info.tickets.push({
+      ticketId: t.id,
+      predicciones: mostrarPredicciones
+        ? {
+            predResultado: t.predResultado,
+            predBtts: t.predBtts,
+            predMas25: t.predMas25,
+            predTarjetaRoja: t.predTarjetaRoja,
+            predMarcadorLocal: t.predMarcadorLocal,
+            predMarcadorVisita: t.predMarcadorVisita,
+          }
+        : null,
+      puntosTotal: t.puntosTotal,
+      puntosDetalle: {
+        resultado: t.puntosResultado,
+        btts: t.puntosBtts,
+        mas25: t.puntosMas25,
+        tarjeta: t.puntosTarjeta,
+        marcador: t.puntosMarcador,
+      },
+      posicionFinal: t.posicionFinal,
+      premioLukas: t.premioLukas,
+      creadoEn: t.creadoEn,
+    });
+  }
+
+  // Cuenta torneos jugados (únicos) por cada usuario — para el nivel.
+  const usuariosIds = Array.from(porUsuario.keys());
+  if (usuariosIds.length > 0) {
+    const todos = await prisma.ticket.findMany({
+      where: { usuarioId: { in: usuariosIds } },
+      select: { usuarioId: true, torneoId: true },
+    });
+    const torneosPorUsuario = new Map<string, Set<string>>();
+    for (const t of todos) {
+      if (!torneosPorUsuario.has(t.usuarioId)) {
+        torneosPorUsuario.set(t.usuarioId, new Set());
+      }
+      torneosPorUsuario.get(t.usuarioId)!.add(t.torneoId);
+    }
+    for (const [usuarioId, info] of porUsuario) {
+      info.torneosJugados = torneosPorUsuario.get(usuarioId)?.size ?? 0;
+    }
+  }
+
+  const inscritos = Array.from(porUsuario.values());
+  const total = inscritos.length;
+
+  // Paginación en memoria — el payload full ya está en RAM (típicamente
+  // <500 tickets por torneo MVP, pico <5000).
+  const page = Math.max(1, input.page ?? 1);
+  const limit = Math.min(100, Math.max(1, input.limit ?? 20));
+  const start = (page - 1) * limit;
+  const slice = inscritos.slice(start, start + limit);
+
+  return {
+    inscritos: slice,
+    total,
+    mostrarPredicciones,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // crear — admin crea un torneo sobre un partido disponible
 // ---------------------------------------------------------------------------
 

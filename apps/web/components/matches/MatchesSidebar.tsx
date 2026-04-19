@@ -10,6 +10,11 @@
 // Server Component — llama a auth() para saber si hay sesión. La data
 // de en-vivo y top-del-día es mock hasta los Sub-Sprints 5 y 3
 // respectivamente.
+//
+// Bug #14 (Hotfix #5): el widget de balance delega a
+// `SidebarBalanceWidget` (client) — antes renderizaba el monto desde
+// `session.user.balanceLukas` (SSR) y quedaba desincronizado tras
+// inscripciones que el store sí reflejaba en header y /mis-combinadas.
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { listarRanking } from "@/lib/services/ranking.service";
@@ -18,6 +23,7 @@ import {
   obtenerLiveMatches,
 } from "@/lib/services/live-matches.service";
 import { getTeamColor } from "@/lib/utils/team-colors";
+import { SidebarBalanceWidget } from "@/components/matches/SidebarBalanceWidget";
 
 // ---------------------------------------------------------------------------
 // Mock data — reemplazado por fetch real en Sub-Sprints 3 (ranking) y 5
@@ -124,7 +130,7 @@ export async function MatchesSidebar() {
     <aside className="flex flex-col gap-3.5">
       <LiveAhoraWidget matches={liveMatches} />
       <TopDelDiaWidget rows={TOP_DAY_MOCK} />
-      <BalanceWidget balance={balance} />
+      <SidebarBalanceWidget initialBalance={balance} />
     </aside>
   );
 }
@@ -341,81 +347,6 @@ function TopDelDiaWidget({ rows }: { rows: TopDayRow[] }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Widget 3: 🪙 Tu balance (auth-aware)
-// ---------------------------------------------------------------------------
-
-function BalanceWidget({ balance }: { balance: number | null }) {
-  const logged = balance !== null;
-  return (
-    <section className="overflow-hidden rounded-md border border-light bg-card shadow-sm">
-      <div className="flex items-center gap-2 border-b border-light px-3.5 py-3">
-        <span aria-hidden className="text-[15px]">
-          🪙
-        </span>
-        <span className="font-display text-[13px] font-extrabold uppercase tracking-[0.06em] text-dark">
-          Tu balance
-        </span>
-      </div>
-
-      {logged ? (
-        <LoggedBalance amount={balance} />
-      ) : (
-        <UnloggedBalance />
-      )}
-    </section>
-  );
-}
-
-function LoggedBalance({ amount }: { amount: number }) {
-  return (
-    <div className="p-[18px] text-center">
-      <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.08em] text-muted-d">
-        Disponible
-      </div>
-      <div className="font-display text-[40px] font-black leading-none text-brand-gold-dark">
-        {amount.toLocaleString("es-PE")}
-      </div>
-      <div className="mt-1 text-[11px] text-muted-d">
-        ≈ S/ {amount.toLocaleString("es-PE")} en créditos
-      </div>
-      <div className="mt-3.5 flex gap-2">
-        <Link
-          href="/wallet"
-          className="flex-1 rounded-sm bg-brand-gold px-2.5 py-2.5 text-center text-[12px] font-bold text-black transition-colors hover:bg-brand-gold-light"
-        >
-          💳 Comprar
-        </Link>
-        <Link
-          href="/tienda"
-          className="flex-1 rounded-sm border border-light bg-subtle px-2.5 py-2.5 text-center text-[12px] font-bold text-dark transition-colors hover:border-brand-gold"
-        >
-          🎁 Tienda
-        </Link>
-      </div>
-    </div>
-  );
-}
-
-function UnloggedBalance() {
-  return (
-    <div className="p-[18px] text-center">
-      <div aria-hidden className="mb-2 text-[28px] leading-none">
-        🔒
-      </div>
-      <p className="mb-0.5 text-[13px] font-bold text-dark">
-        Inicia sesión para ver tu balance
-      </p>
-      <p className="mb-3.5 text-[11px] leading-snug text-muted-d">
-        Regístrate y recibe 500 Lukas de bienvenida para tu primera
-        combinada.
-      </p>
-      <Link
-        href="/auth/login?callbackUrl=/"
-        className="block w-full rounded-sm bg-brand-gold px-2.5 py-2.5 text-[12px] font-bold text-black transition-colors hover:bg-brand-gold-light"
-      >
-        Entrar
-      </Link>
-    </div>
-  );
-}
+// Widget 3 (🪙 Tu balance) vive en SidebarBalanceWidget.tsx — Client
+// Component que consume `useLukasStore` (Bug #14). Sidebar server pasa
+// `initialBalance={session?.user?.balanceLukas ?? null}`.

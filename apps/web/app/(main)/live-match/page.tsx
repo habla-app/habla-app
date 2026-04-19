@@ -1,26 +1,23 @@
-// /live-match — Sub-Sprint 5 + hotfixes #1/#2/#3/#4.
+// /live-match — Sub-Sprint 5 + hotfixes #1/#2/#3/#4/#5.
 //
 // Server Component delgado. Resuelve:
 //   1. Partidos EN_VIVO con al menos un torneo no cancelado (Bug #8).
-//   2. Partidos FINALIZADOS de las últimas 24h (Bug #10).
+//   2. Partidos FINALIZADOS de las últimas 24h (Bug #10) — ahora con
+//      datos enriquecidos del ganador (5 chips + premio) para las
+//      cards de `<LiveFinalizedSection>` (Bug #16).
 //   3. Filtro por liga (`?liga=<slug>`) aplicado solo al switcher en
 //      vivo (Bug #11). La sección "Partidos finalizados" NO filtra.
+//   4. "Próximo torneo" (el ABIERTO cuyo cierre es el siguiente) para
+//      alimentar la banda motivacional `<LiveFinalizedBanner>` que
+//      aparece al final del detalle post-partido (Bug #16).
 //
 // El switcher superior (LiveSwitcher) muestra SOLO partidos EN_VIVO
 // que coincidan con el filtro de liga. Los finalizados van en una
 // sección debajo con cards de resumen (LiveFinalizedSection).
-//
-// Params:
-//   - ?torneoId=<id>  → pantalla específica de un torneo (cualquiera,
-//                       sea EN_VIVO o FINALIZADO). Si apunta a un
-//                       FINALIZADO fuera del filtro, igual se renderea
-//                       (compat con linkeos internos y emails de
-//                       premios); el switcher lo ignora.
-//   - ?partidoId=<id> → backward compat del Hotfix #3.
-//   - ?liga=<slug>    → filtra el switcher en vivo (Bug #11).
 
 import { auth } from "@/lib/auth";
 import { listarRanking } from "@/lib/services/ranking.service";
+import { listar as listarTorneos } from "@/lib/services/torneos.service";
 import {
   elegirTorneoPrincipal,
   obtenerFinalizedMatches,
@@ -40,6 +37,7 @@ import {
 } from "@/components/live/LiveMatchView";
 import type { FinalizedMatchCard } from "@/components/live/LiveFinalizedSection";
 import type { LigaChipInfo } from "@/components/live/LiveLeagueFilter";
+import { buildFinalizedWinnerChips } from "@/components/live/finalized-winner-chips";
 
 interface Props {
   searchParams?: { torneoId?: string; partidoId?: string; liga?: string };
@@ -47,13 +45,25 @@ interface Props {
 
 export const dynamic = "force-dynamic";
 
+async function buscarProximoTorneoId(): Promise<string | null> {
+  try {
+    const { torneos } = await listarTorneos({ estado: "ABIERTO", limit: 1 });
+    return torneos[0]?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export default async function LiveMatchPage({ searchParams }: Props) {
   const session = await auth();
 
-  const [liveRaw, finalizadosRaw] = await Promise.all([
+  const [liveRaw, finalizadosRaw, proximoTorneoId] = await Promise.all([
     // Live-only: el switcher solo muestra EN_VIVO (Bug #10).
     obtenerLiveMatches({ limit: 20, incluirFinalizados: false }),
     obtenerFinalizedMatches({ sinceHours: 24, limit: 10 }),
+    // Próximo torneo abierto más cercano a cerrar — alimenta la banda
+    // motivacional del detalle post-partido (Bug #16).
+    buscarProximoTorneoId(),
   ]);
 
   // Derivamos la lista de ligas presentes EN_VIVO ahora — las chips
@@ -73,21 +83,30 @@ export default async function LiveMatchPage({ searchParams }: Props) {
   const liveTabs = buildLiveTabs(liveFiltered);
 
   // Cards finalizadas (sin filtrar por liga por decisión del PO).
+  // Bug #16: enriquecidas con las 5 chips del ganador + premio real.
   const finalizedCards: FinalizedMatchCard[] = await Promise.all(
     finalizadosRaw.map(async (p) => {
       const main = elegirTorneoPrincipal(p.torneos);
-      let ganadorNombre: string | null = null;
-      let ganadorPremio: number | null = null;
+      let ganador: FinalizedMatchCard["ganador"] = null;
       if (main) {
         try {
           const r = await listarRanking(main.id, { limit: 1 });
           const top = r.ranking[0];
           if (top) {
-            ganadorNombre = top.nombre;
-            ganadorPremio = top.premioEstimado;
+            ganador = {
+              nombre: top.nombre,
+              puntos: top.puntosTotal,
+              premioLukas: top.premioEstimado,
+              chips: buildFinalizedWinnerChips(
+                top,
+                p.equipoLocal,
+                p.equipoVisita,
+              ),
+            };
           }
         } catch {
-          // Ignorar: card se renderiza sin ganador
+          // Ignorar: card se renderiza sin ganador (ver fallback en
+          // LiveFinalizedSection).
         }
       }
       return {
@@ -102,8 +121,7 @@ export default async function LiveMatchPage({ searchParams }: Props) {
         fechaInicio: p.fechaInicio,
         totalInscritos: main?.totalInscritos ?? 0,
         pozoBruto: main?.pozoBruto ?? 0,
-        ganadorNombre,
-        ganadorPremio,
+        ganador,
       };
     }),
   );
@@ -151,6 +169,7 @@ export default async function LiveMatchPage({ searchParams }: Props) {
       <EmptyLiveWithFinalized
         finalizedCards={finalizedCards}
         ligasChips={ligasChips}
+        proximoTorneoId={proximoTorneoId}
       />
     );
   }
@@ -196,6 +215,7 @@ export default async function LiveMatchPage({ searchParams }: Props) {
       ligasChips={ligasChips}
       finalizedCards={finalizedCards}
       filtroActivo={ligaSlug !== null}
+      proximoTorneoId={proximoTorneoId}
     />
   );
 }
@@ -319,9 +339,11 @@ function EmptyLive() {
 function EmptyLiveWithFinalized({
   finalizedCards,
   ligasChips,
+  proximoTorneoId,
 }: {
   finalizedCards: FinalizedMatchCard[];
   ligasChips: LigaChipInfo[];
+  proximoTorneoId: string | null;
 }) {
   // Re-usamos el LiveMatchView con tabs vacío para que rendere el
   // header + section de finalizados debajo. Evita duplicar el diseño.
@@ -340,6 +362,7 @@ function EmptyLiveWithFinalized({
       ligasChips={ligasChips}
       finalizedCards={finalizedCards}
       filtroActivo={false}
+      proximoTorneoId={proximoTorneoId}
     />
   );
 }

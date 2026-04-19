@@ -1,19 +1,27 @@
-// LiveFinalizedSection — lista de partidos finalizados recientes que se
-// muestra debajo del switcher en vivo de `/live-match` (Hotfix #4 Bug
-// #10). El switcher superior ahora SOLO muestra partidos en curso; los
-// finalizados van en esta sección separada con cards de resumen.
+// LiveFinalizedSection — sección de "🏁 Partidos finalizados de hoy"
+// que aparece debajo del switcher en vivo de /live-match.
 //
-// Diseño: usa los tokens de marca (`bg-card`, `border-light`, `brand-gold`)
-// y mantiene el layout coherente con /matches (section-bar + grid de
-// cards). Cada card linkea a `/live-match?torneoId=<id>` que rendera el
-// mismo hero/ranking en modo post-partido.
+// Hotfix #4 Bug #10 introdujo la sección. Hotfix #5 Bug #16 la
+// enriquece: cada card ahora muestra las 5 predicciones del ganador
+// como mini-chips coloreadas por acierto (verde) o fallo (rojo),
+// además del nombre + premio que ya estaban. Al clickear la card
+// → `/live-match?torneoId=<id>` rendera el mismo hero/ranking en modo
+// post-partido, con banda motivacional al final (LiveMatchView).
 //
-// La sección NO se filtra por liga (Bug #10): la `LiveLeagueFilter` de
-// Bug #11 aplica solo al switcher en vivo. Si el PO lo pide, se puede
-// agregar un filter-chips propio para esta sección en el futuro.
+// La sección NO se filtra por liga (decisión del PO del Bug #11).
 
 import Link from "next/link";
 import { getTeamColor } from "@/lib/utils/team-colors";
+
+export type EstadoChipFinalizado = "correct" | "wrong" | "pending";
+
+export interface GanadorPreview {
+  nombre: string;
+  puntos: number;
+  premioLukas: number;
+  /** 5 mini-chips con la predicción + resultado final. Bug #16. */
+  chips: Array<{ label: string; estado: EstadoChipFinalizado }>;
+}
 
 export interface FinalizedMatchCard {
   partidoId: string;
@@ -27,8 +35,12 @@ export interface FinalizedMatchCard {
   fechaInicio: Date;
   totalInscritos: number;
   pozoBruto: number;
-  ganadorNombre: string | null;
-  ganadorPremio: number | null;
+  /**
+   * Ganador del torneo (top 1). Puede ser null si no hubo tickets
+   * (edge case: torneo finalizado con 0 inscritos — improbable tras
+   * el cierre automático que cancela <2, pero defensivo).
+   */
+  ganador: GanadorPreview | null;
 }
 
 interface Props {
@@ -70,7 +82,7 @@ export function LiveFinalizedSection({ matches }: Props) {
             Partidos finalizados de hoy
           </div>
           <div className="mt-0.5 text-[12px] text-muted-d">
-            Mirá cómo terminó el ranking · Entrá para ver los top 10
+            Mirá cómo jugó la gente real · Entrá para ver el top 10 completo
           </div>
         </div>
         <span className="flex-shrink-0 rounded-full bg-brand-green px-3 py-1 font-display text-[13px] font-extrabold text-black">
@@ -129,20 +141,55 @@ function FinalizedCard({ match }: { match: FinalizedMatchCard }) {
         <Meta label="Pozo" value={`${match.pozoBruto.toLocaleString("es-PE")} 🪙`} />
       </div>
 
-      {match.ganadorNombre && match.ganadorPremio !== null && (
-        <div className="mb-2 rounded-sm bg-brand-gold/10 px-2.5 py-1.5 text-[11px]">
-          <span className="font-bold text-brand-gold-dark">🏆 1°</span>{" "}
-          <span className="font-semibold text-dark">{match.ganadorNombre}</span>{" "}
-          <span className="text-muted-d">
-            · {match.ganadorPremio.toLocaleString("es-PE")} 🪙
-          </span>
+      {match.ganador ? (
+        <WinnerPreview ganador={match.ganador} />
+      ) : (
+        <div className="mb-2 rounded-sm border border-dashed border-light px-2.5 py-2 text-center text-[11px] text-muted-d">
+          Sin ganadores registrados
         </div>
       )}
 
-      <div className="mt-auto text-right text-[12px] font-bold text-brand-blue-main transition-colors group-hover:text-brand-gold-dark">
+      <div className="mt-auto pt-2 text-right text-[12px] font-bold text-brand-blue-main transition-colors group-hover:text-brand-gold-dark">
         Ver resultado completo →
       </div>
     </Link>
+  );
+}
+
+function WinnerPreview({ ganador }: { ganador: GanadorPreview }) {
+  return (
+    <div
+      className="mb-2 rounded-sm bg-brand-gold/10 px-2.5 py-2"
+      data-testid="finalized-card-winner"
+    >
+      <div className="mb-1.5 flex items-center gap-2 text-[11px]">
+        <span aria-hidden className="text-[14px]">
+          🏆
+        </span>
+        <span className="font-bold text-brand-gold-dark">1°</span>
+        <span className="truncate font-semibold text-dark">{ganador.nombre}</span>
+        <span className="ml-auto flex-shrink-0 font-display text-[13px] font-black text-brand-gold-dark">
+          +{ganador.premioLukas.toLocaleString("es-PE")} 🪙
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-1">
+        {ganador.chips.map((c, idx) => (
+          <span
+            key={idx}
+            className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+              c.estado === "correct"
+                ? "bg-pred-correct-bg text-pred-correct"
+                : c.estado === "wrong"
+                  ? "bg-pred-wrong-bg text-pred-wrong"
+                  : "bg-pred-pending-bg text-muted-d"
+            }`}
+            data-testid={`finalized-winner-chip-${c.estado}`}
+          >
+            {c.label}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 

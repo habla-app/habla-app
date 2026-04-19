@@ -27,6 +27,7 @@ import { EmptyFilteredState } from "@/components/matches/EmptyFilteredState";
 import { AutoOpenComboFromQuery } from "@/components/combo/AutoOpenComboFromQuery";
 import { slugToLiga } from "@/lib/config/liga-slugs";
 import { DEFAULT_TZ, getDayBounds, getDayKey } from "@/lib/utils/datetime";
+import { buildMatchesPageTitle } from "@/lib/utils/matches-page-title";
 
 interface Props {
   /** ?liga=<slug> — slug de la URL, se traduce a Partido.liga. */
@@ -93,13 +94,23 @@ export async function MatchesPageContent({
     limit: 10,
   });
 
+  // Bug #15: el h1 antes decía literal "Partidos de hoy" siempre. Ahora
+  // lo derivamos de los filtros activos (liga + día) vía helper puro.
+  const { title: pageTitle } = buildMatchesPageTitle({
+    liga: ligaSlug ?? null,
+    dia: dia ?? null,
+  });
+
   return (
     <div className="mx-auto w-full max-w-[1280px] px-4 pt-6 md:px-6 md:pt-8">
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0">
           <header className="mb-5">
-            <h1 className="font-display text-[40px] font-black uppercase leading-none tracking-[0.01em] text-dark">
-              Partidos de hoy
+            <h1
+              className="font-display text-[40px] font-black uppercase leading-none tracking-[0.01em] text-dark"
+              data-testid="matches-page-title"
+            >
+              {pageTitle}
             </h1>
             <p className="mt-1.5 text-sm leading-relaxed text-muted-d">
               Inscríbete al torneo, arma tu combinada de 5 predicciones y

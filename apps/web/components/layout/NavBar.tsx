@@ -6,15 +6,22 @@
 // delega a NavLinks (client) porque necesita usePathname. Para el chip
 // de Lukas delega a BalanceBadge (client) porque necesita re-renderizar
 // cuando el balance cambia en el store tras una inscripción (Bug #7).
+//
+// Bug #12 (Hotfix #5): el contador del link "🔴 En vivo" antes era un
+// hardcode `LIVE_COUNT_PLACEHOLDER = 2`. Ahora el layout (main) hace una
+// sola llamada a `contarLiveMatches()` y nos pasa `initialLiveCount`
+// como prop — lo propagamos al NavLinks que a su vez lo pasa al
+// LiveCountBadge (client, con polling cada 30s).
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { NavLinks } from "@/components/layout/NavLinks";
 import { UserMenu } from "@/components/layout/UserMenu";
 import { BalanceBadge } from "@/components/layout/BalanceBadge";
 
-// Placeholder hasta el Sub-Sprint 5, donde el poller de partidos alimenta
-// un endpoint GET /live/matches. Reemplazar aquí por fetch real.
-const LIVE_COUNT_PLACEHOLDER = 2;
+interface Props {
+  /** Count del SSR (del layout, via contarLiveMatches). 0 default. */
+  initialLiveCount?: number;
+}
 
 function iniciales(
   nombre: string | undefined | null,
@@ -26,7 +33,7 @@ function iniciales(
   return base.slice(0, 2).toUpperCase();
 }
 
-export async function NavBar() {
+export async function NavBar({ initialLiveCount = 0 }: Props = {}) {
   const session = await auth();
   const usuario = session?.user ?? null;
 
@@ -48,7 +55,7 @@ export async function NavBar() {
             </span>
             <span>Habla!</span>
           </Link>
-          <NavLinks liveCount={LIVE_COUNT_PLACEHOLDER} />
+          <NavLinks initialLiveCount={initialLiveCount} />
         </div>
 
         {/* RIGHT: balance + avatar o "Entrar" */}
