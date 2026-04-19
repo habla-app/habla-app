@@ -2,6 +2,15 @@
 // servicio de torneos. CTAs de MatchCard → /torneo/{id} (público).
 import { MatchesPageContent } from "@/components/matches/MatchesPageContent";
 
-export default async function HomePage() {
-  return <MatchesPageContent />;
+interface Props {
+  searchParams?: { liga?: string; dia?: string };
+}
+
+export default async function HomePage({ searchParams }: Props) {
+  return (
+    <MatchesPageContent
+      ligaSlug={searchParams?.liga}
+      dia={searchParams?.dia}
+    />
+  );
 }

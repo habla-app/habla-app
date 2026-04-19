@@ -1,47 +1,87 @@
 // Contenido compartido entre `/` y `/matches`. Server Component async.
-// Fetchea los torneos reales desde el servicio de torneos y los pinta con
-// MatchCard (urgencia computada desde cierreAt). La sidebar sticky de los
-// 3 widgets se comparte con ambas rutas.
 //
-// Filtros/paginación — Sub-Sprint 3 se enfoca en la vista por defecto
-// (ABIERTO, futuros, ordenados por cierreAt). Las chips quedan visibles
-// pero decorativas hasta que se wire el query-params filtering.
+// Fase 3 — filtros funcionales:
+//   - ?liga=<slug> → filtra por Partido.liga usando el mapper de
+//     liga-slugs.ts.
+//   - ?dia=YYYY-MM-DD (en hora Perú) → filtra por Partido.fechaInicio
+//     dentro del rango UTC correspondiente. Si falta, aplica "hoy" por
+//     default en memoria (no redirige; la URL queda limpia).
+//
+// El bloque de chips (LeagueFilterChips / DayFilterChips) es client
+// component; consume la URL con useMatchesFilters. El server hace el
+// fetch real y pinta la lista — la navegación por chips disparará
+// re-render server cuando Next.js re-matchee con los nuevos params.
+
+import Link from "next/link";
 import { listar } from "@/lib/services/torneos.service";
-import { Chip } from "@/components/ui";
 import { MatchCard } from "@/components/matches/MatchCard";
 import { torneoToCardData } from "@/components/matches/adapter";
 import { MatchesSidebar } from "@/components/matches/MatchesSidebar";
-
-const FILTROS_LIGA = [
-  "Todas las ligas",
-  "Liga 1 Perú",
-  "Champions",
-  "Libertadores",
-  "Premier",
-  "Mundial 2026",
-];
+import { LeagueFilterChips } from "@/components/matches/LeagueFilterChips";
+import { DayFilterChips } from "@/components/matches/DayFilterChips";
+import { EmptyFilteredState } from "@/components/matches/EmptyFilteredState";
+import { slugToLiga } from "@/lib/config/liga-slugs";
+import { DEFAULT_TZ, getDayBounds, getDayKey } from "@/lib/utils/datetime";
 
 interface Props {
-  /** Filtro liga opcional — viene de ?liga=... en el futuro. */
-  liga?: string;
+  /** ?liga=<slug> — slug de la URL, se traduce a Partido.liga. */
+  ligaSlug?: string;
+  /** ?dia=YYYY-MM-DD (hora Perú). */
+  dia?: string;
 }
 
-export async function MatchesPageContent({ liga }: Props = {}) {
+const DIAS_LOOKAHEAD = 7;
+
+export async function MatchesPageContent({ ligaSlug, dia }: Props = {}) {
+  const liga = slugToLiga(ligaSlug ?? null) ?? undefined;
+
+  // Default day = hoy en Perú cuando no llega ?dia= en la URL. No
+  // redirigimos — el chip "Hoy" se marca activo igual y la URL queda
+  // sin parámetro.
+  const now = new Date();
+  const todayKey = getDayKey(now, DEFAULT_TZ);
+  const activeDia = dia ?? todayKey;
+  const { desde, hasta } = getDayBounds(activeDia, DEFAULT_TZ);
+
+  // Fetch principal: torneos abiertos del día filtrado (+liga si aplica).
   const { torneos } = await listar({
     estado: "ABIERTO",
     liga,
+    desde,
+    hasta,
     limit: 50,
   });
 
-  const now = new Date();
   const cards = torneos
-    .filter((t) => t.cierreAt.getTime() > now.getTime()) /* esconder vencidos */
-    .map((t) => torneoToCardData(t, now));
+    .filter((t) => t.cierreAt.getTime() > now.getTime())
+    .map(torneoToCardData);
+
+  // Fetch auxiliar para contadores de chips de día: misma liga pero
+  // ventana amplia hoy → hoy+7d. No filtra por día. Se usa solo para
+  // el count en cada chip; la lista real está arriba.
+  const { desde: countDesde } = getDayBounds(todayKey, DEFAULT_TZ);
+  const countHasta = new Date(
+    countDesde.getTime() + DIAS_LOOKAHEAD * 86_400_000 - 1,
+  );
+  const { torneos: torneosVentana } = await listar({
+    estado: "ABIERTO",
+    liga,
+    desde: countDesde,
+    hasta: countHasta,
+    limit: 200,
+  });
+  const dayCounts: Record<string, number> = {};
+  for (const t of torneosVentana) {
+    const key = getDayKey(t.partido.fechaInicio, DEFAULT_TZ);
+    dayCounts[key] = (dayCounts[key] ?? 0) + 1;
+  }
 
   const { torneos: finalizados } = await listar({
     estado: "FINALIZADO",
     limit: 10,
   });
+
+  const filtrosActivos = Boolean(liga || dia);
 
   return (
     <div className="mx-auto w-full max-w-[1280px] px-4 pt-6 md:px-6 md:pt-8">
@@ -57,13 +97,10 @@ export async function MatchesPageContent({ liga }: Props = {}) {
             </p>
           </header>
 
-          {/* FILTER STRIP — decorativo hasta que se wire ?liga=… */}
-          <div className="scrollbar-none mb-5 flex gap-2 overflow-x-auto pb-1">
-            {FILTROS_LIGA.map((filtro, idx) => (
-              <Chip key={filtro} active={idx === 0}>
-                {filtro}
-              </Chip>
-            ))}
+          {/* FILTROS — liga + día */}
+          <div className="mb-4 flex flex-col gap-2.5">
+            <LeagueFilterChips />
+            <DayFilterChips dayCounts={dayCounts} />
           </div>
 
           {/* SECTION BAR — próximos torneos */}
@@ -88,18 +125,22 @@ export async function MatchesPageContent({ liga }: Props = {}) {
           </div>
 
           {cards.length === 0 ? (
-            <div className="mb-10 rounded-md border border-light bg-card px-6 py-12 text-center shadow-sm">
-              <div aria-hidden className="mb-3 text-4xl">
-                📅
+            filtrosActivos ? (
+              <EmptyFilteredState ligaSlug={ligaSlug} dia={dia} />
+            ) : (
+              <div className="mb-10 rounded-md border border-light bg-card px-6 py-12 text-center shadow-sm">
+                <div aria-hidden className="mb-3 text-4xl">
+                  📅
+                </div>
+                <p className="text-sm font-semibold text-dark">
+                  No hay torneos abiertos ahora mismo
+                </p>
+                <p className="mt-1 text-[13px] text-muted-d">
+                  El auto-import trae partidos nuevos cada 6h desde
+                  api-football. Pasa de nuevo en un rato.
+                </p>
               </div>
-              <p className="text-sm font-semibold text-dark">
-                No hay torneos abiertos ahora mismo
-              </p>
-              <p className="mt-1 text-[13px] text-muted-d">
-                Los administradores importan partidos de api-football y crean
-                los torneos desde <code>/admin</code>.
-              </p>
-            </div>
+            )
           ) : (
             <div className="mb-10 flex flex-col gap-3.5">
               {cards.map((torneo) => (

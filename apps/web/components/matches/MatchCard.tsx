@@ -1,67 +1,31 @@
-// MatchCard — réplica de `.mcard` del mockup (docs/habla-mockup-completo.html
-// líneas 244-293). Cards con urgencia basada en tiempo de cierre que cambia
-// el borde, el banner superior, el badge y el CTA.
+// MatchCard v4 — diseño compacto (~150px) con pozo dorado featured,
+// avatares hash-color y CTA lateral 110px. Responsive: <640px el CTA
+// pasa a fila inferior full-width.
 //
-// Usado por `/` (landing) en Fase 2 con mock data; Sub-Sprint 3 lo reutiliza
-// en `/matches` con data real de api-football. Fase 3 agrega urgency
-// calculation desde `cierreAt`.
+// Props: MatchCardData trae los datos crudos del torneo + partido; los
+// labels de kickoff/countdown/urgencia se calculan en render. El server
+// resuelve todo en el primer pass.
 import Link from "next/link";
-
-export type Urgency = "critical" | "high" | "med" | "low";
-
-export type TipoBadge =
-  | "premium"
-  | "express"
-  | "estandar"
-  | "champions"
-  | "clasico"
-  | "mundial"
-  | "liberta";
-
-const TYPE_BADGE_CLASSES: Record<TipoBadge, string> = {
-  premium:
-    "border-brand-gold bg-brand-gold-dim text-brand-gold-dark",
-  express:
-    "border-accent-express bg-accent-express-bg text-accent-express-dark",
-  estandar:
-    "border-accent-libertadores bg-accent-libertadores-bg text-accent-libertadores-dark",
-  champions:
-    "border-brand-blue-main bg-accent-champions-bg text-accent-champions-dark",
-  clasico:
-    "border-accent-clasico bg-accent-clasico-bg text-accent-clasico-dark",
-  mundial:
-    "border-accent-mundial bg-accent-mundial-bg text-accent-mundial-dark",
-  liberta:
-    "border-accent-libertadores bg-accent-libertadores-bg text-accent-libertadores-dark",
-};
-
-const TYPE_BADGE_LABELS: Record<TipoBadge, string> = {
-  premium: "Premium",
-  express: "Express",
-  estandar: "Estándar",
-  champions: "Champions",
-  clasico: "Clásico",
-  mundial: "Mundial",
-  liberta: "Libertadores",
-};
+import {
+  formatCountdown,
+  formatKickoff,
+  urgencyLevel,
+  type UrgencyTier,
+} from "@/lib/utils/datetime";
+import { getTeamColor, getTeamInitials } from "@/lib/utils/team-colors";
 
 export interface MatchCardData {
   id: string;
   liga: string;
-  ligaIcon?: string;
-  tipoBadge: TipoBadge;
+  round: string | null;
+  venue: string | null;
   equipoLocal: string;
-  equipoLocalIcon?: string;
-  equipoLocalColor?: string;
   equipoVisita: string;
-  equipoVisitaIcon?: string;
-  equipoVisitaColor?: string;
   pozoBruto: number;
   entradaLukas: number;
   totalInscritos: number;
-  urgency: Urgency;
-  urgencyLabel: string; /* "¡Cierra en 8 min!" | "⏰ 42 min" | "2h 15m" | "19:30" */
-  featured?: boolean;
+  fechaInicio: Date;
+  cierreAt: Date;
 }
 
 interface MatchCardProps {
@@ -70,195 +34,252 @@ interface MatchCardProps {
   href?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Tokens derivados
+// ---------------------------------------------------------------------------
+
+const URGENCY_TEXT_CLASS: Record<UrgencyTier, string> = {
+  crit: "text-urgent-critical",
+  high: "text-urgent-high",
+  med: "text-brand-gold-dark",
+  low: "text-muted-d",
+};
+
+const URGENCY_WEIGHT_CLASS: Record<UrgencyTier, string> = {
+  crit: "font-extrabold",
+  high: "font-bold",
+  med: "font-semibold",
+  low: "font-medium",
+};
+
+/**
+ * Accent bar color por liga. No usamos tokens Tailwind porque el color
+ * se aplica como `style.background` para ser tintable contra fondos
+ * variables.
+ */
+function getLigaAccent(liga: string): string {
+  const L = liga.toLowerCase();
+  if (L.includes("mundial")) return "#8B5CF6"; // accent-mundial
+  if (L.includes("champions")) return "#1E3A8A"; // accent-champions-dark
+  if (L.includes("libertadores")) return "#059669"; // accent-libertadores
+  if (L.includes("premier")) return "#7C3AED"; // violet
+  if (L.includes("la liga")) return "#DC2626"; // clasico red
+  if (L.includes("liga 1") || L.includes("peru")) return "#B45309"; // amber
+  return "#FFB800"; // brand-gold fallback
+}
+
+// ---------------------------------------------------------------------------
+// Card
+// ---------------------------------------------------------------------------
+
 export function MatchCard({ torneo, href }: MatchCardProps) {
-  const isCritical = torneo.urgency === "critical";
-  const isHigh = torneo.urgency === "high";
-  const isMed = torneo.urgency === "med";
-
-  const mcardBg =
-    isCritical
-      ? "bg-mcard-critical"
-      : isHigh
-        ? "bg-mcard-high"
-        : "bg-card";
-
-  const mcardBorder =
-    isCritical
-      ? "border-2 border-urgent-critical animate-pulse-border"
-      : isHigh
-        ? "border-2 border-urgent-high"
-        : isMed
-          ? "border-[1.5px] border-brand-gold/40"
-          : "border border-light";
-
-  const topStripe = isCritical
-    ? "h-[5px] bg-mcard-critical-stripe bg-[length:200%_100%] animate-shimmer"
-    : isHigh
-      ? "h-1 bg-urgent-high"
-      : "";
+  const urgency = urgencyLevel(torneo.cierreAt);
+  const kickoff = formatKickoff(torneo.fechaInicio);
+  const countdown = formatCountdown(torneo.cierreAt);
 
   const destination = href ?? `/torneo/${torneo.id}`;
 
-  const ctaCritical = isCritical;
-  const ctaText = ctaCritical
-    ? "🔥 Inscribirme antes que cierre"
-    : "🎯 Crear combinada";
-  const ctaClasses = ctaCritical
-    ? "bg-urgent-critical text-white shadow-urgent-btn hover:bg-urgent-critical-hover hover:-translate-y-px"
-    : "bg-brand-gold text-black shadow-gold-btn hover:bg-brand-gold-light hover:-translate-y-px hover:shadow-gold";
-
-  const urgBadgeClasses = {
-    critical:
-      "bg-urgent-critical text-white animate-live-pulse",
-    high: "bg-urgent-high-bg text-urgent-high-dark border border-urgent-high",
-    med: "bg-urgent-med-bg text-brand-gold-dark border border-brand-gold/40",
-    low: "bg-urgent-low-bg text-muted-d border border-light",
-  }[torneo.urgency];
+  const accentColor = getLigaAccent(torneo.liga);
 
   return (
-    <article
-      className={`group relative overflow-hidden rounded-md shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md ${mcardBg} ${mcardBorder} ${torneo.featured ? "p-6" : ""}`}
-    >
-      {topStripe && (
-        <span
-          aria-hidden
-          className={`pointer-events-none absolute inset-x-0 top-0 ${topStripe}`}
-        />
-      )}
+    <article className="group relative flex flex-col overflow-hidden rounded-md border border-light bg-card shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md sm:flex-row">
+      {/* accent bar izquierda (desktop) / superior (mobile) */}
+      <span
+        aria-hidden
+        className="h-1 w-full flex-shrink-0 sm:h-auto sm:w-1"
+        style={{ background: accentColor }}
+      />
 
-      <div className={torneo.featured ? "" : "p-[18px]"}>
-        {/* top row — liga + urgency/type badges */}
-        <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2">
-          <span className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.06em] text-muted-d">
-            {torneo.ligaIcon && <span aria-hidden>{torneo.ligaIcon}</span>}
-            {torneo.liga}
-          </span>
-          <div className="flex items-center gap-2">
-            <span
-              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-[4px] text-[11px] font-extrabold uppercase tracking-[0.04em] ${TYPE_BADGE_CLASSES[torneo.tipoBadge]}`}
-            >
-              {TYPE_BADGE_LABELS[torneo.tipoBadge]}
+      {/* body */}
+      <div className="min-w-0 flex-1 px-4 py-3 sm:px-5 sm:py-3.5">
+        {/* header: liga·round + kickoff/countdown */}
+        <header className="mb-2.5 flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[11px] font-bold uppercase tracking-[0.06em] text-muted-d">
+              {torneo.liga.toUpperCase()}
+              {torneo.round && (
+                <>
+                  <span className="mx-1.5 text-soft">·</span>
+                  <span>{torneo.round.toUpperCase()}</span>
+                </>
+              )}
+            </div>
+            {torneo.venue && (
+              <div className="truncate text-[11px] leading-snug text-soft">
+                {torneo.venue}
+              </div>
+            )}
+          </div>
+          <div className="flex flex-shrink-0 flex-col items-end">
+            <span className="font-display text-[12px] font-extrabold uppercase tracking-[0.04em] text-dark">
+              {kickoff}
             </span>
             <span
-              className={`inline-flex items-center gap-1.5 rounded-full px-[11px] py-[5px] font-display text-[13px] font-extrabold uppercase tracking-[0.03em] ${urgBadgeClasses}`}
+              className={`text-[11px] ${URGENCY_TEXT_CLASS[urgency]} ${URGENCY_WEIGHT_CLASS[urgency]}`}
             >
-              {isCritical && (
-                <span
-                  aria-hidden
-                  className="h-[7px] w-[7px] animate-pulse-dot rounded-full bg-white"
-                />
-              )}
-              {torneo.urgencyLabel}
+              {countdown}
             </span>
           </div>
-        </div>
+        </header>
 
         {/* teams row */}
-        <div
-          className={`grid grid-cols-[1fr_auto_1fr] items-center gap-4 ${torneo.featured ? "my-4" : "my-3.5"}`}
-        >
-          <TeamCol
-            name={torneo.equipoLocal}
-            icon={torneo.equipoLocalIcon}
-            color={torneo.equipoLocalColor}
-            featured={torneo.featured}
-          />
-          <span
-            className={`font-display font-black text-soft ${torneo.featured ? "text-[32px]" : "text-[22px]"}`}
-          >
+        <div className="my-2 flex items-center gap-3">
+          <TeamAvatar name={torneo.equipoLocal} />
+          <span className="min-w-0 flex-1 truncate font-display text-[15px] font-extrabold uppercase text-dark">
+            {torneo.equipoLocal}
+          </span>
+          <span className="flex-shrink-0 font-display text-[15px] font-black text-soft">
             VS
           </span>
-          <TeamCol
-            name={torneo.equipoVisita}
-            icon={torneo.equipoVisitaIcon}
-            color={torneo.equipoVisitaColor}
-            featured={torneo.featured}
-          />
+          <span className="min-w-0 flex-1 truncate text-right font-display text-[15px] font-extrabold uppercase text-dark">
+            {torneo.equipoVisita}
+          </span>
+          <TeamAvatar name={torneo.equipoVisita} />
         </div>
 
-        {/* stats row */}
-        <div className="mb-3.5 grid grid-cols-3 gap-2 border-y border-light py-3">
-          <Stat
-            value={torneo.pozoBruto.toLocaleString("es-PE")}
-            label="Pozo"
-            gold
+        {/* stats row: entrada | pozo (featured 1.7fr) | jugadores */}
+        <div className="mt-2.5 grid grid-cols-[1fr_1.7fr_1fr] gap-2">
+          <StatBox
+            label="ENTRADA"
+            value={`${torneo.entradaLukas.toLocaleString("es-PE")} 🪙`}
+            variant="neutral"
           />
-          <Stat
-            value={`${torneo.entradaLukas} 🪙`}
-            label="Entrada"
+          <StatBox
+            label="POZO EN JUEGO"
+            value={`${torneo.pozoBruto.toLocaleString("es-PE")} 🪙`}
+            variant="featured"
           />
-          <Stat
-            value={torneo.totalInscritos.toString()}
-            label="Inscritos"
+          <StatBox
+            label="JUGADORES"
+            value={torneo.totalInscritos.toLocaleString("es-PE")}
+            variant="neutral-green"
           />
-        </div>
-
-        {/* CTA */}
-        <div className="flex gap-2">
-          <Link
-            href={destination}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm px-4 py-3 text-[13px] font-extrabold transition-all duration-150 ${ctaClasses}`}
-          >
-            {ctaText}
-          </Link>
         </div>
       </div>
+
+      {/* CTA — lateral en desktop (110px), full-width bottom en mobile (48px) */}
+      <Link
+        href={destination}
+        aria-label="Crear combinada"
+        className="group/cta flex h-12 w-full flex-shrink-0 items-center justify-center gap-2 bg-brand-gold font-display text-[13px] font-extrabold uppercase tracking-[0.04em] text-dark transition-all duration-150 hover:bg-brand-gold-light hover:shadow-gold sm:h-auto sm:w-[110px] sm:flex-col sm:gap-1.5 sm:px-3 sm:text-[12px]"
+      >
+        <TargetIcon />
+        <span className="hidden text-center leading-tight sm:inline">
+          Crear
+          <br />
+          combinada
+        </span>
+        <span className="inline sm:hidden">Crear combinada</span>
+        <ArrowIcon />
+      </Link>
     </article>
   );
 }
 
-function TeamCol({
-  name,
-  icon,
-  color,
-  featured,
-}: {
-  name: string;
-  icon?: string;
-  color?: string;
-  featured?: boolean;
-}) {
-  const shieldBg = color
-    ? `bg-gradient-to-br ${color}`
-    : "bg-subtle";
-  const shieldSize = featured ? "h-16 w-16 text-[30px]" : "h-12 w-12 text-[22px]";
-  const nameSize = featured ? "text-[22px]" : "text-[17px]";
+// ---------------------------------------------------------------------------
+// Subcomponents
+// ---------------------------------------------------------------------------
+
+function TeamAvatar({ name }: { name: string }) {
+  const color = getTeamColor(name);
+  const initials = getTeamInitials(name);
   return (
-    <div className="text-center">
-      <div
-        aria-hidden
-        className={`mx-auto mb-2 flex items-center justify-center rounded-full shadow-sm ${shieldBg} ${shieldSize}`}
-      >
-        {icon}
-      </div>
-      <div
-        className={`font-display font-black uppercase text-dark ${nameSize}`}
-      >
-        {name}
-      </div>
+    <div
+      aria-hidden
+      className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full font-display text-[13px] font-black uppercase shadow-sm"
+      style={{ background: color.bg, color: color.fg }}
+    >
+      {initials}
     </div>
   );
 }
 
-function Stat({
-  value,
+type StatVariant = "neutral" | "featured" | "neutral-green";
+
+const STAT_VARIANT_CLASSES: Record<
+  StatVariant,
+  { wrap: string; label: string; value: string }
+> = {
+  neutral: {
+    wrap: "bg-brand-blue-main/[0.06] border border-light",
+    label: "text-muted-d",
+    value: "text-dark text-[18px]",
+  },
+  featured: {
+    wrap: "bg-brand-gold/[0.18] border-[1.5px] border-brand-gold/55 shadow-sm",
+    label: "text-[#7A5500]",
+    value: "text-brand-gold-dark text-[22px]",
+  },
+  "neutral-green": {
+    wrap: "bg-brand-green/[0.12] border border-light",
+    label: "text-muted-d",
+    value: "text-dark text-[18px]",
+  },
+};
+
+function StatBox({
   label,
-  gold = false,
+  value,
+  variant,
 }: {
-  value: string;
   label: string;
-  gold?: boolean;
+  value: string;
+  variant: StatVariant;
 }) {
+  const cls = STAT_VARIANT_CLASSES[variant];
   return (
-    <div className="text-center">
-      <div
-        className={`font-display text-[19px] font-black leading-none ${gold ? "text-brand-gold-dark" : "text-dark"}`}
+    <div
+      className={`flex flex-col items-center justify-center rounded-sm px-2 py-1.5 ${cls.wrap}`}
+    >
+      <span
+        className={`text-[9px] font-bold uppercase tracking-[0.06em] ${cls.label}`}
+      >
+        {label}
+      </span>
+      <span
+        className={`font-display font-black leading-tight ${cls.value}`}
       >
         {value}
-      </div>
-      <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-d">
-        {label}
-      </div>
+      </span>
     </div>
+  );
+}
+
+function TargetIcon() {
+  return (
+    <svg
+      viewBox="0 0 22 22"
+      width="22"
+      height="22"
+      fill="none"
+      stroke="#001050"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <circle cx="11" cy="11" r="8" />
+      <circle cx="11" cy="11" r="4" />
+      <circle cx="11" cy="11" r="1" fill="#001050" />
+    </svg>
+  );
+}
+
+function ArrowIcon() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      width="14"
+      height="14"
+      fill="none"
+      stroke="#001050"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className="transition-transform duration-150 group-hover/cta:translate-x-0.5 sm:hidden"
+    >
+      <path d="M3 8h10M9 4l4 4-4 4" />
+    </svg>
   );
 }

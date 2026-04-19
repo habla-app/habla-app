@@ -6,6 +6,7 @@
 
 import type { Partido } from "@habla/db";
 import type { ApiFootballFixture } from "./api-football.client";
+import { mapRoundToEs } from "../utils/round-mapper";
 
 export type EstadoPartidoDb = Partido["estado"];
 
@@ -50,6 +51,8 @@ export interface PartidoUpsertInput {
   golesVisita: number | null;
   btts: boolean | null;
   mas25Goles: boolean | null;
+  round: string | null;
+  venue: string | null;
 }
 
 export function fixtureToPartidoInput(
@@ -70,6 +73,12 @@ export function fixtureToPartidoInput(
   const btts = finalizado ? golesLocal! > 0 && golesVisita! > 0 : null;
   const mas25Goles = finalizado ? golesLocal! + golesVisita! > 2 : null;
 
+  const venueName = fixture.fixture.venue?.name ?? null;
+  const venueCity = fixture.fixture.venue?.city ?? null;
+  const venue = venueName
+    ? [venueName, venueCity].filter(Boolean).join(", ")
+    : null;
+
   return {
     externalId: String(fixture.fixture.id),
     liga: fixture.league.name,
@@ -81,5 +90,7 @@ export function fixtureToPartidoInput(
     golesVisita,
     btts,
     mas25Goles,
+    round: mapRoundToEs(fixture.league.round),
+    venue,
   };
 }
