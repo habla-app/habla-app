@@ -77,6 +77,50 @@ export async function obtenerLiveMatches(
 }
 
 // ---------------------------------------------------------------------------
+// Partidos finalizados recientes (Bug #10)
+// ---------------------------------------------------------------------------
+
+export interface ObtenerFinalizedMatchesInput {
+  /** Ventana hacia atrás en horas. Default 24. */
+  sinceHours?: number;
+  /** Límite de filas. Default 10. */
+  limit?: number;
+}
+
+/**
+ * Partidos FINALIZADOS dentro de la ventana reciente. Bug #10: la
+ * página `/live-match` los muestra en una sección separada
+ * ("Partidos finalizados de hoy") abajo del switcher en vivo. Mismo
+ * filtro de `torneos.some(estado != CANCELADO)` que `obtenerLiveMatches`
+ * — si todos los torneos del partido se cancelaron, no aparece.
+ */
+export async function obtenerFinalizedMatches(
+  input: ObtenerFinalizedMatchesInput = {},
+): Promise<PartidoLive[]> {
+  const limit = Math.min(30, Math.max(1, input.limit ?? 10));
+  const sinceHours = Math.max(1, input.sinceHours ?? 24);
+  const since = new Date(Date.now() - sinceHours * 60 * 60 * 1000);
+
+  return prisma.partido.findMany({
+    where: {
+      estado: "FINALIZADO",
+      fechaInicio: { gte: since },
+      torneos: {
+        some: { estado: { not: "CANCELADO" } },
+      },
+    },
+    include: {
+      torneos: {
+        where: { estado: { not: "CANCELADO" } },
+        orderBy: { pozoBruto: "desc" },
+      },
+    },
+    orderBy: { fechaInicio: "desc" },
+    take: limit,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Selección de torneo principal para mostrar en /live-match
 // ---------------------------------------------------------------------------
 
