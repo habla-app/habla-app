@@ -4,15 +4,18 @@
 // callbackUrl al punto de entrada. Sub-Sprint 4.
 //
 // Usado desde:
-//   - MatchCard (/matches)
-//   - /torneo/:id
-//   - /mis-combinadas (botón "+ Otra combinada")
-//   - /live-match (si el torneo sigue abierto)
+//   - /torneo/:id           (CTA grande del detalle)
+//   - /mis-combinadas       (botón "+ Otra combinada")
+//   - /live-match           (si el torneo sigue abierto)
+//
+// MatchCard (`/matches`) NO usa este componente — tiene su propio CTA
+// lateral con styling específico del card (ver MatchCardCTA.tsx), pero
+// comparte el hook `useComboOpener` para mantener la lógica de apertura
+// en un solo lugar.
 
-import { useCallback, useState } from "react";
 import Link from "next/link";
-import { ComboModal, type ComboTorneoInfo } from "./ComboModal";
-import { DISTRIB_PREMIOS_FE } from "./premios";
+import { ComboModal } from "./ComboModal";
+import { useComboOpener } from "@/hooks/useComboOpener";
 
 interface ComboLauncherProps {
   torneoId: string;
@@ -25,9 +28,6 @@ interface ComboLauncherProps {
   className?: string;
   /** Styling variant. */
   variant?: "primary" | "ghost" | "urgent";
-  /** Si true, renderiza como Link (todo el elemento clickable). Cuando
-   *  false, el botón delega la apertura del modal al padre via onOpenChange. */
-  asButton?: boolean;
   /** Callback tras crear el ticket exitosamente. */
   onCreated?: (result: { ticketId: string; nuevoBalance: number }) => void;
 }
@@ -41,68 +41,7 @@ export function ComboLauncher({
   variant = "primary",
   onCreated,
 }: ComboLauncherProps) {
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [torneoInfo, setTorneoInfo] = useState<ComboTorneoInfo | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleClick = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/v1/torneos/${torneoId}`, {
-        credentials: "include",
-      });
-      if (!res.ok) {
-        setError("No se pudo cargar el torneo.");
-        setLoading(false);
-        return;
-      }
-      const json = (await res.json()) as {
-        data?: {
-          torneo: {
-            id: string;
-            nombre: string;
-            entradaLukas: number;
-            pozoBruto: number;
-            pozoNeto: number;
-            cierreAt: string;
-            partido: { equipoLocal: string; equipoVisita: string };
-          };
-          miTicket: { id: string } | null;
-        };
-      };
-      const d = json.data;
-      if (!d) {
-        setError("Torneo no encontrado.");
-        setLoading(false);
-        return;
-      }
-      const pozoNeto =
-        d.torneo.pozoNeto > 0
-          ? d.torneo.pozoNeto
-          : Math.floor(d.torneo.pozoBruto * 0.88);
-      const info: ComboTorneoInfo = {
-        torneoId: d.torneo.id,
-        partidoNombre: `${d.torneo.partido.equipoLocal} vs ${d.torneo.partido.equipoVisita}`,
-        equipoLocal: d.torneo.partido.equipoLocal,
-        equipoVisita: d.torneo.partido.equipoVisita,
-        entradaLukas: d.torneo.entradaLukas,
-        pozoBruto: d.torneo.pozoBruto,
-        primerPremioEstimado: Math.floor(
-          pozoNeto * DISTRIB_PREMIOS_FE.primero,
-        ),
-        cierreAt: d.torneo.cierreAt,
-        tienePlaceholder: d.miTicket !== null,
-      };
-      setTorneoInfo(info);
-      setOpen(true);
-      setLoading(false);
-    } catch {
-      setError("Error de red.");
-      setLoading(false);
-    }
-  }, [torneoId]);
+  const { modalProps, openFor, loading, error } = useComboOpener();
 
   if (!hasSession) {
     return (
@@ -119,7 +58,7 @@ export function ComboLauncher({
     <>
       <button
         type="button"
-        onClick={handleClick}
+        onClick={() => openFor(torneoId)}
         disabled={loading}
         className={buttonCls(variant, className)}
       >
@@ -128,12 +67,7 @@ export function ComboLauncher({
       {error && (
         <p className="mt-1 text-[11px] font-semibold text-danger">{error}</p>
       )}
-      <ComboModal
-        isOpen={open}
-        onClose={() => setOpen(false)}
-        torneo={torneoInfo}
-        onCreated={onCreated}
-      />
+      <ComboModal {...modalProps} onCreated={onCreated} />
     </>
   );
 }
