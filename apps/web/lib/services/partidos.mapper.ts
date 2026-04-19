@@ -48,19 +48,38 @@ export interface PartidoUpsertInput {
   estado: EstadoPartidoDb;
   golesLocal: number | null;
   golesVisita: number | null;
+  btts: boolean | null;
+  mas25Goles: boolean | null;
 }
 
 export function fixtureToPartidoInput(
   fixture: ApiFootballFixture,
 ): PartidoUpsertInput {
+  const estado = mapEstadoPartido(fixture.fixture.status.short);
+  const golesLocal = fixture.goals.home;
+  const golesVisita = fixture.goals.away;
+
+  // Sólo derivamos btts / mas25Goles cuando el partido está FINALIZADO y
+  // el marcador está completo. Durante EN_VIVO no es seguro: un partido
+  // 0-2 al HT puede terminar 1-2 y flipear mas25Goles de false→true; btts
+  // puede pasar de false→true igual. Dejamos null hasta que el status
+  // sea final. huboTarjetaRoja requiere /fixtures/events y se llena en
+  // el poller del Sub-Sprint 5.
+  const finalizado =
+    estado === "FINALIZADO" && golesLocal !== null && golesVisita !== null;
+  const btts = finalizado ? golesLocal! > 0 && golesVisita! > 0 : null;
+  const mas25Goles = finalizado ? golesLocal! + golesVisita! > 2 : null;
+
   return {
     externalId: String(fixture.fixture.id),
     liga: fixture.league.name,
     equipoLocal: fixture.teams.home.name,
     equipoVisita: fixture.teams.away.name,
     fechaInicio: new Date(fixture.fixture.date),
-    estado: mapEstadoPartido(fixture.fixture.status.short),
-    golesLocal: fixture.goals.home,
-    golesVisita: fixture.goals.away,
+    estado,
+    golesLocal,
+    golesVisita,
+    btts,
+    mas25Goles,
   };
 }
