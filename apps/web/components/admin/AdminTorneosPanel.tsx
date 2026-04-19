@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/components/ui";
 import { Button } from "@/components/ui";
+import { formatKickoff } from "@/lib/utils/datetime";
 
 interface PartidoDisponible {
   id: string;
@@ -215,8 +216,7 @@ function CrearTorneoRow({
   const [nombre, setNombre] = useState("");
   const [creando, setCreando] = useState(false);
 
-  const fecha = new Date(partido.fechaInicio);
-  const fechaStr = `${fecha.toLocaleDateString("es-PE")} ${fecha.getHours().toString().padStart(2, "0")}:${fecha.getMinutes().toString().padStart(2, "0")}`;
+  const fechaStr = formatKickoff(partido.fechaInicio);
 
   async function handleCrear() {
     setCreando(true);
