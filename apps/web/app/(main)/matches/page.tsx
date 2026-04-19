@@ -3,9 +3,14 @@
 import { MatchesPageContent } from "@/components/matches/MatchesPageContent";
 
 interface Props {
-  searchParams?: { liga?: string };
+  searchParams?: { liga?: string; dia?: string };
 }
 
 export default async function MatchesPage({ searchParams }: Props) {
-  return <MatchesPageContent liga={searchParams?.liga} />;
+  return (
+    <MatchesPageContent
+      ligaSlug={searchParams?.liga}
+      dia={searchParams?.dia}
+    />
+  );
 }
