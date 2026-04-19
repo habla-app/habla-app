@@ -3,10 +3,16 @@
 // Sub-Sprint 4. Replica `.combo-panel` / `.combo-panel-head` / `.combo-body`
 // / `.combo-foot` del mockup (docs/habla-mockup-completo.html §combo).
 //
-// Hotfix post-Sub-Sprint 5: la lógica de "Balance después" + decisión
+// Hotfix #2 post-Sub-Sprint 5: la lógica de "Balance después" + decisión
 // CTA submit/comprar vive en `computeComboFooterState` (mapper puro),
-// para que el modal nunca renderice "-5" y bloquee el submit cuando el
-// balance no alcanza la entrada (caso sin placeholder).
+// para que el modal nunca renderice "-5".
+//
+// Hotfix #4 post-Sub-Sprint 5 (Bug #6): el modal ahora tiene 6 estados
+// discriminados (`ComboModalStatus`) — idle, submitting, success,
+// insufficient-balance, tournament-closed, error. Los estados
+// distinto de `idle` reemplazan el body con un panel de feedback (icono
+// + título + copy + CTAs). El estado `success` muestra los detalles del
+// ticket creado (id, predicciones, entrada pagada, puntos máximos).
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -17,6 +23,12 @@ import { PUNTOS } from "@habla/shared";
 import { PredCard } from "./PredCard";
 import { ScorePicker } from "./ScorePicker";
 import { computeComboFooterState } from "./combo-info.mapper";
+import {
+  computeComboModalUIState,
+  statusFromBackendError,
+  type ComboModalStatus,
+  type ComboSuccessInfo,
+} from "./combo-modal-status";
 
 export interface ComboTorneoInfo {
   torneoId: string;
@@ -56,7 +68,6 @@ const PREDICCIONES_INICIAL: Predicciones = {
   predMarcadorVisita: 1,
 };
 
-// Países de formato: Peruvian es-PE.
 function formatoMiles(n: number): string {
   return n.toLocaleString("es-PE");
 }
@@ -80,20 +91,21 @@ export function ComboModal({
   onCreated,
 }: ComboModalProps) {
   const [preds, setPreds] = useState<Predicciones>(PREDICCIONES_INICIAL);
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [status, setStatus] = useState<ComboModalStatus>("idle");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successInfo, setSuccessInfo] = useState<ComboSuccessInfo | null>(null);
   const [countdown, setCountdown] = useState<string>("--:--");
 
   const balance = useLukasStore((s) => s.balance);
-  const decrementar = useLukasStore((s) => s.decrementar);
   const setBalance = useLukasStore((s) => s.setBalance);
 
   // Reset al abrir
   useEffect(() => {
     if (isOpen) {
       setPreds(PREDICCIONES_INICIAL);
-      setError(null);
-      setSubmitting(false);
+      setStatus("idle");
+      setErrorMessage(null);
+      setSuccessInfo(null);
     }
   }, [isOpen]);
 
@@ -113,7 +125,6 @@ export function ComboModal({
     if (preds.predBtts !== undefined) total += PUNTOS.BTTS;
     if (preds.predMas25 !== undefined) total += PUNTOS.MAS_25_GOLES;
     if (preds.predTarjetaRoja !== undefined) total += PUNTOS.TARJETA_ROJA;
-    // Marcador siempre cuenta — inicia en 1-1
     total += PUNTOS.MARCADOR_EXACTO;
     return total;
   }, [preds]);
@@ -135,26 +146,24 @@ export function ComboModal({
       tienePlaceholder: torneo.tienePlaceholder,
     });
   }, [balance, torneo]);
-  const costoLukas = footer?.costoLukas ?? 0;
   const displayBalanceDespues = footer?.displayBalanceDespues ?? 0;
   const balanceInsuficiente = footer?.balanceInsuficiente ?? false;
 
   const handleSubmit = useCallback(async () => {
     if (!torneo) return;
     if (!listo) {
-      setError("Completá las 5 predicciones antes de enviar.");
+      setStatus("error");
+      setErrorMessage("Completá las 5 predicciones antes de enviar.");
       return;
     }
+    // Defensa redundante: el render ya muestra el status `insufficient-balance`
+    // cuando faltan Lukas. Si por race se llama igual, no avanzamos.
     if (balanceInsuficiente) {
-      // Defensa adicional: el botón ya queda oculto cuando no hay balance,
-      // pero si por algún motivo se llama (ej. test, race), no avanzamos.
-      setError(
-        `Balance insuficiente. Necesitas ${torneo.entradaLukas} Lukas para inscribirte.`,
-      );
+      setStatus("insufficient-balance");
       return;
     }
-    setSubmitting(true);
-    setError(null);
+    setStatus("submitting");
+    setErrorMessage(null);
     try {
       const body = {
         torneoId: torneo.torneoId,
@@ -179,39 +188,83 @@ export function ComboModal({
         error?: { code: string; message: string };
       };
       if (!res.ok || !json.data) {
-        const msg = json.error?.message ?? "No se pudo enviar la combinada.";
-        setError(msg);
-        setSubmitting(false);
+        const nextStatus = statusFromBackendError(json.error?.code);
+        setStatus(nextStatus);
+        setErrorMessage(json.error?.message ?? "No se pudo enviar la combinada.");
         return;
       }
-      // Actualiza store y cierra
+      // Éxito: sincroniza balance global y pinta el panel de confirmación.
       setBalance(json.data.nuevoBalance);
-      if (!json.data.reemplazoPlaceholder && costoLukas > 0) {
-        decrementar(0); /* no-op — setBalance ya alineó */
-      }
+      setSuccessInfo({
+        ticketId: json.data.ticket.id,
+        entradaPagada: json.data.reemplazoPlaceholder ? 0 : torneo.entradaLukas,
+        puntosMaximos: puntosMax,
+        predResumen: {
+          resultado: preds.predResultado!,
+          btts: preds.predBtts!,
+          mas25: preds.predMas25!,
+          tarjetaRoja: preds.predTarjetaRoja!,
+          marcadorLocal: preds.predMarcadorLocal,
+          marcadorVisita: preds.predMarcadorVisita,
+        },
+        nuevoBalance: json.data.nuevoBalance,
+        reemplazoPlaceholder: json.data.reemplazoPlaceholder,
+      });
+      setStatus("success");
       onCreated?.({
         ticketId: json.data.ticket.id,
         nuevoBalance: json.data.nuevoBalance,
       });
-      setSubmitting(false);
-      onClose();
     } catch (err) {
-      setError((err as Error).message ?? "Error de red.");
-      setSubmitting(false);
+      setStatus("error");
+      setErrorMessage((err as Error).message ?? "Error de red.");
     }
   }, [
     torneo,
     listo,
     balanceInsuficiente,
     preds,
-    costoLukas,
+    puntosMax,
     setBalance,
-    decrementar,
     onCreated,
-    onClose,
   ]);
 
+  const handleReset = useCallback(() => {
+    setPreds(PREDICCIONES_INICIAL);
+    setStatus("idle");
+    setErrorMessage(null);
+    setSuccessInfo(null);
+  }, []);
+
+  // Si el balance baja en medio de la sesión a insuficiente, reflejarlo.
+  useEffect(() => {
+    if (!torneo) return;
+    if (status !== "idle") return;
+    if (balanceInsuficiente) {
+      // No reseteamos el status a insufficient-balance automáticamente
+      // para no atrapar al usuario: el CTA del footer ya cambia a
+      // "Comprar Lukas". Pero dejamos el gate para que handleSubmit no
+      // avance si el balance cambió entre idle y submit.
+    }
+  }, [balanceInsuficiente, status, torneo]);
+
   if (!torneo) return null;
+
+  const faltanLukas = Math.max(0, torneo.entradaLukas - balance);
+  const ui = computeComboModalUIState({
+    status,
+    tienePlaceholder: torneo.tienePlaceholder,
+    entradaLukas: torneo.entradaLukas,
+    errorMessage,
+    faltanLukas,
+  });
+
+  const isFeedback =
+    status === "success" ||
+    status === "error" ||
+    status === "tournament-closed" ||
+    status === "submitting" ||
+    (status === "insufficient-balance");
 
   return (
     <Modal
@@ -259,127 +312,383 @@ export function ComboModal({
       </div>
 
       {/* BODY */}
-      <div className="flex-1 overflow-y-auto bg-page px-7 py-5">
-        <div className="mb-3.5 flex items-center gap-2.5 font-display text-[13px] font-extrabold uppercase tracking-[0.08em] text-muted-d">
-          <span
-            aria-hidden
-            className="block h-[3px] w-5 flex-shrink-0 rounded-full bg-brand-gold"
-          />
-          Tus 5 predicciones
-          <span aria-hidden className="block h-px flex-1 bg-border-light" />
-        </div>
-
-        <PredCard<Resultado>
-          question="¿Quién gana?"
-          points={PUNTOS.RESULTADO}
-          selected={preds.predResultado}
-          onSelect={(v) => setPreds((p) => ({ ...p, predResultado: v }))}
-          options={[
-            { label: cortoNombre(torneo.equipoLocal), value: "LOCAL" },
-            { label: "Empate", value: "EMPATE" },
-            { label: cortoNombre(torneo.equipoVisita), value: "VISITA" },
-          ]}
+      {isFeedback ? (
+        <FeedbackBody
+          status={status}
+          ui={ui}
+          successInfo={successInfo}
+          torneo={torneo}
         />
-
-        <PredCard<boolean>
-          question="¿Ambos equipos anotan?"
-          points={PUNTOS.BTTS}
-          selected={preds.predBtts}
-          onSelect={(v) => setPreds((p) => ({ ...p, predBtts: v }))}
-          options={[
-            { label: "Sí", value: true },
-            { label: "No", value: false, isNegative: true },
-          ]}
-        />
-
-        <PredCard<boolean>
-          question="¿Más de 2.5 goles?"
-          points={PUNTOS.MAS_25_GOLES}
-          selected={preds.predMas25}
-          onSelect={(v) => setPreds((p) => ({ ...p, predMas25: v }))}
-          options={[
-            { label: "Sí", value: true },
-            { label: "No", value: false, isNegative: true },
-          ]}
-        />
-
-        <PredCard<boolean>
-          question="¿Habrá tarjeta roja?"
-          points={PUNTOS.TARJETA_ROJA}
-          selected={preds.predTarjetaRoja}
-          onSelect={(v) => setPreds((p) => ({ ...p, predTarjetaRoja: v }))}
-          options={[
-            { label: "Sí", value: true },
-            { label: "No", value: false, isNegative: true },
-          ]}
-        />
-
-        <PredCard<string>
-          question="Marcador exacto"
-          points={PUNTOS.MARCADOR_EXACTO}
-          selected={`${preds.predMarcadorLocal}-${preds.predMarcadorVisita}`}
-          onSelect={() => {
-            /* never */
-          }}
-          options={[]}
-        >
-          <ScorePicker
-            nombreLocal={cortoNombre(torneo.equipoLocal)}
-            nombreVisita={cortoNombre(torneo.equipoVisita)}
-            golesLocal={preds.predMarcadorLocal}
-            golesVisita={preds.predMarcadorVisita}
-            onChange={(local, visita) =>
-              setPreds((p) => ({
-                ...p,
-                predMarcadorLocal: local,
-                predMarcadorVisita: visita,
-              }))
-            }
-          />
-        </PredCard>
-
-        {error && (
-          <div
-            role="alert"
-            className="mt-3 rounded-sm border border-urgent-critical/40 bg-urgent-critical/10 px-3 py-2 text-[13px] font-semibold text-danger"
-          >
-            {error}
+      ) : (
+        <div className="flex-1 overflow-y-auto bg-page px-7 py-5">
+          <div className="mb-3.5 flex items-center gap-2.5 font-display text-[13px] font-extrabold uppercase tracking-[0.08em] text-muted-d">
+            <span
+              aria-hidden
+              className="block h-[3px] w-5 flex-shrink-0 rounded-full bg-brand-gold"
+            />
+            Tus 5 predicciones
+            <span aria-hidden className="block h-px flex-1 bg-border-light" />
           </div>
-        )}
-      </div>
+
+          <PredCard<Resultado>
+            question="¿Quién gana?"
+            points={PUNTOS.RESULTADO}
+            selected={preds.predResultado}
+            onSelect={(v) => setPreds((p) => ({ ...p, predResultado: v }))}
+            options={[
+              { label: cortoNombre(torneo.equipoLocal), value: "LOCAL" },
+              { label: "Empate", value: "EMPATE" },
+              { label: cortoNombre(torneo.equipoVisita), value: "VISITA" },
+            ]}
+          />
+
+          <PredCard<boolean>
+            question="¿Ambos equipos anotan?"
+            points={PUNTOS.BTTS}
+            selected={preds.predBtts}
+            onSelect={(v) => setPreds((p) => ({ ...p, predBtts: v }))}
+            options={[
+              { label: "Sí", value: true },
+              { label: "No", value: false, isNegative: true },
+            ]}
+          />
+
+          <PredCard<boolean>
+            question="¿Más de 2.5 goles?"
+            points={PUNTOS.MAS_25_GOLES}
+            selected={preds.predMas25}
+            onSelect={(v) => setPreds((p) => ({ ...p, predMas25: v }))}
+            options={[
+              { label: "Sí", value: true },
+              { label: "No", value: false, isNegative: true },
+            ]}
+          />
+
+          <PredCard<boolean>
+            question="¿Habrá tarjeta roja?"
+            points={PUNTOS.TARJETA_ROJA}
+            selected={preds.predTarjetaRoja}
+            onSelect={(v) => setPreds((p) => ({ ...p, predTarjetaRoja: v }))}
+            options={[
+              { label: "Sí", value: true },
+              { label: "No", value: false, isNegative: true },
+            ]}
+          />
+
+          <PredCard<string>
+            question="Marcador exacto"
+            points={PUNTOS.MARCADOR_EXACTO}
+            selected={`${preds.predMarcadorLocal}-${preds.predMarcadorVisita}`}
+            onSelect={() => {
+              /* never */
+            }}
+            options={[]}
+          >
+            <ScorePicker
+              nombreLocal={cortoNombre(torneo.equipoLocal)}
+              nombreVisita={cortoNombre(torneo.equipoVisita)}
+              golesLocal={preds.predMarcadorLocal}
+              golesVisita={preds.predMarcadorVisita}
+              onChange={(local, visita) =>
+                setPreds((p) => ({
+                  ...p,
+                  predMarcadorLocal: local,
+                  predMarcadorVisita: visita,
+                }))
+              }
+            />
+          </PredCard>
+        </div>
+      )}
 
       {/* FOOT */}
-      <div className="border-t border-light bg-card px-7 py-4 shadow-[0_-4px_12px_rgba(0,16,80,.06)]">
-        <div className="mb-3 grid grid-cols-2 gap-3">
-          <SummaryBox label="Puntos máx" value={`${puntosMax} pts`} gold />
-          <SummaryBox
-            label="Balance después"
-            value={`${formatoMiles(displayBalanceDespues)} 🪙`}
-          />
+      <FooterSection
+        status={status}
+        ui={ui}
+        torneo={torneo}
+        puntosMax={puntosMax}
+        displayBalanceDespues={displayBalanceDespues}
+        balanceInsuficiente={balanceInsuficiente}
+        balance={balance}
+        listo={listo}
+        onSubmit={handleSubmit}
+        onReset={handleReset}
+        onClose={onClose}
+      />
+    </Modal>
+  );
+}
+
+function FeedbackBody({
+  status,
+  ui,
+  successInfo,
+  torneo,
+}: {
+  status: ComboModalStatus;
+  ui: ReturnType<typeof computeComboModalUIState>;
+  successInfo: ComboSuccessInfo | null;
+  torneo: ComboTorneoInfo;
+}) {
+  const toneClasses: Record<string, string> = {
+    success: "bg-brand-green/10 border-brand-green/35",
+    error: "bg-urgent-critical/10 border-urgent-critical/35",
+    warning: "bg-brand-gold/10 border-brand-gold/35",
+    neutral: "bg-card border-light",
+  };
+  return (
+    <div
+      className="flex-1 overflow-y-auto bg-page px-7 py-8"
+      data-testid={`combo-feedback-${status}`}
+      role="status"
+      aria-live="polite"
+    >
+      <div
+        className={`flex flex-col items-center rounded-lg border px-5 py-8 text-center shadow-sm ${toneClasses[ui.tone]}`}
+      >
+        <div aria-hidden className="mb-3 text-5xl">
+          {ui.icon}
         </div>
-        {balanceInsuficiente ? (
-          <BuyLukasCTA
-            entradaLukas={torneo.entradaLukas}
-            balanceActual={balance}
-          />
-        ) : (
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={!listo || submitting}
-            data-testid="combo-submit"
-            className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-brand-gold px-4 py-4 font-display text-[16px] font-extrabold uppercase tracking-[0.04em] text-black shadow-gold-cta transition-all duration-150 hover:bg-brand-gold-light hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
-          >
-            <span aria-hidden>🎯</span>
-            {submitting
-              ? "Enviando..."
-              : torneo.tienePlaceholder
-                ? "Confirmar mi combinada"
-                : `Inscribir por ${formatoMiles(torneo.entradaLukas)} 🪙`}
-          </button>
+        <h2 className="mb-2 font-display text-[24px] font-black uppercase leading-tight tracking-[0.01em] text-dark">
+          {ui.bodyTitle}
+        </h2>
+        <p className="max-w-[420px] text-[14px] leading-relaxed text-body">
+          {ui.bodyCopy}
+        </p>
+
+        {status === "success" && successInfo && (
+          <SuccessDetails info={successInfo} torneo={torneo} />
         )}
       </div>
-    </Modal>
+    </div>
+  );
+}
+
+function SuccessDetails({
+  info,
+  torneo,
+}: {
+  info: ComboSuccessInfo;
+  torneo: ComboTorneoInfo;
+}) {
+  const chips: Array<{ label: string; key: string }> = [
+    {
+      key: "resultado",
+      label:
+        info.predResumen.resultado === "LOCAL"
+          ? cortoNombre(torneo.equipoLocal)
+          : info.predResumen.resultado === "VISITA"
+            ? cortoNombre(torneo.equipoVisita)
+            : "Empate",
+    },
+    { key: "btts", label: `Ambos ${info.predResumen.btts ? "Sí" : "No"}` },
+    { key: "mas25", label: `+2.5 ${info.predResumen.mas25 ? "Sí" : "No"}` },
+    {
+      key: "roja",
+      label: `Roja ${info.predResumen.tarjetaRoja ? "Sí" : "No"}`,
+    },
+    {
+      key: "marcador",
+      label: `${info.predResumen.marcadorLocal}-${info.predResumen.marcadorVisita}`,
+    },
+  ];
+
+  return (
+    <div
+      className="mt-5 w-full max-w-[460px] rounded-md border border-light bg-card px-4 py-4 text-left shadow-sm"
+      data-testid="combo-success-details"
+    >
+      <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.08em] text-muted-d">
+        Detalles de tu ticket
+      </div>
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        {chips.map((c) => (
+          <span
+            key={c.key}
+            className="rounded-full bg-brand-gold-dim px-2.5 py-1 font-display text-[12px] font-bold text-brand-gold-dark"
+          >
+            {c.label}
+          </span>
+        ))}
+      </div>
+      <dl className="grid grid-cols-2 gap-2 text-[12px]">
+        <Meta label="Entrada pagada">
+          {info.entradaPagada > 0
+            ? `${info.entradaPagada.toLocaleString("es-PE")} 🪙`
+            : "Ya cobrada antes"}
+        </Meta>
+        <Meta label="Puntos máx posibles">{info.puntosMaximos} pts</Meta>
+        <Meta label="Balance después">
+          {info.nuevoBalance.toLocaleString("es-PE")} 🪙
+        </Meta>
+        <Meta label="ID ticket">
+          <span className="font-mono text-[11px]">
+            {info.ticketId.slice(0, 10)}…
+          </span>
+        </Meta>
+      </dl>
+    </div>
+  );
+}
+
+function Meta({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col">
+      <dt className="text-[10px] font-bold uppercase tracking-[0.06em] text-muted-d">
+        {label}
+      </dt>
+      <dd className="font-display text-[14px] font-extrabold text-dark">
+        {children}
+      </dd>
+    </div>
+  );
+}
+
+function FooterSection({
+  status,
+  ui,
+  torneo,
+  puntosMax,
+  displayBalanceDespues,
+  balanceInsuficiente,
+  balance,
+  listo,
+  onSubmit,
+  onReset,
+  onClose,
+}: {
+  status: ComboModalStatus;
+  ui: ReturnType<typeof computeComboModalUIState>;
+  torneo: ComboTorneoInfo;
+  puntosMax: number;
+  displayBalanceDespues: number;
+  balanceInsuficiente: boolean;
+  balance: number;
+  listo: boolean;
+  onSubmit: () => void;
+  onReset: () => void;
+  onClose: () => void;
+}) {
+  // En estados de feedback (success/error/etc.) mostramos solo los CTAs
+  // del ui state, sin el resumen de puntos/balance. El modo `idle`
+  // mantiene el layout original del mockup (2 cajas + botón).
+  if (status !== "idle") {
+    return (
+      <div
+        className="border-t border-light bg-card px-7 py-4 shadow-[0_-4px_12px_rgba(0,16,80,.06)]"
+        data-testid="combo-footer-feedback"
+      >
+        <div className="flex flex-col gap-2 sm:flex-row">
+          {ui.primaryCta && (
+            <CtaButton
+              cta={ui.primaryCta}
+              primary
+              disabled={status === "submitting"}
+              onSubmit={onSubmit}
+              onReset={onReset}
+              onClose={onClose}
+            />
+          )}
+          {ui.secondaryCta && (
+            <CtaButton
+              cta={ui.secondaryCta}
+              onSubmit={onSubmit}
+              onReset={onReset}
+              onClose={onClose}
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // idle: layout normal con resumen + submit/comprar
+  return (
+    <div className="border-t border-light bg-card px-7 py-4 shadow-[0_-4px_12px_rgba(0,16,80,.06)]">
+      <div className="mb-3 grid grid-cols-2 gap-3">
+        <SummaryBox label="Puntos máx" value={`${puntosMax} pts`} gold />
+        <SummaryBox
+          label="Balance después"
+          value={`${formatoMiles(displayBalanceDespues)} 🪙`}
+        />
+      </div>
+      {balanceInsuficiente ? (
+        <BuyLukasCTA
+          entradaLukas={torneo.entradaLukas}
+          balanceActual={balance}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={onSubmit}
+          disabled={!listo}
+          data-testid="combo-submit"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-brand-gold px-4 py-4 font-display text-[16px] font-extrabold uppercase tracking-[0.04em] text-black shadow-gold-cta transition-all duration-150 hover:bg-brand-gold-light hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+        >
+          <span aria-hidden>🎯</span>
+          {torneo.tienePlaceholder
+            ? "Confirmar mi combinada"
+            : `Inscribir por ${formatoMiles(torneo.entradaLukas)} 🪙`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function CtaButton({
+  cta,
+  primary,
+  disabled,
+  onSubmit,
+  onReset,
+  onClose,
+}: {
+  cta: NonNullable<
+    ReturnType<typeof computeComboModalUIState>["primaryCta"]
+  >;
+  primary?: boolean;
+  disabled?: boolean;
+  onSubmit: () => void;
+  onReset: () => void;
+  onClose: () => void;
+}) {
+  const cls = primary
+    ? "inline-flex flex-1 items-center justify-center gap-2 rounded-md bg-brand-gold px-4 py-3.5 font-display text-[14px] font-extrabold uppercase tracking-[0.04em] text-black shadow-gold-cta transition-all duration-150 hover:bg-brand-gold-light hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-60"
+    : "inline-flex flex-1 items-center justify-center gap-2 rounded-md border-[1.5px] border-strong bg-card px-4 py-3.5 font-display text-[14px] font-extrabold uppercase tracking-[0.04em] text-body transition-colors hover:border-brand-blue-main hover:text-brand-blue-main";
+
+  const dataAttr = primary ? "combo-primary-cta" : "combo-secondary-cta";
+
+  if (cta.kind === "link" && cta.href) {
+    return (
+      <Link href={cta.href} className={cls} data-testid={dataAttr}>
+        {cta.label}
+      </Link>
+    );
+  }
+  const onClick =
+    cta.kind === "submit"
+      ? onSubmit
+      : cta.kind === "retry"
+        ? onSubmit
+        : cta.kind === "reset"
+          ? onReset
+          : onClose;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={cls}
+      data-testid={dataAttr}
+    >
+      {cta.label}
+    </button>
   );
 }
 
