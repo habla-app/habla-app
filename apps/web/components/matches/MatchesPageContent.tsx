@@ -3,16 +3,19 @@
 // Fase 3 — filtros funcionales:
 //   - ?liga=<slug> → filtra por Partido.liga usando el mapper de
 //     liga-slugs.ts.
-//   - ?dia=YYYY-MM-DD (en hora Perú) → filtra por Partido.fechaInicio
-//     dentro del rango UTC correspondiente. Si falta, aplica "hoy" por
-//     default en memoria (no redirige; la URL queda limpia).
+//   - ?dia=YYYY-MM-DD (hora Perú) → filtra por Partido.fechaInicio
+//     dentro del rango UTC correspondiente.
+//
+// Default (sin ?dia=): se muestran TODOS los torneos abiertos en orden
+// `partido.fechaInicio ASC`. Permite que un usuario que entra por
+// primera vez siempre vea partidos disponibles aunque no haya nada
+// programado para hoy en particular. El chip "Todos" queda activo.
 //
 // El bloque de chips (LeagueFilterChips / DayFilterChips) es client
 // component; consume la URL con useMatchesFilters. El server hace el
-// fetch real y pinta la lista — la navegación por chips disparará
+// fetch real y pinta la lista — la navegación por chips dispara
 // re-render server cuando Next.js re-matchee con los nuevos params.
 
-import Link from "next/link";
 import { listar } from "@/lib/services/torneos.service";
 import { MatchCard } from "@/components/matches/MatchCard";
 import { torneoToCardData } from "@/components/matches/adapter";
@@ -26,62 +29,57 @@ import { DEFAULT_TZ, getDayBounds, getDayKey } from "@/lib/utils/datetime";
 interface Props {
   /** ?liga=<slug> — slug de la URL, se traduce a Partido.liga. */
   ligaSlug?: string;
-  /** ?dia=YYYY-MM-DD (hora Perú). */
+  /** ?dia=YYYY-MM-DD (hora Perú). null/undefined → "Todos". */
   dia?: string;
 }
-
-const DIAS_LOOKAHEAD = 7;
 
 export async function MatchesPageContent({ ligaSlug, dia }: Props = {}) {
   const liga = slugToLiga(ligaSlug ?? null) ?? undefined;
 
-  // Default day = hoy en Perú cuando no llega ?dia= en la URL. No
-  // redirigimos — el chip "Hoy" se marca activo igual y la URL queda
-  // sin parámetro.
-  const now = new Date();
-  const todayKey = getDayKey(now, DEFAULT_TZ);
-  const activeDia = dia ?? todayKey;
-  const { desde, hasta } = getDayBounds(activeDia, DEFAULT_TZ);
-
-  // Fetch principal: torneos abiertos del día filtrado (+liga si aplica).
-  const { torneos } = await listar({
-    estado: "ABIERTO",
-    liga,
-    desde,
-    hasta,
-    limit: 50,
-  });
-
-  const cards = torneos
-    .filter((t) => t.cierreAt.getTime() > now.getTime())
-    .map(torneoToCardData);
-
-  // Fetch auxiliar para contadores de chips de día: misma liga pero
-  // ventana amplia hoy → hoy+7d. No filtra por día. Se usa solo para
-  // el count en cada chip; la lista real está arriba.
-  const { desde: countDesde } = getDayBounds(todayKey, DEFAULT_TZ);
-  const countHasta = new Date(
-    countDesde.getTime() + DIAS_LOOKAHEAD * 86_400_000 - 1,
-  );
+  // Fetch de la ventana completa (estado=ABIERTO, limit grande). Sirve
+  // como lista principal cuando no hay filtro de día y como fuente de
+  // counts para los chips siempre.
   const { torneos: torneosVentana } = await listar({
     estado: "ABIERTO",
     liga,
-    desde: countDesde,
-    hasta: countHasta,
     limit: 200,
   });
+
+  // Lista principal — depende del filtro de día:
+  //   - sin ?dia=: todos los torneos de la ventana (ordenados por
+  //     fechaInicio ASC por el backend).
+  //   - con ?dia=: fetch filtrado por rango UTC del día local.
+  let torneosLista = torneosVentana;
+  if (dia) {
+    const { desde, hasta } = getDayBounds(dia, DEFAULT_TZ);
+    const res = await listar({
+      estado: "ABIERTO",
+      liga,
+      desde,
+      hasta,
+      limit: 50,
+    });
+    torneosLista = res.torneos;
+  }
+
+  const now = new Date();
+  const cards = torneosLista
+    .filter((t) => t.cierreAt.getTime() > now.getTime())
+    .map(torneoToCardData);
+
+  // Counts por día para DayFilterChips. Siempre derivados de la
+  // ventana (sin filtro de día). Respetan el filtro de liga.
   const dayCounts: Record<string, number> = {};
   for (const t of torneosVentana) {
     const key = getDayKey(t.partido.fechaInicio, DEFAULT_TZ);
     dayCounts[key] = (dayCounts[key] ?? 0) + 1;
   }
+  const totalCount = torneosVentana.length;
 
   const { torneos: finalizados } = await listar({
     estado: "FINALIZADO",
     limit: 10,
   });
-
-  const filtrosActivos = Boolean(liga || dia);
 
   return (
     <div className="mx-auto w-full max-w-[1280px] px-4 pt-6 md:px-6 md:pt-8">
@@ -100,7 +98,7 @@ export async function MatchesPageContent({ ligaSlug, dia }: Props = {}) {
           {/* FILTROS — liga + día */}
           <div className="mb-4 flex flex-col gap-2.5">
             <LeagueFilterChips />
-            <DayFilterChips dayCounts={dayCounts} />
+            <DayFilterChips dayCounts={dayCounts} totalCount={totalCount} />
           </div>
 
           {/* SECTION BAR — próximos torneos */}
@@ -125,22 +123,7 @@ export async function MatchesPageContent({ ligaSlug, dia }: Props = {}) {
           </div>
 
           {cards.length === 0 ? (
-            filtrosActivos ? (
-              <EmptyFilteredState ligaSlug={ligaSlug} dia={dia} />
-            ) : (
-              <div className="mb-10 rounded-md border border-light bg-card px-6 py-12 text-center shadow-sm">
-                <div aria-hidden className="mb-3 text-4xl">
-                  📅
-                </div>
-                <p className="text-sm font-semibold text-dark">
-                  No hay torneos abiertos ahora mismo
-                </p>
-                <p className="mt-1 text-[13px] text-muted-d">
-                  El auto-import trae partidos nuevos cada 6h desde
-                  api-football. Pasa de nuevo en un rato.
-                </p>
-              </div>
-            )
+            <EmptyFilteredState ligaSlug={ligaSlug} dia={dia} />
           ) : (
             <div className="mb-10 flex flex-col gap-3.5">
               {cards.map((torneo) => (
