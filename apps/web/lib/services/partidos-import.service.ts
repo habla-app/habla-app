@@ -148,6 +148,8 @@ async function procesarFixtures(
         golesVisita: input.golesVisita,
         btts: input.btts,
         mas25Goles: input.mas25Goles,
+        round: input.round,
+        venue: input.venue,
       },
     });
 
