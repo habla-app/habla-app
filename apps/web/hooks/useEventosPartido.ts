@@ -1,13 +1,17 @@
 "use client";
 // Hook que trae la timeline de eventos de un partido y se actualiza en
-// vivo con `partido:evento` por Socket.io. Se suscribe al mismo room
+// vivo con `partido:evento` (inserción) + `partido:evento-invalidado`
+// (eliminación, Hotfix #6) por Socket.io. Se suscribe al mismo room
 // del torneo (el poller emite al room del torneo, no al del partido),
 // así que el caller pasa `torneoId` + `partidoId`.
 
 import { useEffect, useRef, useState } from "react";
 import { joinTorneo, getSocket } from "@/lib/realtime/socket-client";
 import { authedFetch } from "@/lib/api-client";
-import type { PartidoEventoPayload } from "@/lib/realtime/events";
+import type {
+  PartidoEventoPayload,
+  PartidoEventoInvalidadoPayload,
+} from "@/lib/realtime/events";
 
 export interface EventoTimeline {
   id: string;
@@ -87,10 +91,25 @@ export function useEventosPartido(
           visita: payload.marcadorVisita,
         });
       };
+      // Hotfix #6 Ítem 2: evento invalidado (VAR anula gol, roja revocada).
+      // El cliente remueve la fila de la timeline al recibirlo.
+      const onInvalidado = (payload: PartidoEventoInvalidadoPayload) => {
+        if (payload.torneoId !== torneoId) return;
+        if (payload.partidoId !== partidoId) return;
+        setEventos((prev) =>
+          prev.filter(
+            (e) =>
+              `${e.tipo}|${e.minuto}|${e.equipo}|${e.jugador ?? ""}` !==
+              payload.naturalKey,
+          ),
+        );
+      };
       socket.on("partido:evento", onEvento);
+      socket.on("partido:evento-invalidado", onInvalidado);
       leaveFn = await joinTorneo(torneoId);
       cleanupRef.current = () => {
         socket.off("partido:evento", onEvento);
+        socket.off("partido:evento-invalidado", onInvalidado);
         leaveFn?.();
       };
     })();
