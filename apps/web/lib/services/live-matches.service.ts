@@ -7,26 +7,22 @@
 // existencial que descartaba partidos cuyos torneos no estaban en
 // EN_JUEGO/CERRADO/FINALIZADO — el caso típico era el cron de cierre
 // llegando un minuto tarde y dejando los torneos en ABIERTO mientras el
-// partido ya había arrancado. Resultado: la sidebar mostraba 2 partidos
-// en vivo y `/live-match` decía "no hay partidos". Ahora filtramos solo
-// por `partido.estado` y excluimos torneos CANCELADO via `include`.
+// partido ya había arrancado. Ahora filtramos solo por `partido.estado`.
 //
-// `partido.estado` es el filtro autoritativo del partido. Los estados de
-// los torneos asociados pueden quedar atrás temporalmente (cron in-process
-// + jitter de hasta 1 min); no es razón para esconder el partido.
+// Hotfix #3 post-Sub-Sprint 5 (re-fix Bug #2): el `include.torneos.where`
+// excluía CANCELADO, lo que dejaba partidos EN_VIVO con `torneos: []` si
+// todos sus torneos se habían cancelado por <2 inscritos. La página
+// /live-match filtraba esos partidos como "no hay torneo principal" y
+// caía al empty state global. Ahora el helper INCLUYE TODOS los torneos
+// (incluso CANCELADO) para que el caller decida qué hacer; la sidebar
+// y la página manejan torneo principal `null` mostrando el partido con
+// un cartel "sin torneo activo" en lugar de esconderlo.
 
 import { prisma, type EstadoTorneo, type Partido, type Torneo } from "@habla/db";
 
 export type PartidoLive = Partido & {
   torneos: Torneo[];
 };
-
-export const ESTADOS_TORNEO_NO_CANCELADO: EstadoTorneo[] = [
-  "ABIERTO",
-  "CERRADO",
-  "EN_JUEGO",
-  "FINALIZADO",
-];
 
 export interface ObtenerLiveMatchesInput {
   /** Cuántos partidos máximo. Default 6 (tabs del switcher de /live-match). */
@@ -50,11 +46,11 @@ export async function obtenerLiveMatches(
     },
     include: {
       torneos: {
-        // Excluir solo CANCELADO. Los torneos en ABIERTO se incluyen para
-        // no perder partidos cuyo cron de cierre aún no transicionó. El
-        // consumer puede priorizar EN_JUEGO/CERRADO/FINALIZADO al elegir
-        // el "torneo principal" del partido.
-        where: { estado: { in: ESTADOS_TORNEO_NO_CANCELADO } },
+        // Incluimos TODOS los estados (incluido CANCELADO). El caller
+        // filtra con `elegirTorneoPrincipal` que excluye CANCELADO al
+        // elegir el principal — pero el partido aparece igual aunque
+        // todos sus torneos estén CANCELADO, y el frontend muestra un
+        // cartel específico en ese caso.
         orderBy: { pozoBruto: "desc" },
       },
     },

@@ -17,8 +17,10 @@ import { useRankingEnVivo } from "@/hooks/useRankingEnVivo";
 import { useEventosPartido } from "@/hooks/useEventosPartido";
 import type { RankingRowPayload } from "@/lib/realtime/events";
 
-interface LiveMatchTab {
-  torneoId: string;
+export interface LiveMatchTab {
+  /** null si todos los torneos del partido están CANCELADO (sin
+   *  torneo activo donde competir). Hotfix #3 post-Sub-Sprint 5. */
+  torneoId: string | null;
   partidoId: string;
   liga: string;
   equipoLocal: string;
@@ -31,7 +33,8 @@ interface LiveMatchTab {
   // ABIERTO incluido por hotfix Bug #2: el cron de cierre puede tardar
   // hasta 1 minuto en transicionar el torneo, así que un partido EN_VIVO
   // puede tener torneos asociados aún en ABIERTO. Se renderea igual.
-  torneoEstado: "ABIERTO" | "EN_JUEGO" | "FINALIZADO" | "CERRADO";
+  // null si el partido no tiene torneo activo (todos cancelados).
+  torneoEstado: "ABIERTO" | "EN_JUEGO" | "FINALIZADO" | "CERRADO" | null;
   pozoBruto: number;
   pozoNeto: number;
   totalInscritos: number;
@@ -51,13 +54,21 @@ interface InitialSnapshot {
 
 interface LiveMatchViewProps {
   tabs: LiveMatchTab[];
-  torneoIdActivo: string;
+  /** null si el partido activo no tiene torneo donde competir (todos
+   *  cancelados). En ese caso el componente muestra "sin torneo activo"
+   *  en lugar del ranking pero sigue mostrando el hero + eventos. */
+  torneoIdActivo: string | null;
   rankingInicial: InitialSnapshot;
   hasSession: boolean;
   miUsuarioId: string | null;
 }
 
 type TabKey = "ranking" | "stats" | "eventos";
+
+/** Identifica un tab unívocamente sin importar si tiene torneo activo. */
+function tabKey(t: LiveMatchTab): string {
+  return t.torneoId ?? `partido:${t.partidoId}`;
+}
 
 export function LiveMatchView({
   tabs,
@@ -67,14 +78,21 @@ export function LiveMatchView({
   miUsuarioId,
 }: LiveMatchViewProps) {
   const router = useRouter();
-  const [activeTorneoId, setActiveTorneoId] = useState<string>(torneoIdInicial);
+  // El key del tab activo. Si el partido no tiene torneo, usamos
+  // `partido:<id>` como identificador sintético para navegar entre tabs.
+  const initialKey =
+    torneoIdInicial ??
+    (tabs[0] ? tabKey(tabs[0]) : "");
+  const [activeKey, setActiveKey] = useState<string>(initialKey);
   const [activeTab, setActiveTab] = useState<TabKey>("ranking");
   const [miPosLocal, setMiPosLocal] = useState(rankingInicial.miPosicion);
   const didFirstMount = useRef(false);
 
-  const active = tabs.find((t) => t.torneoId === activeTorneoId) ?? tabs[0]!;
+  const active = tabs.find((t) => tabKey(t) === activeKey) ?? tabs[0]!;
+  const activeTorneoId = active.torneoId;
 
-  // Ranking en vivo para el torneo activo
+  // Ranking en vivo para el torneo activo. Si no hay torneo, pasamos null
+  // y el hook no abre conexión WS ni fetchea.
   const live = useRankingEnVivo(activeTorneoId, { initialLimit: 100 });
 
   // Inicial del servidor si el hook aún no trajo nada
@@ -85,7 +103,7 @@ export function LiveMatchView({
     : rankingInicial.totalInscritos;
   const pozoNeto = live.pozoNeto > 0 ? live.pozoNeto : rankingInicial.pozoNeto;
 
-  // Eventos en vivo
+  // Eventos en vivo (al partido, no al torneo — funciona aunque no haya torneo)
   const eventos = useEventosPartido(activeTorneoId, active.partidoId);
 
   // Score actual (live si el hook lo tiene, sino el del server)
@@ -106,21 +124,27 @@ export function LiveMatchView({
         puntosTotal: miFila.puntosTotal,
         premioEstimado: miFila.premioEstimado,
       });
-    } else if (rankingInicial.miPosicion && activeTorneoId === torneoIdInicial) {
+    } else if (
+      rankingInicial.miPosicion &&
+      activeTorneoId === torneoIdInicial
+    ) {
       setMiPosLocal(rankingInicial.miPosicion);
     } else {
       setMiPosLocal(null);
     }
   }, [ranking, miUsuarioId, rankingInicial, activeTorneoId, torneoIdInicial]);
 
-  // Sync URL
+  // Sync URL — usa torneoId si hay, sino partidoId.
   useEffect(() => {
     if (!didFirstMount.current) {
       didFirstMount.current = true;
       return;
     }
-    router.replace(`/live-match?torneoId=${activeTorneoId}`, { scroll: false });
-  }, [activeTorneoId, router]);
+    const qs = activeTorneoId
+      ? `torneoId=${activeTorneoId}`
+      : `partidoId=${active.partidoId}`;
+    router.replace(`/live-match?${qs}`, { scroll: false });
+  }, [activeTorneoId, active.partidoId, router]);
 
   const miFilaRow: RankingRowPayload | null = miUsuarioId
     ? ranking.find((r) => r.usuarioId === miUsuarioId) ?? null
@@ -138,19 +162,22 @@ export function LiveMatchView({
       </header>
 
       <LiveSwitcher
-        tabs={tabs.map((t) => ({
-          torneoId: t.torneoId,
-          liga: t.liga,
-          equipoLocal: t.equipoLocal,
-          equipoVisita: t.equipoVisita,
-          golesLocal: t.torneoId === activeTorneoId ? scoreLocal : t.golesLocal,
-          golesVisita:
-            t.torneoId === activeTorneoId ? scoreVisita : t.golesVisita,
-          round: t.round,
-          estado: t.estado,
-        }))}
-        active={activeTorneoId}
-        onChange={setActiveTorneoId}
+        tabs={tabs.map((t) => {
+          const key = tabKey(t);
+          const isActive = key === activeKey;
+          return {
+            torneoId: key,
+            liga: t.liga,
+            equipoLocal: t.equipoLocal,
+            equipoVisita: t.equipoVisita,
+            golesLocal: isActive ? scoreLocal : t.golesLocal,
+            golesVisita: isActive ? scoreVisita : t.golesVisita,
+            round: t.round,
+            estado: t.estado,
+          };
+        })}
+        active={activeKey}
+        onChange={setActiveKey}
       />
 
       <LiveHero
@@ -202,13 +229,17 @@ export function LiveMatchView({
       </div>
 
       {activeTab === "ranking" && (
-        <RankingTable
-          ranking={ranking}
-          miUsuarioId={miUsuarioId}
-          equipoLocal={active.equipoLocal}
-          equipoVisita={active.equipoVisita}
-          totalInscritos={totalInscritos}
-        />
+        activeTorneoId ? (
+          <RankingTable
+            ranking={ranking}
+            miUsuarioId={miUsuarioId}
+            equipoLocal={active.equipoLocal}
+            equipoVisita={active.equipoVisita}
+            totalInscritos={totalInscritos}
+          />
+        ) : (
+          <SinTorneoActivo />
+        )
       )}
       {activeTab === "stats" && (
         <StatsView
@@ -229,6 +260,23 @@ export function LiveMatchView({
       <div className="mt-3 text-right text-[11px] text-soft">
         {live.isConnected ? "🟢 Conectado en vivo" : "🟠 Reconectando…"}
       </div>
+    </div>
+  );
+}
+
+function SinTorneoActivo() {
+  return (
+    <div className="rounded-md border border-light bg-card p-6 text-center shadow-sm">
+      <div aria-hidden className="mb-3 text-4xl">
+        🏟️
+      </div>
+      <p className="font-display text-[18px] font-extrabold uppercase tracking-[0.02em] text-dark">
+        Este partido no tiene torneo activo
+      </p>
+      <p className="mt-2 text-[13px] text-muted-d">
+        Todos los torneos se cancelaron antes del cierre por no alcanzar el
+        mínimo de inscritos. El marcador y los eventos siguen en vivo.
+      </p>
     </div>
   );
 }
