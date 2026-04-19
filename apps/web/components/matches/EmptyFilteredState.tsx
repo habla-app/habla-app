@@ -16,7 +16,7 @@ import {
   LIGA_CHIP_LABELS,
   slugToLiga,
 } from "@/lib/config/liga-slugs";
-import { DEFAULT_TZ, formatDayChipLabel } from "@/lib/utils/datetime";
+import { DEFAULT_TZ, formatDayChip } from "@/lib/utils/datetime";
 
 interface EmptyFilteredStateProps {
   ligaSlug?: string;
@@ -29,7 +29,7 @@ export function EmptyFilteredState({ ligaSlug, dia }: EmptyFilteredStateProps) {
     ? (LIGA_CHIP_LABELS[ligaSlug] ?? slugToLiga(ligaSlug) ?? "esa liga")
     : null;
   const diaLabel = dia
-    ? formatDayChipLabel(dia, DEFAULT_TZ).toLowerCase()
+    ? formatDayChip(dia, DEFAULT_TZ).toLowerCase()
     : null;
 
   const mensaje = buildMensaje({ ligaLabel, diaLabel });

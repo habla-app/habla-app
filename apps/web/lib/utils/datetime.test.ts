@@ -2,7 +2,7 @@ import { afterEach, describe, it, expect, vi } from "vitest";
 import {
   DEFAULT_TZ,
   formatCountdown,
-  formatDayChipLabel,
+  formatDayChip,
   formatKickoff,
   getDayBounds,
   getDayKey,
@@ -83,18 +83,42 @@ describe("formatKickoff", () => {
   });
 });
 
-describe("formatDayChipLabel", () => {
-  it("devuelve Hoy/Mañana/Día-abreviado", () => {
-    const now = new Date("2026-04-18T15:00:00Z"); // 10:00 Lima, miércoles
+describe("formatDayChip", () => {
+  it("devuelve Hoy para el día en curso en la tz dada", () => {
+    const now = new Date("2026-04-18T15:00:00Z"); // 10:00 Lima, sábado
     const todayKey = getDayKey(now, "America/Lima");
-    expect(formatDayChipLabel(todayKey, "America/Lima", now)).toBe("Hoy");
+    expect(formatDayChip(todayKey, "America/Lima", now)).toBe("Hoy");
+  });
+
+  it("devuelve Mañana para el día siguiente", () => {
+    const now = new Date("2026-04-18T15:00:00Z");
     const tomorrowKey = getDayKey(
       new Date(now.getTime() + 86_400_000),
       "America/Lima",
     );
-    expect(formatDayChipLabel(tomorrowKey, "America/Lima", now)).toBe("Mañana");
-    expect(formatDayChipLabel("2026-04-20", "America/Lima", now)).toMatch(
-      /^[A-ZÁÉÍÓÚ][a-záéíóú]{2,3} 20$/,
-    );
+    expect(formatDayChip(tomorrowKey, "America/Lima", now)).toBe("Mañana");
+  });
+
+  it("usa formato corto (sin mes) para días dentro del mes actual", () => {
+    // Hoy: sábado 18 de abril. Día a formatear: lunes 20 de abril (mismo mes).
+    const now = new Date("2026-04-18T15:00:00Z");
+    expect(formatDayChip("2026-04-20", "America/Lima", now)).toBe("Lun 20");
+    expect(formatDayChip("2026-04-29", "America/Lima", now)).toBe("Mié 29");
+  });
+
+  it("incluye el mes abreviado cuando el día cae en un mes distinto al actual", () => {
+    // Hoy: sábado 18 de abril. Día a formatear: viernes 1 de mayo.
+    const now = new Date("2026-04-18T15:00:00Z");
+    expect(formatDayChip("2026-05-01", "America/Lima", now)).toBe("Vie 1 may");
+    // Más lejos: 15 de mayo.
+    expect(formatDayChip("2026-05-15", "America/Lima", now)).toBe("Vie 15 may");
+  });
+
+  it("cruza de diciembre a enero del año siguiente", () => {
+    // Hoy: miércoles 30 de diciembre 2026. Día: viernes 1 de enero 2027.
+    const now = new Date("2026-12-30T18:00:00Z"); // 13:00 Lima
+    expect(formatDayChip("2027-01-01", "America/Lima", now)).toBe("Vie 1 ene");
+    // 2027-01-05 → martes 5 ene.
+    expect(formatDayChip("2027-01-05", "America/Lima", now)).toBe("Mar 5 ene");
   });
 });

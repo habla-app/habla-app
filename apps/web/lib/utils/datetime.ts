@@ -155,9 +155,21 @@ function getTimezoneOffsetMs(instantMs: number, tz: string): number {
 }
 
 /**
- * Label legible para un chip de día. `Hoy`, `Mañana`, o `Lun 20`.
+ * Label legible para un chip de día. El formato varía según si el día cae
+ * dentro del mes actual del navegador o en un mes distinto:
+ *
+ *   Hoy               → día en curso (en la tz dada)
+ *   Mañana            → día siguiente
+ *   Lun 20            → día en el mes actual (solo día-de-mes)
+ *   Sáb 28 abr        → día en otro mes (incluye mes abreviado)
+ *   Vie 1 may         → idem (cruza al mes siguiente)
+ *   Mié 1 ene         → idem (cruza al año siguiente)
+ *
+ * El "mes actual" se determina contra `now` en la tz dada, no contra el
+ * dayKey del chip. Así todos los chips del mes en curso comparten el
+ * formato corto y los que caen fuera muestran el mes para desambiguar.
  */
-export function formatDayChipLabel(
+export function formatDayChip(
   dayKey: string,
   tz: string = DEFAULT_TZ,
   now: Date = new Date(),
@@ -167,18 +179,33 @@ export function formatDayChipLabel(
   if (dayKey === todayKey) return "Hoy";
   if (dayKey === tomorrowKey) return "Mañana";
 
-  // Reconstruir Date a partir del dayKey y mostrar "Lun 20".
+  // Reconstruimos el Date del dayKey con mediodía UTC para evitar flips de
+  // offset al cruzar medianoche en tz's con offset negativo (Lima UTC-5).
   const [y, m, d] = dayKey.split("-").map(Number);
-  const asDate = new Date(Date.UTC(y, m - 1, d, 12)); // mediodía UTC para evitar offset flip
-  const label = asDate
-    .toLocaleDateString("es-PE", {
-      timeZone: tz,
-      weekday: "short",
-      day: "2-digit",
-    })
-    .replace(/\./g, "");
-  // es-PE devuelve "lun. 20" → capitalizar la primera letra.
-  return label.charAt(0).toUpperCase() + label.slice(1);
+  const asDate = new Date(Date.UTC(y, m - 1, d, 12));
+
+  // Mes actual del navegador en la tz dada, para decidir si el chip cae
+  // en el mes en curso (formato corto) o en otro mes (formato con mes).
+  const [currentY, currentM] = getDayKey(now, tz).split("-").map(Number);
+  const sameMonth = y === currentY && m === currentM;
+
+  const weekday = capitalizeFirst(
+    asDate
+      .toLocaleDateString("es-PE", { timeZone: tz, weekday: "short" })
+      .replace(/\./g, ""),
+  );
+
+  if (sameMonth) return `${weekday} ${d}`;
+
+  const monthAbbrev = asDate
+    .toLocaleDateString("es-PE", { timeZone: tz, month: "short" })
+    .replace(/\./g, "")
+    .toLowerCase();
+  return `${weekday} ${d} ${monthAbbrev}`;
+}
+
+function capitalizeFirst(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function isSameDay(a: Date, b: Date, tz: string): boolean {
