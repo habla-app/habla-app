@@ -6,6 +6,21 @@
 //
 // Orden exacto del mockup: Partidos · 🔴 En vivo (con live-count) ·
 // Mis combinadas · Tienda · Billetera.
+//
+// Nota — Hotfix 19 Abr: el mockup HTML define el estado default como
+// `color:var(--dark-muted)` (#7B93D0), que sobre el header navy
+// `bg-dark-surface` (#001050) da contraste ~1.5:1, muy por debajo de
+// WCAG AA (4.5:1). Priorizamos contraste sobre fidelidad literal al
+// mockup y usamos `text-white/80` (11.4:1 sobre navy, AAA) con hover a
+// blanco puro (`text-white`) + background tint, manteniendo la jerarquía
+// visual original.
+//
+// Trampa conocida del design system (no fixeada en este hotfix — scope):
+// los tokens nested `text-dark-text` / `text-dark-muted` no se generan
+// como utilities porque `textColor.dark: "#001050"` (string flat) en
+// tailwind.config colisiona con `colors.dark.*` y bloquea la expansión
+// nested. Usar `text-white/N` donde haga falta color claro sobre dark
+// surface; ver CLAUDE.md §14.
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -46,6 +61,17 @@ const LINKS: NavLinkDef[] = [
   },
 ];
 
+/**
+ * Clases para el estado inactivo (default) de un nav link. Exportadas para
+ * poder cubrirlas con tests de regresión — cualquier rollback a un token
+ * de bajo contraste sobre `bg-dark-surface` debe reventar el suite.
+ */
+export const NAV_LINK_INACTIVE_CLASSES =
+  "text-white/80 hover:bg-white/[0.06] hover:text-white";
+
+/** Clases para el estado activo (ruta actual). */
+export const NAV_LINK_ACTIVE_CLASSES = "bg-brand-gold-dim text-brand-gold";
+
 interface NavLinksProps {
   /**
    * Cantidad de partidos en vivo actualmente — va en el badge .live-count.
@@ -66,11 +92,10 @@ export function NavLinks({ liveCount = 0 }: NavLinksProps) {
           <Link
             key={link.href}
             href={link.href}
+            data-testid={`nav-link-${link.href === "/" ? "partidos" : link.href.replace(/\//g, "")}`}
             aria-current={isActive ? "page" : undefined}
             className={`flex items-center gap-1.5 rounded-sm px-4 py-[9px] text-[13px] font-semibold transition-colors duration-150 ${
-              isActive
-                ? "bg-brand-gold-dim text-brand-gold"
-                : "text-dark-muted hover:bg-white/[0.06] hover:text-white"
+              isActive ? NAV_LINK_ACTIVE_CLASSES : NAV_LINK_INACTIVE_CLASSES
             }`}
           >
             {link.hasLiveIndicator && (

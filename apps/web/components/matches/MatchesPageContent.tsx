@@ -16,6 +16,7 @@
 // fetch real y pinta la lista — la navegación por chips dispara
 // re-render server cuando Next.js re-matchee con los nuevos params.
 
+import { auth } from "@/lib/auth";
 import { listar } from "@/lib/services/torneos.service";
 import { MatchCard } from "@/components/matches/MatchCard";
 import { torneoToCardData } from "@/components/matches/adapter";
@@ -23,6 +24,7 @@ import { MatchesSidebar } from "@/components/matches/MatchesSidebar";
 import { LeagueFilterChips } from "@/components/matches/LeagueFilterChips";
 import { DayFilterChips } from "@/components/matches/DayFilterChips";
 import { EmptyFilteredState } from "@/components/matches/EmptyFilteredState";
+import { AutoOpenComboFromQuery } from "@/components/combo/AutoOpenComboFromQuery";
 import { slugToLiga } from "@/lib/config/liga-slugs";
 import { DEFAULT_TZ, getDayBounds, getDayKey } from "@/lib/utils/datetime";
 
@@ -31,9 +33,19 @@ interface Props {
   ligaSlug?: string;
   /** ?dia=YYYY-MM-DD (hora Perú). null/undefined → "Todos". */
   dia?: string;
+  /** Path base de la página (`/` o `/matches`). Usado para armar el
+   *  callbackUrl del CTA sin sesión — post-login el usuario vuelve al
+   *  mismo path con `?openCombo=<torneoId>` y el modal se auto-abre. */
+  basePath?: string;
 }
 
-export async function MatchesPageContent({ ligaSlug, dia }: Props = {}) {
+export async function MatchesPageContent({
+  ligaSlug,
+  dia,
+  basePath = "/matches",
+}: Props = {}) {
+  const session = await auth();
+  const hasSession = !!session?.user;
   const liga = slugToLiga(ligaSlug ?? null) ?? undefined;
 
   // Fetch de la ventana completa (estado=ABIERTO, limit grande). Sirve
@@ -126,9 +138,23 @@ export async function MatchesPageContent({ ligaSlug, dia }: Props = {}) {
             <EmptyFilteredState ligaSlug={ligaSlug} dia={dia} />
           ) : (
             <div className="mb-10 flex flex-col gap-3.5">
-              {cards.map((torneo) => (
-                <MatchCard key={torneo.id} torneo={torneo} />
-              ))}
+              {cards.map((torneo) => {
+                // callbackUrl preserva los filtros actuales (liga/dia) +
+                // inyecta openCombo=<id> para el auto-disparo post-login.
+                const qs = new URLSearchParams();
+                if (ligaSlug) qs.set("liga", ligaSlug);
+                if (dia) qs.set("dia", dia);
+                qs.set("openCombo", torneo.id);
+                const ctaCallbackUrl = `${basePath}?${qs.toString()}`;
+                return (
+                  <MatchCard
+                    key={torneo.id}
+                    torneo={torneo}
+                    hasSession={hasSession}
+                    ctaCallbackUrl={ctaCallbackUrl}
+                  />
+                );
+              })}
             </div>
           )}
 
@@ -191,6 +217,10 @@ export async function MatchesPageContent({ ligaSlug, dia }: Props = {}) {
           <MatchesSidebar />
         </div>
       </div>
+
+      {/* Post-login auto-open: si venimos con ?openCombo=<id>, abre el
+          ComboModal sin que el usuario tenga que volver a clickear. */}
+      <AutoOpenComboFromQuery hasSession={hasSession} />
     </div>
   );
 }

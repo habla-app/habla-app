@@ -130,9 +130,8 @@ export default async function TorneoDetallePage({ params }: Props) {
           Reglas de puntaje
         </h2>
         <p className="mb-4 text-sm leading-relaxed text-body">
-          Arma tu combinada de 5 predicciones (máximo <strong>21 puntos</strong>).
-          El Sub-Sprint 4 habilita el formulario; por ahora la inscripción crea
-          un ticket placeholder.
+          Arma tu combinada de 5 predicciones — máximo{" "}
+          <strong>21 puntos</strong>.
         </p>
         <ul className="divide-y divide-light">
           <RuleRow n={1} title="Resultado" desc="Local / Empate / Visita" pts={3} />

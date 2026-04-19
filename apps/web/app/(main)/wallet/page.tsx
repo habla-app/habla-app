@@ -1,6 +1,6 @@
-// Wallet — placeholder hasta el Sub-Sprint 2 (Culqi + packs). Replica la
-// estructura del mockup `/wallet` con hero dark azul + mini stats + zona
-// "próximamente". El NavBar viene del layout (main).
+// Wallet — hero dark azul con balance + historial básico. La compra con
+// Culqi + packs con bonus llega en Sub-Sprint 2; hasta entonces el
+// balance viene del bono de bienvenida + premios ganados.
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
@@ -34,17 +34,16 @@ export default async function WalletPage() {
         </div>
       </section>
 
-      {/* Placeholder Sub-Sprint 2 */}
       <section className="mt-4 rounded-md border border-light bg-card p-6 text-center shadow-sm">
         <div aria-hidden className="mb-2 text-3xl">
           🔥
         </div>
         <h2 className="mb-1 font-display text-[22px] font-extrabold uppercase tracking-wide text-dark">
-          Próximamente: Compra de Lukas
+          Compra de Lukas
         </h2>
         <p className="text-sm text-body">
-          En el Sub-Sprint 2 habilitamos la compra con Culqi y los packs con
-          bonus.
+          Estamos terminando la integración con Culqi para habilitar la compra
+          de Lukas con tarjeta y los packs con bonus. En breve.
         </p>
       </section>
 
