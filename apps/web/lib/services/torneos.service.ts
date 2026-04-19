@@ -58,6 +58,10 @@ export type TorneoConPartido = Torneo & { partido: Partido };
 export interface ListarInput {
   estado?: EstadoTorneo;
   liga?: string;
+  /** Filtro sobre partido.fechaInicio (inclusive). */
+  desde?: Date;
+  /** Filtro sobre partido.fechaInicio (inclusive). */
+  hasta?: Date;
   page?: number;
   limit?: number;
 }
@@ -99,7 +103,15 @@ export async function listar(input: ListarInput = {}): Promise<ListarResult> {
 
   const where: Prisma.TorneoWhereInput = {};
   if (input.estado) where.estado = input.estado;
-  if (input.liga) where.partido = { liga: input.liga };
+
+  const partidoFilter: Prisma.PartidoWhereInput = {};
+  if (input.liga) partidoFilter.liga = input.liga;
+  if (input.desde || input.hasta) {
+    partidoFilter.fechaInicio = {};
+    if (input.desde) partidoFilter.fechaInicio.gte = input.desde;
+    if (input.hasta) partidoFilter.fechaInicio.lte = input.hasta;
+  }
+  if (Object.keys(partidoFilter).length > 0) where.partido = partidoFilter;
 
   const [torneos, total] = await Promise.all([
     prisma.torneo.findMany({

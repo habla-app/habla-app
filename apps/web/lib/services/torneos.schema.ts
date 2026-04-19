@@ -8,6 +8,11 @@ export const ListarTorneosQuerySchema = z.object({
     .enum(["ABIERTO", "CERRADO", "EN_JUEGO", "FINALIZADO", "CANCELADO"])
     .optional(),
   liga: z.string().min(1).max(100).optional(),
+  // Rango sobre `partido.fechaInicio`. Ambos son ISO 8601 UTC — el
+  // frontend resuelve el día local a UTC vía getDayBounds() antes de
+  // llamar. El backend no hace conversión de tz.
+  desde: z.coerce.date().optional(),
+  hasta: z.coerce.date().optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
 });
