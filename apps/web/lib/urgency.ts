@@ -1,15 +1,24 @@
-// Helper compartido para calcular urgencia + label de una match card a
-// partir de un `cierreAt`. Se usa en `/`, `/matches` y `/torneo/:id`.
+// Helper para calcular urgencia + label de un torneo a partir de su
+// `cierreAt`. Lo usan páginas que ya no renderizan MatchCard pero
+// necesitan un texto de urgencia (ej. el hero del detalle de torneo).
 //
-// Tiers (CLAUDE.md §9, sección Sub-Sprint 3):
+// Fase 3 — MatchCard pasó a usar los helpers de lib/utils/datetime.ts
+// (tier 'crit' en vez de 'critical', label "Cierra en X"). Este
+// archivo queda para callers legacy que ya tienen copy tipo
+// "¡Cierra en 8 min!". No se recicla por compat visual.
+//
+// Tiers:
 //   - critical: <15min al cierre
 //   - high:     <1h al cierre
 //   - med:      <3h al cierre
 //   - low:      ≥3h al cierre (o ya cerrado — devuelve "low" como safe default)
 
-import type { Urgency, TipoBadge } from "@/components/matches/MatchCard";
+export type Urgency = "critical" | "high" | "med" | "low";
 
-export function calcularUrgencia(cierreAt: Date, now: Date = new Date()): Urgency {
+export function calcularUrgencia(
+  cierreAt: Date,
+  now: Date = new Date(),
+): Urgency {
   const diffMin = (cierreAt.getTime() - now.getTime()) / 60_000;
   if (diffMin < 15) return "critical";
   if (diffMin < 60) return "high";
@@ -36,7 +45,8 @@ export function formatearUrgencyLabel(
     const mins = diffMin % 60;
     return `${hours}h ${mins}min`;
   }
-  // low: mostrar la hora del cierre (formato "Hoy HH:mm" o "DD/MM HH:mm")
+  // low: mostrar la hora del cierre en tz del runtime (no crítico —
+  // esta rama solo se ve en hero estáticos, no en listados).
   const hoy = now;
   const sameDay =
     hoy.getFullYear() === cierreAt.getFullYear() &&
@@ -48,39 +58,4 @@ export function formatearUrgencyLabel(
   const dd = cierreAt.getDate().toString().padStart(2, "0");
   const mon = (cierreAt.getMonth() + 1).toString().padStart(2, "0");
   return `${dd}/${mon} ${hh}:${mm}`;
-}
-
-/**
- * Infiere el tipoBadge visual del Torneo a partir de su tipo + liga. Patrón
- * temporal hasta que el schema agregue una columna `tipoBadge` explícita.
- *
- * Sub-Sprint 3 mock rules:
- *   - Liga con "Mundial" → mundial
- *   - Liga con "Champions" → champions
- *   - Liga con "Libertadores" → liberta
- *   - Tipo PREMIUM en clásicos peruanos → clasico
- *   - Tipo EXPRESS → express
- *   - Tipo PREMIUM → premium
- *   - default → estandar
- */
-export function inferirTipoBadge(
-  tipoTorneo: string,
-  liga: string,
-): TipoBadge {
-  const L = liga.toLowerCase();
-  if (L.includes("mundial")) return "mundial";
-  if (L.includes("champions")) return "champions";
-  if (L.includes("libertadores")) return "liberta";
-  if (tipoTorneo === "EXPRESS") return "express";
-  if (tipoTorneo === "PREMIUM") {
-    // Clásicos peruanos: Alianza vs Universitario, etc. → clasico badge.
-    if (
-      (L.includes("liga 1") || L.includes("peru")) &&
-      /alianza|universitario|cristal|melgar/i.test(liga)
-    ) {
-      return "clasico";
-    }
-    return "premium";
-  }
-  return "estandar";
 }
