@@ -2,13 +2,21 @@
 // ComboModal — modal centrado donde el usuario arma sus 5 predicciones.
 // Sub-Sprint 4. Replica `.combo-panel` / `.combo-panel-head` / `.combo-body`
 // / `.combo-foot` del mockup (docs/habla-mockup-completo.html §combo).
+//
+// Hotfix post-Sub-Sprint 5: la lógica de "Balance después" + decisión
+// CTA submit/comprar vive en `computeComboFooterState` (mapper puro),
+// para que el modal nunca renderice "-5" y bloquee el submit cuando el
+// balance no alcanza la entrada (caso sin placeholder).
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { useLukasStore } from "@/stores/lukas.store";
+import { authedFetch } from "@/lib/api-client";
 import { PUNTOS } from "@habla/shared";
 import { PredCard } from "./PredCard";
 import { ScorePicker } from "./ScorePicker";
+import { computeComboFooterState } from "./combo-info.mapper";
 
 export interface ComboTorneoInfo {
   torneoId: string;
@@ -119,17 +127,30 @@ export function ComboModal({
     );
   }, [preds]);
 
-  const costoLukas = torneo
-    ? torneo.tienePlaceholder
-      ? 0
-      : torneo.entradaLukas
-    : 0;
-  const balanceDespues = balance - costoLukas;
+  const footer = useMemo(() => {
+    if (!torneo) return null;
+    return computeComboFooterState({
+      balance,
+      entradaLukas: torneo.entradaLukas,
+      tienePlaceholder: torneo.tienePlaceholder,
+    });
+  }, [balance, torneo]);
+  const costoLukas = footer?.costoLukas ?? 0;
+  const displayBalanceDespues = footer?.displayBalanceDespues ?? 0;
+  const balanceInsuficiente = footer?.balanceInsuficiente ?? false;
 
   const handleSubmit = useCallback(async () => {
     if (!torneo) return;
     if (!listo) {
       setError("Completá las 5 predicciones antes de enviar.");
+      return;
+    }
+    if (balanceInsuficiente) {
+      // Defensa adicional: el botón ya queda oculto cuando no hay balance,
+      // pero si por algún motivo se llama (ej. test, race), no avanzamos.
+      setError(
+        `Balance insuficiente. Necesitas ${torneo.entradaLukas} Lukas para inscribirte.`,
+      );
       return;
     }
     setSubmitting(true);
@@ -144,11 +165,10 @@ export function ComboModal({
         predMarcadorLocal: preds.predMarcadorLocal,
         predMarcadorVisita: preds.predMarcadorVisita,
       };
-      const res = await fetch("/api/v1/tickets", {
+      const res = await authedFetch("/api/v1/tickets", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
-        credentials: "include",
       });
       const json = (await res.json()) as {
         data?: {
@@ -182,6 +202,7 @@ export function ComboModal({
   }, [
     torneo,
     listo,
+    balanceInsuficiente,
     preds,
     costoLukas,
     setBalance,
@@ -333,24 +354,60 @@ export function ComboModal({
           <SummaryBox label="Puntos máx" value={`${puntosMax} pts`} gold />
           <SummaryBox
             label="Balance después"
-            value={`${formatoMiles(balanceDespues)} 🪙`}
+            value={`${formatoMiles(displayBalanceDespues)} 🪙`}
           />
         </div>
-        <button
-          type="button"
-          onClick={handleSubmit}
-          disabled={!listo || submitting}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-brand-gold px-4 py-4 font-display text-[16px] font-extrabold uppercase tracking-[0.04em] text-black shadow-gold-cta transition-all duration-150 hover:bg-brand-gold-light hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
-        >
-          <span aria-hidden>🎯</span>
-          {submitting
-            ? "Enviando..."
-            : torneo.tienePlaceholder
-              ? "Confirmar mi combinada"
-              : `Inscribir por ${formatoMiles(torneo.entradaLukas)} 🪙`}
-        </button>
+        {balanceInsuficiente ? (
+          <BuyLukasCTA
+            entradaLukas={torneo.entradaLukas}
+            balanceActual={balance}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!listo || submitting}
+            data-testid="combo-submit"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-brand-gold px-4 py-4 font-display text-[16px] font-extrabold uppercase tracking-[0.04em] text-black shadow-gold-cta transition-all duration-150 hover:bg-brand-gold-light hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+          >
+            <span aria-hidden>🎯</span>
+            {submitting
+              ? "Enviando..."
+              : torneo.tienePlaceholder
+                ? "Confirmar mi combinada"
+                : `Inscribir por ${formatoMiles(torneo.entradaLukas)} 🪙`}
+          </button>
+        )}
       </div>
     </Modal>
+  );
+}
+
+function BuyLukasCTA({
+  entradaLukas,
+  balanceActual,
+}: {
+  entradaLukas: number;
+  balanceActual: number;
+}) {
+  const faltan = Math.max(0, entradaLukas - balanceActual);
+  return (
+    <div className="flex flex-col gap-2">
+      <p
+        role="alert"
+        className="rounded-sm border border-urgent-critical/30 bg-urgent-critical/10 px-3 py-2 text-center text-[13px] font-semibold text-danger"
+      >
+        Te faltan {formatoMiles(faltan)} 🪙 para inscribirte en este torneo.
+      </p>
+      <Link
+        href="/wallet"
+        data-testid="combo-buy-lukas"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-brand-gold px-4 py-4 font-display text-[16px] font-extrabold uppercase tracking-[0.04em] text-black shadow-gold-cta transition-all duration-150 hover:bg-brand-gold-light hover:-translate-y-px"
+      >
+        <span aria-hidden>🪙</span>
+        Comprar Lukas
+      </Link>
+    </div>
   );
 }
 

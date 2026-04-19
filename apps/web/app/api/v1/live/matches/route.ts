@@ -1,30 +1,32 @@
 // GET /api/v1/live/matches
 //
 // Público. Devuelve los partidos actualmente en vivo junto con el
-// torneo principal (el de mayor pozoBruto) de cada uno y un preview
-// del top 3 del ranking. Sub-Sprint 5.
+// torneo principal (priorizado por estado y pozoBruto) y un preview del
+// top 3 del ranking. Sub-Sprint 5.
+//
+// Hotfix post-Sub-Sprint 5 (Bug #2): comparte el helper
+// `obtenerLiveMatches` con la página `/live-match` para que ambas vistas
+// vean el mismo conjunto de partidos. El filtro previo a EN_JUEGO/CERRADO
+// excluía partidos cuyos torneos quedaban en ABIERTO por jitter del cron.
 
-import { prisma } from "@habla/db";
 import { listarRanking } from "@/lib/services/ranking.service";
+import {
+  elegirTorneoPrincipal,
+  obtenerLiveMatches,
+} from "@/lib/services/live-matches.service";
 import { toErrorResponse } from "@/lib/services/errors";
 import { logger } from "@/lib/services/logger";
 
 export async function GET() {
   try {
-    const partidos = await prisma.partido.findMany({
-      where: { estado: "EN_VIVO" },
-      include: {
-        torneos: {
-          where: { estado: { in: ["EN_JUEGO", "CERRADO"] } },
-          orderBy: { pozoBruto: "desc" },
-        },
-      },
-      orderBy: { fechaInicio: "asc" },
+    const partidos = await obtenerLiveMatches({
+      limit: 20,
+      incluirFinalizados: false,
     });
 
     const data = await Promise.all(
       partidos.map(async (p) => {
-        const torneoPrincipal = p.torneos[0] ?? null;
+        const torneoPrincipal = elegirTorneoPrincipal(p.torneos);
         let topPreview: Array<{
           rank: number;
           nombre: string;

@@ -3,7 +3,11 @@
 // Server Component: trae tickets del usuario (con torneo + partido
 // embebidos) y stats. Agrupa por torneoId para renderizar MatchGroup.
 // El tab activo viene en ?tab=activas|ganadas|historial (default activas).
-
+//
+// Hotfix Bug #3: `force-dynamic` evita que Next.js cachee el RSC entre
+// requests con sesión distinta. Sin esto, el primer render anónimo
+// quedaba cacheado y futuras navegaciones autenticadas redirigían a
+// login aunque el cookie fuera válido.
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
@@ -16,6 +20,8 @@ import { StatsPill } from "@/components/tickets/StatsPill";
 import { MisTicketsTabs, type TicketsTab } from "@/components/tickets/MisTicketsTabs";
 import { MatchGroup } from "@/components/tickets/MatchGroup";
 import type { TicketConContexto } from "@/components/tickets/adapter";
+
+export const dynamic = "force-dynamic";
 
 interface Props {
   searchParams?: { tab?: string };

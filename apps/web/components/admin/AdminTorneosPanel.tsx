@@ -18,6 +18,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/components/ui";
 import { Button } from "@/components/ui";
 import { formatKickoff } from "@/lib/utils/datetime";
+import { authedFetch } from "@/lib/api-client";
 
 interface PartidoDisponible {
   id: string;
@@ -48,7 +49,7 @@ export function AdminTorneosPanel() {
   const refrescarDisponibles = useCallback(async () => {
     setCargando(true);
     try {
-      const res = await fetch("/api/v1/admin/partidos/disponibles");
+      const res = await authedFetch("/api/v1/admin/partidos/disponibles");
       const payload = await res.json();
       if (!res.ok)
         throw new Error(payload?.error?.message ?? "No se pudo cargar.");
@@ -67,7 +68,7 @@ export function AdminTorneosPanel() {
   async function handleImportar() {
     setImportando(true);
     try {
-      const res = await fetch("/api/v1/admin/partidos/importar", {
+      const res = await authedFetch("/api/v1/admin/partidos/importar", {
         method: "POST",
       });
       const payload = await res.json();
@@ -221,7 +222,7 @@ function CrearTorneoRow({
   async function handleCrear() {
     setCreando(true);
     try {
-      const res = await fetch("/api/v1/admin/torneos", {
+      const res = await authedFetch("/api/v1/admin/torneos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

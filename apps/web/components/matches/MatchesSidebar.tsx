@@ -12,8 +12,11 @@
 // respectivamente.
 import Link from "next/link";
 import { auth } from "@/lib/auth";
-import { prisma } from "@habla/db";
 import { listarRanking } from "@/lib/services/ranking.service";
+import {
+  elegirTorneoPrincipal,
+  obtenerLiveMatches,
+} from "@/lib/services/live-matches.service";
 import { getTeamColor } from "@/lib/utils/team-colors";
 
 // ---------------------------------------------------------------------------
@@ -41,22 +44,16 @@ interface LiveMini {
 }
 
 async function fetchLiveMatches(): Promise<LiveMini[]> {
-  const partidos = await prisma.partido.findMany({
-    where: { estado: "EN_VIVO" },
-    include: {
-      torneos: {
-        where: { estado: { in: ["EN_JUEGO", "CERRADO"] } },
-        orderBy: { pozoBruto: "desc" },
-        take: 1,
-      },
-    },
-    orderBy: { fechaInicio: "asc" },
-    take: 3,
+  // Hotfix Bug #2: usar el helper compartido para que el widget vea los
+  // mismos partidos que `/live-match` y el endpoint `/api/v1/live/matches`.
+  const partidos = await obtenerLiveMatches({
+    limit: 3,
+    incluirFinalizados: false,
   });
 
   const out: LiveMini[] = [];
   for (const p of partidos) {
-    const torneo = p.torneos[0];
+    const torneo = elegirTorneoPrincipal(p.torneos);
     let lead: LiveMini["lead"];
     if (torneo) {
       try {

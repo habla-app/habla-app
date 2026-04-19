@@ -12,6 +12,7 @@ dist/
 .next/
 out/
 build/
+*.tsbuildinfo
 
 # Prisma
 packages/db/prisma/migrations/**/migration_lock.toml

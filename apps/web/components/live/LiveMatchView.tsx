@@ -28,7 +28,10 @@ interface LiveMatchTab {
   round: string | null;
   venue: string | null;
   estado: "EN_VIVO" | "FINALIZADO";
-  torneoEstado: "EN_JUEGO" | "FINALIZADO" | "CERRADO";
+  // ABIERTO incluido por hotfix Bug #2: el cron de cierre puede tardar
+  // hasta 1 minuto en transicionar el torneo, así que un partido EN_VIVO
+  // puede tener torneos asociados aún en ABIERTO. Se renderea igual.
+  torneoEstado: "ABIERTO" | "EN_JUEGO" | "FINALIZADO" | "CERRADO";
   pozoBruto: number;
   pozoNeto: number;
   totalInscritos: number;

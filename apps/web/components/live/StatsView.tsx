@@ -4,6 +4,7 @@
 // tab está visible.
 
 import { useEffect, useState } from "react";
+import { authedFetch } from "@/lib/api-client";
 import type { EstadisticasPartidoLado } from "@/lib/services/eventos.mapper";
 
 interface StatsViewProps {
@@ -31,7 +32,7 @@ export function StatsView({
     let cancelled = false;
     async function load() {
       try {
-        const res = await fetch(`/api/v1/partidos/${partidoId}/stats`);
+        const res = await authedFetch(`/api/v1/partidos/${partidoId}/stats`);
         if (!res.ok) {
           const errJson = await res.json().catch(() => ({}));
           setError(errJson?.error?.message ?? "No se pudo cargar stats");

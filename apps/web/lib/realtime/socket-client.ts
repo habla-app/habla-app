@@ -12,6 +12,7 @@ import type {
   ServerToClientEvents,
 } from "./events";
 import { SOCKET_PATH } from "./events";
+import { authedFetch } from "@/lib/api-client";
 
 export type HablaSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
@@ -25,9 +26,7 @@ let container: SocketContainer | null = null;
 
 async function fetchToken(): Promise<string | null> {
   try {
-    const res = await fetch("/api/v1/realtime/token", {
-      credentials: "include",
-    });
+    const res = await authedFetch("/api/v1/realtime/token");
     if (!res.ok) return null;
     const json = (await res.json()) as {
       data?: { token?: string };

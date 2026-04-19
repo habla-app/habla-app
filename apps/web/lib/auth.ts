@@ -9,6 +9,7 @@ import NextAuth from "next-auth";
 import Resend from "next-auth/providers/resend";
 import { HablaPrismaAdapter } from "@/lib/auth-adapter";
 import { crearOEncontrarUsuario, obtenerBalance } from "@/lib/usuarios";
+import { logger } from "@/lib/services/logger";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   // Railway corre la app detras de un proxy; NextAuth v5 por defecto no
@@ -58,12 +59,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     async session({ session, token }) {
       // Inyectar usuarioId, balanceLukas y rol en la sesion que ve el frontend.
+      // Hotfix Bug #3: si `obtenerBalance` falla (Prisma down, latencia, etc.)
+      // no debemos romper la sesión devolviendo null — eso causaría que el
+      // usuario "pierda" la sesión en navegaciones client-side aunque el
+      // cookie esté válido. Defaulteamos a balance=0 y loggeamos el error.
       if (token.usuarioId && session.user) {
         session.user.id = token.usuarioId as string;
         session.user.rol = (token.rol as "JUGADOR" | "ADMIN") ?? "JUGADOR";
-        session.user.balanceLukas = await obtenerBalance(
-          token.usuarioId as string
-        );
+        try {
+          session.user.balanceLukas = await obtenerBalance(
+            token.usuarioId as string
+          );
+        } catch (err) {
+          logger.error(
+            { err, usuarioId: token.usuarioId },
+            "session callback: obtenerBalance falló, default 0"
+          );
+          session.user.balanceLukas = 0;
+        }
       }
       return session;
     },

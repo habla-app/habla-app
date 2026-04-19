@@ -7,6 +7,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildComboTorneoInfo,
+  computeComboFooterState,
   type TorneoApiResponse,
 } from "@/components/combo/combo-info.mapper";
 
@@ -101,5 +102,109 @@ describe("buildComboTorneoInfo", () => {
       }),
     );
     expect(info!.primerPremioEstimado).toBe(10);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeComboFooterState — hotfix Bug #1 (post-Sub-Sprint 5)
+// ---------------------------------------------------------------------------
+//
+// El bug del balance "-5" se reproducía cuando el `useLukasStore` quedaba
+// en su valor inicial (0) porque el layout no hidrataba el store desde la
+// sesión NextAuth. La función pura derive el footer del modal y nunca
+// permite renderizar un balance proyectado negativo. Cobertura completa
+// de los edge cases del checklist a) – i) del PO.
+
+describe("computeComboFooterState", () => {
+  it("a) primer ticket: con placeholder NO cobra entrada y queda enabled", () => {
+    // Usuario tiene 100 Lukas, ya se inscribió (placeholder). Al editar
+    // su combinada el costo es 0 y el balance no se mueve.
+    const f = computeComboFooterState({
+      balance: 100,
+      entradaLukas: 5,
+      tienePlaceholder: true,
+    });
+    expect(f.costoLukas).toBe(0);
+    expect(f.balanceDespues).toBe(100);
+    expect(f.displayBalanceDespues).toBe(100);
+    expect(f.balanceInsuficiente).toBe(false);
+    expect(f.ctaMode).toBe("submit");
+  });
+
+  it("b) ticket adicional: sin placeholder cobra entrada y descuenta", () => {
+    // Usuario con 50 Lukas crea su 2do ticket en un torneo de entrada 10.
+    const f = computeComboFooterState({
+      balance: 50,
+      entradaLukas: 10,
+      tienePlaceholder: false,
+    });
+    expect(f.costoLukas).toBe(10);
+    expect(f.balanceDespues).toBe(40);
+    expect(f.displayBalanceDespues).toBe(40);
+    expect(f.balanceInsuficiente).toBe(false);
+    expect(f.ctaMode).toBe("submit");
+  });
+
+  it("c) balance insuficiente sin placeholder: bloquea submit, modo comprar", () => {
+    // Usuario con 5 Lukas intenta inscribirse a torneo de 10 sin placeholder.
+    const f = computeComboFooterState({
+      balance: 5,
+      entradaLukas: 10,
+      tienePlaceholder: false,
+    });
+    expect(f.balanceInsuficiente).toBe(true);
+    expect(f.ctaMode).toBe("comprar");
+    // El cálculo crudo da -5 pero la UI nunca debe mostrarlo
+    expect(f.balanceDespues).toBe(-5);
+    expect(f.displayBalanceDespues).toBe(0);
+  });
+
+  it("BUG REPRO: store sin hidratar (balance=0) NO muestra negativo", () => {
+    // Reproducción exacta del bug del PO: store inicial = 0, entrada=5.
+    // Antes del fix esto mostraba "Balance después: -5".
+    const f = computeComboFooterState({
+      balance: 0,
+      entradaLukas: 5,
+      tienePlaceholder: false,
+    });
+    expect(f.displayBalanceDespues).toBe(0); // nunca negativo en UI
+    expect(f.balanceInsuficiente).toBe(true);
+    expect(f.ctaMode).toBe("comprar");
+  });
+
+  it("balance exactamente igual a entrada: alcanza, queda en 0", () => {
+    // Edge case: 5 Lukas, entrada 5, sin placeholder. Alcanza justo.
+    const f = computeComboFooterState({
+      balance: 5,
+      entradaLukas: 5,
+      tienePlaceholder: false,
+    });
+    expect(f.balanceInsuficiente).toBe(false);
+    expect(f.balanceDespues).toBe(0);
+    expect(f.displayBalanceDespues).toBe(0);
+    expect(f.ctaMode).toBe("submit");
+  });
+
+  it("placeholder + balance 0: aún permite confirmar (entrada ya pagada)", () => {
+    // Edge: usuario gastó todo su saldo después de inscribirse. Aún así
+    // puede CONFIRMAR su combinada porque la entrada está cobrada.
+    const f = computeComboFooterState({
+      balance: 0,
+      entradaLukas: 50,
+      tienePlaceholder: true,
+    });
+    expect(f.balanceInsuficiente).toBe(false);
+    expect(f.costoLukas).toBe(0);
+    expect(f.ctaMode).toBe("submit");
+  });
+
+  it("entrada 0 (torneo gratis): nunca insuficiente", () => {
+    const f = computeComboFooterState({
+      balance: 0,
+      entradaLukas: 0,
+      tienePlaceholder: false,
+    });
+    expect(f.balanceInsuficiente).toBe(false);
+    expect(f.ctaMode).toBe("submit");
   });
 });
