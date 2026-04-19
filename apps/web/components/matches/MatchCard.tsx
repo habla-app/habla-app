@@ -15,13 +15,13 @@
 // hermanos en el árbol (no nested) para evitar `<a>` dentro de `<a>`.
 import Link from "next/link";
 import {
-  formatCountdown,
   formatKickoff,
   urgencyLevel,
   type UrgencyTier,
 } from "@/lib/utils/datetime";
 import { getTeamColor, getTeamInitials } from "@/lib/utils/team-colors";
 import { MatchCardCTA } from "./MatchCardCTA";
+import { CountdownLabel } from "./CountdownLabel";
 
 export interface MatchCardData {
   id: string;
@@ -89,7 +89,6 @@ function getLigaAccent(liga: string): string {
 export function MatchCard({ torneo, hasSession, ctaCallbackUrl }: MatchCardProps) {
   const urgency = urgencyLevel(torneo.cierreAt);
   const kickoff = formatKickoff(torneo.fechaInicio);
-  const countdown = formatCountdown(torneo.cierreAt);
 
   const accentColor = getLigaAccent(torneo.liga);
   const detalleHref = `/torneo/${torneo.id}`;
@@ -137,8 +136,9 @@ export function MatchCard({ torneo, hasSession, ctaCallbackUrl }: MatchCardProps
               </span>
               <span
                 className={`text-[11px] ${URGENCY_TEXT_CLASS[urgency]} ${URGENCY_WEIGHT_CLASS[urgency]}`}
+                data-testid="match-card-countdown"
               >
-                {countdown}
+                <CountdownLabel cierreAt={torneo.cierreAt} />
               </span>
             </div>
           </header>
