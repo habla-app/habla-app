@@ -5,16 +5,19 @@
 // 5 items route-based. Visible solo en mobile/tablet (<lg en Tailwind ≈
 // 1024px, suficientemente cerca del 1000px del mockup).
 //
-// Las rutas `/live-match` y `/mis-combinadas` llegan en Sub-Sprints
-// posteriores; hasta entonces apuntan ahí y la navegación devuelve 404
-// (aceptable como estado temporal).
+// Bug #12 (Hotfix #5): el item "🔴 En vivo" ahora renderea el
+// `<LiveCountBadge>` como overlay absoluto sobre el icono; si no hay
+// partidos en vivo, el badge devuelve null y no aparece nada (antes el
+// NavBar mostraba "2" hardcoded aunque no hubiera nada).
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LiveCountBadge } from "@/components/layout/LiveCountBadge";
 
 interface Item {
   href: string;
   label: string;
   icon: string;
+  hasLiveIndicator?: boolean;
   match: (pathname: string) => boolean;
 }
 
@@ -30,6 +33,7 @@ const ITEMS: Item[] = [
     href: "/live-match",
     label: "En vivo",
     icon: "🔴",
+    hasLiveIndicator: true,
     match: (p) => p.startsWith("/live-match"),
   },
   {
@@ -52,7 +56,12 @@ const ITEMS: Item[] = [
   },
 ];
 
-export function BottomNav() {
+interface Props {
+  /** Count del SSR (del layout, via contarLiveMatches). 0 default. */
+  initialLiveCount?: number;
+}
+
+export function BottomNav({ initialLiveCount = 0 }: Props) {
   const pathname = usePathname() ?? "/";
 
   // Oculto en /auth/* y /admin/* (tienen layouts propios sin bottom-nav).
@@ -76,8 +85,16 @@ export function BottomNav() {
               isActive ? "text-brand-gold-dark" : "text-muted-d"
             }`}
           >
-            <span aria-hidden className="text-[22px] leading-none">
-              {item.icon}
+            <span className="relative inline-flex">
+              <span aria-hidden className="text-[22px] leading-none">
+                {item.icon}
+              </span>
+              {item.hasLiveIndicator && (
+                <LiveCountBadge
+                  initialCount={initialLiveCount}
+                  variant="mobile"
+                />
+              )}
             </span>
             <span className="text-[10px] font-semibold uppercase tracking-[0.03em]">
               {item.label}

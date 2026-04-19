@@ -20,6 +20,7 @@ import {
   LiveFinalizedSection,
   type FinalizedMatchCard,
 } from "./LiveFinalizedSection";
+import { LiveFinalizedBanner } from "./LiveFinalizedBanner";
 import { LiveHero } from "./LiveHero";
 import { MiTicketCard } from "./MiTicketCard";
 import { RankingTable } from "./RankingTable";
@@ -75,6 +76,10 @@ interface LiveMatchViewProps {
   /** True si `?liga=` está activo — usado para el copy del empty
    *  state del switcher (invita a volver a "Todas"). */
   filtroActivo: boolean;
+  /** Próximo torneo ABIERTO más cercano a cerrar — alimenta el CTA
+   *  de la banda motivacional cuando el tab activo es FINALIZADO
+   *  (Bug #16). Null → CTA genérico a /matches. */
+  proximoTorneoId?: string | null;
 }
 
 type TabKey = "ranking" | "stats" | "eventos";
@@ -88,6 +93,7 @@ export function LiveMatchView({
   ligasChips,
   finalizedCards,
   filtroActivo,
+  proximoTorneoId = null,
 }: LiveMatchViewProps) {
   const router = useRouter();
   // Cuando el filtro deja tabs vacíos, torneoIdActivo es null y no
@@ -281,6 +287,14 @@ export function LiveMatchView({
           <div className="mt-3 text-right text-[11px] text-soft">
             {live.isConnected ? "🟢 Conectado en vivo" : "🟠 Reconectando…"}
           </div>
+
+          {/* Bug #16: banda motivacional cuando el tab activo es un
+              torneo FINALIZADO — "el próximo te espera". Para tabs en
+              vivo, dejamos el espacio limpio para no competir con el
+              ranking en vivo. */}
+          {active.estado === "FINALIZADO" && (
+            <LiveFinalizedBanner proximoTorneoId={proximoTorneoId} />
+          )}
         </>
       )}
 

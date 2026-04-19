@@ -77,6 +77,28 @@ export async function obtenerLiveMatches(
 }
 
 // ---------------------------------------------------------------------------
+// Count cheap (Bug #12)
+// ---------------------------------------------------------------------------
+
+/**
+ * Conteo barato de partidos EN_VIVO con al menos un torneo no cancelado.
+ * Lo usa el badge "🔴 En vivo" del NavBar/BottomNav para decidir si
+ * renderizarse (count > 0) o no (count === 0). No se hace JOIN al
+ * ranking ni al pozo: solo `count` sobre la misma condición que
+ * `obtenerLiveMatches`.
+ */
+export async function contarLiveMatches(): Promise<number> {
+  return prisma.partido.count({
+    where: {
+      estado: "EN_VIVO",
+      torneos: {
+        some: { estado: { not: "CANCELADO" } },
+      },
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Partidos finalizados recientes (Bug #10)
 // ---------------------------------------------------------------------------
 

@@ -21,8 +21,14 @@
 // tailwind.config colisiona con `colors.dark.*` y bloquea la expansión
 // nested. Usar `text-white/N` donde haga falta color claro sobre dark
 // surface; ver CLAUDE.md §14.
+//
+// Bug #12 (Hotfix #5): el contador del link "🔴 En vivo" ya no es un
+// prop hardcoded de NavBar — ahora delegamos a `<LiveCountBadge>` que
+// lee `useLiveMatchesCount()` con polling cada 30s y devuelve null si
+// count===0. Si no hay partidos, NO aparece ningún globo rojo ni "0".
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LiveCountBadge } from "@/components/layout/LiveCountBadge";
 
 interface NavLinkDef {
   href: string;
@@ -74,14 +80,14 @@ export const NAV_LINK_ACTIVE_CLASSES = "bg-brand-gold-dim text-brand-gold";
 
 interface NavLinksProps {
   /**
-   * Cantidad de partidos en vivo actualmente — va en el badge .live-count.
-   * Placeholder hasta Sub-Sprint 5 (poller de partidos). Si 0, el badge no
-   * se muestra.
+   * Cantidad inicial de partidos en vivo (del SSR, via `contarLiveMatches`
+   * en NavBar). El LiveCountBadge usa este valor para su primer paint y
+   * luego polea `/api/v1/live/count` cada 30s.
    */
-  liveCount?: number;
+  initialLiveCount?: number;
 }
 
-export function NavLinks({ liveCount = 0 }: NavLinksProps) {
+export function NavLinks({ initialLiveCount = 0 }: NavLinksProps) {
   const pathname = usePathname() ?? "/";
 
   return (
@@ -105,10 +111,8 @@ export function NavLinks({ liveCount = 0 }: NavLinksProps) {
               />
             )}
             <span>{link.label}</span>
-            {link.hasLiveIndicator && liveCount > 0 && (
-              <span className="animate-live-pulse rounded-full bg-urgent-critical px-[7px] py-[2px] text-[10px] font-extrabold leading-none text-white">
-                {liveCount}
-              </span>
+            {link.hasLiveIndicator && (
+              <LiveCountBadge initialCount={initialLiveCount} />
             )}
           </Link>
         );

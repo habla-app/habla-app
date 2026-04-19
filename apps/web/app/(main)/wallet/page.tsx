@@ -4,8 +4,14 @@
 //
 // Hotfix Bug #3: `force-dynamic` por la misma razón que /mis-combinadas
 // — el balance debe re-leerse de la sesión en cada request.
+//
+// Hotfix #5 Bug #14: el hero con el monto gigante delega a
+// `WalletBalanceHero` (Client Component) que se suscribe al store. La
+// página server pasa `initialBalance` del session para evitar flicker
+// pre-hydration.
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { WalletBalanceHero } from "@/components/wallet/WalletBalanceHero";
 
 export const dynamic = "force-dynamic";
 
@@ -26,18 +32,7 @@ export default async function WalletPage() {
         </p>
       </header>
 
-      {/* Balance hero — pattern del .profile-head (gradient hero-blue) */}
-      <section className="overflow-hidden rounded-lg border border-dark-border bg-hero-blue p-7 text-center shadow-md">
-        <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-white/70">
-          Tu balance
-        </div>
-        <div className="mt-2 font-display text-[64px] font-black leading-none text-brand-gold">
-          {balance.toLocaleString("es-PE")} <span aria-hidden>🪙</span>
-        </div>
-        <div className="mt-2 text-xs text-white/60">
-          1 Luka = S/ 1 · No son retirables como efectivo
-        </div>
-      </section>
+      <WalletBalanceHero initialBalance={balance} />
 
       <section className="mt-4 rounded-md border border-light bg-card p-6 text-center shadow-sm">
         <div aria-hidden className="mb-2 text-3xl">
