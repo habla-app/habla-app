@@ -1,7 +1,7 @@
 # CLAUDE.md — Habla! App
 
 > Este archivo es el cerebro del proyecto. Léelo completo antes de tocar cualquier código.
-> Última actualización: 18 de Abril 2026 (Sprint 1 completado, mockup aprobado, Sub-Sprint 3 de Mecánica de Juego completado, auto-import de partidos y torneos en marcha)
+> Última actualización: 18 de Abril 2026 (Sprint 1 completado, mockup aprobado, Sub-Sprint 3 de Mecánica de Juego completado, auto-import de partidos y torneos en marcha, Fase 3 — UX de /matches con filtros + timezone)
 
 ---
 
@@ -211,6 +211,8 @@ model Partido {
   btts            Boolean?
   mas25Goles      Boolean?
   huboTarjetaRoja Boolean?
+  round           String?                            // "Fecha 34", "Cuartos de final", "Fase de grupos · J1"
+  venue           String?                            // "Goodison Park, Liverpool"
   eventos         EventoPartido[]
   torneos         Torneo[]
   creadoEn        DateTime      @default(now())
@@ -494,6 +496,9 @@ El admin ya no tiene que tocar el panel para traer partidos. Tres jobs nuevos co
 Ligas whitelisteadas (editables en `apps/web/lib/config/ligas.ts`): Liga 1 Perú (EXPRESS, 5 Lukas), Champions (ESTANDAR, 10), Libertadores (ESTANDAR, 10), Premier (EXPRESS, 5), La Liga (EXPRESS, 5), Mundial 2026 (PREMIUM, 30).
 
 El endpoint `POST /api/v1/admin/partidos/importar` sigue existiendo como botón de panic desde `/admin`, pero ya no recibe `fecha`: dispara el mismo job y devuelve `ImportLigaResult[]` con 4 contadores por liga (partidosCreados, partidosActualizados, torneosCreados, errores) + la season resuelta. El panel muestra la tabla por liga tras cada refresh.
+
+### ✅ Fase 3 (18 Abr) — UX de /matches
+Migración Prisma `add_round_venue_to_partidos` agrega `round` y `venue` a `Partido`. El poller los llena al importar (mapper `round-mapper.ts` traduce inglés→español y ejecuta en `fixtureToPartidoInput`). Filtros funcionales en `/matches` con estado en URL (`?liga=&dia=`): chip activo dorado para liga, chip azul-dark para día, counts dinámicos. Zona horaria normalizada a `America/Lima` con fallback al browser (`getUserTimezone`). MatchCard rediseñada (~150px, 55% más compacta): accent bar lateral coloreado por liga, avatares hash-color con iniciales (`team-colors.ts`), stats en grid `1fr/1.7fr/1fr` con pozo dorado featured, CTA lateral 110px con SVG diana 22×22 y flecha. Responsive <640px el CTA pasa a fila inferior full-width. Helpers nuevos: `lib/utils/datetime.ts`, `lib/utils/round-mapper.ts`, `lib/utils/team-colors.ts` (22 tests unitarios). Endpoint `GET /api/v1/torneos` ahora acepta `?desde=&hasta=` (ISO 8601 UTC) para filtro por rango de `partido.fechaInicio`.
 
 ---
 
@@ -1178,6 +1183,7 @@ Socket.io montado sobre Fastify. Cliente se conecta con `?token=<jwt>`. Sala por
 - Validación: **Zod** en entrada de datos
 - Errores: clases tipadas (nunca `throw new Error('string')`)
 - Logs: **Pino** en producción (nunca `console.log`)
+- **Fechas y zonas horarias:** prohibido usar `Date.prototype.toLocaleString` / `toLocaleDateString` / `toLocaleTimeString` sobre un `Date` sin `timeZone` explícito dentro de `apps/web/`. Usar los helpers de `lib/utils/datetime.ts` (`formatKickoff`, `formatCountdown`, `getDayKey`, `getDayBounds`, etc.). Default del proyecto: `America/Lima`. Nota: la invocación `Number.toLocaleString("es-PE")` para separador de miles no aplica — no hay fecha, no hay tz.
 
 ---
 
@@ -1196,6 +1202,12 @@ Socket.io montado sobre Fastify. Cliente se conecta con `?token=<jwt>`. Sala por
 - **Sub-Sprint 3.5 — Temporada de liga resuelta dinámicamente, no hardcodeada:** api-football NO acepta `season=current` en `/fixtures`; hay que pedirla primero con `/leagues?id=X&current=true`. En vez de cablear el año en la config (`season: 2026` por cada liga) guardamos sólo el `apiFootballId` y dejamos que `seasons.cache.ts` resuelva y cachee la temporada (refresh cada 24h). Beneficio: cuando Liga 1 pase de 2026 a 2027, el sistema lo recoge sin deploy — lo recoge en la siguiente corrida del refresh.
 
 - **Sub-Sprint 3.5 — Auto-creación de torneo al importar partido (regla dura):** el business rule es que toda partido de liga whitelisteada tiene torneo, punto. El service `partidos-import.service.ts` hace `findFirst({ partidoId })` antes de crear; si existe, skip. Si el partido ya tiene `cierreAt` en el pasado (importado tarde, ya empezó), NO se crea torneo — un torneo con cierre vencido es basura que confunde `procesarCierreAutomatico`. La combinación `upsert partido + find/create torneo` hace al job 100% idempotente.
+
+- **Fase 3 — round y venue en BD en vez de on-demand:** el mapper inglés→español corre en el poller (`mapRoundToEs`) y cachea resultado en columna `round` de `Partido`. Evita recalcular en cada render y mantiene el frontend agnóstico del formato del API. `venue` se guarda como string concatenado `"{name}, {city}"` — si el formato cambiara, el poller repobla en la siguiente corrida (cada 6h). Los partidos anteriores al deploy quedan con `null` hasta que el poller los refresque; la UI omite las líneas null limpiamente.
+
+- **Fase 3 — colores de equipos por hash, no por marca real:** `team-colors.ts` mapea un seed estable (team.id o nombre del equipo) a un palette determinista de 12 colores. Evita problemas de trademark con escudos/colores oficiales y garantiza que cada equipo siempre recibe el mismo color dentro de la app. Como el schema actual de `Partido` no guarda team.id, usamos el nombre como seed — igualmente determinista.
+
+- **Fase 3 — filtros de /matches en URL, no en client state:** `useMatchesFilters` lee `?liga=&dia=` con `useSearchParams` y escribe con `router.replace`. Permite deep-linking, refresh estable y share. Default "hoy" se aplica en memoria sin redirigir — URL limpia hasta que el usuario toque otro día. Para filtrar por día el frontend resuelve el rango local (`getDayBounds` en America/Lima) a ISO UTC antes de llamar al backend; el backend NO convierte tz. Así, un mismo día clickeado desde Madrid y Lima hace la misma query UTC.
 
 ---
 
