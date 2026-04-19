@@ -1,4 +1,4 @@
-// Motor de puntuación — Sub-Sprint 5.
+// Motor de puntuación — Sub-Sprint 5 + Hotfix #6.
 //
 // Tabla oficial (CLAUDE.md §2, inamovible):
 //   Resultado (1X2):        3 pts
@@ -11,6 +11,21 @@
 // El cálculo es una función pura: mismos inputs → mismos puntos. La
 // idempotencia del motor depende de esto (si el poller reentra, los
 // puntos no se duplican — simplemente se re-escriben con el mismo valor).
+//
+// Hotfix #6 — Bug #4: TODOS los campos proyectan "si el partido terminara
+// ahora" durante EN_VIVO, incluido el marcador exacto (reversal de la
+// decisión del Sub-Sprint 5). La volatilidad es esperada — el ranking
+// refleja la pregunta "¿quién gana si terminara ahora?" y la UI comunica
+// ese significado con el copy motivacional del tab Ranking.
+//
+// Reglas proyectivas:
+//   - Resultado 1X2: según score actual (ya era así).
+//   - BTTS:         true si ambos anotaron; false como proyección mientras
+//                   alguno tenga 0 — puede "desproyectarse" si anota.
+//   - +2.5 goles:    true si local+visita ≥ 3; false como proyección.
+//   - Tarjeta roja:  true si confirmada; false como proyección (null se
+//                   trata como "aún no hay roja").
+//   - Marcador:      true si coincide con score actual. Proyecta en vivo.
 
 import { prisma, type Partido, type Ticket } from "@habla/db";
 import { PUNTOS } from "@habla/shared";
@@ -64,13 +79,16 @@ type PrediccionesTicket = Pick<
  * Calcula puntos de un ticket contra un snapshot de partido. Función
  * pura — apta para tests unitarios.
  *
- * Semántica de campos null:
+ * Semántica de campos null (Hotfix #6):
  *   - golesLocal/golesVisita null → el partido aún no tiene marcador
  *     (PROGRAMADO o arranque). Todo queda en 0 pendiente.
- *   - btts / mas25Goles null → el poller aún no los derivó. Dejamos en 0.
- *   - huboTarjetaRoja null → aún no hubo evento. Si el ticket predijo
- *     "No habrá roja", le damos los 6 pts sólo si el partido
- *     FINALIZÓ sin roja; durante EN_VIVO queda en pendiente (0).
+ *   - btts / mas25Goles null → derivamos de los goles proyectando
+ *     en vivo. Todos los campos proyectan como si el partido terminara
+ *     ahora.
+ *   - huboTarjetaRoja null → se interpreta como "aún no hubo roja";
+ *     la predicción "No habrá roja" recibe los 6 pts como proyección.
+ *     Si después hay una tarjeta, el motor revierte los puntos en el
+ *     siguiente recalc.
  */
 export function calcularPuntosTicket(
   preds: PrediccionesTicket,
@@ -83,7 +101,7 @@ export function calcularPuntosTicket(
 
   const d: PuntosDetalle = { ...PUNTOS_CERO };
 
-  // 1. Resultado 1X2 (3 pts)
+  // 1. Resultado 1X2 (3 pts) — proyecta en vivo según marcador actual.
   const resultadoReal: "LOCAL" | "EMPATE" | "VISITA" =
     golesLocal > golesVisita
       ? "LOCAL"
@@ -92,53 +110,45 @@ export function calcularPuntosTicket(
         : "EMPATE";
   if (preds.predResultado === resultadoReal) d.resultado = PUNTOS.RESULTADO;
 
-  // 2. BTTS (2 pts) — durante EN_VIVO sólo se confirma CUANDO se cumple
-  //    por lado positivo. Si el partido no terminó y btts es null,
-  //    podemos inferir:
-  //      - goles.home > 0 && goles.away > 0 → btts = true (ya pasó,
-  //        no puede "desverdadcer")
-  //      - de lo contrario → null (puede anotar el que no anotó)
-  const bttsEfectivo =
+  // 2. BTTS (2 pts) — proyecta en vivo.
+  //    - Si ambos anotaron → true (irreversible, ya pasó).
+  //    - Si alguno tiene 0 → false como proyección (puede mutar).
+  //    El campo persistido `btts` se respeta cuando el poller ya lo
+  //    cristalizó al FINALIZADO.
+  const bttsEfectivo: boolean =
     partido.btts !== null
       ? partido.btts
-      : golesLocal > 0 && golesVisita > 0
-        ? true
-        : partido.estado === "FINALIZADO"
-          ? false
-          : null;
-  if (bttsEfectivo !== null && preds.predBtts === bttsEfectivo) {
+      : golesLocal > 0 && golesVisita > 0;
+  if (preds.predBtts === bttsEfectivo) {
     d.btts = PUNTOS.BTTS;
   }
 
-  // 3. +2.5 goles (2 pts) — análogo: si ya hay 3+ goles ya está
-  //    confirmado true; si quedan menos de 3 pero partido FT → false.
-  const mas25Efectivo =
+  // 3. +2.5 goles (2 pts) — proyecta en vivo.
+  //    - Si hay 3+ goles → true.
+  //    - Si hay <3 goles → false como proyección.
+  const mas25Efectivo: boolean =
     partido.mas25Goles !== null
       ? partido.mas25Goles
-      : golesLocal + golesVisita > 2
-        ? true
-        : partido.estado === "FINALIZADO"
-          ? false
-          : null;
-  if (mas25Efectivo !== null && preds.predMas25 === mas25Efectivo) {
+      : golesLocal + golesVisita > 2;
+  if (preds.predMas25 === mas25Efectivo) {
     d.mas25 = PUNTOS.MAS_25_GOLES;
   }
 
-  // 4. Tarjeta roja (6 pts) — se confirma verdadero en cuanto hubo
-  //    una; "No" sólo se confirma al finalizar el partido.
-  let tarjetaEfectiva: boolean | null = partido.huboTarjetaRoja ?? null;
-  if (tarjetaEfectiva === null && partido.estado === "FINALIZADO") {
-    tarjetaEfectiva = false;
-  }
-  if (tarjetaEfectiva !== null && preds.predTarjetaRoja === tarjetaEfectiva) {
+  // 4. Tarjeta roja (6 pts) — proyecta en vivo.
+  //    - Si hubo roja confirmada → true (irreversible).
+  //    - Si null / false → false como proyección. "No habrá roja" recibe
+  //      los puntos desde el minuto 1 y se revierte si más adelante
+  //      aparece una roja (el motor es función pura de inputs).
+  const tarjetaEfectiva: boolean = partido.huboTarjetaRoja === true;
+  if (preds.predTarjetaRoja === tarjetaEfectiva) {
     d.tarjeta = PUNTOS.TARJETA_ROJA;
   }
 
-  // 5. Marcador exacto (8 pts) — sólo se confirma al FINALIZADO.
-  //    Durante EN_VIVO no se dan los 8 pts aunque momentáneamente
-  //    el score coincida, porque podría cambiar.
+  // 5. Marcador exacto (8 pts) — Hotfix #6: proyecta en vivo.
+  //    Si el score actual coincide con la predicción, adjudica los 8 pts.
+  //    Puede mutar en cada gol (la función es pura: se re-evalúa cada
+  //    recálculo).
   if (
-    partido.estado === "FINALIZADO" &&
     preds.predMarcadorLocal === golesLocal &&
     preds.predMarcadorVisita === golesVisita
   ) {

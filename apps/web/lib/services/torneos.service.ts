@@ -1,9 +1,10 @@
-// Servicio de torneos — operaciones principales del Sub-Sprint 3.
+// Servicio de torneos — operaciones principales del Sub-Sprint 3 + Hotfix #6.
 //
 // Reglas de negocio (CLAUDE.md §6):
 // - Cierre = partido.fechaInicio - 5 minutos (irreversible).
 // - Rake = 12% del pozo bruto (al entero de Luka, floor).
-// - Distribución: 35% / 20% / 12% / 33% repartido entre 4°-10°.
+// - Distribución (Hotfix #6): 10% de inscritos, curva top-heavy.
+//   Ver `lib/utils/premios-distribucion.ts` para la fórmula exacta.
 // - Torneo con <2 inscritos al cierre se cancela y se reembolsa.
 // - Todo movimiento de Lukas es transacción atómica.
 // - Un Ticket placeholder se crea con predicciones default (LOCAL, 0-0,
@@ -42,11 +43,19 @@ export const RAKE_PCT = 0.12;
 export const CIERRE_MIN_BEFORE = 5; /* minutos antes del partido */
 export const MIN_INSCRITOS_PARA_ACTIVAR = 2;
 
-export const DISTRIB_PREMIOS = {
-  "1": 0.35,
-  "2": 0.20,
-  "3": 0.12,
-  "4-10": 0.33,
+/**
+ * Descriptor serializable de la regla de distribución vigente al crearse
+ * el torneo — se guarda en `Torneo.distribPremios` (Json?) como audit
+ * trail. Los cálculos reales NO leen de acá: usan `distribuirPremios`
+ * del helper puro. Si la regla cambia en el futuro, los torneos viejos
+ * conservan su descriptor original y los nuevos reciben el nuevo.
+ */
+export const DISTRIB_PREMIOS_DESCRIPTOR = {
+  tipo: "hotfix-6-top-heavy",
+  rakePct: RAKE_PCT,
+  maxPctInscritos: 0.1,
+  share1: 0.45,
+  decayFormula: "share[i] geometric with r = 1 - 2.8/M for M>=10",
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -386,7 +395,7 @@ export async function crear(input: CrearInput): Promise<TorneoConPartido> {
       entradaLukas: input.entradaLukas,
       partidoId: input.partidoId,
       cierreAt,
-      distribPremios: DISTRIB_PREMIOS,
+      distribPremios: DISTRIB_PREMIOS_DESCRIPTOR,
     },
     include: { partido: true },
   });

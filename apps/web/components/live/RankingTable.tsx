@@ -3,10 +3,15 @@
 // `.ranking-table` del mockup. Top 1/2/3 con tonos oro/plata/bronce,
 // fila propia del usuario destacada en azul. Botón "Ver todos" expande
 // la lista del top 10 hacia abajo.
+//
+// Hotfix #6 Ítem 1.6: la fila del usuario ahora incluye una línea
+// motivacional bajo el premio estimado (únicos ganador / empate /
+// cerca / lejos), derivada del helper puro `buildMotivationalCopy`.
 
 import { useState } from "react";
 import type { RankingRowPayload } from "@/lib/realtime/events";
 import { PredChip } from "@/components/tickets/PredChip";
+import { buildMotivationalCopy } from "@/lib/utils/premio-motivacional";
 
 interface RankingTableProps {
   ranking: RankingRowPayload[];
@@ -14,6 +19,8 @@ interface RankingTableProps {
   equipoLocal: string;
   equipoVisita: string;
   totalInscritos: number;
+  /** Hotfix #6: posiciones pagadas (M) — para el copy motivacional. */
+  pagados: number;
 }
 
 const TOP = 10;
@@ -24,10 +31,19 @@ export function RankingTable({
   equipoLocal,
   equipoVisita,
   totalInscritos,
+  pagados,
 }: RankingTableProps) {
   const [expanded, setExpanded] = useState(false);
   const visibles = expanded ? ranking : ranking.slice(0, TOP);
   const mostrandoResto = expanded && ranking.length > TOP;
+
+  // Snapshot para el helper motivacional — solo rank + puntos del ranking
+  // COMPLETO (no del slice), porque necesitamos ver todos los empates y
+  // calcular diferencia al puesto M.
+  const rankingForMotivational = ranking.map((r) => ({
+    rank: r.rank,
+    puntosTotal: r.puntosTotal,
+  }));
 
   return (
     <div className="overflow-hidden rounded-md border border-light bg-card shadow-sm">
@@ -44,14 +60,22 @@ export function RankingTable({
       <ul className="divide-y divide-light">
         {visibles.map((row) => {
           const isMe = miUsuarioId !== null && row.usuarioId === miUsuarioId;
+          const motivational = isMe
+            ? buildMotivationalCopy({
+                miPuesto: row.rank,
+                puntosPropios: row.puntosTotal,
+                ranking: rankingForMotivational,
+                M: pagados,
+              })
+            : null;
           return (
             <li
               key={row.ticketId}
-              className={`grid grid-cols-[50px_1fr_auto_72px_100px] items-center gap-3 px-4 py-3 transition-colors ${
+              className={`grid grid-cols-[50px_1fr_auto_72px_100px] items-start gap-3 px-4 py-3 transition-colors ${
                 isMe ? "bg-brand-blue-main/10" : "hover:bg-hover"
               }`}
             >
-              <div>
+              <div className="pt-1">
                 <PosBadge rank={row.rank} />
               </div>
               <div className="min-w-0">
@@ -68,10 +92,10 @@ export function RankingTable({
                   )}
                 </div>
               </div>
-              <div className="hidden flex-wrap justify-end gap-1 md:flex">
+              <div className="hidden flex-wrap justify-end gap-1 pt-1 md:flex">
                 {chipsDeRow(row, equipoLocal, equipoVisita)}
               </div>
-              <div className="text-right font-display text-[18px] font-black text-dark">
+              <div className="pt-1 text-right font-display text-[18px] font-black text-dark">
                 {row.puntosTotal}
               </div>
               <div className="text-right">
@@ -87,11 +111,23 @@ export function RankingTable({
                           ? "Premio 2°"
                           : row.rank === 3
                             ? "Premio 3°"
-                            : "Top 10"}
+                            : "En premio"}
                     </div>
                   </>
                 ) : (
                   <span className="text-[11px] text-soft">—</span>
+                )}
+                {motivational && (
+                  <div
+                    data-testid="premio-motivacional"
+                    className={`mt-1.5 text-[10px] font-semibold leading-tight ${
+                      motivational.tone === "gold"
+                        ? "text-brand-gold-dark"
+                        : "text-muted-d"
+                    }`}
+                  >
+                    {motivational.emoji} {motivational.copy}
+                  </div>
                 )}
               </div>
             </li>

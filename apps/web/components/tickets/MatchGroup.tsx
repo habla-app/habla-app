@@ -13,6 +13,7 @@ import Link from "next/link";
 import { TicketCard } from "./TicketCard";
 import { ComboLauncher } from "@/components/combo/ComboLauncher";
 import type { TicketConContexto } from "./adapter";
+import { premioEstimadoSinEmpate } from "@/lib/utils/premios-distribucion";
 
 interface MatchGroupProps {
   tickets: TicketConContexto[];
@@ -154,7 +155,9 @@ export function MatchGroup({
           const pending =
             t.torneo.estado === "ABIERTO" || t.torneo.estado === "CERRADO";
           const isWinner = t.premioLukas > 0;
-          const premioEstimado = inTop ? estimarPremio(t.torneo.pozoBruto, posicion ?? 0) : 0;
+          const premioEstimado = inTop
+            ? estimarPremio(t.torneo.pozoBruto, posicion ?? 0, t.torneo.totalInscritos)
+            : 0;
           return (
             <TicketCard
               key={t.id}
@@ -221,15 +224,17 @@ function StatusPill({
   );
 }
 
-function estimarPremio(pozoBruto: number, posicion: number): number {
+function estimarPremio(
+  pozoBruto: number,
+  posicion: number,
+  totalInscritos: number,
+): number {
+  // Hotfix #6: usa la curva top-heavy del helper puro. El "SinEmpate"
+  // asume que el jugador es único en la posición — para mostrar un
+  // estimado optimista en /mis-combinadas. El valor real con empates se
+  // calcula en /live-match via listarRanking.
   const pozoNeto = Math.floor(pozoBruto * 0.88);
-  if (posicion === 1) return Math.floor(pozoNeto * 0.35);
-  if (posicion === 2) return Math.floor(pozoNeto * 0.2);
-  if (posicion === 3) return Math.floor(pozoNeto * 0.12);
-  if (posicion >= 4 && posicion <= 10) {
-    return Math.floor((pozoNeto * 0.33) / 7);
-  }
-  return 0;
+  return premioEstimadoSinEmpate(posicion, totalInscritos, pozoNeto);
 }
 
 function formatKickoff(d: Date | string): string {

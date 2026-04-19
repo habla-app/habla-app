@@ -24,6 +24,7 @@ import {
 } from "@/lib/services/live-matches.service";
 import { getTeamColor } from "@/lib/utils/team-colors";
 import { SidebarBalanceWidget } from "@/components/matches/SidebarBalanceWidget";
+import { PrizeRulesCard } from "@/components/matches/PrizeRulesCard";
 
 // ---------------------------------------------------------------------------
 // Mock data — reemplazado por fetch real en Sub-Sprints 3 (ranking) y 5
@@ -130,6 +131,7 @@ export async function MatchesSidebar() {
     <aside className="flex flex-col gap-3.5">
       <LiveAhoraWidget matches={liveMatches} />
       <TopDelDiaWidget rows={TOP_DAY_MOCK} />
+      <PrizeRulesCard />
       <SidebarBalanceWidget initialBalance={balance} />
     </aside>
   );

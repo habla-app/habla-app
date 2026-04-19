@@ -1,11 +1,12 @@
-// torneo-detail-view — mapper puro para /torneo/:id (Hotfix #5 Bug #13).
+// torneo-detail-view — mapper puro para /torneo/:id (Hotfix #5 Bug #13 +
+// Hotfix #6 Ítem 1).
 //
 // Deriva el "view-model" del detalle del torneo a partir de:
 //   - el torneo y su partido (BD)
 //   - estado del torneo (ABIERTO / CERRADO / EN_JUEGO / FINALIZADO / CANCELADO)
 //   - el ticket del usuario loggeado, si hay
 //
-// Convenciones del Bug #13:
+// Convenciones del Bug #13 + Hotfix #6:
 //
 // 1. EL POZO: se muestra UN SOLO NÚMERO con label "Pozo".
 //    - Mientras el torneo está ABIERTO el "pozo" expuesto es la
@@ -14,9 +15,11 @@
 //    - Una vez CERRADO/EN_JUEGO/FINALIZADO usamos `pozoNeto` real de BD.
 //    - NUNCA se expone "pozo neto", "pozo bruto" ni "rake" al jugador.
 //
-// 2. DISTRIBUCIÓN: calculamos los montos en Lukas absolutos sobre el
-//    pozo expuesto (35/20/12/33%). El 33% de "4° a 10°" se divide en
-//    7 partes iguales y se expone como "~X 🪙 c/u".
+// 2. DISTRIBUCIÓN: Hotfix #6 reemplaza 35/20/12/33 por curva top-heavy
+//    del 10% de inscritos. El view-model devuelve un array ordenado
+//    con el premio por posición (hasta M = calcularPagados(totalInscritos),
+//    capped a 10 para la UI — si M>10 la UI muestra "Top 10 se reparte..."
+//    pero los primeros 10 se listan con sus shares específicos).
 //
 // 3. CTA estelar: cambia según estado.
 //    - ABIERTO + yaInscrito + ticketsUsuario<10 → "Editar mi combinada"
@@ -30,7 +33,11 @@
 // Todo el helper es puro — ni Prisma ni env ni dates dinámicas — para
 // facilitar el testeo. Fecha-dependencias se pasan por parámetro (`now`).
 
-import { DISTRIB_PREMIOS, RAKE_PCT } from "@/lib/services/torneos.service";
+import { RAKE_PCT } from "@/lib/services/torneos.service";
+import {
+  calcularPagados,
+  calcularShares,
+} from "./premios-distribucion";
 
 export type EstadoTorneoView =
   | "ABIERTO"
@@ -60,14 +67,14 @@ export interface TorneoDetailInput {
 export interface TorneoDetailViewModel {
   /** Número único a mostrar con label "Pozo" (en Lukas). */
   pozoMostrado: number;
-  /** Premios por posición en Lukas absolutos (1°, 2°, 3°, y cada
-   *  puesto del 4°-10° por separado = mismo valor). */
-  premios: {
-    primero: number;
-    segundo: number;
-    tercero: number;
-    cuartoADecimo: number;
-  };
+  /** Premios por posición en Lukas absolutos. Hotfix #6: tamaño variable
+   *  (M = calcularPagados), capped a 10 para la UI. Cada entrada tiene
+   *  la posición 1-indexed y los Lukas exactos. */
+  premios: Array<{ posicion: number; lukas: number }>;
+  /** Posiciones pagadas totales (M). Puede ser >10 cuando hay 100+
+   *  inscritos; en ese caso la UI muestra los primeros 10 y un texto
+   *  "... y 40 posiciones más" o similar. */
+  pagados: number;
   /** Estado resuelto para la UI (mismo que input.estado salvo que el
    *  cierre ya se pasó pero el cron aún no movió el estado: marcamos
    *  como CERRADO para que el CTA deje de invitar a inscribirse). */
@@ -107,12 +114,12 @@ export function buildTorneoDetailViewModel(
       ? input.pozoNeto
       : Math.floor(input.pozoBruto * (1 - RAKE_PCT));
 
-  const premios = {
-    primero: Math.floor(pozoMostrado * DISTRIB_PREMIOS["1"]),
-    segundo: Math.floor(pozoMostrado * DISTRIB_PREMIOS["2"]),
-    tercero: Math.floor(pozoMostrado * DISTRIB_PREMIOS["3"]),
-    cuartoADecimo: Math.floor((pozoMostrado * DISTRIB_PREMIOS["4-10"]) / 7),
-  };
+  // Hotfix #6: distribución top-heavy variable según totalInscritos.
+  const pagados = calcularPagados(input.totalInscritos);
+  const shares = calcularShares(pagados, pozoMostrado);
+  const premios: Array<{ posicion: number; lukas: number }> = shares.map(
+    (lukas, idx) => ({ posicion: idx + 1, lukas }),
+  );
 
   const mostrarPredicciones = estadoResuelto !== "ABIERTO";
 
@@ -121,6 +128,7 @@ export function buildTorneoDetailViewModel(
   return {
     pozoMostrado,
     premios,
+    pagados,
     estadoResuelto,
     mostrarPredicciones,
     cta,

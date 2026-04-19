@@ -29,6 +29,7 @@ import { EventsView } from "./EventsView";
 import { useRankingEnVivo } from "@/hooks/useRankingEnVivo";
 import { useEventosPartido } from "@/hooks/useEventosPartido";
 import type { RankingRowPayload } from "@/lib/realtime/events";
+import { premioEstimadoSinEmpate } from "@/lib/utils/premios-distribucion";
 
 export interface LiveMatchTab {
   torneoId: string;
@@ -54,6 +55,8 @@ export interface LiveMatchTab {
 interface InitialSnapshot {
   totalInscritos: number;
   pozoNeto: number;
+  /** Hotfix #6: posiciones pagadas (M). */
+  pagados: number;
   ranking: RankingRowPayload[];
   miPosicion: {
     posicion: number;
@@ -222,7 +225,7 @@ export function LiveMatchView({
             minutoLabel={live.minutoLabel ?? active.minutoLabel}
             totalInscritos={totalInscritos}
             pozoNeto={pozoNeto}
-            primerPremio={Math.floor(pozoNeto * 0.35)}
+            primerPremio={premioEstimadoSinEmpate(1, totalInscritos, pozoNeto)}
             ultimosEventos={eventos.eventos.slice(-5).reverse()}
           />
 
@@ -266,6 +269,7 @@ export function LiveMatchView({
               equipoLocal={active.equipoLocal}
               equipoVisita={active.equipoVisita}
               totalInscritos={totalInscritos}
+              pagados={live.pagados > 0 ? live.pagados : rankingInicial.pagados}
             />
           )}
           {activeTab === "stats" && (

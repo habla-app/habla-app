@@ -43,10 +43,17 @@ describe("buildTorneoDetailViewModel — pozo mostrado", () => {
       now: NOW,
     });
     expect(vm.pozoMostrado).toBe(880);
-    expect(vm.premios.primero).toBe(Math.floor(880 * 0.35));
-    expect(vm.premios.segundo).toBe(Math.floor(880 * 0.2));
-    expect(vm.premios.tercero).toBe(Math.floor(880 * 0.12));
-    expect(vm.premios.cuartoADecimo).toBe(Math.floor((880 * 0.33) / 7));
+    // Hotfix #6: N=100 → M=10 (round(100*0.10)). 1° = 45% = 396 + residual.
+    // La suma de todos los shares == pozoMostrado.
+    expect(vm.premios).toHaveLength(10);
+    expect(vm.pagados).toBe(10);
+    const sumaPremios = vm.premios.reduce((a, p) => a + p.lukas, 0);
+    expect(sumaPremios).toBe(880);
+    // 1° >= 45% y residual va al 1°
+    expect(vm.premios[0]!.lukas).toBeGreaterThanOrEqual(Math.floor(880 * 0.45));
+    // Cada posición tiene su .posicion correcto 1-indexed
+    expect(vm.premios[0]!.posicion).toBe(1);
+    expect(vm.premios[9]!.posicion).toBe(10);
   });
 
   it("CERRADO con pozoNeto real lo usa directamente", () => {

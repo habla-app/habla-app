@@ -49,13 +49,14 @@ describe("buildComboTorneoInfo", () => {
   });
 
   it("usa pozoBruto × 0.88 como fallback cuando pozoNeto=0 (torneo ABIERTO)", () => {
-    // pozoBruto=1000 → pozoNeto fallback=880 → primerPremio=880*0.35=308
+    // Hotfix #6: primerPremio usa 45% (lower bound de la curva top-heavy).
+    // pozoBruto=1000 → pozoNeto fallback=880 → primerPremio=floor(880*0.45)=396
     const info = buildComboTorneoInfo(makePayload());
-    expect(info!.primerPremioEstimado).toBe(308);
+    expect(info!.primerPremioEstimado).toBe(396);
   });
 
   it("usa pozoNeto real cuando viene >0 (torneo CERRADO/EN_JUEGO)", () => {
-    // pozoNeto real=900 → primerPremio=900*0.35=315
+    // pozoNeto real=900 → primerPremio=floor(900*0.45)=405
     const info = buildComboTorneoInfo(
       makePayload({
         torneo: {
@@ -69,7 +70,7 @@ describe("buildComboTorneoInfo", () => {
         },
       }),
     );
-    expect(info!.primerPremioEstimado).toBe(315);
+    expect(info!.primerPremioEstimado).toBe(405);
   });
 
   it("tienePlaceholder=false cuando miTicket es null (primera inscripción)", () => {
@@ -87,7 +88,7 @@ describe("buildComboTorneoInfo", () => {
   });
 
   it("primerPremioEstimado se redondea hacia abajo (Math.floor)", () => {
-    // pozoBruto=33 → pozoNeto fallback=floor(33*0.88)=29 → primerPremio=floor(29*0.35)=10.15 → 10
+    // pozoBruto=33 → pozoNeto fallback=floor(33*0.88)=29 → primerPremio=floor(29*0.45)=13
     const info = buildComboTorneoInfo(
       makePayload({
         torneo: {
@@ -101,7 +102,7 @@ describe("buildComboTorneoInfo", () => {
         },
       }),
     );
-    expect(info!.primerPremioEstimado).toBe(10);
+    expect(info!.primerPremioEstimado).toBe(13);
   });
 });
 

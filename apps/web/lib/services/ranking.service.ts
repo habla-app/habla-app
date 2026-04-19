@@ -1,19 +1,26 @@
-// Servicio de ranking en vivo — Sub-Sprint 5.
+// Servicio de ranking en vivo — Sub-Sprint 5 + Hotfix #6.
 //
 // Fuente de verdad: la base de datos (Ticket.puntosTotal). Redis se usa
 // como cache del sorted set para lecturas <1ms; si Redis no responde
 // degradamos a BD.
 //
-// Desempate (CLAUDE.md §6):
-//   1) puntosTotal DESC
-//   2) marcador exacto acertado (puntosMarcador=8) antes que no
-//   3) tarjeta roja acertada (puntosTarjeta=6) antes que no
-//   4) orden de inscripción (Ticket.creadoEn ASC)
+// Hotfix #6 — Nueva distribución de premios (§6):
+//   - Pagan el 10% de inscritos, brackets especiales para N<100.
+//   - Curva top-heavy: 45% al 1°, 55% restante en decaimiento geométrico.
+//   - Empates: tickets con puntaje idéntico reparten equitativamente
+//     los premios de las posiciones que ocupan como grupo.
+//   - Desempates adicionales ELIMINADOS. Mismos puntos = mismo premio.
+//     El orden de inscripción queda como tiebreaker cosmético estable
+//     para que la UI no salte entre refreshes, pero no afecta premios.
 
 import { prisma, type Prisma } from "@habla/db";
-import { DISTRIB_PREMIOS } from "./torneos.service";
 import { TorneoNoEncontrado } from "./errors";
 import { logger } from "./logger";
+import {
+  distribuirPremios,
+  premioEstimadoSinEmpate,
+  type TicketParaDistribuir,
+} from "../utils/premios-distribucion";
 
 // ---------------------------------------------------------------------------
 // Tipos públicos
@@ -51,6 +58,9 @@ export interface RankingResult {
   pozoBruto: number;
   ranking: RankingRow[];
   miPosicion: (RankingRow & { posicion: number }) | null;
+  /** Posiciones pagadas (M) según `calcularPagados(totalInscritos)`.
+   *  UI lo usa para el badge "En el dinero" y el copy motivacional. */
+  pagados: number;
 }
 
 export interface ListarRankingInput {
@@ -60,58 +70,12 @@ export interface ListarRankingInput {
 }
 
 // ---------------------------------------------------------------------------
-// distribución del pozo → premio estimado por posición
-// ---------------------------------------------------------------------------
-
-/**
- * Premio estimado en Lukas para una posición 1-indexada, dado el pozo
- * neto. Sigue la distribución de negocio: 35% al 1°, 20% al 2°, 12% al
- * 3°, y 33% repartido en partes iguales entre 4°-10°. Del 11° en
- * adelante: 0.
- *
- * El cálculo usa pozoNeto del Torneo (ya restó el rake 12%). Si el
- * torneo aún está ABIERTO (pozoNeto = 0), usamos pozoBruto * (1 - RAKE).
- */
-export function calcularPremioEstimado(
-  pozoNeto: number,
-  posicion: number,
-): number {
-  if (posicion < 1) return 0;
-  if (posicion > 10) return 0;
-  if (posicion === 1) return Math.floor(pozoNeto * DISTRIB_PREMIOS["1"]);
-  if (posicion === 2) return Math.floor(pozoNeto * DISTRIB_PREMIOS["2"]);
-  if (posicion === 3) return Math.floor(pozoNeto * DISTRIB_PREMIOS["3"]);
-  // 4° a 10°: 33% dividido en 7 (siete posiciones)
-  const pool = Math.floor(pozoNeto * DISTRIB_PREMIOS["4-10"]);
-  return Math.floor(pool / 7);
-}
-
-// ---------------------------------------------------------------------------
-// rankear — ordenamiento con desempate
+// listar — función principal
 // ---------------------------------------------------------------------------
 
 type TicketConUsuario = Prisma.TicketGetPayload<{
   include: { usuario: { select: { id: true; nombre: true; email: true } } };
 }>;
-
-function compararParaDesempate(a: TicketConUsuario, b: TicketConUsuario): number {
-  // 1) Puntos totales DESC
-  if (b.puntosTotal !== a.puntosTotal) return b.puntosTotal - a.puntosTotal;
-  // 2) Marcador exacto acertado (8 pts) antes que no
-  const aMarc = a.puntosMarcador > 0 ? 1 : 0;
-  const bMarc = b.puntosMarcador > 0 ? 1 : 0;
-  if (bMarc !== aMarc) return bMarc - aMarc;
-  // 3) Tarjeta roja acertada (6 pts) antes que no
-  const aTarj = a.puntosTarjeta > 0 ? 1 : 0;
-  const bTarj = b.puntosTarjeta > 0 ? 1 : 0;
-  if (bTarj !== aTarj) return bTarj - aTarj;
-  // 4) Orden de inscripción ASC
-  return a.creadoEn.getTime() - b.creadoEn.getTime();
-}
-
-// ---------------------------------------------------------------------------
-// listar — función principal
-// ---------------------------------------------------------------------------
 
 export async function listarRanking(
   torneoId: string,
@@ -145,10 +109,36 @@ export async function listarRanking(
     include: { usuario: { select: { id: true, nombre: true, email: true } } },
   });
 
-  const ordenados = [...tickets].sort(compararParaDesempate);
+  // Ordenamiento: puntosTotal DESC, creadoEn ASC. El segundo criterio
+  // es SÓLO cosmético — jugadores con mismos puntos reciben el mismo
+  // premio (split por empate).
+  const ordenados = [...tickets].sort(comparadorCosmetico);
 
+  // Distribución de premios: pasamos los tickets al helper puro. El
+  // resultado nos da `posicionFinal` + `premioLukas` para cada uno,
+  // respetando los empates.
+  const ticketsParaDistribuir: TicketParaDistribuir[] = ordenados.map((t) => ({
+    id: t.id,
+    puntosTotal: t.puntosTotal,
+    creadoEn: t.creadoEn,
+  }));
+  const asignaciones = distribuirPremios(
+    ticketsParaDistribuir,
+    torneo.totalInscritos,
+    pozoNetoEstimado,
+  );
+  const premioPorTicketId = new Map(
+    asignaciones.map((a) => [a.ticketId, a]),
+  );
+
+  // `rank` visual: el índice del array ordenado + 1. Para empates, el
+  // primer ticket del grupo tiene rank == posicionFinal y los demás
+  // tienen rank > posicionFinal (para UI sigan visualmente abajo del
+  // primero, aunque compartan premio). En el futuro podríamos
+  // colapsar visualmente los empates, pero el MVP conserva el orden.
   const rows: RankingRow[] = ordenados.map((t, idx) => {
     const rank = idx + 1;
+    const asig = premioPorTicketId.get(t.id);
     return {
       rank,
       ticketId: t.id,
@@ -170,7 +160,7 @@ export async function listarRanking(
         predMarcadorLocal: t.predMarcadorLocal,
         predMarcadorVisita: t.predMarcadorVisita,
       },
-      premioEstimado: calcularPremioEstimado(pozoNetoEstimado, rank),
+      premioEstimado: asig?.premioLukas ?? 0,
       creadoEn: t.creadoEn,
     };
   });
@@ -185,11 +175,15 @@ export async function listarRanking(
   if (input.usuarioId) {
     const propios = rows.filter((r) => r.usuarioId === input.usuarioId);
     if (propios.length > 0) {
-      // El de menor rank (mejor posición)
       const mejor = propios.reduce((acc, r) => (r.rank < acc.rank ? r : acc));
       miPosicion = { ...mejor, posicion: mejor.rank };
     }
   }
+
+  // pagados: lo exponemos para que la UI del badge "En el dinero" y el
+  // copy motivacional del Ítem 1.6 del Hotfix #6 calculen posicionamiento.
+  const { calcularPagados } = await import("../utils/premios-distribucion");
+  const pagados = calcularPagados(torneo.totalInscritos);
 
   return {
     torneoId,
@@ -198,7 +192,13 @@ export async function listarRanking(
     pozoBruto: torneo.pozoBruto,
     ranking: slice,
     miPosicion,
+    pagados,
   };
+}
+
+function comparadorCosmetico(a: TicketConUsuario, b: TicketConUsuario): number {
+  if (b.puntosTotal !== a.puntosTotal) return b.puntosTotal - a.puntosTotal;
+  return a.creadoEn.getTime() - b.creadoEn.getTime();
 }
 
 function nombreDisplay(u: {
@@ -206,17 +206,29 @@ function nombreDisplay(u: {
   email: string;
   id: string;
 }): string {
-  // Preferencia: nombre si no es email-derivado. Fallback: prefijo del email.
   if (u.nombre && !u.nombre.includes("@")) return u.nombre;
   const prefix = u.email.split("@")[0] ?? u.id.slice(0, 8);
   return prefix;
 }
 
 // ---------------------------------------------------------------------------
+// calcularPremioEstimado — helper público (compat con callers que no
+// necesitan el full ranking). Útil para notificaciones pre-finalización
+// o tooltips del mockup. Proyecta SIN empates.
+// ---------------------------------------------------------------------------
+
+export function calcularPremioEstimado(
+  pozoNeto: number,
+  posicion: number,
+  totalInscritos: number,
+): number {
+  return premioEstimadoSinEmpate(posicion, totalInscritos, pozoNeto);
+}
+
+// ---------------------------------------------------------------------------
 // finalizarTorneo — llamado por el poller cuando el partido llega a
-// FIN_PARTIDO. Asigna posiciones finales + premios definitivos y marca
-// el torneo FINALIZADO. La distribución real de Lukas (crear transacciones
-// PREMIO_TORNEO) queda para Sub-Sprint 6.
+// FIN_PARTIDO. Asigna posiciones finales + premios definitivos usando
+// la nueva distribución con empates. Marca el torneo FINALIZADO.
 // ---------------------------------------------------------------------------
 
 export interface FinalizarTorneoResult {
@@ -236,7 +248,7 @@ export async function finalizarTorneo(
 ): Promise<FinalizarTorneoResult> {
   const torneo = await prisma.torneo.findUnique({
     where: { id: torneoId },
-    select: { pozoNeto: true, pozoBruto: true, estado: true },
+    select: { pozoNeto: true, pozoBruto: true, estado: true, totalInscritos: true },
   });
   if (!torneo) throw new TorneoNoEncontrado(torneoId);
 
@@ -247,27 +259,46 @@ export async function finalizarTorneo(
       ? torneo.pozoNeto
       : Math.floor(torneo.pozoBruto * 0.88);
 
-  const { ranking } = await listarRanking(torneoId, { limit: 500 });
+  // Traer todos los tickets con el usuario (para el display name).
+  const tickets = await prisma.ticket.findMany({
+    where: { torneoId },
+    include: { usuario: { select: { id: true, nombre: true, email: true } } },
+  });
 
-  // Actualiza cada ticket con su posición y premio final
+  // Distribuir premios con la nueva regla (split por empate).
+  const asignaciones = distribuirPremios(
+    tickets.map((t) => ({
+      id: t.id,
+      puntosTotal: t.puntosTotal,
+      creadoEn: t.creadoEn,
+    })),
+    torneo.totalInscritos,
+    pozoNeto,
+  );
+  const porTicketId = new Map(asignaciones.map((a) => [a.ticketId, a]));
+
+  // Actualiza cada ticket con su posición y premio final.
+  // Tickets empatados reciben el mismo posicionFinal (ej. los 3 empatados
+  // en 1° reciben posicionFinal=1 todos).
   const ganadores: FinalizarTorneoResult["ganadores"] = [];
-  for (const row of ranking) {
-    const premio = calcularPremioEstimado(pozoNeto, row.rank);
+  for (const t of tickets) {
+    const asig = porTicketId.get(t.id);
+    if (!asig) continue;
     await prisma.ticket.update({
-      where: { id: row.ticketId },
+      where: { id: t.id },
       data: {
-        posicionFinal: row.rank,
-        premioLukas: premio,
+        posicionFinal: asig.posicionFinal,
+        premioLukas: asig.premioLukas,
       },
     });
-    if (premio > 0) {
+    if (asig.premioLukas > 0) {
       ganadores.push({
-        rank: row.rank,
-        ticketId: row.ticketId,
-        usuarioId: row.usuarioId,
-        nombre: row.nombre,
-        puntosTotal: row.puntosTotal,
-        premioLukas: premio,
+        rank: asig.posicionFinal,
+        ticketId: t.id,
+        usuarioId: t.usuarioId,
+        nombre: nombreDisplay(t.usuario),
+        puntosTotal: t.puntosTotal,
+        premioLukas: asig.premioLukas,
       });
     }
   }
@@ -280,7 +311,7 @@ export async function finalizarTorneo(
   logger.info(
     {
       torneoId,
-      totalTickets: ranking.length,
+      totalTickets: tickets.length,
       ganadores: ganadores.length,
     },
     "torneo finalizado",

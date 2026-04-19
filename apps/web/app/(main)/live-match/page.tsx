@@ -185,6 +185,7 @@ export default async function LiveMatchPage({ searchParams }: Props) {
   const initialSnapshot = {
     totalInscritos: rankingInicial.totalInscritos,
     pozoNeto: rankingInicial.pozoNeto,
+    pagados: rankingInicial.pagados,
     ranking: rankingInicial.ranking.map((r) => ({
       rank: r.rank,
       ticketId: r.ticketId,
@@ -354,6 +355,7 @@ function EmptyLiveWithFinalized({
       rankingInicial={{
         totalInscritos: 0,
         pozoNeto: 0,
+        pagados: 0,
         ranking: [],
         miPosicion: null,
       }}
