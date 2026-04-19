@@ -27,26 +27,19 @@ RUN pnpm --filter @habla/db exec prisma generate
 RUN pnpm --filter @habla/web build
 
 # --- Production ---
-FROM node:20-alpine AS runner
+FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-RUN apk add --no-cache openssl
-RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 
-# Standalone server + estaticos + publicos
-COPY --from=builder /app/apps/web/.next/standalone ./
-COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
-COPY --from=builder /app/apps/web/public ./apps/web/public
-
-# Prisma schema + migraciones + CLI para ejecutar migrate deploy al arrancar
-COPY --from=builder /app/packages/db ./packages/db
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/node_modules/.bin ./node_modules/.bin
+# Sub-Sprint 5: pasamos a custom server (apps/web/server.ts) para montar
+# Socket.io sobre el mismo proceso de Next (CLAUDE.md §15). Ya no usamos
+# `output: "standalone"` — copiamos el workspace completo (node_modules
+# hoisted + .next + packages) y ejecutamos con tsx.
+COPY --from=builder /app ./
 
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Aplicar migraciones pendientes y arrancar el server
-CMD ["sh", "-c", "npx prisma migrate deploy --schema=packages/db/prisma/schema.prisma && node apps/web/server.js"]
+# Aplicar migraciones pendientes y arrancar el server Next + Socket.io.
+CMD ["sh", "-c", "npx prisma migrate deploy --schema=packages/db/prisma/schema.prisma && cd apps/web && npx tsx server.ts"]

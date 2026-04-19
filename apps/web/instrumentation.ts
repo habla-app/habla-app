@@ -133,11 +133,38 @@ export async function register() {
     }, INTERVALO_IMPORT_MS);
   }, 30_000);
 
+  // -------------------------------------------------------------------
+  // Job D — Poller de partidos en vivo (Sub-Sprint 5). Corre cada 30s.
+  // Llama api-football para partidos EN_VIVO o PROGRAMADO <15min,
+  // upsertea eventos, recalcula tickets y emite por Socket.io.
+  // -------------------------------------------------------------------
+  const { pollerTick, POLLER_INTERVAL_MS } = await import(
+    "./lib/services/poller-partidos.job"
+  );
+
+  async function tickPollerPartidos() {
+    try {
+      await pollerTick();
+    } catch (err) {
+      logger.error({ err }, "[cron in-process] tick del poller falló");
+    }
+  }
+
+  // Primera corrida 15s tras boot (para que el server esté listo y la
+  // instancia de Socket.io ya registrada por server.ts).
+  setTimeout(() => {
+    void tickPollerPartidos();
+    setInterval(() => {
+      void tickPollerPartidos();
+    }, POLLER_INTERVAL_MS);
+  }, 15_000);
+
   logger.info(
     {
       cerrarTorneos: `${CERRAR_INTERVAL_MS / 1000}s`,
       importPartidos: `${INTERVALO_IMPORT_MS / 1000 / 60}min`,
       refreshSeasons: `${INTERVALO_REFRESH_SEASONS_MS / 1000 / 3600}h`,
+      pollerPartidos: `${POLLER_INTERVAL_MS / 1000}s`,
     },
     "cron in-process registrado",
   );

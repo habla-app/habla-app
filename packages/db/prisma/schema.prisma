@@ -100,8 +100,24 @@ model Partido {
   creadoEn        DateTime      @default(now())
 
   torneos Torneo[]
+  eventos EventoPartido[]
 
   @@map("partidos")
+}
+
+model EventoPartido {
+  id        String   @id @default(cuid())
+  partidoId String
+  partido   Partido  @relation(fields: [partidoId], references: [id], onDelete: Cascade)
+  tipo      String // GOL | TARJETA_AMARILLA | TARJETA_ROJA | SUSTITUCION | FIN_PARTIDO | HALFTIME | INICIO
+  minuto    Int
+  equipo    String // LOCAL | VISITA | NEUTRAL (para FIN_PARTIDO/HALFTIME)
+  jugador   String?
+  detalle   String?
+  creadoEn  DateTime @default(now())
+
+  @@index([partidoId, minuto])
+  @@map("eventos_partido")
 }
 
 enum EstadoPartido {

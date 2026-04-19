@@ -1,15 +1,15 @@
-// Detalle de torneo — Sub-Sprint 3.
+// Detalle de torneo — Sub-Sprints 3 + 4.
 //
 // Público: cualquiera puede ver el detalle, reglas, pozo, inscritos.
-// Para inscribirse se requiere sesión (el InscribirButton maneja el
+// Para armar combinada se requiere sesión (el ComboLauncher maneja el
 // redirect a login si no la hay).
 //
 // CTAs según estado:
-//   - ABIERTO         → InscribirButton (login si no sesión, toast si
-//                       no alcanza, POST si todo OK)
+//   - ABIERTO         → ComboLauncher (abre modal con torneoId; si ya
+//                       hay placeholder, se actualiza en vez de cobrar
+//                       entrada)
 //   - CERRADO/EN_JUEGO→ Link "Ver ranking en vivo" → /live-match
-//                       (Sub-Sprint 5 construye /live-match)
-//   - FINALIZADO      → Link "Ver resultado final" (Sub-Sprint 6)
+//   - FINALIZADO      → Link "Ver ranking final" → /live-match
 //   - CANCELADO       → Mensaje informativo + Lukas reembolsados
 
 import Link from "next/link";
@@ -18,7 +18,7 @@ import { auth } from "@/lib/auth";
 import { obtener } from "@/lib/services/torneos.service";
 import { TorneoNoEncontrado } from "@/lib/services/errors";
 import { calcularUrgencia, formatearUrgencyLabel } from "@/lib/urgency";
-import { InscribirButton } from "@/components/torneo/InscribirButton";
+import { ComboLauncher } from "@/components/combo/ComboLauncher";
 
 interface Props {
   params: { id: string };
@@ -361,22 +361,26 @@ function CTA({
   yaInscrito: boolean;
   urgent: boolean;
 }) {
+  void entradaLukas;
   if (estado === "ABIERTO") {
-    if (yaInscrito) {
-      return (
-        <div className="rounded-md border border-alert-success-border bg-alert-success-bg px-5 py-4 text-center text-[14px] font-semibold text-alert-success-text">
-          ✅ Ya estás inscrito en este torneo. En el Sub-Sprint 4 podrás editar
-          tus 5 predicciones desde “Mis combinadas”.
-        </div>
-      );
-    }
+    // Abre el ComboModal directamente. Si hay placeholder (yaInscrito),
+    // el endpoint sabe reemplazarlo y el header del modal muestra
+    // "Entrada: Ya pagada". Si no hay placeholder, se descuenta la
+    // entrada al confirmar.
     return (
-      <InscribirButton
+      <ComboLauncher
         torneoId={torneoId}
-        entradaLukas={entradaLukas}
         hasSession={!!session?.user}
-        balance={session?.user?.balanceLukas ?? null}
-        urgent={urgent}
+        callbackUrl={`/torneo/${torneoId}`}
+        label={
+          yaInscrito
+            ? "✏️ Editar mi combinada"
+            : urgent
+              ? "🔥 Crear combinada"
+              : "🎯 Crear combinada"
+        }
+        variant={urgent ? "urgent" : "primary"}
+        className="w-full"
       />
     );
   }
@@ -384,7 +388,7 @@ function CTA({
   if (estado === "CERRADO" || estado === "EN_JUEGO") {
     return (
       <Link
-        href="/live-match"
+        href={`/live-match?torneoId=${torneoId}`}
         className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-brand-blue-main px-6 py-4 font-display text-[16px] font-extrabold uppercase tracking-[0.04em] text-white shadow-md transition-all hover:-translate-y-px hover:bg-brand-blue-light"
       >
         Ver ranking en vivo →
@@ -394,10 +398,12 @@ function CTA({
 
   if (estado === "FINALIZADO") {
     return (
-      <div className="rounded-md border border-light bg-card px-5 py-4 text-center text-[14px] font-semibold text-muted-d">
-        ✅ Este torneo ya finalizó. El detalle de resultados llega con el
-        Sub-Sprint 6.
-      </div>
+      <Link
+        href={`/live-match?torneoId=${torneoId}`}
+        className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-light bg-card px-5 py-4 text-center text-[14px] font-semibold text-muted-d transition-all hover:border-brand-blue-main hover:text-brand-blue-main"
+      >
+        Ver ranking final →
+      </Link>
     );
   }
 
