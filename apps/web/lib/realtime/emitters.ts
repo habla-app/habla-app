@@ -9,6 +9,7 @@
 
 import type { Server as SocketIOServer } from "socket.io";
 import { listarRanking } from "../services/ranking.service";
+import { getLiveStatus } from "../services/live-partido-status.cache";
 import { logger } from "../services/logger";
 import type {
   ClientToServerEvents,
@@ -56,12 +57,26 @@ export function roomTorneo(torneoId: string): string {
 
 export async function emitirRankingUpdate(
   torneoId: string,
-  minutoPartido: number | null = null,
+  opts: {
+    /** PartidoId asociado al torneo, para leer el snapshot del minuto
+     *  del cache in-memory (Bug #9). Si es null, minutoLabel queda null. */
+    partidoId?: string | null;
+    /** Override explícito del minuto (ej. caller ya tiene el valor).
+     *  Si no se pasa, se lee del cache por partidoId. */
+    minutoPartido?: number | null;
+  } = {},
 ): Promise<void> {
   const io = getIO();
   if (!io) return;
   try {
     const r = await listarRanking(torneoId, { limit: 100 });
+    // Bug #9: leer label del cache si hay partidoId, sino null.
+    const snapshot = opts.partidoId ? getLiveStatus(opts.partidoId) : null;
+    const minutoPartido =
+      opts.minutoPartido !== undefined
+        ? opts.minutoPartido
+        : (snapshot?.minuto ?? null);
+    const minutoLabel = snapshot?.label ?? null;
     const payload: RankingUpdatePayload = {
       torneoId,
       ranking: r.ranking.map((row) => ({
@@ -77,6 +92,7 @@ export async function emitirRankingUpdate(
       totalInscritos: r.totalInscritos,
       pozoNeto: r.pozoNeto,
       minutoPartido,
+      minutoLabel,
       timestamp: Date.now(),
     };
     io.to(roomTorneo(torneoId)).emit("ranking:update", payload);

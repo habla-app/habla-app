@@ -40,6 +40,10 @@ export interface LiveMatchTab {
   pozoBruto: number;
   pozoNeto: number;
   totalInscritos: number;
+  /** Label del minuto listo para renderizar ("23'", "ENT", "FIN",
+   *  "—"). Bug #9: SSR lo setea desde el cache del poller; WS lo
+   *  sobrescribe en vivo (`live.minutoLabel` tiene preferencia). */
+  minutoLabel: string | null;
 }
 
 interface InitialSnapshot {
@@ -171,7 +175,7 @@ export function LiveMatchView({
         equipoVisita={active.equipoVisita}
         golesLocal={scoreLocal}
         golesVisita={scoreVisita}
-        minuto={live.minutoPartido}
+        minutoLabel={live.minutoLabel ?? active.minutoLabel}
         totalInscritos={totalInscritos}
         pozoNeto={pozoNeto}
         primerPremio={Math.floor(pozoNeto * 0.35)}

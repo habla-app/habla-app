@@ -20,6 +20,7 @@ import {
   elegirTorneoPrincipal,
   obtenerLiveMatches,
 } from "@/lib/services/live-matches.service";
+import { getLiveStatus } from "@/lib/services/live-partido-status.cache";
 import {
   LiveMatchView,
   type LiveMatchTab,
@@ -48,6 +49,9 @@ export default async function LiveMatchPage({ searchParams }: Props) {
   for (const p of liveMatchesRaw) {
     const main = elegirTorneoPrincipal(p.torneos);
     if (!main) continue; // defensive: no debería pasar post-Bug #8
+    // Bug #9: leer label del cache del poller para mostrar el minuto
+    // en el primer render (antes de que llegue el primer WS).
+    const snap = getLiveStatus(p.id);
     tabs.push({
       torneoId: main.id,
       partidoId: p.id,
@@ -67,6 +71,7 @@ export default async function LiveMatchPage({ searchParams }: Props) {
       pozoBruto: main.pozoBruto,
       pozoNeto: main.pozoNeto,
       totalInscritos: main.totalInscritos,
+      minutoLabel: snap?.label ?? null,
     });
   }
 

@@ -14,6 +14,7 @@ import {
   elegirTorneoPrincipal,
   obtenerLiveMatches,
 } from "@/lib/services/live-matches.service";
+import { getLiveStatus } from "@/lib/services/live-partido-status.cache";
 import { toErrorResponse } from "@/lib/services/errors";
 import { logger } from "@/lib/services/logger";
 
@@ -47,6 +48,8 @@ export async function GET() {
             );
           }
         }
+        // Bug #9: adjuntamos minuto + label del cache del poller.
+        const liveSnap = getLiveStatus(p.id);
         return {
           id: p.id,
           partido: {
@@ -57,6 +60,8 @@ export async function GET() {
             golesLocal: p.golesLocal ?? 0,
             golesVisita: p.golesVisita ?? 0,
             round: p.round,
+            minutoLabel: liveSnap?.label ?? null,
+            minutoPartido: liveSnap?.minuto ?? null,
           },
           torneoPrincipalId: torneoPrincipal?.id ?? null,
           torneos: p.torneos.map((t) => ({

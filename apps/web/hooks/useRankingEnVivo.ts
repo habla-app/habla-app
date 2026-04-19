@@ -24,6 +24,9 @@ export interface RankingSnapshot {
   totalInscritos: number;
   pozoNeto: number;
   minutoPartido: number | null;
+  /** Label renderizable del minuto (ej. "23'", "ENT", "FIN"). Null
+   *  hasta que el primer WS llegue — la UI debe mostrar "—" mientras. */
+  minutoLabel: string | null;
   miPosicion: MiPosicion | null;
   isLoading: boolean;
   isConnected: boolean;
@@ -40,6 +43,7 @@ export function useRankingEnVivo(
     totalInscritos: 0,
     pozoNeto: 0,
     minutoPartido: null,
+    minutoLabel: null,
     miPosicion: null,
     isLoading: true,
     isConnected: false,
@@ -94,6 +98,7 @@ export function useRankingEnVivo(
           totalInscritos: payload.totalInscritos,
           pozoNeto: payload.pozoNeto,
           minutoPartido: payload.minutoPartido,
+          minutoLabel: payload.minutoLabel,
           lastUpdate: payload.timestamp,
         }));
       };
