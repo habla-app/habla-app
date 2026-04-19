@@ -12,7 +12,10 @@ import { useCallback } from "react";
 export interface MatchesFilters {
   /** Slug en URL ("champions", "liga-1-peru"…) o null (todas). */
   liga: string | null;
-  /** YYYY-MM-DD en hora Perú, o null (el componente aplica "hoy" por default). */
+  /**
+   * YYYY-MM-DD en hora Perú cuando hay filtro activo, o null (default
+   * "Todos" — no se aplica ningún rango de fechas).
+   */
   dia: string | null;
 }
 
