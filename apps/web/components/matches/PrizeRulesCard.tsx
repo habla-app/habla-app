@@ -25,8 +25,8 @@ export function PrizeRulesCard() {
           El 1° se lleva al menos el <strong>45%</strong> del bote.
         </p>
         <p className="text-[11px] italic text-muted-d">
-          Si empatás en puntos con otros jugadores, se reparten los premios
-          de las posiciones que ocupan.
+          En caso de empate, el premio se reparte en partes iguales entre
+          los jugadores empatados.
         </p>
       </div>
     </section>
