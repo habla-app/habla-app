@@ -15,12 +15,17 @@ model Usuario {
   id           String    @id @default(cuid())
   email        String    @unique
   nombre       String
+  username     String?   @unique // @handle público para ranking/inscritos (Sub-Sprint 7)
   telefono     String?
+  telefonoVerif Boolean  @default(false) // Sub-Sprint 7
+  dniVerif     Boolean   @default(false) // Sub-Sprint 7 — requerido para canjes > S/500
   fechaNac     DateTime?
+  ubicacion    String? // Ciudad / Región libre
   verificado   Boolean   @default(false)
   rol          Rol       @default(JUGADOR)
   balanceLukas Int       @default(0) // en unidades enteras de Lukas
   creadoEn     DateTime  @default(now())
+  deletedAt    DateTime? // Sub-Sprint 7: soft delete (anonimiza PII)
   // Campos requeridos por NextAuth Prisma Adapter
   emailVerified DateTime?
   image         String?
@@ -30,6 +35,11 @@ model Usuario {
   canjes        Canje[]
   cuentas       Account[]
   sesiones      Session[]
+  preferenciasNotif PreferenciasNotif?
+  limitesJuego      LimitesJuego?
+  verifTelefono     VerificacionTelefono?
+  verifDni          VerificacionDni?
+  solicitudesElim   SolicitudEliminacion[]
 
   @@map("usuarios")
 }
@@ -229,13 +239,33 @@ model Premio {
   descripcion String
   costeLukas  Int // Precio en Lukas
   stock       Int      @default(0)
-  imagen      String?
+  imagen      String? // URL o emoji fallback
+  categoria   CategoriaPremio @default(GIFT) // Sub-Sprint 6
+  badge       BadgePremio? // Sub-Sprint 6: POPULAR | NUEVO | LIMITADO
+  featured    Boolean  @default(false) // Hero de /tienda
   activo      Boolean  @default(true)
+  requiereDireccion Boolean @default(false) // Si necesita envío físico
+  valorSoles  Int? // Valor de referencia en soles (para audit, no visible al jugador)
   creadoEn    DateTime @default(now())
 
   canjes Canje[]
 
+  @@index([activo, categoria])
   @@map("premios")
+}
+
+enum CategoriaPremio {
+  ENTRADA // Entradas a partidos, eventos
+  CAMISETA // Camisetas de equipos/selecciones
+  GIFT // Gift cards (Plaza Vea, Falabella, etc.)
+  TECH // Tecnología (audífonos, cargadores, etc.)
+  EXPERIENCIA // Experiencias (cenas, tours, etc.)
+}
+
+enum BadgePremio {
+  POPULAR
+  NUEVO
+  LIMITADO
 }
 
 model Canje {
@@ -258,4 +288,80 @@ enum EstadoCanje {
   ENVIADO
   ENTREGADO
   CANCELADO
+}
+
+// ==========================================
+// Sub-Sprint 7 — Perfil + Juego Responsable
+// ==========================================
+
+model PreferenciasNotif {
+  usuarioId         String   @id
+  usuario           Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  // 7 toggles según §10.8 del mockup
+  notifInicioTorneo Boolean  @default(true) // Inicio de torneos
+  notifResultados   Boolean  @default(true) // Resultados / puntuación final
+  notifPremios      Boolean  @default(true) // Premios ganados
+  notifSugerencias  Boolean  @default(true) // Sugerencias de torneos
+  notifCierreTorneo Boolean  @default(true) // Cierre próximo / recordatorios
+  notifPromos       Boolean  @default(false) // Novedades / promos (opt-in)
+  emailSemanal      Boolean  @default(false) // Resumen semanal (opt-in)
+  actualizadoEn     DateTime @default(now()) @updatedAt
+
+  @@map("preferencias_notif")
+}
+
+model LimitesJuego {
+  usuarioId            String    @id
+  usuario              Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  limiteMensualCompra  Int       @default(300) // Lukas = soles (1:1). 0 = sin límite.
+  limiteDiarioTickets  Int       @default(10) // máximo tickets por día
+  autoExclusionHasta   DateTime? // Si presente y futura, bloquea acciones
+  actualizadoEn        DateTime  @default(now()) @updatedAt
+
+  @@map("limites_juego")
+}
+
+model VerificacionTelefono {
+  usuarioId  String   @id
+  usuario    Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  telefono   String // Número solicitado (puede diferir del actual del usuario hasta confirmar)
+  codigo     String // 6 dígitos hasheados (bcrypt) — no almacenar plaintext
+  intentos   Int      @default(0) // contador de intentos fallidos
+  expiraEn   DateTime // TTL 10 min
+  creadoEn   DateTime @default(now())
+  confirmado Boolean  @default(false)
+
+  @@map("verificacion_telefono")
+}
+
+model VerificacionDni {
+  id           String            @id @default(cuid())
+  usuarioId    String            @unique
+  usuario      Usuario           @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  dniNumero    String // Número del DNI ingresado
+  imagenUrl    String // URL al storage (local dev: /uploads/dni/<uuid>.jpg)
+  estado       EstadoVerifDni    @default(PENDIENTE)
+  motivoRechazo String?
+  revisadoEn   DateTime?
+  creadoEn     DateTime          @default(now())
+
+  @@map("verificacion_dni")
+}
+
+enum EstadoVerifDni {
+  PENDIENTE
+  APROBADO
+  RECHAZADO
+}
+
+model SolicitudEliminacion {
+  id          String    @id @default(cuid())
+  usuarioId   String
+  usuario     Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  token       String    @unique // 32 bytes random para link de confirmación
+  expiraEn    DateTime // 48h
+  confirmadaEn DateTime?
+  creadoEn    DateTime  @default(now())
+
+  @@map("solicitudes_eliminacion")
 }
