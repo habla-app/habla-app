@@ -198,6 +198,9 @@ const WHITELIST: ReadonlyArray<string> = [
   "app/(main)/layout.tsx",
   "app/(main)/mis-combinadas/page.tsx",
   "app/(main)/wallet/page.tsx",
+  // Sub-Sprint 6: /tienda es RSC que lee la sesión una vez y pasa
+  // `initialBalance` a TiendaContent (client) que se suscribe al store.
+  "app/(main)/tienda/page.tsx",
   // Sidebar es Server Component que lee la sesión una sola vez y pasa
   // `initialBalance` al Client Component `SidebarBalanceWidget` (que sí
   // se suscribe al store). Mismo patrón que (main)/layout.

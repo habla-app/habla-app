@@ -24,6 +24,9 @@ export default async function AdminPage() {
           <Link href="/" className="hover:underline">
             ← Volver al home
           </Link>
+          <Link href="/admin/canjes" className="hover:underline">
+            🎁 Gestionar canjes →
+          </Link>
         </div>
       </header>
 

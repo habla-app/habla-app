@@ -114,6 +114,14 @@ export default async function MisCombinadasPage({ searchParams }: Props) {
 
       <MisTicketsTabs active={tab} counts={counts} />
 
+      {/* Sub-Sprint 6: cuando el usuario está en "Ganadas" y tiene premios
+          acreditados, mostramos una banda motivacional que empuja a /tienda.
+          La suma del premio total ya acreditado en la vista actual se muestra
+          como incentivo. Cuando el tab es otro, o no hay premios, no rendereamos. */}
+      {tab === "ganadas" && ganadasRes.tickets.length > 0 && (
+        <WinnerPrompt tickets={ganadasRes.tickets} />
+      )}
+
       {grupos.length === 0 ? (
         <EmptyState tab={tab} />
       ) : (
@@ -173,6 +181,33 @@ function prioridad(estado: string): number {
   if (estado === "CERRADO") return 2;
   if (estado === "FINALIZADO") return 3;
   return 4;
+}
+
+function WinnerPrompt({ tickets }: { tickets: TicketConTorneo[] }) {
+  const totalGanado = tickets.reduce((s, t) => s + t.premioLukas, 0);
+  return (
+    <div className="mb-4 flex flex-col gap-3 rounded-lg bg-hero-blue px-5 py-4 text-white shadow-md md:flex-row md:items-center md:justify-between">
+      <div>
+        <div className="flex items-center gap-2">
+          <span className="text-2xl" aria-hidden>
+            🏆
+          </span>
+          <div className="font-display text-[18px] font-extrabold">
+            ¡Ganaste {totalGanado} 🪙 en tus torneos!
+          </div>
+        </div>
+        <p className="mt-1 text-[13px] text-white/80">
+          Canjealos por premios reales en la tienda.
+        </p>
+      </div>
+      <Link
+        href="/tienda"
+        className="inline-flex items-center justify-center gap-2 rounded-md bg-brand-gold px-5 py-2.5 font-bold text-dark shadow-gold-btn transition-colors hover:bg-brand-gold-light"
+      >
+        🎁 Ir a la tienda →
+      </Link>
+    </div>
+  );
 }
 
 function EmptyState({ tab }: { tab: TicketsTab }) {
