@@ -37,10 +37,83 @@ function readSrcNoComments(rel: string): string {
 // computeMinutoLabel — función pura
 // ---------------------------------------------------------------------------
 
-describe("computeMinutoLabel — 1H ancla a fechaInicio", () => {
+describe("computeMinutoLabel — 1H con elapsed del server (fuente de verdad)", () => {
   const kickoff = new Date("2026-04-19T20:00:00.000Z").getTime();
 
-  it("10 min desde kickoff, sin elapsed server → '11'", () => {
+  it("server dice elapsed=20 recibido hace 60s → '21' (server-anclado, no heurística)", () => {
+    // Caso real del bug del PO: heurística daría 60 por clock skew, server
+    // dice 20. Fix: el server GANA. Heurística solo se usa si elapsed es null.
+    const now = Date.now();
+    expect(
+      computeMinutoLabel({
+        fechaInicio: new Date(now - 59 * 60_000), // heurística diría 60'
+        statusShort: "1H",
+        elapsed: 20,
+        elapsedAnchorAt: now - 60_000,
+        now,
+      }),
+    ).toBe("21'");
+  });
+
+  it("server dice elapsed=10 recibido hace 30s → '10' (delta <60s se redondea a 0)", () => {
+    const now = Date.now();
+    expect(
+      computeMinutoLabel({
+        fechaInicio: new Date(now - 11 * 60_000), // heurística diría 12'
+        statusShort: "1H",
+        elapsed: 10,
+        elapsedAnchorAt: now - 30_000,
+        now,
+      }),
+    ).toBe("10'");
+  });
+
+  it("server dice elapsed=48 (descuento largo del PT) → respeta sin clamp", () => {
+    const now = Date.now();
+    expect(
+      computeMinutoLabel({
+        fechaInicio: new Date(now - 45 * 60_000),
+        statusShort: "1H",
+        elapsed: 48,
+        elapsedAnchorAt: now - 5_000,
+        now,
+      }),
+    ).toBe("48'");
+  });
+
+  it("server dice elapsed=44 + 3 min local → clamp en 45", () => {
+    const now = Date.now();
+    expect(
+      computeMinutoLabel({
+        fechaInicio: new Date(now - 44 * 60_000),
+        statusShort: "1H",
+        elapsed: 44,
+        elapsedAnchorAt: now - 3 * 60_000,
+        now,
+      }),
+    ).toBe("45'");
+  });
+
+  it("server dice elapsed=15 aunque heurística diría 50 → server gana (15 + delta)", () => {
+    // El bug del PO era el opuesto: heurística pisaba server con max().
+    // Ahora: server=15 hace 5s → 15'. Punto.
+    const now = Date.now();
+    expect(
+      computeMinutoLabel({
+        fechaInicio: new Date(now - 50 * 60_000),
+        statusShort: "1H",
+        elapsed: 15,
+        elapsedAnchorAt: now - 5_000,
+        now,
+      }),
+    ).toBe("15'");
+  });
+});
+
+describe("computeMinutoLabel — 1H sin elapsed (heurística por fechaInicio)", () => {
+  const kickoff = new Date("2026-04-19T20:00:00.000Z").getTime();
+
+  it("10 min desde kickoff, elapsed=null → '11' (heurística)", () => {
     const now = kickoff + 10 * 60_000;
     expect(
       computeMinutoLabel({
@@ -53,20 +126,7 @@ describe("computeMinutoLabel — 1H ancla a fechaInicio", () => {
     ).toBe("11'");
   });
 
-  it("10 min desde kickoff, server dice elapsed=10 → '11' (max de ambos)", () => {
-    const now = kickoff + 10 * 60_000;
-    expect(
-      computeMinutoLabel({
-        fechaInicio: new Date(kickoff),
-        statusShort: "1H",
-        elapsed: 10,
-        elapsedAnchorAt: kickoff,
-        now,
-      }),
-    ).toBe("11'");
-  });
-
-  it("30s desde kickoff → '1' (primer minuto, clamp en 1)", () => {
+  it("30s desde kickoff, elapsed=null → '1'", () => {
     const now = kickoff + 30_000;
     expect(
       computeMinutoLabel({
@@ -79,7 +139,7 @@ describe("computeMinutoLabel — 1H ancla a fechaInicio", () => {
     ).toBe("1'");
   });
 
-  it("10 min antes del kickoff → '1' (sin retroceder — partido aún no empezó por schedule)", () => {
+  it("10 min antes del kickoff, elapsed=null → '1' (clamp en 1)", () => {
     const now = kickoff - 10 * 60_000;
     expect(
       computeMinutoLabel({
@@ -92,7 +152,7 @@ describe("computeMinutoLabel — 1H ancla a fechaInicio", () => {
     ).toBe("1'");
   });
 
-  it("60 min desde kickoff, pero server dice 1H → clamp en 45", () => {
+  it("60 min desde kickoff, elapsed=null → '45' (clamp)", () => {
     const now = kickoff + 60 * 60_000;
     expect(
       computeMinutoLabel({
@@ -103,19 +163,6 @@ describe("computeMinutoLabel — 1H ancla a fechaInicio", () => {
         now,
       }),
     ).toBe("45'");
-  });
-
-  it("server dice elapsed=48 en 1H (descuento largo) → respeta server sin clamp", () => {
-    const now = kickoff + 48 * 60_000;
-    expect(
-      computeMinutoLabel({
-        fechaInicio: new Date(kickoff),
-        statusShort: "1H",
-        elapsed: 48,
-        elapsedAnchorAt: now - 5_000, // hace 5s recibimos el 48
-        now,
-      }),
-    ).toBe("48'");
   });
 
   it("fechaInicio como string ISO funciona igual que Date", () => {
@@ -131,29 +178,26 @@ describe("computeMinutoLabel — 1H ancla a fechaInicio", () => {
       }),
     ).toBe("16'");
   });
-
-  it("partido arrancó tarde (fechaInicio atrasa al server): server=15, heurística=50 → 50 por max", () => {
-    // fechaInicio=14:00 pero kickoff real fue 14:35 → delta=50 pero
-    // elapsed server=15. Usamos el MAYOR de los dos, clamped a 45.
-    // En este caso la heurística (50 → clamp 45) es mayor que server (15).
-    const now = kickoff + 50 * 60_000;
-    expect(
-      computeMinutoLabel({
-        fechaInicio: new Date(kickoff),
-        statusShort: "1H",
-        elapsed: 15,
-        elapsedAnchorAt: now - 5_000,
-        now,
-      }),
-    ).toBe("45'");
-    // Nota: el resultado es 45 clamped — servidor corrige a 45 por cap.
-    // Cuando el server reporte elapsed correcto (eventualmente), el ancla
-    // se re-alinea.
-  });
 });
 
 describe("computeMinutoLabel — 2H ancla al elapsed del server", () => {
   const kickoff = new Date("2026-04-19T20:00:00.000Z").getTime();
+
+  it("BUG REPRO PO: partido real minuto 54 + heurística desalineada → muestra 54, no 59", () => {
+    // Cienciano vs UCV Moquegua: el PO reportó que el hero mostraba 59'
+    // cuando el partido real iba 54'. Antes del fix, la heurística de
+    // fechaInicio pisaba al server con `max()`. Ahora el server gana.
+    const now = Date.now();
+    expect(
+      computeMinutoLabel({
+        fechaInicio: new Date(now - 73 * 60_000), // heurística 2T diría "59'"
+        statusShort: "2H",
+        elapsed: 54,
+        elapsedAnchorAt: now - 5_000, // recién recibido del server
+        now,
+      }),
+    ).toBe("54'");
+  });
 
   it("2H con elapsed=55 anclado hace 60s → '56'", () => {
     const recibidoHace60s = Date.now() - 60_000;
