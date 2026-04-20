@@ -46,7 +46,7 @@ describe("/tienda — PrizeCardV2", () => {
   });
 
   it("muestra badges POPULAR/NUEVO/LIMITADO con colores del design system", () => {
-    expect(SRC).toMatch(/POPULAR.*NUEVO.*LIMITADO/s);
+    expect(SRC).toMatch(/POPULAR[\s\S]*NUEVO[\s\S]*LIMITADO/);
   });
 });
 
@@ -96,6 +96,6 @@ describe("/tienda — TiendaContent", () => {
   });
 
   it("nota legal sobre Lukas (no son efectivo)", () => {
-    expect(SRC).toMatch(/No se retiran[\s\S]*efectivo/i);
+    expect(SRC).toMatch(/No se retiran[\s\S]*efectivo/);
   });
 });
