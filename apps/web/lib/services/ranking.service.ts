@@ -22,6 +22,7 @@ import {
   type TicketParaDistribuir,
 } from "../utils/premios-distribucion";
 import { recalcularTorneo } from "./puntuacion.service";
+import { notifyPremioGanado } from "./notificaciones.service";
 
 // ---------------------------------------------------------------------------
 // Tipos públicos
@@ -415,6 +416,32 @@ export async function finalizarTorneo(
     },
     "torneo finalizado + saldos acreditados",
   );
+
+  // Sub-Sprint 6: fire-and-forget emails a ganadores. `notifyPremioGanado`
+  // respeta `PreferenciasNotif.notifPremios` internamente.
+  try {
+    const torneoMeta = await prisma.torneo.findUnique({
+      where: { id: torneoId },
+      select: {
+        nombre: true,
+        partido: { select: { equipoLocal: true, equipoVisita: true } },
+      },
+    });
+    if (torneoMeta) {
+      const partidoStr = `${torneoMeta.partido.equipoLocal} vs ${torneoMeta.partido.equipoVisita}`;
+      for (const g of resultado) {
+        void notifyPremioGanado({
+          usuarioId: g.usuarioId,
+          torneoNombre: torneoMeta.nombre,
+          posicion: g.rank,
+          premioLukas: g.premioLukas,
+          partido: partidoStr,
+        });
+      }
+    }
+  } catch (err) {
+    logger.error({ err, torneoId }, "finalizarTorneo: error preparando emails");
+  }
 
   return { torneoId, ganadores: resultado, alreadyFinalized: false };
 }
