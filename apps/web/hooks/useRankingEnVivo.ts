@@ -37,6 +37,11 @@ export interface RankingSnapshot {
   /** Label renderizable del minuto (ej. "23'", "ENT", "FIN"). Null
    *  hasta que el primer WS llegue — la UI debe mostrar "—" mientras. */
   minutoLabel: string | null;
+  /** Hotfix #8 Bug #22: `fixture.status.short` del snapshot del server.
+   *  Consumido por `useMinutoEnVivo` para decidir si correr reloj local. */
+  statusShort: string | null;
+  /** Hotfix #8 Bug #22: epoch ms en que el server capturó el snapshot. */
+  snapshotUpdatedAt: number | null;
   /** Hotfix #6: posiciones pagadas. 0 hasta que llegue el primer fetch. */
   pagados: number;
   miPosicion: MiPosicion | null;
@@ -56,6 +61,8 @@ export function useRankingEnVivo(
     pozoNeto: 0,
     minutoPartido: null,
     minutoLabel: null,
+    statusShort: null,
+    snapshotUpdatedAt: null,
     pagados: 0,
     miPosicion: null,
     isLoading: true,
@@ -79,6 +86,8 @@ export function useRankingEnVivo(
       pagados?: number;
       minutoLabel?: string | null;
       minutoPartido?: number | null;
+      statusShort?: string | null;
+      snapshotUpdatedAt?: number | null;
       miPosicion?: {
         posicion: number;
         ticketId: string;
@@ -101,6 +110,12 @@ export function useRankingEnVivo(
         // borre el label que ya tenemos.
         minutoLabel: d.minutoLabel ?? s.minutoLabel,
         minutoPartido: d.minutoPartido ?? s.minutoPartido,
+        // Hotfix #8 Bug #22: mismo pattern de "preservar si null" para
+        // statusShort + snapshotUpdatedAt. Un snapshot nuevo del server
+        // ancla el reloj local al nuevo `updatedAt`; una respuesta sin
+        // datos no borra el ancla previa.
+        statusShort: d.statusShort ?? s.statusShort,
+        snapshotUpdatedAt: d.snapshotUpdatedAt ?? s.snapshotUpdatedAt,
         miPosicion: d.miPosicion
           ? {
               posicion: d.miPosicion.posicion,
@@ -158,6 +173,11 @@ export function useRankingEnVivo(
           pozoNeto: payload.pozoNeto,
           minutoPartido: payload.minutoPartido,
           minutoLabel: payload.minutoLabel,
+          // Hotfix #8 Bug #22: statusShort + snapshotUpdatedAt del WS
+          // re-anclan el reloj local. El WS siempre trae un snapshot
+          // fresco, así que no usamos el fallback null-preserve.
+          statusShort: payload.statusShort,
+          snapshotUpdatedAt: payload.snapshotUpdatedAt,
           pagados: payload.pagados ?? s.pagados,
           lastUpdate: payload.timestamp,
         }));

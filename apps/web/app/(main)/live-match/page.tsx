@@ -251,6 +251,10 @@ function buildLiveTabs(partidos: PartidoLive[]): LiveMatchTab[] {
       pozoNeto: main.pozoNeto,
       totalInscritos: main.totalInscritos,
       minutoLabel: snap?.label ?? null,
+      // Hotfix #8 Bug #22: snapshot crudo para el reloj local del LiveHero.
+      statusShort: snap?.statusShort ?? null,
+      elapsed: snap?.minuto ?? null,
+      snapshotUpdatedAt: snap?.updatedAt ?? null,
     });
   }
   return tabs;
@@ -286,6 +290,11 @@ async function tryBuildFinalizedTab(
       pozoNeto: match.pozoNeto,
       totalInscritos: match.totalInscritos,
       minutoLabel: snap?.label ?? "FIN",
+      // Hotfix #8 Bug #22: partido FINALIZADO — el hook `useMinutoEnVivo`
+      // verá statusShort no-avanzable (FT/AET/PEN) y no correrá reloj.
+      statusShort: snap?.statusShort ?? null,
+      elapsed: snap?.minuto ?? null,
+      snapshotUpdatedAt: snap?.updatedAt ?? null,
     };
   }
   return null;

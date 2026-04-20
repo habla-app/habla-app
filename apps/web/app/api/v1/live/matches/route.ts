@@ -49,6 +49,8 @@ export async function GET() {
           }
         }
         // Bug #9: adjuntamos minuto + label del cache del poller.
+        // Hotfix #8 Bug #22: incluimos statusShort + snapshotUpdatedAt
+        // para el reloj local del sidebar.
         const liveSnap = getLiveStatus(p.id);
         return {
           id: p.id,
@@ -62,6 +64,8 @@ export async function GET() {
             round: p.round,
             minutoLabel: liveSnap?.label ?? null,
             minutoPartido: liveSnap?.minuto ?? null,
+            statusShort: liveSnap?.statusShort ?? null,
+            snapshotUpdatedAt: liveSnap?.updatedAt ?? null,
           },
           torneoPrincipalId: torneoPrincipal?.id ?? null,
           torneos: p.torneos.map((t) => ({

@@ -50,6 +50,12 @@ export interface LiveMatchTab {
    *  "—"). Bug #9: SSR lo setea desde el cache del poller; WS lo
    *  sobrescribe en vivo (`live.minutoLabel` tiene preferencia). */
   minutoLabel: string | null;
+  /** Hotfix #8 Bug #22: snapshot del server para el reloj local del
+   *  LiveHero. Llegan del cache `live-partido-status`. Null hasta
+   *  que el poller tenga datos. */
+  statusShort: string | null;
+  elapsed: number | null;
+  snapshotUpdatedAt: number | null;
 }
 
 interface InitialSnapshot {
@@ -223,6 +229,11 @@ export function LiveMatchView({
             golesLocal={scoreLocal}
             golesVisita={scoreVisita}
             minutoLabel={live.minutoLabel ?? active.minutoLabel}
+            statusShort={live.statusShort ?? active.statusShort}
+            elapsed={live.minutoPartido ?? active.elapsed}
+            snapshotUpdatedAt={
+              live.snapshotUpdatedAt ?? active.snapshotUpdatedAt
+            }
             totalInscritos={totalInscritos}
             pozoNeto={pozoNeto}
             primerPremio={premioEstimadoSinEmpate(1, totalInscritos, pozoNeto)}

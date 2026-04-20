@@ -2,7 +2,9 @@
 // `{minuto ?? "?"}'` que mostraba literalmente "?" cuando el poller
 // aún no había entregado un número. Ahora:
 //   - Recibe `minutoLabel: string | null` (NO `minuto: number | null`).
-//   - Usa `renderMinutoLabel()` para garantizar "—" en lugar de "?".
+//   - Usa `useMinutoEnVivo` para correr un reloj local (Hotfix #8 Bug
+//     #22). El hook internamente delega a `formatMinutoLabel` +
+//     `renderMinutoLabel` — garantiza "—" en lugar de "?" igual que antes.
 //   - Nunca tiene "?" hardcodeado como fallback.
 
 import { describe, expect, it } from "vitest";
@@ -32,9 +34,9 @@ describe("LiveHero — Bug #9: minute display", () => {
     expect(LIVE_HERO_SRC).not.toMatch(/\n\s*minuto:\s*number\s*\|\s*null/);
   });
 
-  it("importa renderMinutoLabel del helper puro", () => {
+  it("importa useMinutoEnVivo (Hotfix #8) — reemplaza a renderMinutoLabel directo", () => {
     expect(LIVE_HERO_SRC).toMatch(
-      /import\s*\{[^}]*renderMinutoLabel[^}]*\}\s*from\s*["']@\/lib\/utils\/minuto-label["']/,
+      /import\s*\{[^}]*useMinutoEnVivo[^}]*\}\s*from\s*["']@\/hooks\/useMinutoEnVivo["']/,
     );
   });
 
