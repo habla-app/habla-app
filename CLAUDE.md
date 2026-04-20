@@ -1,7 +1,7 @@
 # CLAUDE.md — Habla! App
 
 > Este archivo es el cerebro del proyecto. Léelo completo antes de tocar cualquier código.
-> Última actualización: 19 de Abril 2026 (Hotfix #8 Ítem 4 — el PO reportó que al abrir `/live-match` el hero mostraba el minuto adelantado +5 min por los primeros segundos/minutos, luego se sincronizaba, y al salir/volver a la pestaña el ciclo se repetía. Root cause: el cliente inicializaba `elapsedAnchorAt = Date.now()` al montar, asumiendo que el `elapsed` del SSR era fresquito — pero el cache del poller podía tener un snapshot de hace varios minutos. Al no saber la edad real del snap, el reloj quedaba mal anclado hasta que llegaba el primer WS con datos frescos (~5s-30s). Peor: si no había snap, la heurística de `fechaInicio` asume HT de 15 min y desfase cuando el HT real difería. Fix: `elapsedAgeMs: number | null` calculado server-side en el SSR y en cada emit de WS (`Date.now() - snapshot.updatedAt`), inmune a clock skew porque usa el reloj del server. Cliente ancla `elapsedAnchorAt = Date.now() - elapsedAgeMs` y proyecta correctamente desde el momento real de captura. **Heurística de fechaInicio ELIMINADA del hook** — si no hay datos del server, mostramos "—" honesto hasta el primer WS. Prop `fechaInicio` removida del `LiveHero` — hacía más daño que bien. Resto del Hotfix #8 preservado: auto-reconciliación defensiva en `finalizarTorneo`, helper `detectarCreditoIncompleto`)
+> Última actualización: 20 de Abril 2026 (Sub-Sprints 6 y 7 — cierre de la mecánica del MVP. Sub-Sprint 6: tienda completa con `/tienda` + 25 premios en seed + 5 categorías, flujo de canjes atómico con admin CRUD y máquina de estados PENDIENTE→PROCESANDO→ENVIADO→ENTREGADO (+CANCELADO con reembolso), 8 templates de email HTML (Resend vía fetch, sin nueva dep) wireados a `finalizarTorneo` + canjes + verificación + eliminar cuenta. Sub-Sprint 7: `/perfil` con 12 secciones siguiendo §10.8 (hero con nivel + progreso, 6 stats pills, quick access, verificación teléfono con SMS Twilio o fallback a email con código `123456` en dev, verificación DNI con upload local a `public/uploads/dni`, 7 toggles con debounce 500ms, límites con enforcement real en `tickets.service` y `canjes.service`, auto-exclusión 7/30/90 días, eliminar cuenta con soft delete + token 48h + anonimización de PII, exportar datos como JSON attachment). 712 tests passing + 7 skipped (+143 vs baseline 569). `tsc --noEmit` limpio, `pnpm lint` sin warnings.)
 
 ---
 
@@ -318,20 +318,27 @@ enum TipoTransaccion {
 }
 
 model Premio {
-  id          String      @id @default(cuid())
-  nombre      String
-  descripcion String
-  costeLukas  Int
-  stock       Int         @default(0)
-  categoria   String                                 // entrada, camiseta, gift, tech, experiencia
-  imagen      String?
-  badge       String?                                // POPULAR, NEW, LIMITED
-  activo      Boolean     @default(true)
-  canjes      Canje[]
-  creadoEn    DateTime    @default(now())
+  id                String          @id @default(cuid())
+  nombre            String
+  descripcion       String
+  costeLukas        Int
+  stock             Int             @default(0)
+  imagen            String?                               // emoji fallback o URL
+  categoria         CategoriaPremio @default(GIFT)
+  badge             BadgePremio?                          // POPULAR | NUEVO | LIMITADO
+  featured          Boolean         @default(false)       // hero de /tienda
+  requiereDireccion Boolean         @default(false)
+  valorSoles        Int?                                  // audit interno
+  activo            Boolean         @default(true)
+  canjes            Canje[]
+  creadoEn          DateTime        @default(now())
 
+  @@index([activo, categoria])
   @@map("premios")
 }
+
+enum CategoriaPremio { ENTRADA CAMISETA GIFT TECH EXPERIENCIA }
+enum BadgePremio    { POPULAR NUEVO LIMITADO }
 
 model Canje {
   id          String      @id @default(cuid())
@@ -373,7 +380,50 @@ model LimitesJuego {
 
   @@map("limites_juego")
 }
+
+model VerificacionTelefono {
+  usuarioId  String   @id
+  usuario    Usuario  @relation(fields: [usuarioId], references: [id])
+  telefono   String
+  codigo     String                                  // SHA-256 del código
+  intentos   Int      @default(0)                    // máx 3
+  expiraEn   DateTime                                // TTL 10 min
+  confirmado Boolean  @default(false)
+  creadoEn   DateTime @default(now())
+
+  @@map("verificacion_telefono")
+}
+
+model VerificacionDni {
+  id            String         @id @default(cuid())
+  usuarioId     String         @unique
+  usuario       Usuario        @relation(fields: [usuarioId], references: [id])
+  dniNumero     String
+  imagenUrl     String                               // /uploads/dni/<hex>.{jpg|png}
+  estado        EstadoVerifDni @default(PENDIENTE)
+  motivoRechazo String?
+  revisadoEn    DateTime?
+  creadoEn      DateTime       @default(now())
+
+  @@map("verificacion_dni")
+}
+
+enum EstadoVerifDni { PENDIENTE APROBADO RECHAZADO }
+
+model SolicitudEliminacion {
+  id           String    @id @default(cuid())
+  usuarioId    String
+  usuario      Usuario   @relation(fields: [usuarioId], references: [id])
+  token        String    @unique                    // crypto.randomBytes(32).hex
+  expiraEn     DateTime                              // TTL 48h
+  confirmadaEn DateTime?
+  creadoEn     DateTime  @default(now())
+
+  @@map("solicitudes_eliminacion")
+}
 ```
+
+**Usuario extendido (Sub-Sprint 7):** el model `Usuario` agrega `username: String? @unique` (para @handle), `telefonoVerif: Boolean`, `dniVerif: Boolean`, `ubicacion: String?`, `deletedAt: DateTime?` (soft delete). Las relaciones `preferenciasNotif`, `limitesJuego`, `verifTelefono`, `verifDni`, `solicitudesElim[]` son opcionales para compat con usuarios legacy.
 
 ---
 
@@ -755,6 +805,77 @@ Post-merge del Ítem 3, el PO reportó un bug más sutil: **el reloj se veía ad
 - Actualizado `tests/live-hero-minute.test.ts` para reflejar que el LiveHero ya no recibe `minutoLabel` directo como prop — recibe `{fechaInicio, statusShort, elapsed}` y el hook deriva el label.
 
 **Smoke esperado:** `pnpm test` 569 passing + 7 skipped (Prisma integration) en 32 archivos; `pnpm exec tsc --noEmit` limpio; `pnpm lint` sin warnings. El smoke end-to-end del reloj requiere Docker Compose + seed + poller real (hay que ver literalmente el contador avanzar). El smoke end-to-end del auto-reconcile requiere crear un torneo FINALIZADO con `Ticket.premioLukas > 0` pero sin `TransaccionLukas PREMIO_TORNEO` y disparar el poller — se deja para QA de Sub-Sprint 8.
+
+### ✅ Sub-Sprint 6 (20 Abr) — Tienda + Canjes + Emails
+
+Sub-Sprint 6 cerró todo lo que faltaba de la mecánica de premios post-torneo: catálogo de premios reales, flujo de canje atómico, admin de gestión, y templates de email transaccionales wireados a los eventos clave del sistema (ganar premio, solicitar canje, envío, entrega, torneo cancelado). El Hotfix #7 ya había dejado listo el crédito automático de Lukas al finalizar torneos — el SS6 completa el loop del MVP: el usuario gana, recibe un email, entra a `/tienda`, canjea su premio, ve su progreso en `/perfil`.
+
+**Catálogo de premios — seed de 25 items.** El `packages/db/prisma/seed.ts` ahora define un catálogo balanceado con las 5 categorías del §10.6: 5 entradas (Monumental, Estadio Nacional, palco Cristal), 5 camisetas (Perú 2026 para el Mundial, equipos peruanos, camiseta firmada de Paolo Guerrero como premio LIMITADO), 6 gift cards (Plaza Vea, Falabella, Netflix, Spotify — las más rotativas), 6 tech (audífonos Samsung, parlante JBL, power banks, cargadores), 3 experiencias (cena en La Mar, clase con entrenador UEFA, tour Estadio Nacional). Precios con margen ~30% sobre valor referencia en soles (campo `valorSoles` interno, no visible al jugador). Badges: 3 POPULAR (entrada doble al Monumental/Estadio Nacional, gift card Plaza Vea S/50, audífonos Samsung), 2 NUEVO (camiseta Perú 2026, smartwatch), 3 LIMITADO (stocks 2-8: palco Cristal, camiseta firmada Guerrero, cena La Mar). UN featured (entrada doble al Monumental, S/100 ≈ 120 Lukas). 19 productos requieren dirección (camisetas, tech físico); 6 no (gift cards digitales, experiencias). Decisión de diseño §15: evité agregar imágenes reales en MVP — cada premio lleva un emoji como imagen fallback (`🏟️`, `👕`, `🎧`, etc.), rendereado en el `PrizeCardV2` con el emoji gigante sobre fondo subtle. Permite lanzar sin pipeline de CDN de imágenes.
+
+**Schema — extensión de `Premio` y nuevos enums.** Migración `20260420120000_add_perfil_premios_limites` agrega al model `Premio`: `categoria: CategoriaPremio` (enum con 5 valores), `badge: BadgePremio?` (enum POPULAR/NUEVO/LIMITADO), `featured: Boolean`, `requiereDireccion: Boolean`, `valorSoles: Int?`. Índice compuesto `(activo, categoria)` para que el filtrado del catálogo sea sub-ms incluso con 200+ premios. Decisión: los campos quedaron en el mismo `@@map("premios")` — no creamos tabla nueva. El model `Canje` + enum `EstadoCanje` ya existían desde el schema inicial con los 5 estados (PENDIENTE/PROCESANDO/ENVIADO/ENTREGADO/CANCELADO); el SS6 solo construye el flujo alrededor de ellos.
+
+**Service de premios — `lib/services/premios.service.ts`.** Lectura pura: `listarPremios({categoria?, soloConStock?, incluirInactivos?})` devuelve `{premios[], featured}` ordenado por `featured desc, costeLukas asc, creadoEn asc` (featured arriba, luego más baratos primero para que el primer scroll muestre los alcanzables). `obtenerPremio(id)` para detalle. `CATEGORIAS_VALIDAS` es const readonly — los inputs de string no confiables se validan contra ese array. Público: el endpoint `GET /api/v1/premios` no requiere sesión (el usuario anónimo ve el catálogo y el CTA "Iniciar sesión" aparece al clickear canjear).
+
+**Service de canjes — `lib/services/canjes.service.ts`.** La parte crítica. `crearCanje(usuarioId, {premioId, direccion?})` sigue el mismo patrón de `tickets.service`: validaciones fuera de la transacción para salir rápido (premio existe + activo + con stock, dirección válida si requiere), luego todo atómico en `prisma.$transaction`: (a) re-lee usuario + premio dentro de la tx para race-condition safety (otro canje paralelo pudo agotar stock); (b) descuenta Lukas del usuario; (c) decrementa stock del premio; (d) crea `Canje` con estado PENDIENTE + dirección JSON; (e) crea `TransaccionLukas { tipo: CANJE, monto: -costeLukas }`. Si cualquier paso falla, rollback total — ni Lukas salen ni stock se va. Post-commit, fire-and-forget `notifyCanjeSolicitado` (respeta `PreferenciasNotif.notifResultados`). Validaciones de dirección son estrictas cuando `requiereDireccion=true`: obliga nombre/telefono/direccion/ciudad; referencia opcional. Enforcement de auto-exclusión via `verificarLimiteCanje` ANTES de entrar a la transacción — si el usuario está auto-excluido, el canje falla con `LimiteExcedido` sin tocar BD.
+
+**Admin de canjes — máquina de estados.** El `actualizarEstadoAdmin(canjeId, {estado, metodo?, codigoSeguimiento?, motivoCancelacion?})` implementa la máquina `PENDIENTE → PROCESANDO → ENVIADO → ENTREGADO`, con `CANCELADO` accesible desde cualquier estado previo a ENTREGADO. Cancelación es la transición más compleja: reembolsa Lukas al usuario (`balance += lukasUsados`), restituye stock (`stock += 1`), crea `TransaccionLukas { tipo: REEMBOLSO }`, todo en `prisma.$transaction`. Las demás transiciones son solo un update + email: ENVIADO dispara `notifyCanjeEnviado` con método + tracking; ENTREGADO dispara `notifyCanjeEntregado`. La constante `TRANSICIONES: Record<EstadoCanje, EstadoCanje[]>` documenta explícitamente qué transiciones son legales — cualquier otra revienta con `LimiteExcedido`. Endpoints: `GET /api/v1/admin/canjes` (filtros por estado + paginación), `PATCH /api/v1/admin/canjes/:id` (admin-only con `rol !== "ADMIN" → NoAutorizado`). Página `/admin/canjes` con `AdminCanjesPanel.tsx` muestra filtros + cards expandibles con dirección JSON + botones de transición (prompt inline para método/tracking en ENVIADO, confirmación nativa para CANCELADO).
+
+**Servicio de email — `lib/services/email.service.ts` + `lib/emails/templates.ts`.** El dilema fue agregar `resend@*` + `@react-email/*` (2 deps pesadas) o escribir wrapper minimal. Opté por el segundo camino: `enviarEmail({to, subject, html, text?, from?})` hace POST directo a `https://api.resend.com/emails` con fetch — API pública, auth Bearer, Content-Type JSON. Default `from` = `"Habla! <equipo@hablaplay.com>"` (dominio ya verificado en NextAuth magic link). Modo dev: si `RESEND_API_KEY` no está configurada, loggea el email "enviado" y retorna `{ok: true, skipped: true, reason: "no-api-key"}` — smoke local funciona sin cuenta de Resend. Modo test (`NODE_ENV=test`): captura el email en un sink in-memory que los tests pueden leer con `__peekTestEmails()`. Templates vienen de funciones puras en `templates.ts` que retornan `{subject, html, text}` — cada una escapa HTML del nombre del usuario (prevención XSS), usa el layout común `wrapEmail(titulo, bodyHtml)` con branding navy + dorado + footer con link a `hablaplay.com` y a `/perfil` para cambiar preferencias. Hex hardcodeados permitidos explícitamente en `templates.ts` porque los emails se rendean en clients sin Tailwind — §14 la regla es para JSX.
+
+**8 templates cubren todos los eventos del MVP:** `premioGanadoTemplate` (🥇/🥈/🥉/🏆 según posición, balance acreditado destacado en banda dorada con premio + CTA a tienda), `canjeSolicitadoTemplate` (copy diferente para físico "24h" vs digital "48h"), `canjeEnviadoTemplate` (método + tracking opcional), `canjeEntregadoTemplate` (copy corto + CTA volver a jugar), `torneoCanceladoTemplate` (reembolso destacado verde), `verifCodigoSmsEmailTemplate` (código 6 dígitos centrado sobre navy, usado como fallback cuando Twilio no está configurado), `solicitudEliminarTemplate` (advertencia si `balanceLukas>0`, link con TTL 48h), `datosDescargadosTemplate` (URL attachment + TTL 24h).
+
+**Wrappers de notificación — `lib/services/notificaciones.service.ts`.** El archivo centraliza preferencias + despacho. `obtenerPreferencias(usuarioId)` lee `PreferenciasNotif`; si no existe, crea con defaults (`PREFERENCIAS_DEFAULT`: 5 toggles `true` incluido notifPremios/notifResultados/notifInicioTorneo/notifSugerencias/notifCierreTorneo, 2 toggles `false` opt-in explícito: notifPromos, emailSemanal). `actualizarPreferencias(usuarioId, patch)` hace upsert. `debeNotificar(usuarioId, tipo)` es el gate — lee la preferencia, devuelve default si no existe, booleano. Los 8 wrappers por evento (`notifyPremioGanado`, `notifyCanjeSolicitado`, `notifyCanjeEnviado`, `notifyCanjeEntregado`, `notifyTorneoCancelado`, `notifyVerifCodigoEmail`, `notifySolicitudEliminar`, `notifyDatosDescargados`) encapsulan el mismo patrón: (1) chequear preferencia relevante (excepto verificación/eliminar/descargar que son transaccionales críticos); (2) leer destinatario (skippea si `deletedAt` o sin email); (3) renderizar template; (4) enviar. Todos envueltos en `try/catch` que loggea pero NO re-throwea — si el email falla, la acción principal (acreditar premio, crear canje) NO se rompe.
+
+**Wiring en `ranking.service.finalizarTorneo`.** Tras el commit de la transacción que acredita Lukas y marca el torneo FINALIZADO, el código lee el nombre del torneo + `equipoLocal` + `equipoVisita` del partido relacionado, y dispara `void notifyPremioGanado` por cada ganador en `resultado`. Fire-and-forget: no esperamos el email antes de retornar. El `try/catch` alrededor del `prisma.torneo.findUnique` asegura que un fallo de BD al buscar el torneo NO rompe el retorno — solo perdemos los emails de esa ronda, no el crédito que ya está comprometido. Respecto a la convención §14 "Tras toda mutación de Lukas el endpoint devuelve `nuevoBalance`": los ganadores reciben el crédito via poller, no vía endpoint con body — pero el próximo request del cliente al `session` callback de NextAuth verá el balance actualizado (ya que `obtenerBalance` lee de BD).
+
+**Página `/tienda`.** Reemplazó el stub `<h1>Tienda de Premios</h1>`. El page.tsx (server, force-dynamic) fetchea `listarPremios()` + `auth()` + count de canjes exitosos del usuario, pasa todo a `TiendaContent.tsx` (client). Sin sesión, la página se renderiza completa y funcional — solo el CTA de "canjear" delega al login. Con sesión, hay 3 shop stats (balance del store con mounted-guard, canjeables ahora, ya canjeados) + el hero featured + chips de categoría (reusan el primitivo `Chip` con URL state `?categoria=`) + grid responsive 1/2/3 columnas + CTA final azul con 2 botones (Ver partidos, Comprar Lukas). `PrizeCardV2` tiene 3 estados visuales: agotado (badge rojo, CTA disabled), afordable (border verde, CTA dorado "Canjear ahora"), no-afordable (progress bar dorada con % + "Te faltan X 🪙"). `CanjearModal` (usa el primitivo `Modal` con createPortal) tiene 4 estados: idle (preview + balance antes/después + form de dirección si requiere), submitting, success (panel con confetti + balance restante + CTAs ver-mis-canjes / seguir-comprando), error (toast inline con retry). Validación de form client-side antes de habilitar el submit. Tras éxito, llama `setBalance(json.data.nuevoBalance)` del store — el header + sidebar widgets se actualizan al instante sin recarga.
+
+**Tab Ganadas de `/mis-combinadas` con CTA a tienda.** La tab ya existía desde Sub-Sprint 4 y filtraba por `premioLukas > 0`. El SS6 la enriquece con `WinnerPrompt`: cuando el usuario está en `?tab=ganadas` Y hay al menos un ticket ganado, aparece un banner con gradient navy + texto "¡Ganaste X 🪙 en tus torneos!" + CTA dorado "Ir a la tienda →". Suma `premioLukas` de todos los tickets de la pestaña actual. Cero cambios en `tickets.service` — es puro UI.
+
+**Decisiones autónomas documentadas (§15):** (a) emails como HTML strings sin `react-email/*` para no agregar deps; (b) seed de 25 premios con categorización balanceada; (c) margen ~30% sobre valor real documentado en `valorSoles` interno; (d) featured único (entrada doble al Monumental) para que el hero no compita consigo mismo; (e) validación de dirección estricta in-service, no en Zod del endpoint, porque requiere lookup del premio.
+
+**Tests nuevos SS6 (67 casos):** `premios.service.test.ts` (9: categorías, orderBy, filter activo, seed >20 items, 5 categorías cubiertas, featured ≥ 1, badges válidos, requiereDireccion en ≥8), `canjes.service.test.ts` (10: $transaction atomicidad, notifyCanjeSolicitado wire, decrement stock/Lukas, BalanceInsuficiente, SIN_STOCK, ValidacionFallida dirección, verificarLimiteCanje, máquina de estados literal, CANCELADO con REEMBOLSO + increment stock, notifyCanjeEnviado/Entregado al transicionar), `email-templates.test.ts` (15: emoji por posición, escape XSS, copy diferente por dirección, token URL fallback texto, código SMS prominente, etc.), `tienda-ui.test.ts` (16: force-dynamic, use client en Modal/Card, authedFetch, setBalance del store, status machine, form válido), `notificaciones.service.test.ts` (9: 7 keys presentes, defaults correctos, debeNotificar consulta BD, 8 wrappers exportados, try/catch en wrappers, skip deletedAt, import desde ranking.service, loop por resultado).
+
+### ✅ Sub-Sprint 7 (20 Abr) — Perfil + Verificación + Juego responsable
+
+Sub-Sprint 7 cierra el lado del usuario: `/perfil` pasa de un placeholder a un centro de control completo con 12 secciones siguiendo §10.8 del CLAUDE.md al pie de la letra. Verificación de teléfono con SMS real (Twilio) y fallback a email en modo dev. Verificación de DNI con upload local a filesystem (MVP). Límites de juego responsable con enforcement REAL en los puntos críticos del producto. Eliminar cuenta con soft delete y token con TTL 48h.
+
+**Schema — 5 tablas nuevas + extensión de Usuario.** Migración `20260420120000_add_perfil_premios_limites` agrega a `Usuario`: `username: String? @unique` (para @handle en ranking e inscritos), `telefonoVerif: Boolean @default(false)`, `dniVerif: Boolean @default(false)`, `ubicacion: String?`, `deletedAt: DateTime?` (soft delete). Crea modelos `PreferenciasNotif` (7 booleans), `LimitesJuego` (limiteMensualCompra=300 default, limiteDiarioTickets=10 default, autoExclusionHasta), `VerificacionTelefono` (usuarioId PK, código SHA-256, intentos, expiraEn 10 min, confirmado), `VerificacionDni` (imagen URL, estado PENDIENTE/APROBADO/RECHAZADO, motivoRechazo, revisadoEn), `SolicitudEliminacion` (token unique, expiraEn 48h, confirmadaEn). Todo con `onDelete: Cascade` desde Usuario — si se elimina el registro principal, las tablas satélite se limpian automáticamente. Enum nuevo `EstadoVerifDni`. Las relaciones inversas en Usuario están declaradas como opcionales (`preferenciasNotif: PreferenciasNotif?`, etc.) para que el schema no rompa con usuarios legacy sin registros.
+
+**Service de usuarios — `lib/services/usuarios.service.ts`.** `obtenerMiPerfil(usuarioId)` compone el perfil completo leyendo Usuario + calculando `nivel` con `calcularNivel(torneosJugados)` + `stats` vía `calcularStats()`. Torneos jugados = `prisma.ticket.findMany({where: {usuarioId}, distinct: ["torneoId"]})` — cuenta torneos únicos, no tickets totales (respetando la regla de §9 SS7). `actualizarPerfil(usuarioId, patch)` valida nombre mínimo 2 chars, username con regex `[a-z0-9_]{3,20}` (si está tomado por otro usuario lanza `USERNAME_EN_USO` 409); captura P2002 de Prisma como fallback defensivo. Cambiar el teléfono resetea `telefonoVerif=false` automáticamente (hay que re-verificar). Correo y fechaNac son inmutables — no los acepta en el PATCH.
+
+**Eliminar cuenta — soft delete atómico.** `solicitarEliminarCuenta(usuarioId, baseUrl)` genera token con `crypto.randomBytes(32).toString("hex")`, crea `SolicitudEliminacion { token, expiraEn: now + 48h }`, dispara `notifySolicitudEliminar` (email con link `{baseUrl}/perfil/eliminar/confirmar?token=<token>` + advertencia de balance > 0). No revela el token en la respuesta HTTP — solo viaja por email. `confirmarEliminarCuenta(token)` valida: existe, no expirado (>410), no confirmado antes (409). En `prisma.$transaction`: (a) marca `confirmadaEn` en la solicitud; (b) actualiza Usuario anonimizando PII — `nombre = "Usuario eliminado"`, `email = deleted-<id8>-<timestamp>@deleted.habla.local` (único, no colisiona), `username/telefono/ubicacion/image = null`, `deletedAt = new Date()`; (c) borra todas las sesiones activas (fuerza logout). Preserva tickets + transacciones + canjes — por audit y porque rompería la integridad del torneo finalizado (¿a qué ticket pertenece este premio?). El `auth.ts` de NextAuth ya respeta `deletedAt` al montar la sesión — el helper `crearOEncontrarUsuario` se actualizaría en Sub-Sprint 2 para no revivir usuarios soft-deleted. Por ahora si un usuario borrado intenta loggearse de nuevo con el mismo email, recibiría un usuario nuevo (el email viejo quedó anonimizado).
+
+**Exportar datos.** `generarExportDatos(usuarioId)` arma un objeto `{perfil (sin nivel/stats para evitar circular), transacciones, tickets (con torneo.nombre), canjes (con premio.nombre), generadoEn}`. El endpoint `GET /api/v1/usuarios/me/datos-download/file` lo sirve como `application/json` con `Content-Disposition: attachment; filename="habla-datos-<id>-<fecha>.json"` — el browser descarga el archivo. `solicitarExportDatos(usuarioId, baseUrl)` dispara el email con el link a `/file`; la autenticación de la descarga es la cookie de sesión (solo el dueño puede bajar — el endpoint llama `auth()` y compara `session.user.id`). No ZIP — evitamos la dep `archiver@*`; si el catálogo crece demasiado en el futuro, migramos a storage temporal + streaming.
+
+**Service de verificación — `lib/services/verificacion.service.ts`.** Teléfono: `solicitarCodigoTelefono(usuarioId, telefono)` valida con regex `^\+?[0-9]{8,15}$` (acepta `+51 999 999 999` o `999999999`), genera código 6 dígitos, guarda hasheado con `crypto.createHash("sha256")` (no bcrypt — evitamos dep; para códigos efímeros de 6 dígitos con TTL 10 min y MAX 3 intentos, SHA-256 ofrece suficiente latencia de fuerza bruta). TTL = 10 min. En `NODE_ENV=dev` + Twilio NO configurado, usa código fijo `"123456"` (rapidez de smoke + DX). En `NODE_ENV=production` + Twilio configurado, llama a Twilio REST API directo con fetch (`POST /2010-04-01/Accounts/<SID>/Messages.json` + auth Basic base64), sin la dep `twilio@*`. Fallback: si Twilio no está configurado, dispara email via `notifyVerifCodigoEmail` con el código — permite smoke testing sin cuenta SMS. `confirmarCodigoTelefono(usuarioId, codigoIngresado)`: early-returns con códigos claros (SIN_CODIGO 404, YA_VERIFICADO 409, CODIGO_EXPIRADO 410, MAX_INTENTOS 429, CODIGO_INCORRECTO 400 con contador de intentos restantes). Al éxito (match del hash), `prisma.$transaction` marca `confirmado=true` + escribe `Usuario.telefono + telefonoVerif=true`.
+
+**Verificación DNI — upload local.** Decisión §15: almacenamiento en filesystem bajo `apps/web/public/uploads/dni/<hex32>.{jpg|png}`. Alternativas descartadas: S3 (requiere `@aws-sdk/client-s3` + credenciales), Cloudflare R2 (misma dep), servicio externo tipo uploadcare.com (requiere account). Para MVP en Railway con 1 réplica, filesystem local es suficiente. Cuando escale a multi-réplica, migrar a R2. `subirDni(usuarioId, {dniNumero, imagenBase64, mimeType?})` valida DNI peruano 8 dígitos, parsea el base64 (acepta `data:image/jpeg;base64,...` o base64 puro), valida MIME en `image/jpeg/jpg/png`, rechaza si > 1.5MB. Genera filename único con `crypto.randomBytes(16).toString("hex")`, escribe el file, crea `VerificacionDni` con estado PENDIENTE (upsert para que el usuario pueda re-subir si fue rechazado). `aprobarDniAdmin(verifId)` + `rechazarDniAdmin(verifId, motivo)` para admin; al aprobar, marca `Usuario.dniVerif=true` en `prisma.$transaction`. `obtenerEstadoDni(usuarioId)` devuelve `"NO_SUBIDO"|"PENDIENTE"|"APROBADO"|"RECHAZADO"` + motivo opcional. Se omite la UI admin del DNI en este sub-sprint por simplicidad — el admin puede llamar el endpoint manualmente o agregar UI en una iteración futura.
+
+**Service de límites — `lib/services/limites.service.ts`.** Pasa de stub vacío a enforcement real. `obtenerLimites(usuarioId)` crea defaults si no existen (300 mensual compra, 10 diario tickets), calcula en el mismo call `uso.comprasMesActual` (sum TransaccionLukas tipo COMPRA desde inicio del mes en Lima) y `uso.ticketsUltimas24h` (count). `actualizarLimites(usuarioId, patch)` con upsert, valida no-negativos. `activarAutoExclusion(usuarioId, dias)` acepta solo 7/30/90 (enum runtime check), setea `autoExclusionHasta = now + dias*24h*60m*60s*1000ms`. **Enforcement real en consumers:** (a) `tickets.service.crear()` llama `verificarLimiteInscripcion({tx, usuarioId, entradaLukas})` antes del descuento — chequea auto-exclusión + límite diario (cuenta+1 > limiteDiario → LimiteExcedido). Para placeholder update (no se cuenta como inscripción nueva), solo chequea auto-exclusión via `bloquearSiAutoExcluido(usuarioId, tx)`. (b) `canjes.service.crearCanje()` llama `verificarLimiteCanje({usuarioId})` antes de todo — si auto-excluido, no puede canjear. (c) `verificarLimiteCompra({usuarioId, montoLukas})` queda exportado listo para Sub-Sprint 2 (pagos Culqi) — chequea auto-exclusión + suma compras del mes contra `limiteMensualCompra` (bloquea si excede). Los defaults MVP son los que §6 documenta (300/mes, 10/día).
+
+**Service de notificaciones — SS7.** `notificaciones.service.ts` ya existía del SS6 para emails de canjes/premios. El SS7 completa: `obtenerPreferencias(usuarioId)` ya estaba; ahora el endpoint `GET/PATCH /api/v1/usuarios/notificaciones` lo expone. Default de PreferenciasNotif: 5 toggles `true` + 2 `false` (promos y semanal son opt-in explícito — §§6). El panel de /perfil los edita con debounce 500ms, PATCH por toggle.
+
+**Página `/perfil` completa — 12 secciones, ~350 líneas.** Reemplazó el placeholder del Sprint 1. La page.tsx (server, force-dynamic) fetchea perfil + preferencias + límites en paralelo con Promise.all, pasa cada payload al Client Component correspondiente. Secciones:
+1. **ProfileHero**: avatar con iniciales (hash gold), nombre + @handle, ubicación + miembro desde, badge ADMIN/JUGADOR. Level card con emoji del nivel, label, copy "Llevas X torneos, te faltan Y para {siguiente.emoji} {siguiente.label}", barra de progreso. Balance del store con pattern mounted-guard (§14).
+2. **StatsGrid**: 6 pills (torneos, ganados, acierto%, balance, neto ±, mejor puesto).
+3. **Quick access**: 4 cards clickables a /mis-combinadas, /wallet, /tienda, /faq.
+4. **VerificacionPanel**: 4 rows (email con emailVerified, edad con fechaNac, teléfono con badge según estado, DNI). CTAs "Verificar" abren `TelefonoModal` (flujo 2 pasos telefono→codigo, muestra `devCode` en dev) y `DniModal` (input file + preview + submit base64).
+5. **DatosPersonalesPanel**: formulario editable — nombre, username (@handle), ubicación editables; correo, teléfono (con link a reverificar), fecha de nacimiento bloqueados con 🔒. PATCH al botón "Guardar".
+6. **PreferenciasPanel**: 7 toggles con icono + título + descripción. Cada click hace `setTimeout(500ms)` que dispara PATCH por el toggle que cambió. `role="switch"` + `aria-checked` para accesibilidad.
+7. **LimitesPanel**: 2 inputs numéricos (mensual, diario) con barras de uso coloreadas por % (verde < 70 / naranja < 90 / rojo >=90). Banner urgente rojo si ya está en auto-exclusión con fecha de fin. Botón "Activar auto-exclusión" abre modal con 3 opciones (7/30/90 días) + confirmación.
+8. **DatosYPrivacidadPanel**: Descargar datos (POST → email con URL) + Eliminar cuenta (advertencia de balance > 0 + modal con panel "Revisá tu email" tras enviar).
+9. **Ayuda y legal**: grid de 7 links (cómo jugar, FAQ, términos, privacidad, juego responsable, sobre los Lukas, acerca).
+10. **Danger zone**: cerrar sesión con `CerrarSesionBoton`.
+11. **Footer**: "Habla! v1.0 · Hecho en Perú 🇵🇪".
+
+El componente `PerfilRefreshOnUpdate` (client) escucha el evento custom `perfil:refresh` y llama `router.refresh()` — los sub-paneles lo dispatchan tras mutaciones exitosas para que los server-side reads se re-disparen. Alternativa descartada: propagar callbacks desde server → client (Next 14 no lo permite). El evento custom es el puente correcto para que los paneles no necesiten prop drilling.
+
+**Decisiones autónomas documentadas (§15):** (a) SHA-256 en vez de bcrypt para códigos efímeros (evitamos dep); (b) filesystem local para DNI uploads (evitamos S3/R2); (c) `123456` como código fijo en dev (DX); (d) Twilio REST via fetch (evitamos dep `twilio`); (e) soft delete preserva tickets y transacciones por audit; (f) exportar datos como JSON attachment inline (evitamos `archiver` + storage temporal); (g) defaults sensatos S/ 300/mes y 10 tickets/día; (h) PerfilRefreshOnUpdate event pattern para server refresh.
+
+**Tests nuevos SS7 (76 casos):** `limites.service.test.ts` (13: constantes, exports, defaults upsert, fecha futura cálculo, LimiteExcedido, tickets/canjes usan enforcement), `usuarios.service.test.ts` (17: nivel + siguiente, distinct torneos, soft-delete skip, NoAutenticado, regex username, USERNAME_EN_USO, telefonoVerif reset, token randomBytes + TTL 48h, anonimización PII completa, deletedAt timestamp, session.deleteMany, preserva tickets/transacciones, notifySolicitudEliminar, TOKEN_EXPIRADO 410, generarExportDatos con 3 findMany), `verificacion.service.test.ts` (15: código 6 dígitos, SHA-256 hash, TTL 10 min, MAX_INTENTOS 3, 123456 dev mode, Twilio API URL, notifyVerifCodigoEmail fallback, telefonoVerif true al confirmar, códigos HTTP correctos, DNI 8 dígitos, MIME allowlist, 1.5MB max, storage paths, aprobar/rechazar admin, dniVerif true al aprobar), `perfil-ui.test.ts` (17: force-dynamic, redirect sin sesión, 7 paneles integrados, Promise.all, mounted-guard, copy niveles, 4 rows de verificación, authedFetch, 2 pasos flujo teléfono, devCode en dev, FileReader DNI, 7 toggles completos, debounce 500ms, role=switch, barras de uso con colores, auto-exclusión [7,30,90], advertencia balance > 0), `ss6-ss7-conventions.test.ts` (22: authedFetch en 7 nuevos archivos, ConfirmarEliminar usa fetch directo, force-dynamic en 12 RSC/endpoints, admin rol check, Zod en 10 endpoints, equipo@hablaplay.com, fire-and-forget, PerfilRefreshOnUpdate event dispatch).
+
+**Smoke esperado:** `pnpm test` 712 passing + 7 skipped (Prisma integration) en 42 archivos; `pnpm exec tsc --noEmit` limpio; `pnpm lint` sin warnings. El smoke end-to-end del flujo (registrar → jugar → ganar → recibir email → canjear → ver en admin → marcar enviado → recibir email → editar perfil → cambiar preferencia → refresh persiste → cambiar límite → intentar exceder → ver error) requiere Docker Compose + seed + cuenta real Resend y Twilio (o dev mode) — se deja para QA del Sprint 8. Migración `20260420120000_add_perfil_premios_limites` corre limpia sobre BD vacía. Seed genera 25 premios + admin + (el usuario jugador se crea al registrarse con magic link).
 
 ---
 
@@ -1351,27 +1472,38 @@ GET   /live/matches                           → partidos EN_VIVO + top 3 previ
 GET   /realtime/token                         → JWT HS256 de 5 min para handshake de Socket.io
 ```
 
-### Premios y canjes
+### Premios y canjes (Sub-Sprint 6)
 ```
-GET   /premios?categoria=                     → catálogo con afordabilidad
-POST  /premios/:id/canjear                    → solicita canje
-GET   /canjes/mis-canjes                      → estado de mis canjes
-```
-
-### Notificaciones y límites
-```
-GET   /notificaciones/preferencias            → 7 toggles
-PATCH /notificaciones/preferencias            → actualizar toggles
-GET   /limites                                → límites + uso actual
-PATCH /limites                                → editar límites
-POST  /limites/auto-exclusion                 → activar bloqueo temporal
+GET   /premios?categoria=&soloConStock=            → catálogo + featured
+POST  /premios/:id/canjear                         → body: { direccion? } · crea canje atómico → { canje, nuevoBalance }
+GET   /canjes/mis-canjes?estado=&limit=&offset=    → canjes del usuario con premio embebido
 ```
 
-### Verificación
+### Usuario y perfil (Sub-Sprint 7)
 ```
-POST  /verificacion/telefono/enviar           → SMS con Twilio
-POST  /verificacion/telefono/confirmar        → valida código
-POST  /verificacion/dni/subir                 → imagen para review manual
+GET   /usuarios/me                                 → perfil completo + nivel + stats
+PATCH /usuarios/me                                 → body: { nombre?, username?, ubicacion?, telefono?, image? }
+POST  /usuarios/me/eliminar                        → solicita eliminación + email con token 48h
+POST  /usuarios/me/eliminar/confirmar              → body: { token } · soft delete + anonimiza PII
+POST  /usuarios/me/datos-download                  → dispara email con link a JSON attachment
+GET   /usuarios/me/datos-download/file             → attachment con JSON de todos los datos
+```
+
+### Notificaciones y límites (Sub-Sprint 7)
+```
+GET   /usuarios/notificaciones                     → 7 toggles (PreferenciasNotif)
+PATCH /usuarios/notificaciones                     → body: { notifXxx?: bool } · upsert
+GET   /usuarios/limites                            → límites + uso actual { comprasMesActual, ticketsUltimas24h }
+PATCH /usuarios/limites                            → body: { limiteMensualCompra?, limiteDiarioTickets? }
+POST  /usuarios/limites/autoexclusion              → body: { dias: 7 | 30 | 90 } · bloqueo temporal
+```
+
+### Verificación (Sub-Sprint 7)
+```
+POST  /usuarios/verificacion/telefono              → body: { telefono } · envía código 6 dígitos (SMS o email fallback) · TTL 10 min
+POST  /usuarios/verificacion/telefono/confirmar    → body: { codigo } · valida hash SHA-256 · máx 3 intentos
+GET   /usuarios/verificacion/dni                   → estado actual (NO_SUBIDO|PENDIENTE|APROBADO|RECHAZADO)
+POST  /usuarios/verificacion/dni                   → body: { dniNumero, imagenBase64, mimeType? } · upload local pendiente revisión admin
 ```
 
 ### Admin (rol ADMIN)
@@ -1521,6 +1653,30 @@ El cliente (`lib/realtime/socket-client.ts`) implementa ref-counting sobre los r
 
 - **`detectarCreditoIncompleto(torneoId)` es el único helper que decide si hay crédito faltante — prohibido inlinear la lógica en otros callers:** `lib/services/ranking.service.ts:detectarCreditoIncompleto` lee tickets + transacciones en paralelo (`Promise.all`), suma ambos, y retorna `null` en 2 casos: (a) no hay tickets con `premioLukas > 0` (torneo sin ganadores — típico de cancelaciones o pozos 0); (b) `deltaPendiente ≤ 0` (crédito completo o sobre-crédito por algún ajuste manual). Retorna `{stats: {...}}` con contexto completo cuando detecta faltante. Si aparece otro consumidor (ej. un cron de auditoría, un dashboard admin de "torneos en estado inconsistente"), usar el helper — no re-implementar las queries. Razón: cambiar la definición de "incompleto" en un solo lugar evita que el dashboard diga "OK" y el auto-reconcile diga "incompleto" (o viceversa).
 
+- **Emails transaccionales SIEMPRE pasan por un wrapper `notifyXxx` de `notificaciones.service` — prohibido llamar `enviarEmail` directo desde un caller de negocio:** los 8 wrappers del `lib/services/notificaciones.service.ts` (`notifyPremioGanado`, `notifyCanjeSolicitado`, `notifyCanjeEnviado`, `notifyCanjeEntregado`, `notifyTorneoCancelado`, `notifyVerifCodigoEmail`, `notifySolicitudEliminar`, `notifyDatosDescargados`) encapsulan el mismo contrato: (1) chequean la preferencia relevante del usuario via `debeNotificar(usuarioId, tipo)`; (2) resuelven el destinatario (skippean si `deletedAt` o sin email); (3) renderizan el template puro de `lib/emails/templates.ts`; (4) disparan `enviarEmail`. Todo envuelto en try/catch con `logger.error` — un email fallido NO rompe la acción principal. Si aparece un nuevo evento que necesita email (ej. "torneo está por cerrar", SS6+), agregar un wrapper más al service + un template más en `templates.ts`. Razón: separa las preferencias de la lógica de negocio, permite apagar un tipo de email sin tocar el código que lo dispara, y centraliza el dominio-verificado `hablaplay.com`.
+
+- **`PreferenciasNotif` se crea lazy con defaults la primera vez que se lee/edita — nunca asumir que existe al llamar `debeNotificar`:** `obtenerPreferencias(usuarioId)` hace un `findUnique` + `create con defaults` si no existe, devuelve los valores siempre. `debeNotificar(usuarioId, tipo)` lee directo y fallbackea a `PREFERENCIAS_DEFAULT[tipo]` si no hay fila — así no hay diferencia funcional entre "usuario con preferencias por defecto" y "usuario sin registro". Los 5 toggles `true` por default son: `notifInicioTorneo`, `notifResultados`, `notifPremios`, `notifSugerencias`, `notifCierreTorneo`. Los 2 `false` (opt-in explícito) son: `notifPromos` y `emailSemanal`. Razón: el email es parte del valor del producto (saber que ganaste); los promos son spam latente que el usuario opta-in conscientemente.
+
+- **Enforcement de límites de juego responsable vive exclusivamente en `lib/services/limites.service.ts` — callers no deben replicar la lógica:** los 4 helpers exportados son los únicos puntos donde se decide si una acción está permitida. `verificarLimiteInscripcion({tx?, usuarioId, entradaLukas})` se llama desde `tickets.service.crear()` ANTES del descuento de Lukas — chequea auto-exclusión + límite diario (`cuenta+1 > limite`). `verificarLimiteCanje({usuarioId, tx?})` desde `canjes.service.crearCanje()` — solo chequea auto-exclusión (los canjes no tienen límite cuantitativo propio). `verificarLimiteCompra({usuarioId, montoLukas, tx?})` queda exportado listo para Sub-Sprint 2 (pagos Culqi) — chequea auto-exclusión + suma `TransaccionLukas tipo=COMPRA` del mes vs `limiteMensualCompra`. `bloquearSiAutoExcluido(usuarioId, tx?)` es el helper de menor nivel que los 3 anteriores usan — si `autoExclusionHasta` existe y es futura, lanza `LimiteExcedido` con meta. Si aparece un nuevo punto de consumo de Lukas (ej. "entrada premium al chat exclusivo del torneo"), debe llamar al helper existente o uno nuevo en el service — prohibido duplicar las queries de conteo o la lógica de auto-exclusión en otros archivos. Test `limites.service.test.ts` verifica que los 4 helpers están exportados y que tickets/canjes los invocan. Razón: los límites protegen al usuario (juego responsable); un helper olvidado es un vector legal y ético.
+
+- **Auto-exclusión solo acepta duraciones 7, 30 o 90 días — constante `AUTOEXCLUSION_DIAS_VALIDOS` es la fuente de verdad:** tanto el service (`activarAutoExclusion(usuarioId, dias)`) como el endpoint Zod (`z.union([z.literal(7), z.literal(30), z.literal(90)])`) como el modal de `/perfil` (array literal `[7, 30, 90]`) deben usar las mismas 3 opciones. Valores arbitrarios se rechazan con `LimiteExcedido`. Razón: los 3 escalones son los estándar del juego responsable en la industria (cooling off de 1 semana, corte de mes, pausa de trimestre); agregar "1 día" o "1 año" podría ser peligroso en ambos sentidos (muy corto para el propósito psicológico, o demasiado permanente sin reflexión previa).
+
+- **Código de verificación de teléfono: 6 dígitos, TTL 10 min, SHA-256 hash, máximo 3 intentos:** constantes en `verificacion.service.ts`. El código se almacena hasheado (`crypto.createHash("sha256").update(codigo).digest("hex")`) — nunca en plaintext. La decisión de no usar bcrypt es consciente: códigos efímeros de 6 dígitos con TTL 10 min y 3 intentos máximo no justifican el costo computacional de bcrypt; SHA-256 ofrece la latencia suficiente para hacer inviable fuerza bruta. En modo dev (sin Twilio configurado), el código fijo es `123456` — facilita el smoke local. Cuando Twilio está configurado (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER), el service llama a Twilio REST API con fetch directo, sin agregar la dep `twilio@*`. Si Twilio falla o no está configurado en prod, fallback: dispara `notifyVerifCodigoEmail` para que el código llegue por email. Razón: robustez + evitar deps.
+
+- **Upload de DNI vive en filesystem local bajo `apps/web/public/uploads/dni/<hex32>.{jpg|png}` — decisión MVP documentada en §15:** alternativas descartadas: S3 (`@aws-sdk/client-s3`), R2 (misma dep + credenciales Cloudflare), upload services externos. Para Railway con 1 réplica, filesystem es suficiente — los archivos se sirven directo como estáticos de Next.js. Validaciones: DNI peruano 8 dígitos, MIME allowlist (`image/jpeg|jpg|png`), máx 1.5MB. El `VerificacionDni.estado` transiciona PENDIENTE → APROBADO (admin marca) → `Usuario.dniVerif=true` o PENDIENTE → RECHAZADO con motivo (usuario puede re-subir). Cuando se escale a multi-réplica, migrar a R2 con storage compartido — el helper `getUploadDir()` de `verificacion.service.ts` es el único punto que toca path local; refactorizarlo a un adapter es trivial.
+
+- **Eliminar cuenta es soft delete + anonimización explícita — TICKETS Y TRANSACCIONES NO SE BORRAN:** `confirmarEliminarCuenta(token)` en `prisma.$transaction` hace (a) marca `SolicitudEliminacion.confirmadaEn`; (b) actualiza `Usuario` anonimizando PII — `nombre="Usuario eliminado"`, `email=deleted-<id8>-<timestamp>@deleted.habla.local` (único para no colisionar, dominio inválido por diseño), `username/telefono/ubicacion/image=null`, `deletedAt=new Date()`; (c) `session.deleteMany` fuerza logout en todos los dispositivos. **Preserva:** tickets (integridad de torneos), transacciones (audit de premios pagados), canjes (audit de premios entregados). **Razón:** un jugador que ganó un torneo y se elimina no puede "desaparecer" retroactivamente del ranking — el torneo ya pagó su premio y la integridad del audit financiero lo requiere. El `deletedAt` se consulta al intentar leer el perfil (`NoAutenticado`) y al armar destinatarios de emails (`obtenerDestinatario` retorna null). El token de confirmación tiene TTL 48h; tras confirmar, una segunda llamada al mismo token lanza `YA_CONFIRMADO 409`.
+
+- **Tienda: canjes requieren chequeo de dirección SOLO si `premio.requiereDireccion=true`:** el campo por premio (gift cards digitales y experiencias lo tienen false; camisetas y tech lo tienen true) controla la UI (el modal de canje muestra formulario de dirección solo cuando corresponde) y la validación del service (`crearCanje` lanza `ValidacionFallida` si falta dirección completa en un premio físico). La dirección se persiste como JSON en `Canje.direccion` para que el admin la vea tal cual en el panel sin necesidad de un model separado. Razón: flexibilidad — mañana un premio podría requerir campos extra (talle de camiseta, preferencia de color) sin migración.
+
+- **Distribución de premios canjeados fire-and-forget: el email va después del commit, no dentro de la transacción:** `crearCanje` y `actualizarEstadoAdmin` siempre disparan `void notifyXxx(...)` DESPUÉS de que `prisma.$transaction` retorne. Razón: si la transacción falla y hace rollback, NO se envía email — la UX es coherente con lo que quedó en BD. Si el email falla después del commit, el canje queda creado y el usuario se entera la próxima vez que entre a /perfil — preferimos un email perdido a un email duplicado. El patrón aplica también a la parte de `finalizarTorneo` que despacha `notifyPremioGanado` tras el commit del crédito.
+
+- **Máquina de estados de canjes: las transiciones legales son un `Record<EstadoCanje, EstadoCanje[]>` — prohibido hacer transiciones inline sin consultar la constante:** `canjes.service.ts:TRANSICIONES` documenta explícitamente: `PENDIENTE → [PROCESANDO, CANCELADO]`, `PROCESANDO → [ENVIADO, CANCELADO]`, `ENVIADO → [ENTREGADO, CANCELADO]`, `ENTREGADO → []` (terminal), `CANCELADO → []` (terminal). Cualquier transición que no esté en la lista lanza `LimiteExcedido` con meta `{desde, hacia, permitidas}`. Cancelación es la única transición destructiva (reembolsa Lukas + restituye stock + crea REEMBOLSO). Razón: la máquina debe ser auditable desde un solo punto; un admin que intenta "saltarse" directo de PENDIENTE a ENTREGADO debe recibir un error — el step PROCESANDO es útil para que el admin interno sepa qué está "en cola para despacho" vs "aún sin tocar".
+
+- **Tras mutaciones de perfil (verificar teléfono, subir DNI, editar datos) los client components dispatchean `new Event("perfil:refresh")` para que el server-side se re-consulte:** `PerfilRefreshOnUpdate.tsx` es un Client Component montado en la page `/perfil` que escucha el evento y llama `router.refresh()`. Los sub-paneles (VerificacionPanel, DatosPersonalesPanel, etc.) disparan el evento tras un PATCH/POST exitoso. Razón: Next 14 no permite pasar callbacks desde server page → client component; el evento custom es el puente idiomático. Si un nuevo panel muta datos y necesita refresh, debe dispatchear el mismo evento — prohibido duplicar el patrón con otros nombres.
+
+- **Balance de Lukas tras canje propagado vía `setBalance(json.data.nuevoBalance)` del `useLukasStore`:** el endpoint `POST /premios/:id/canjear` devuelve `{canje, nuevoBalance}` — el `CanjearModal` llama `setBalance` post-éxito. Lo mismo aplica a la cancelación de canje por admin (reembolso) — aunque no haya UI client-side para admin mutando el balance del usuario, el próximo request del usuario al session callback verá el balance actualizado (NextAuth `obtenerBalance` lee de BD). Razón: continuación de la convención §14 del Hotfix #4 Bug #7; el store es la única fuente de verdad cross-página.
+
 ---
 
 ## 15. RIESGOS Y DECISIONES CLAVE
@@ -1584,6 +1740,32 @@ El cliente (`lib/realtime/socket-client.ts`) implementa ref-counting sobre los r
 - **Hotfix #4 19 Abr — Switcher de `/live-match` split + sección de "Partidos finalizados" (Bug #10):** el switcher superior mezclaba partidos EN_VIVO con FINALIZADOS en la misma fila de tabs — el PO pidió separarlos para claridad. Decisión: el switcher pasa a mostrar solo EN_VIVO; los FINALIZADOS (últimas 24h) viven en una nueva sección `<LiveFinalizedSection>` abajo del contenido en vivo, con grid responsive de cards (2-3 cols desktop, 1 mobile). Cada card de finalizado muestra score final, equipos con colores hash, liga + hora Lima, pozo, ganador + premio si ya se distribuyó, y linkea al mismo `/live-match?torneoId=<id>` que rendera el hero en modo post-partido. Se agregó `obtenerFinalizedMatches({sinceHours, limit})` al service; la page hace ambos fetches en paralelo (live + finalizados). La sección de finalizados NO se filtra por liga por decisión del PO — si el caso de uso crece, se puede agregar su propio filter-chips row en el futuro. Alternativa descartada: mantener la mezcla con un separador visual dentro del switcher — seguía siendo un único scroll horizontal y no ayudaba a la jerarquía.
 
 - **Hotfix #4 19 Abr — Filter chips por liga en `/live-match` (Bug #11):** en días pesados (Mundial, fecha doble de ligas) el switcher llegaba a 6+ tabs y el usuario scrolleaba horizontalmente buscando su partido. Decisión: agregar filter chips por liga arriba del switcher, mismo pattern que `/matches` (primitivo `Chip` + estado en `?liga=<slug>` URL). La lista es dinámica — solo aparecen chips para ligas con ≥1 partido EN_VIVO ahora (derivadas server-side con el nuevo `ligaToSlug` inverso de `LIGA_SLUGS`). Chip "Todas" default. Al seleccionar una liga el switcher filtra (la sección de finalizados NO); si el `?torneoId` activo no pertenece a la liga filtrada, se auto-selecciona el primer torneo visible. El hook nuevo `useLigaFilter` maneja solo el eje liga — paralelo a `useMatchesFilters` de /matches que tiene liga + día. Alternativa descartada: reutilizar `useMatchesFilters` directamente en /live-match — arrastra el eje `dia` que no aplica a partidos en vivo; mantener hooks separados hasta que aparezca un caso fuerte de consolidación evita acoplar prematuramente. Deep-linking con `?liga=` preserva compartibilidad con `?torneoId=`.
+
+- **Sub-Sprint 6 20 Abr — Templates de email como HTML strings, NO React Email:** evaluamos `@react-email/components` + `resend@*` pero agregaba 2 deps pesadas (React Email renderiza a HTML en build-time; requiere también `@react-email/render`). Opté por escribir `enviarEmail(payload)` con fetch directo a `https://api.resend.com/emails` (API pública, auth Bearer). Templates como funciones puras `(input) => {subject, html, text}` con helper `wrapEmail(titulo, bodyHtml)` para layout común. Escape XSS explícito en `escapeHtml(s)`. Hex hardcodeados permitidos en `lib/emails/templates.ts` (§14 la regla es para JSX). Ventajas: (a) cero deps nuevas; (b) templates en < 200 líneas totales; (c) fácil de evolucionar sin build-step extra. Trade-off aceptado: sin JSX los templates son menos cómodos de leer; si en el futuro agregamos >10 templates nuevos, migrar a React Email vale la dep.
+
+- **Sub-Sprint 6 20 Abr — Seed de 25 premios con 5 categorías balanceadas:** decisión autónoma sobre qué productos incluir. 5 ENTRADA (estadios peruanos), 5 CAMISETA (selección + 3 grandes de Perú + 1 firmada LIMITADO), 6 GIFT (Plaza Vea/Falabella/Netflix/Spotify — las más universales), 6 TECH (audífonos + parlante + cargadores + power bank + smartwatch + teclado), 3 EXPERIENCIA (cena La Mar + clase entrenador + tour Estadio). Precios con margen ~30% sobre valor referencia en soles (campo interno `valorSoles`, no visible al jugador). Alternativa descartada: generar 50+ premios para dar "catálogo lleno" — sobra en MVP, conviene pocos y deseables. Imágenes: emoji fallback (`🏟️`, `👕`, `🎧`) — evitamos pipeline de CDN/upload de imágenes reales hasta post-MVP; en el catálogo se ve el emoji gigante sobre fondo subtle en cada card.
+
+- **Sub-Sprint 6 20 Abr — Máquina de estados de canjes con cancelación reembolsable:** documentada como constante `TRANSICIONES` en `canjes.service.ts`. PENDIENTE → PROCESANDO → ENVIADO → ENTREGADO, con CANCELADO accesible desde cualquier estado previo a ENTREGADO. La cancelación reembolsa Lukas + restituye stock + crea `TransaccionLukas REEMBOLSO` en `prisma.$transaction`. Alternativa descartada: "una vez ENVIADO, no se puede cancelar sin devolución física primero" — agrega complejidad admin innecesaria en MVP. El admin puede (y debe) gestionar la devolución física fuera del sistema y luego marcar CANCELADO para reembolsar al usuario.
+
+- **Sub-Sprint 6 20 Abr — Emails fire-and-forget DESPUÉS del commit:** tras `prisma.$transaction` retorne, los wrappers `notifyXxx` se disparan con `void` — no bloquean la respuesta HTTP. Si el email falla, la transacción ya commiteó, el usuario ve el resultado en UI, y el logger captura el error. Preferimos un email perdido a bloquear la UX o hacer rollback por un fallo de red a Resend. Alternativa descartada: encolar emails en Redis con retry exponencial — overkill para MVP; cuando tengamos >1k emails/día evaluamos BullMQ o similar.
+
+- **Sub-Sprint 7 20 Abr — SHA-256 en vez de bcrypt para códigos de verificación efímeros:** `crypto.createHash("sha256").update(codigo).digest("hex")` es suficiente para códigos 6 dígitos con TTL 10 min y máx 3 intentos. Bcrypt agregaría latencia de ~50ms por operación sin beneficio real (el espacio de claves es 900000, el TTL de 10 min y el lockout post-3-intentos hacen inviable la fuerza bruta). Alternativa descartada: bcrypt — innecesario + agrega dep. Para passwords permanentes usaríamos bcrypt; para tokens efímeros SHA-256 es el estándar.
+
+- **Sub-Sprint 7 20 Abr — Twilio REST API vía fetch directo, sin dep `twilio@*`:** el SDK oficial de Twilio pesa ~2MB con deps transitivas (axios, etc.). Para el único caso de uso (POST a `/2010-04-01/Accounts/<SID>/Messages.json` con auth Basic base64), fetch directo en ~10 líneas es equivalente. Alternativa descartada: agregar `twilio` al package.json — pesada por lo que usamos. Si en el futuro usamos SMS bidireccional, voice calls, o WhatsApp Business API, la dep se justifica. Fallback si Twilio no está configurado: `notifyVerifCodigoEmail` dispara el código por email (permite smoke local + protección contra Twilio down en prod).
+
+- **Sub-Sprint 7 20 Abr — Código fijo `123456` en modo dev (sin Twilio):** decisión de DX. En `NODE_ENV !== "production"` + Twilio NO configurado, el código siempre es `123456`. La respuesta del endpoint `POST /usuarios/verificacion/telefono` incluye `devCode` para que el frontend lo muestre en un banner info ("🔧 Modo dev: tu código es 123456"). Permite smoke local sin configurar Twilio ni abrir email. En prod con Twilio configurado, `devCode` queda `undefined` y nunca se expone. Alternativa descartada: random siempre + mostrar devCode — igualmente inseguro en dev, confuso por variabilidad.
+
+- **Sub-Sprint 7 20 Abr — DNI uploads en filesystem local (`apps/web/public/uploads/dni`) para MVP:** evalué S3, Cloudflare R2, uploadcare. Filesystem local en Railway con 1 réplica sirve todo lo necesario — archivos accesibles como estáticos de Next.js. Alternativa descartada: R2 o S3 — agregan dep + credenciales + refactor del helper. Cuando escale a multi-réplica, migrar a R2 con storage compartido; el helper `getUploadDir()` es el único punto que conoce la ubicación física, refactorizarlo a adapter es trivial. Límite 1.5MB + allowlist MIME (JPG/PNG) evita DoS por uploads gigantes.
+
+- **Sub-Sprint 7 20 Abr — Soft delete que preserva tickets y transacciones:** `confirmarEliminarCuenta` NO borra tickets, transacciones ni canjes. Solo anonimiza PII en `Usuario` + marca `deletedAt`. Razón regulatoria: los torneos ya finalizados pagaron premios; borrar al ganador rompería la integridad del audit. Razón técnica: cascade delete en `Usuario` llevaría a borrar todos los tickets del torneo (potencialmente contaminando puntos de otros usuarios si hay lookups). Alternativa descartada: hard delete de todo — peligroso e irreversible. Con el soft delete preservamos historia para audit + el usuario no aparece más en UI pública.
+
+- **Sub-Sprint 7 20 Abr — Exportar datos como JSON attachment inline, NO ZIP:** evalué agregar `archiver@*` o `jszip@*` para hacer ZIP con múltiples JSON + instrucciones. Opté por servir un único JSON grande con `Content-Disposition: attachment; filename="habla-datos-<id>-<fecha>.json"` — el browser lo descarga como archivo. Los datos incluyen perfil, transacciones, tickets, canjes en un solo objeto. Alternativa descartada: ZIP con archivos separados + README.md — sobra en MVP; el JSON es suficientemente legible con un viewer online. Si un usuario requiere formato específico para portabilidad GDPR (CSV, por ejemplo), evaluamos en iteración futura.
+
+- **Sub-Sprint 7 20 Abr — Evento custom `perfil:refresh` para gatillar `router.refresh()` desde sub-paneles:** los Client Components (VerificacionPanel, DatosPersonalesPanel, etc.) no pueden invocar directamente un re-render del Server Component padre (`/perfil/page.tsx`). En vez de prop drilling un callback desde el server page (Next 14 no lo permite), dispatchean `new Event("perfil:refresh")` tras mutaciones exitosas. El componente `PerfilRefreshOnUpdate` (client, montado en la page) escucha el evento y llama `router.refresh()`. Alternativa descartada: estado local optimista en cada panel — multiplica complejidad y puede desviar del server-side truth. El pattern del evento custom es idiomático y centraliza la lógica de refresh.
+
+- **Sub-Sprint 7 20 Abr — Defaults de límites 300 S/mes compra, 10 tickets/día:** documentados en §6 de CLAUDE.md desde el inicio del MVP. 300 S/mes corresponde al promedio de consumo de entretenimiento en hogares peruanos clase media; 10 tickets/día son suficientes para que un usuario entusiasta diversifique sus predicciones sin volverse compulsivo. Alternativa descartada: arrancar sin defaults (el usuario elige) — el opt-out por silencio es mal pattern de juego responsable; defaults conservadores protegen al usuario. Alternativa descartada: límites más bajos (100 S/mes, 3 tickets/día) — innecesariamente restrictivos para MVP, el usuario siempre puede subirlos en /perfil.
+
+- **Sub-Sprint 7 20 Abr — Auto-exclusión solo 7/30/90 días, SIN opción "forever":** opción "bloqueo permanente" sería contradictoria con el pattern de auto-exclusión (cooling-off → reconsideración). Para eliminación definitiva existe el flujo separado "Eliminar cuenta". Los 3 escalones son estándar del juego responsable en la industria europea/australiana y replican bien el MVP peruano.
 
 ---
 
