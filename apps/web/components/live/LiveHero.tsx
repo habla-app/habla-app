@@ -3,17 +3,16 @@
 // Replica `.live-hero` del mockup.
 //
 // Bug #9: el minuto ya no se renderiza como número crudo (con fallback
-// literal "?" cuando era null). Ahora recibe `minutoLabel` listo para
-// mostrar — el mapper `formatMinutoLabel` del backend traduce status
-// codes de api-football (HT, ET, FT, PEN, etc.) a labels legibles.
-// Si `minutoLabel` llega null (ej. antes del primer WS, cache stale),
-// mostramos "—" — nunca "?".
+// literal "?" cuando era null). El hook `useMinutoEnVivo` devuelve un
+// string renderizable con fallback "—" cuando no hay suficientes datos
+// — nunca "?".
 //
-// Hotfix #8 Bug #22: además del label server-rendered, aceptamos
-// `statusShort` + `elapsed` + `snapshotUpdatedAt` para que el hook
-// `useMinutoEnVivo` corra un reloj local que avance segundo a segundo
-// en 1H/2H/ET entre ticks del poller (30s). El `minutoLabel` queda
-// como fallback para SSR y estados fijos (HT/FT/PEN/...).
+// Hotfix #8 Bug #22 (refactor simplificado post-feedback del PO): el
+// reloj se ancla a `Partido.fechaInicio` (persistido en BD, disponible
+// desde el primer render) en vez de `snapshotUpdatedAt` del cache
+// in-memory. Así el minuto avanza aunque el poller no haya escrito
+// todavía al cache. El `elapsed` del server actúa como ancla solo
+// para 2H/ET (donde el descanso variable rompe la heurística kickoff).
 
 import { useMinutoEnVivo } from "@/hooks/useMinutoEnVivo";
 
@@ -25,18 +24,15 @@ interface LiveHeroProps {
   equipoVisita: string;
   golesLocal: number;
   golesVisita: number;
-  /** Label ya renderizado ("23'", "ENT", "FIN", etc.). Si es null,
-   *  mostramos "—". El hook useMinutoEnVivo lo usa como fallback. */
-  minutoLabel: string | null;
-  /** Hotfix #8 Bug #22: `fixture.status.short` del poller. Habilita el
-   *  reloj local cuando es 1H/2H/ET. */
+  /** Hotfix #8 Bug #22: kickoff programado del partido (ISO string o Date).
+   *  Ancla primaria del reloj local en 1H. */
+  fechaInicio: string | Date;
+  /** Hotfix #8 Bug #22: `fixture.status.short` del poller. Null hasta que
+   *  el cache tenga datos — el hook usa heurística basada en fechaInicio
+   *  mientras tanto. */
   statusShort: string | null;
-  /** Hotfix #8 Bug #22: minuto anclado al snapshot del server. */
+  /** Hotfix #8 Bug #22: minuto crudo del server. Ancla para 2H/ET. */
   elapsed: number | null;
-  /** Hotfix #8 Bug #22: epoch ms del snapshot del server. Null si el
-   *  cache no tiene datos del partido — en ese caso el hook degrada
-   *  al fallbackLabel (label server-rendered). */
-  snapshotUpdatedAt: number | null;
   totalInscritos: number;
   pozoNeto: number;
   primerPremio: number;
@@ -56,23 +52,22 @@ export function LiveHero({
   equipoVisita,
   golesLocal,
   golesVisita,
-  minutoLabel,
+  fechaInicio,
   statusShort,
   elapsed,
-  snapshotUpdatedAt,
   totalInscritos,
   pozoNeto,
   primerPremio,
   ultimosEventos,
 }: LiveHeroProps) {
   const isLive = estado === "EN_VIVO";
-  // Hotfix #8 Bug #22: reloj local. En estados fijos o sin snapshot,
-  // el hook delega al fallback server-rendered.
+  // Hotfix #8 Bug #22: reloj local anclado a fechaInicio (1H) o al
+  // elapsed del server (2H/ET). En estados fijos (HT/FT/PEN/...) el
+  // hook delega al mapper `formatMinutoLabel` sin interval.
   const labelRendered = useMinutoEnVivo({
+    fechaInicio,
     statusShort,
     elapsed,
-    snapshotUpdatedAt,
-    fallbackLabel: minutoLabel,
   });
   return (
     <section className="relative mb-5 overflow-hidden rounded-lg bg-stadium p-6 text-white shadow-xl">

@@ -55,10 +55,10 @@ export async function GET(req: NextRequest, { params }: Context) {
         ...data,
         minutoLabel: liveSnap?.label ?? null,
         minutoPartido: liveSnap?.minuto ?? null,
-        // Hotfix #8 Bug #22: statusShort + snapshotUpdatedAt para que el
-        // cliente pueda correr un reloj local entre ticks del poller.
+        // Hotfix #8 Bug #22: statusShort para que el cliente pueda correr
+        // un reloj local anclado a `Partido.fechaInicio` (ya persistido
+        // en el LiveMatchTab del SSR) sin depender del cache in-memory.
         statusShort: liveSnap?.statusShort ?? null,
-        snapshotUpdatedAt: liveSnap?.updatedAt ?? null,
       },
     });
   } catch (err) {

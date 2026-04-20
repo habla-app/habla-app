@@ -1,23 +1,22 @@
 // Tests del Hotfix #8 Bug #22 — reloj local del minuto del partido.
+// Refactor simplificado (post-feedback del PO): usar `Partido.fechaInicio`
+// como ancla permanente en vez de `snapshotUpdatedAt` del cache.
 //
 // Cobertura:
-//   1. `computeElapsedLocal` puro: matriz de casos por status (avanzable
-//      vs fijo), null-inputs, cap por status, respeto al server cuando
-//      ya superó el cap.
+//   1. `computeMinutoLabel` puro: matriz de casos por status (1H con
+//      fechaInicio como ancla; 2H/ET con elapsed server + anchor; fases
+//      fijas HT/FT/PEN/NS; heurística cuando statusShort es null).
 //   2. AST sobre `useMinutoEnVivo.ts`: contrato del hook (use client,
-//      interval 1s, cleanup, reset por snapshot, fallback delegate).
-//   3. AST sobre wiring: RankingUpdatePayload incluye statusShort +
-//      snapshotUpdatedAt; endpoints REST los devuelven; LiveHero acepta
-//      las nuevas props; LiveMatchView las propaga.
-//
-// Vitest corre en env "node" sin jsdom — el hook en sí no se render-
-// tests; la lógica vive en la función pura `computeElapsedLocal`, que
-// es donde está el riesgo.
+//      interval 1s, cleanup, ref que trackea cambios de elapsed/status,
+//      exporta `computeMinutoLabel`).
+//   3. AST sobre wiring: RankingUpdatePayload SIN snapshotUpdatedAt;
+//      endpoints REST SIN snapshotUpdatedAt; LiveHero acepta fechaInicio
+//      como prop; LiveMatchView + SSR lo propagan.
 
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { computeElapsedLocal } from "../hooks/useMinutoEnVivo";
+import { computeMinutoLabel } from "../hooks/useMinutoEnVivo";
 
 const ROOT = resolve(__dirname, "..");
 
@@ -25,213 +24,280 @@ function readSrc(rel: string): string {
   return readFileSync(resolve(ROOT, rel), "utf8");
 }
 
+/** Lee un archivo stripping block y line comments para que los tests
+ *  "NO contiene X" no choquen con menciones históricas en comentarios. */
+function readSrcNoComments(rel: string): string {
+  const raw = readSrc(rel);
+  return raw
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:])\/\/.*$/gm, "$1");
+}
+
 // ---------------------------------------------------------------------------
-// computeElapsedLocal — función pura
+// computeMinutoLabel — función pura
 // ---------------------------------------------------------------------------
 
-describe("computeElapsedLocal — statuses avanzables (1H/2H/ET)", () => {
-  it("1H minuto 10 + 60s reales → minuto 11", () => {
-    const snapshotAt = 1_700_000_000_000;
-    const now = snapshotAt + 60_000; // +1 min
+describe("computeMinutoLabel — 1H ancla a fechaInicio", () => {
+  const kickoff = new Date("2026-04-19T20:00:00.000Z").getTime();
+
+  it("10 min desde kickoff, sin elapsed server → '11'", () => {
+    const now = kickoff + 10 * 60_000;
     expect(
-      computeElapsedLocal({
+      computeMinutoLabel({
+        fechaInicio: new Date(kickoff),
+        statusShort: "1H",
+        elapsed: null,
+        elapsedAnchorAt: kickoff,
+        now,
+      }),
+    ).toBe("11'");
+  });
+
+  it("10 min desde kickoff, server dice elapsed=10 → '11' (max de ambos)", () => {
+    const now = kickoff + 10 * 60_000;
+    expect(
+      computeMinutoLabel({
+        fechaInicio: new Date(kickoff),
         statusShort: "1H",
         elapsed: 10,
-        snapshotUpdatedAt: snapshotAt,
+        elapsedAnchorAt: kickoff,
         now,
       }),
-    ).toBe(11);
+    ).toBe("11'");
   });
 
-  it("1H minuto 10 + 30s reales → sigue en 10 (minutos enteros)", () => {
-    const snapshotAt = 1_700_000_000_000;
-    const now = snapshotAt + 30_000; // +30s (<1 min)
+  it("30s desde kickoff → '1' (primer minuto, clamp en 1)", () => {
+    const now = kickoff + 30_000;
     expect(
-      computeElapsedLocal({
+      computeMinutoLabel({
+        fechaInicio: new Date(kickoff),
         statusShort: "1H",
-        elapsed: 10,
-        snapshotUpdatedAt: snapshotAt,
+        elapsed: null,
+        elapsedAnchorAt: kickoff,
         now,
       }),
-    ).toBe(10);
+    ).toBe("1'");
   });
 
-  it("2H minuto 67 + 180s reales → minuto 70", () => {
-    const snapshotAt = 1_700_000_000_000;
-    const now = snapshotAt + 3 * 60_000;
+  it("10 min antes del kickoff → '1' (sin retroceder — partido aún no empezó por schedule)", () => {
+    const now = kickoff - 10 * 60_000;
     expect(
-      computeElapsedLocal({
-        statusShort: "2H",
-        elapsed: 67,
-        snapshotUpdatedAt: snapshotAt,
-        now,
-      }),
-    ).toBe(70);
-  });
-
-  it("ET minuto 95 + 60s reales → minuto 96", () => {
-    const snapshotAt = 1_700_000_000_000;
-    const now = snapshotAt + 60_000;
-    expect(
-      computeElapsedLocal({
-        statusShort: "ET",
-        elapsed: 95,
-        snapshotUpdatedAt: snapshotAt,
-        now,
-      }),
-    ).toBe(96);
-  });
-});
-
-describe("computeElapsedLocal — cap por status", () => {
-  it("1H cap en 45: minuto 44 + 10 min → 45, no 54", () => {
-    const snapshotAt = 1_700_000_000_000;
-    const now = snapshotAt + 10 * 60_000;
-    expect(
-      computeElapsedLocal({
+      computeMinutoLabel({
+        fechaInicio: new Date(kickoff),
         statusShort: "1H",
-        elapsed: 44,
-        snapshotUpdatedAt: snapshotAt,
+        elapsed: null,
+        elapsedAnchorAt: kickoff,
         now,
       }),
-    ).toBe(45);
+    ).toBe("1'");
   });
 
-  it("2H cap en 90: minuto 89 + 5 min → 90, no 94", () => {
-    const snapshotAt = 1_700_000_000_000;
-    const now = snapshotAt + 5 * 60_000;
+  it("60 min desde kickoff, pero server dice 1H → clamp en 45", () => {
+    const now = kickoff + 60 * 60_000;
     expect(
-      computeElapsedLocal({
-        statusShort: "2H",
-        elapsed: 89,
-        snapshotUpdatedAt: snapshotAt,
+      computeMinutoLabel({
+        fechaInicio: new Date(kickoff),
+        statusShort: "1H",
+        elapsed: null,
+        elapsedAnchorAt: kickoff,
         now,
       }),
-    ).toBe(90);
+    ).toBe("45'");
   });
 
-  it("1H server ya superó cap (elapsed=48 por descuento) → respeta server", () => {
-    // El server puede reportar 1H con elapsed > 45 durante el descuento
-    // del PT. No revertimos ese número.
-    const snapshotAt = 1_700_000_000_000;
-    const now = snapshotAt + 60_000;
+  it("server dice elapsed=48 en 1H (descuento largo) → respeta server sin clamp", () => {
+    const now = kickoff + 48 * 60_000;
     expect(
-      computeElapsedLocal({
+      computeMinutoLabel({
+        fechaInicio: new Date(kickoff),
         statusShort: "1H",
         elapsed: 48,
-        snapshotUpdatedAt: snapshotAt,
+        elapsedAnchorAt: now - 5_000, // hace 5s recibimos el 48
         now,
       }),
-    ).toBe(48);
+    ).toBe("48'");
   });
 
-  it("ET cap en 120: minuto 119 + 10 min → 120", () => {
-    const snapshotAt = 1_700_000_000_000;
-    const now = snapshotAt + 10 * 60_000;
+  it("fechaInicio como string ISO funciona igual que Date", () => {
+    const iso = new Date(kickoff).toISOString();
+    const now = kickoff + 15 * 60_000;
     expect(
-      computeElapsedLocal({
+      computeMinutoLabel({
+        fechaInicio: iso,
+        statusShort: "1H",
+        elapsed: null,
+        elapsedAnchorAt: kickoff,
+        now,
+      }),
+    ).toBe("16'");
+  });
+
+  it("partido arrancó tarde (fechaInicio atrasa al server): server=15, heurística=50 → 50 por max", () => {
+    // fechaInicio=14:00 pero kickoff real fue 14:35 → delta=50 pero
+    // elapsed server=15. Usamos el MAYOR de los dos, clamped a 45.
+    // En este caso la heurística (50 → clamp 45) es mayor que server (15).
+    const now = kickoff + 50 * 60_000;
+    expect(
+      computeMinutoLabel({
+        fechaInicio: new Date(kickoff),
+        statusShort: "1H",
+        elapsed: 15,
+        elapsedAnchorAt: now - 5_000,
+        now,
+      }),
+    ).toBe("45'");
+    // Nota: el resultado es 45 clamped — servidor corrige a 45 por cap.
+    // Cuando el server reporte elapsed correcto (eventualmente), el ancla
+    // se re-alinea.
+  });
+});
+
+describe("computeMinutoLabel — 2H ancla al elapsed del server", () => {
+  const kickoff = new Date("2026-04-19T20:00:00.000Z").getTime();
+
+  it("2H con elapsed=55 anclado hace 60s → '56'", () => {
+    const recibidoHace60s = Date.now() - 60_000;
+    expect(
+      computeMinutoLabel({
+        fechaInicio: new Date(kickoff),
+        statusShort: "2H",
+        elapsed: 55,
+        elapsedAnchorAt: recibidoHace60s,
+        now: Date.now(),
+      }),
+    ).toBe("56'");
+  });
+
+  it("2H con elapsed=89 + 5 min → clamp en 90", () => {
+    const recibidoHace5Min = Date.now() - 5 * 60_000;
+    expect(
+      computeMinutoLabel({
+        fechaInicio: new Date(kickoff),
+        statusShort: "2H",
+        elapsed: 89,
+        elapsedAnchorAt: recibidoHace5Min,
+        now: Date.now(),
+      }),
+    ).toBe("90'");
+  });
+
+  it("2H con elapsed=94 (descuento largo reportado por server) → respeta server", () => {
+    expect(
+      computeMinutoLabel({
+        fechaInicio: new Date(kickoff),
+        statusShort: "2H",
+        elapsed: 94,
+        elapsedAnchorAt: Date.now() - 5_000,
+        now: Date.now(),
+      }),
+    ).toBe("94'");
+  });
+
+  it("2H sin elapsed del server → fallback '2T'", () => {
+    expect(
+      computeMinutoLabel({
+        fechaInicio: new Date(kickoff),
+        statusShort: "2H",
+        elapsed: null,
+        elapsedAnchorAt: 0,
+        now: Date.now(),
+      }),
+    ).toBe("2T");
+  });
+});
+
+describe("computeMinutoLabel — ET (prórroga)", () => {
+  it("ET con elapsed=95 hace 60s → 'Prór. 96'", () => {
+    expect(
+      computeMinutoLabel({
+        fechaInicio: new Date("2026-04-19T20:00:00.000Z"),
         statusShort: "ET",
-        elapsed: 119,
-        snapshotUpdatedAt: snapshotAt,
-        now,
+        elapsed: 95,
+        elapsedAnchorAt: Date.now() - 60_000,
+        now: Date.now(),
       }),
-    ).toBe(120);
+    ).toBe("Prór. 96'");
+  });
+
+  it("ET sin elapsed → 'Prórroga'", () => {
+    expect(
+      computeMinutoLabel({
+        fechaInicio: new Date("2026-04-19T20:00:00.000Z"),
+        statusShort: "ET",
+        elapsed: null,
+        elapsedAnchorAt: 0,
+        now: Date.now(),
+      }),
+    ).toBe("Prórroga");
   });
 });
 
-describe("computeElapsedLocal — statuses fijos (HT/FT/PEN/NS/...)", () => {
-  it("HT → elapsed crudo (no avanza)", () => {
-    const snapshotAt = 1_700_000_000_000;
-    const now = snapshotAt + 10 * 60_000;
-    expect(
-      computeElapsedLocal({
-        statusShort: "HT",
-        elapsed: 45,
-        snapshotUpdatedAt: snapshotAt,
-        now,
-      }),
-    ).toBe(45);
-  });
+describe("computeMinutoLabel — estados fijos (sin interval)", () => {
+  const kickoff = new Date("2026-04-19T20:00:00.000Z").getTime();
+  const base = {
+    fechaInicio: new Date(kickoff),
+    elapsed: null,
+    elapsedAnchorAt: 0,
+    now: Date.now(),
+  };
 
-  it("FT → elapsed crudo", () => {
-    expect(
-      computeElapsedLocal({
-        statusShort: "FT",
-        elapsed: 90,
-        snapshotUpdatedAt: 0,
-        now: 9999999,
-      }),
-    ).toBe(90);
+  it("HT → 'ENT'", () => {
+    expect(computeMinutoLabel({ ...base, statusShort: "HT" })).toBe("ENT");
   });
-
-  it("NS → elapsed crudo (null)", () => {
-    expect(
-      computeElapsedLocal({
-        statusShort: "NS",
-        elapsed: null,
-        snapshotUpdatedAt: 1,
-        now: 2,
-      }),
-    ).toBe(null);
+  it("FT → 'FIN'", () => {
+    expect(computeMinutoLabel({ ...base, statusShort: "FT" })).toBe("FIN");
   });
-
-  it("PEN → elapsed crudo", () => {
-    expect(
-      computeElapsedLocal({
-        statusShort: "PEN",
-        elapsed: 120,
-        snapshotUpdatedAt: 0,
-        now: 9999999,
-      }),
-    ).toBe(120);
+  it("AET → 'FIN (prór.)'", () => {
+    expect(computeMinutoLabel({ ...base, statusShort: "AET" })).toBe("FIN (prór.)");
+  });
+  it("PEN → 'FIN (pen.)'", () => {
+    expect(computeMinutoLabel({ ...base, statusShort: "PEN" })).toBe("FIN (pen.)");
+  });
+  it("NS → 'Por empezar'", () => {
+    expect(computeMinutoLabel({ ...base, statusShort: "NS" })).toBe("Por empezar");
+  });
+  it("SUSP → 'Suspendido'", () => {
+    expect(computeMinutoLabel({ ...base, statusShort: "SUSP" })).toBe("Suspendido");
   });
 });
 
-describe("computeElapsedLocal — casos degenerados", () => {
-  it("statusShort null → elapsed crudo", () => {
-    expect(
-      computeElapsedLocal({
-        statusShort: null,
-        elapsed: 20,
-        snapshotUpdatedAt: 0,
-        now: 9999999,
-      }),
-    ).toBe(20);
+describe("computeMinutoLabel — heurística sin statusShort (cache vacío)", () => {
+  const kickoff = new Date("2026-04-19T20:00:00.000Z").getTime();
+  const base = {
+    fechaInicio: new Date(kickoff),
+    statusShort: null,
+    elapsed: null,
+    elapsedAnchorAt: 0,
+  };
+
+  it("antes del kickoff → 'Por empezar'", () => {
+    expect(computeMinutoLabel({ ...base, now: kickoff - 5 * 60_000 })).toBe(
+      "Por empezar",
+    );
   });
 
-  it("elapsed null → null (no hay de dónde partir)", () => {
-    expect(
-      computeElapsedLocal({
-        statusShort: "1H",
-        elapsed: null,
-        snapshotUpdatedAt: 0,
-        now: 9999999,
-      }),
-    ).toBe(null);
+  it("10 min post-kickoff → '11' (estimado del 1T)", () => {
+    expect(computeMinutoLabel({ ...base, now: kickoff + 10 * 60_000 })).toBe(
+      "11'",
+    );
   });
 
-  it("snapshotUpdatedAt null → elapsed crudo (no podemos anclar)", () => {
-    expect(
-      computeElapsedLocal({
-        statusShort: "1H",
-        elapsed: 20,
-        snapshotUpdatedAt: null,
-        now: 9999999,
-      }),
-    ).toBe(20);
+  it("50 min post-kickoff → 'ENT' (estimado del HT)", () => {
+    expect(computeMinutoLabel({ ...base, now: kickoff + 50 * 60_000 })).toBe(
+      "ENT",
+    );
   });
 
-  it("now < snapshotUpdatedAt (clock skew) → no retrocede, clampa a 0 delta", () => {
-    const snapshotAt = 1_700_000_000_000;
-    const now = snapshotAt - 10_000; // 10s antes (skew)
-    expect(
-      computeElapsedLocal({
-        statusShort: "1H",
-        elapsed: 30,
-        snapshotUpdatedAt: snapshotAt,
-        now,
-      }),
-    ).toBe(30);
+  it("70 min post-kickoff → '56' (estimado del 2T, asumiendo HT de 15 min)", () => {
+    expect(computeMinutoLabel({ ...base, now: kickoff + 70 * 60_000 })).toBe(
+      "56'",
+    );
+  });
+
+  it("120 min post-kickoff → '—' (fuera de rango sin confirmación server)", () => {
+    expect(computeMinutoLabel({ ...base, now: kickoff + 120 * 60_000 })).toBe(
+      "—",
+    );
   });
 });
 
@@ -239,7 +305,7 @@ describe("computeElapsedLocal — casos degenerados", () => {
 // useMinutoEnVivo — AST del hook
 // ---------------------------------------------------------------------------
 
-describe("useMinutoEnVivo — contrato", () => {
+describe("useMinutoEnVivo — contrato del hook", () => {
   const SRC = readSrc("hooks/useMinutoEnVivo.ts");
 
   it('es client component ("use client")', () => {
@@ -250,24 +316,20 @@ describe("useMinutoEnVivo — contrato", () => {
     expect(SRC).toMatch(/export\s+function\s+useMinutoEnVivo\b/);
   });
 
-  it("exporta `computeElapsedLocal` como función pura testeable", () => {
-    expect(SRC).toMatch(/export\s+function\s+computeElapsedLocal\b/);
+  it("exporta `computeMinutoLabel` como función pura testeable", () => {
+    expect(SRC).toMatch(/export\s+function\s+computeMinutoLabel\b/);
   });
 
   it("usa setInterval de 1000ms (reloj segundo a segundo)", () => {
-    expect(SRC).toMatch(/setInterval\([\s\S]*?,\s*1000\s*\)/);
+    expect(SRC).toMatch(/setInterval\([\s\S]*?,\s*1_?000\s*\)/);
   });
 
   it("limpia el interval en cleanup del useEffect", () => {
     expect(SRC).toMatch(/return\s*\(\)\s*=>\s*clearInterval\(\s*id\s*\)/);
   });
 
-  it("delega al mapper formatMinutoLabel para derivar el string", () => {
+  it("delega al mapper formatMinutoLabel para estados fijos", () => {
     expect(SRC).toMatch(/formatMinutoLabel\(/);
-  });
-
-  it("usa renderMinutoLabel como fallback para labels null", () => {
-    expect(SRC).toMatch(/renderMinutoLabel\(/);
   });
 
   it("los statuses avanzables son 1H, 2H y ET", () => {
@@ -284,11 +346,19 @@ describe("useMinutoEnVivo — contrato", () => {
     expect(SRC).toMatch(/ET\s*:\s*120/);
   });
 
-  it("la dependencia del effect incluye snapshotUpdatedAt (reset por snapshot nuevo)", () => {
-    // Sin snapshotUpdatedAt en deps, el reloj no se re-ancla al llegar
-    // un snapshot nuevo del poller.
-    expect(SRC).toMatch(
-      /\[\s*statusShort\s*,\s*elapsed\s*,\s*snapshotUpdatedAt\s*,\s*esAvanzable\s*\]/,
+  it("usa useRef para trackear el ancla del elapsed (resetea al cambiar elapsed/status)", () => {
+    expect(SRC).toMatch(/useRef/);
+    expect(SRC).toMatch(/elapsedAnchorAt/);
+    expect(SRC).toMatch(/prevElapsedRef/);
+    expect(SRC).toMatch(/prevStatusRef/);
+  });
+
+  it("acepta fechaInicio como ancla primaria (no snapshotUpdatedAt)", () => {
+    expect(SRC).toMatch(/fechaInicio\s*:\s*string\s*\|\s*Date/);
+    // snapshotUpdatedAt solo puede aparecer en comentarios históricos,
+    // no como símbolo activo.
+    expect(readSrcNoComments("hooks/useMinutoEnVivo.ts")).not.toMatch(
+      /snapshotUpdatedAt/,
     );
   });
 });
@@ -297,59 +367,63 @@ describe("useMinutoEnVivo — contrato", () => {
 // Wiring — payload + endpoints + LiveHero
 // ---------------------------------------------------------------------------
 
-describe("RankingUpdatePayload — nuevos campos (Hotfix #8 Bug #22)", () => {
+describe("RankingUpdatePayload — statusShort sí, snapshotUpdatedAt NO (simplificación)", () => {
   const SRC = readSrc("lib/realtime/events.ts");
 
   it("incluye `statusShort: string | null`", () => {
     expect(SRC).toMatch(/statusShort\s*:\s*string\s*\|\s*null/);
   });
 
-  it("incluye `snapshotUpdatedAt: number | null`", () => {
-    expect(SRC).toMatch(/snapshotUpdatedAt\s*:\s*number\s*\|\s*null/);
+  it("NO incluye snapshotUpdatedAt (refactor simplificado)", () => {
+    expect(SRC).not.toMatch(/snapshotUpdatedAt/);
   });
 });
 
-describe("emitirRankingUpdate — propaga statusShort + snapshotUpdatedAt", () => {
+describe("emitirRankingUpdate — propaga statusShort desde el cache", () => {
   const SRC = readSrc("lib/realtime/emitters.ts");
 
   it("lee statusShort del snapshot del cache", () => {
-    // Derivado como `const statusShort = snapshot?.statusShort ?? null`.
     expect(SRC).toMatch(/statusShort\s*=\s*snapshot\?\.statusShort/);
   });
 
-  it("lee updatedAt del snapshot del cache", () => {
-    // Derivado como `const snapshotUpdatedAt = snapshot?.updatedAt ?? null`.
-    expect(SRC).toMatch(/snapshotUpdatedAt\s*=\s*snapshot\?\.updatedAt/);
+  it("NO lee snapshotUpdatedAt (eliminado)", () => {
+    expect(SRC).not.toMatch(/snapshotUpdatedAt/);
   });
 
-  it("incluye ambos en el payload emitido", () => {
+  it("incluye statusShort en el payload emitido", () => {
     expect(SRC).toMatch(/statusShort\s*,/);
-    expect(SRC).toMatch(/snapshotUpdatedAt\s*,/);
   });
 });
 
-describe("GET /api/v1/torneos/:id/ranking — expone statusShort + snapshotUpdatedAt", () => {
+describe("GET /api/v1/torneos/:id/ranking — expone statusShort", () => {
   const SRC = readSrc("app/api/v1/torneos/[id]/ranking/route.ts");
 
   it("agrega statusShort al response", () => {
     expect(SRC).toMatch(/statusShort\s*:/);
   });
 
-  it("agrega snapshotUpdatedAt al response", () => {
-    expect(SRC).toMatch(/snapshotUpdatedAt\s*:/);
+  it("NO agrega snapshotUpdatedAt (eliminado)", () => {
+    expect(SRC).not.toMatch(/snapshotUpdatedAt/);
   });
 });
 
-describe("GET /api/v1/live/matches — expone statusShort + snapshotUpdatedAt", () => {
+describe("GET /api/v1/live/matches — expone statusShort + fechaInicio", () => {
   const SRC = readSrc("app/api/v1/live/matches/route.ts");
 
-  it("incluye ambos en el payload del partido", () => {
+  it("incluye statusShort en el payload del partido", () => {
     expect(SRC).toMatch(/statusShort\s*:/);
-    expect(SRC).toMatch(/snapshotUpdatedAt\s*:/);
+  });
+
+  it("incluye fechaInicio serializada (ISO) para el reloj local", () => {
+    expect(SRC).toMatch(/fechaInicio\s*:\s*p\.fechaInicio\.toISOString\(\)/);
+  });
+
+  it("NO incluye snapshotUpdatedAt", () => {
+    expect(SRC).not.toMatch(/snapshotUpdatedAt/);
   });
 });
 
-describe("LiveHero — consume useMinutoEnVivo en vez de renderMinutoLabel directo", () => {
+describe("LiveHero — consume useMinutoEnVivo con fechaInicio", () => {
   const SRC = readSrc("components/live/LiveHero.tsx");
 
   it('es client component ("use client")', () => {
@@ -362,20 +436,25 @@ describe("LiveHero — consume useMinutoEnVivo en vez de renderMinutoLabel direc
     );
   });
 
-  it("acepta props statusShort + elapsed + snapshotUpdatedAt", () => {
-    expect(SRC).toMatch(/statusShort\s*:\s*string\s*\|\s*null/);
-    expect(SRC).toMatch(/elapsed\s*:\s*number\s*\|\s*null/);
-    expect(SRC).toMatch(/snapshotUpdatedAt\s*:\s*number\s*\|\s*null/);
+  it("acepta prop fechaInicio (ancla del reloj)", () => {
+    expect(SRC).toMatch(/fechaInicio\s*:\s*string\s*\|\s*Date/);
   });
 
-  it("invoca useMinutoEnVivo con los 4 campos", () => {
-    expect(SRC).toMatch(
-      /useMinutoEnVivo\(\s*\{[\s\S]*?statusShort[\s\S]*?elapsed[\s\S]*?snapshotUpdatedAt[\s\S]*?fallbackLabel[\s\S]*?\}\s*\)/,
+  it("acepta props statusShort + elapsed", () => {
+    expect(SRC).toMatch(/statusShort\s*:\s*string\s*\|\s*null/);
+    expect(SRC).toMatch(/elapsed\s*:\s*number\s*\|\s*null/);
+  });
+
+  it("NO acepta snapshotUpdatedAt (eliminado — solo permitido en comentarios)", () => {
+    expect(readSrcNoComments("components/live/LiveHero.tsx")).not.toMatch(
+      /snapshotUpdatedAt/,
     );
   });
 
-  it("ya NO llama renderMinutoLabel directo (el hook lo resuelve)", () => {
-    expect(SRC).not.toMatch(/renderMinutoLabel\(/);
+  it("invoca useMinutoEnVivo con los 3 campos {fechaInicio, statusShort, elapsed}", () => {
+    expect(SRC).toMatch(
+      /useMinutoEnVivo\(\s*\{[\s\S]*?fechaInicio[\s\S]*?statusShort[\s\S]*?elapsed[\s\S]*?\}\s*\)/,
+    );
   });
 
   it("preserva data-testid='live-minute-label' (no regresión del Bug #9)", () => {
@@ -383,55 +462,61 @@ describe("LiveHero — consume useMinutoEnVivo en vez de renderMinutoLabel direc
   });
 });
 
-describe("LiveMatchView — propaga statusShort/elapsed/snapshotUpdatedAt al LiveHero", () => {
+describe("LiveMatchView — propaga fechaInicio al LiveHero", () => {
   const SRC = readSrc("components/live/LiveMatchView.tsx");
 
-  it("LiveMatchTab tiene los 3 nuevos campos", () => {
-    expect(SRC).toMatch(/statusShort\s*:\s*string\s*\|\s*null/);
-    expect(SRC).toMatch(/elapsed\s*:\s*number\s*\|\s*null/);
-    expect(SRC).toMatch(/snapshotUpdatedAt\s*:\s*number\s*\|\s*null/);
+  it("LiveMatchTab declara fechaInicio: string", () => {
+    expect(SRC).toMatch(/fechaInicio\s*:\s*string/);
   });
 
-  it("pasa statusShort={live.statusShort ?? active.statusShort}", () => {
+  it("LiveMatchTab declara statusShort + elapsed", () => {
+    expect(SRC).toMatch(/statusShort\s*:\s*string\s*\|\s*null/);
+    expect(SRC).toMatch(/elapsed\s*:\s*number\s*\|\s*null/);
+  });
+
+  it("LiveMatchTab NO tiene snapshotUpdatedAt", () => {
+    expect(SRC).not.toMatch(/snapshotUpdatedAt/);
+  });
+
+  it("pasa fechaInicio={active.fechaInicio} al LiveHero", () => {
+    expect(SRC).toMatch(/fechaInicio=\{active\.fechaInicio\}/);
+  });
+
+  it("pasa statusShort con fallback SSR → WS", () => {
     expect(SRC).toMatch(/statusShort=\{live\.statusShort\s*\?\?\s*active\.statusShort\}/);
   });
 
-  it("pasa elapsed con preferencia del WS + fallback al SSR", () => {
+  it("pasa elapsed con fallback WS → SSR", () => {
     expect(SRC).toMatch(/elapsed=\{live\.minutoPartido\s*\?\?\s*active\.elapsed\}/);
   });
-
-  it("pasa snapshotUpdatedAt con el mismo patrón WS-preferido", () => {
-    expect(SRC).toMatch(
-      /snapshotUpdatedAt=\{[\s\S]*?live\.snapshotUpdatedAt\s*\?\?\s*active\.snapshotUpdatedAt[\s\S]*?\}/,
-    );
-  });
 });
 
-describe("useRankingEnVivo — expone statusShort + snapshotUpdatedAt", () => {
+describe("useRankingEnVivo — statusShort sí, snapshotUpdatedAt NO", () => {
   const SRC = readSrc("hooks/useRankingEnVivo.ts");
 
-  it("RankingSnapshot declara ambos campos", () => {
+  it("RankingSnapshot declara statusShort", () => {
     expect(SRC).toMatch(/statusShort\s*:\s*string\s*\|\s*null/);
-    expect(SRC).toMatch(/snapshotUpdatedAt\s*:\s*number\s*\|\s*null/);
   });
 
-  it("onUpdate copia del payload al state", () => {
+  it("RankingSnapshot NO declara snapshotUpdatedAt", () => {
+    expect(SRC).not.toMatch(/snapshotUpdatedAt/);
+  });
+
+  it("onUpdate copia statusShort del payload al state", () => {
     expect(SRC).toMatch(/statusShort\s*:\s*payload\.statusShort/);
-    expect(SRC).toMatch(/snapshotUpdatedAt\s*:\s*payload\.snapshotUpdatedAt/);
   });
 
-  it("applySnapshot preserva null para no perder el ancla entre polls", () => {
-    // Si el REST devuelve statusShort=null (cache stale), NO queremos
-    // borrar el valor del WS previo — preservar con ?? s.statusShort.
+  it("applySnapshot preserva statusShort null (no pisa un valor anterior)", () => {
     expect(SRC).toMatch(/statusShort\s*:\s*d\.statusShort\s*\?\?\s*s\.statusShort/);
-    expect(SRC).toMatch(
-      /snapshotUpdatedAt\s*:\s*d\.snapshotUpdatedAt\s*\?\?\s*s\.snapshotUpdatedAt/,
-    );
   });
 });
 
-describe("/live-match page.tsx — SSR rellena los tabs con el snapshot", () => {
+describe("/live-match page.tsx — SSR rellena fechaInicio + statusShort + elapsed", () => {
   const SRC = readSrc("app/(main)/live-match/page.tsx");
+
+  it("buildLiveTabs asigna fechaInicio del Partido (ISO)", () => {
+    expect(SRC).toMatch(/fechaInicio\s*:\s*p\.fechaInicio\.toISOString\(\)/);
+  });
 
   it("buildLiveTabs asigna statusShort del cache", () => {
     expect(SRC).toMatch(/statusShort\s*:\s*snap\?\.statusShort/);
@@ -441,7 +526,7 @@ describe("/live-match page.tsx — SSR rellena los tabs con el snapshot", () => 
     expect(SRC).toMatch(/elapsed\s*:\s*snap\?\.minuto/);
   });
 
-  it("buildLiveTabs asigna snapshotUpdatedAt del cache", () => {
-    expect(SRC).toMatch(/snapshotUpdatedAt\s*:\s*snap\?\.updatedAt/);
+  it("NO asigna snapshotUpdatedAt (eliminado)", () => {
+    expect(SRC).not.toMatch(/snapshotUpdatedAt/);
   });
 });

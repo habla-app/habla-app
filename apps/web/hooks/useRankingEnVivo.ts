@@ -38,10 +38,9 @@ export interface RankingSnapshot {
    *  hasta que el primer WS llegue — la UI debe mostrar "—" mientras. */
   minutoLabel: string | null;
   /** Hotfix #8 Bug #22: `fixture.status.short` del snapshot del server.
-   *  Consumido por `useMinutoEnVivo` para decidir si correr reloj local. */
+   *  Consumido por `useMinutoEnVivo` para decidir qué fase del partido
+   *  está en curso (1H/2H/HT/FT/...). */
   statusShort: string | null;
-  /** Hotfix #8 Bug #22: epoch ms en que el server capturó el snapshot. */
-  snapshotUpdatedAt: number | null;
   /** Hotfix #6: posiciones pagadas. 0 hasta que llegue el primer fetch. */
   pagados: number;
   miPosicion: MiPosicion | null;
@@ -62,7 +61,6 @@ export function useRankingEnVivo(
     minutoPartido: null,
     minutoLabel: null,
     statusShort: null,
-    snapshotUpdatedAt: null,
     pagados: 0,
     miPosicion: null,
     isLoading: true,
@@ -87,7 +85,6 @@ export function useRankingEnVivo(
       minutoLabel?: string | null;
       minutoPartido?: number | null;
       statusShort?: string | null;
-      snapshotUpdatedAt?: number | null;
       miPosicion?: {
         posicion: number;
         ticketId: string;
@@ -110,12 +107,10 @@ export function useRankingEnVivo(
         // borre el label que ya tenemos.
         minutoLabel: d.minutoLabel ?? s.minutoLabel,
         minutoPartido: d.minutoPartido ?? s.minutoPartido,
-        // Hotfix #8 Bug #22: mismo pattern de "preservar si null" para
-        // statusShort + snapshotUpdatedAt. Un snapshot nuevo del server
-        // ancla el reloj local al nuevo `updatedAt`; una respuesta sin
-        // datos no borra el ancla previa.
+        // Hotfix #8 Bug #22: preservar statusShort si llega null del REST
+        // (cache stale) — un WS previo o SSR nos dio el valor real, no
+        // queremos borrarlo por una respuesta tardía.
         statusShort: d.statusShort ?? s.statusShort,
-        snapshotUpdatedAt: d.snapshotUpdatedAt ?? s.snapshotUpdatedAt,
         miPosicion: d.miPosicion
           ? {
               posicion: d.miPosicion.posicion,
@@ -173,11 +168,11 @@ export function useRankingEnVivo(
           pozoNeto: payload.pozoNeto,
           minutoPartido: payload.minutoPartido,
           minutoLabel: payload.minutoLabel,
-          // Hotfix #8 Bug #22: statusShort + snapshotUpdatedAt del WS
-          // re-anclan el reloj local. El WS siempre trae un snapshot
-          // fresco, así que no usamos el fallback null-preserve.
+          // Hotfix #8 Bug #22: statusShort del WS pisa el valor previo
+          // (no-preserve) — el WS siempre trae un snapshot fresco del
+          // poller. El hook `useMinutoEnVivo` re-ancla el reloj cuando
+          // cambia `elapsed`/`statusShort`.
           statusShort: payload.statusShort,
-          snapshotUpdatedAt: payload.snapshotUpdatedAt,
           pagados: payload.pagados ?? s.pagados,
           lastUpdate: payload.timestamp,
         }));

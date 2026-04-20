@@ -72,8 +72,9 @@ export async function emitirRankingUpdate(
   try {
     const r = await listarRanking(torneoId, { limit: 100 });
     // Bug #9: leer label del cache si hay partidoId, sino null.
-    // Hotfix #8 Bug #22: también extraemos statusShort y updatedAt del
-    // snapshot para que el cliente pueda correr un reloj local.
+    // Hotfix #8 Bug #22: también extraemos statusShort para que el
+    // cliente sepa qué fase del partido y corra reloj local anclado
+    // a `Partido.fechaInicio` (ya persistido en BD, no depende del cache).
     const snapshot = opts.partidoId ? getLiveStatus(opts.partidoId) : null;
     const minutoPartido =
       opts.minutoPartido !== undefined
@@ -81,7 +82,6 @@ export async function emitirRankingUpdate(
         : (snapshot?.minuto ?? null);
     const minutoLabel = snapshot?.label ?? null;
     const statusShort = snapshot?.statusShort ?? null;
-    const snapshotUpdatedAt = snapshot?.updatedAt ?? null;
     const payload: RankingUpdatePayload = {
       torneoId,
       ranking: r.ranking.map((row) => ({
@@ -99,7 +99,6 @@ export async function emitirRankingUpdate(
       minutoPartido,
       minutoLabel,
       statusShort,
-      snapshotUpdatedAt,
       pagados: r.pagados,
       timestamp: Date.now(),
     };

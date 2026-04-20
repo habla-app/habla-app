@@ -50,12 +50,18 @@ export interface LiveMatchTab {
    *  "—"). Bug #9: SSR lo setea desde el cache del poller; WS lo
    *  sobrescribe en vivo (`live.minutoLabel` tiene preferencia). */
   minutoLabel: string | null;
-  /** Hotfix #8 Bug #22: snapshot del server para el reloj local del
-   *  LiveHero. Llegan del cache `live-partido-status`. Null hasta
-   *  que el poller tenga datos. */
+  /** Hotfix #8 Bug #22: `fixture.status.short` del poller. Null hasta
+   *  que el poller tenga datos del partido. El cliente lo combina con
+   *  `fechaInicio` para correr el reloj local. */
   statusShort: string | null;
+  /** Hotfix #8 Bug #22: `fixture.status.elapsed` del poller. Ancla para
+   *  el reloj local en 2H/ET (donde el descanso variable rompe la
+   *  heurística "kickoff + X min"). Null antes del primer tick. */
   elapsed: number | null;
-  snapshotUpdatedAt: number | null;
+  /** Hotfix #8 Bug #22: kickoff programado del partido (ISO string).
+   *  Persistido en BD — disponible SIEMPRE desde el primer render, aun
+   *  con cache in-memory vacío. El reloj local del 1H se ancla acá. */
+  fechaInicio: string;
 }
 
 interface InitialSnapshot {
@@ -228,12 +234,9 @@ export function LiveMatchView({
             equipoVisita={active.equipoVisita}
             golesLocal={scoreLocal}
             golesVisita={scoreVisita}
-            minutoLabel={live.minutoLabel ?? active.minutoLabel}
+            fechaInicio={active.fechaInicio}
             statusShort={live.statusShort ?? active.statusShort}
             elapsed={live.minutoPartido ?? active.elapsed}
-            snapshotUpdatedAt={
-              live.snapshotUpdatedAt ?? active.snapshotUpdatedAt
-            }
             totalInscritos={totalInscritos}
             pozoNeto={pozoNeto}
             primerPremio={premioEstimadoSinEmpate(1, totalInscritos, pozoNeto)}
