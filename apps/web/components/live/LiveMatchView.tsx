@@ -52,15 +52,20 @@ export interface LiveMatchTab {
   minutoLabel: string | null;
   /** Hotfix #8 Bug #22: `fixture.status.short` del poller. Null hasta
    *  que el poller tenga datos del partido. El cliente lo combina con
-   *  `fechaInicio` para correr el reloj local. */
+   *  `elapsed` y `elapsedAgeMs` para correr el reloj local. */
   statusShort: string | null;
-  /** Hotfix #8 Bug #22: `fixture.status.elapsed` del poller. Ancla para
-   *  el reloj local en 2H/ET (donde el descanso variable rompe la
-   *  heurística "kickoff + X min"). Null antes del primer tick. */
+  /** Hotfix #8 Bug #22: `fixture.status.elapsed` del poller. Ancla del
+   *  reloj local para 1H/2H/ET. El cliente proyecta desde este valor
+   *  sumando el tiempo transcurrido (ver `elapsedAgeMs`). */
   elapsed: number | null;
+  /** Hotfix #8 Ítem 4: edad del snapshot al momento del SSR/emit del WS.
+   *  Permite anclar `elapsedAnchorAt = Date.now() - elapsedAgeMs` para
+   *  que el reloj local proyecte correctamente aunque el cache tenga
+   *  un snap de hace varios minutos. Null si el cache no tiene datos. */
+  elapsedAgeMs: number | null;
   /** Hotfix #8 Bug #22: kickoff programado del partido (ISO string).
-   *  Persistido en BD — disponible SIEMPRE desde el primer render, aun
-   *  con cache in-memory vacío. El reloj local del 1H se ancla acá. */
+   *  Persistido en BD. Solo usado para metadata del partido (labels,
+   *  deep-linking) — el reloj local NO deriva de aquí (ver Ítem 4). */
   fechaInicio: string;
 }
 
@@ -234,9 +239,9 @@ export function LiveMatchView({
             equipoVisita={active.equipoVisita}
             golesLocal={scoreLocal}
             golesVisita={scoreVisita}
-            fechaInicio={active.fechaInicio}
             statusShort={live.statusShort ?? active.statusShort}
             elapsed={live.minutoPartido ?? active.elapsed}
+            elapsedAgeMs={live.elapsedAgeMs ?? active.elapsedAgeMs}
             totalInscritos={totalInscritos}
             pozoNeto={pozoNeto}
             primerPremio={premioEstimadoSinEmpate(1, totalInscritos, pozoNeto)}

@@ -56,11 +56,18 @@ export interface RankingUpdatePayload {
    *  Si es null, la UI debe mostrar "—". Nunca "?". */
   minutoLabel: string | null;
   /** Hotfix #8 Bug #22: `fixture.status.short` del poller. El cliente lo
-   *  usa junto con `Partido.fechaInicio` (que está en LiveMatchTab) para
-   *  correr un reloj local entre ticks del poller (30s). El `elapsed`
-   *  del server (minutoPartido) actúa como ancla para 2H/ET donde el
-   *  descanso variable rompe la heurística "kickoff + X min". */
+   *  usa junto con `elapsed` + `elapsedAgeMs` para correr un reloj local
+   *  entre ticks del poller (30s). */
   statusShort: string | null;
+  /** Hotfix #8 Ítem 4: edad (ms) del snapshot del cache al momento en que
+   *  el server emitió este payload. Permite al cliente anclar el reloj
+   *  local al tiempo REAL en que el server capturó `elapsed` (no al
+   *  momento del mount del componente). Sin esto, el cliente inicializa
+   *  `elapsedAnchorAt = Date.now()` asumiendo que el snapshot es fresco;
+   *  si en realidad es de hace 5 min, el reloj aparece desfasado hasta
+   *  que llegue el primer WS con datos frescos. Null si el server no
+   *  tiene snap. */
+  elapsedAgeMs: number | null;
   /** Hotfix #6: cantidad de posiciones pagadas (M). UI lo usa para
    *  calcular el badge "En el dinero" + copy motivacional. */
   pagados: number;

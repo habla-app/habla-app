@@ -50,15 +50,20 @@ export async function GET(req: NextRequest, { params }: Context) {
     });
     const liveSnap = torneo ? getLiveStatus(torneo.partidoId) : null;
 
+    const now = Date.now();
     return Response.json({
       data: {
         ...data,
         minutoLabel: liveSnap?.label ?? null,
         minutoPartido: liveSnap?.minuto ?? null,
-        // Hotfix #8 Bug #22: statusShort para que el cliente pueda correr
-        // un reloj local anclado a `Partido.fechaInicio` (ya persistido
-        // en el LiveMatchTab del SSR) sin depender del cache in-memory.
+        // Hotfix #8 Bug #22 + Ítem 4: statusShort + elapsedAgeMs para
+        // que el cliente ancle el reloj local al tiempo REAL en que el
+        // server capturó el `elapsed` (no al momento del mount). Evita
+        // que el hero muestre el minuto desfasado los primeros segundos
+        // cada vez que se abre la pestaña cuando el cache tiene un
+        // snapshot de hace varios minutos.
         statusShort: liveSnap?.statusShort ?? null,
+        elapsedAgeMs: liveSnap ? now - liveSnap.updatedAt : null,
       },
     });
   } catch (err) {

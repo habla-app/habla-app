@@ -26,16 +26,16 @@ const LIVE_MATCH_VIEW_SRC = readFileSync(
   "utf-8",
 );
 
-describe("LiveHero — Bug #9 + Hotfix #8 Bug #22", () => {
-  it("recibe `fechaInicio: string | Date` como ancla del reloj local", () => {
-    expect(LIVE_HERO_SRC).toMatch(/fechaInicio\s*:\s*string\s*\|\s*Date/);
+describe("LiveHero — Bug #9 + Hotfix #8 Ítems 2/3/4", () => {
+  it("recibe `elapsedAgeMs: number | null` como ancla del reloj (Ítem 4)", () => {
+    expect(LIVE_HERO_SRC).toMatch(/elapsedAgeMs\s*:\s*number\s*\|\s*null/);
   });
 
   it("recibe `statusShort: string | null` (fase del partido)", () => {
     expect(LIVE_HERO_SRC).toMatch(/statusShort\s*:\s*string\s*\|\s*null/);
   });
 
-  it("recibe `elapsed: number | null` (ancla para 2H/ET)", () => {
+  it("recibe `elapsed: number | null` (minuto crudo del server)", () => {
     expect(LIVE_HERO_SRC).toMatch(/elapsed\s*:\s*number\s*\|\s*null/);
   });
 
@@ -67,9 +67,11 @@ describe("LiveHero — Bug #9 + Hotfix #8 Bug #22", () => {
   });
 });
 
-describe("LiveMatchView — propaga inputs crudos al LiveHero", () => {
-  it("propaga `fechaInicio={...}` al LiveHero (ancla del reloj)", () => {
-    expect(LIVE_MATCH_VIEW_SRC).toMatch(/fechaInicio=\{active\.fechaInicio\}/);
+describe("LiveMatchView — propaga inputs crudos al LiveHero (Ítem 4)", () => {
+  it("propaga `elapsedAgeMs={...}` al LiveHero (ancla del reloj server-side)", () => {
+    expect(LIVE_MATCH_VIEW_SRC).toMatch(
+      /elapsedAgeMs=\{live\.elapsedAgeMs\s*\?\?\s*active\.elapsedAgeMs\}/,
+    );
   });
 
   it("propaga `statusShort={...}` al LiveHero con fallback WS→SSR", () => {
@@ -82,14 +84,18 @@ describe("LiveMatchView — propaga inputs crudos al LiveHero", () => {
     expect(LIVE_MATCH_VIEW_SRC).toMatch(/elapsed=\{live\.minutoPartido/);
   });
 
+  it("ya NO propaga `fechaInicio` al LiveHero (removida en Ítem 4)", () => {
+    expect(LIVE_MATCH_VIEW_SRC).not.toMatch(/fechaInicio=\{active\.fechaInicio\}/);
+  });
+
   it("LiveMatchTab.minutoLabel sigue tipado string | null (fallback SSR del Hotfix #4)", () => {
     expect(LIVE_MATCH_VIEW_SRC).toMatch(
       /minutoLabel\s*:\s*string\s*\|\s*null/,
     );
   });
 
-  it("LiveMatchTab.fechaInicio agregado para ancla del reloj (Hotfix #8)", () => {
-    expect(LIVE_MATCH_VIEW_SRC).toMatch(/fechaInicio\s*:\s*string/);
+  it("LiveMatchTab.elapsedAgeMs agregado (Ítem 4)", () => {
+    expect(LIVE_MATCH_VIEW_SRC).toMatch(/elapsedAgeMs\s*:\s*number\s*\|\s*null/);
   });
 });
 

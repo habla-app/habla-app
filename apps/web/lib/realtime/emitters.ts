@@ -76,12 +76,19 @@ export async function emitirRankingUpdate(
     // cliente sepa qué fase del partido y corra reloj local anclado
     // a `Partido.fechaInicio` (ya persistido en BD, no depende del cache).
     const snapshot = opts.partidoId ? getLiveStatus(opts.partidoId) : null;
+    const emitAt = Date.now();
     const minutoPartido =
       opts.minutoPartido !== undefined
         ? opts.minutoPartido
         : (snapshot?.minuto ?? null);
     const minutoLabel = snapshot?.label ?? null;
     const statusShort = snapshot?.statusShort ?? null;
+    // Hotfix #8 Ítem 4: edad del snapshot relativa al reloj del server.
+    // Calculada con el mismo `Date.now()` que escribió `updatedAt` →
+    // inmune a clock skew entre client y server. El cliente hace
+    // `elapsedAnchorAt = Date.now() - elapsedAgeMs` y proyecta correctamente
+    // aunque el snapshot tenga 5 min de antigüedad (cache no refrescado).
+    const elapsedAgeMs = snapshot ? emitAt - snapshot.updatedAt : null;
     const payload: RankingUpdatePayload = {
       torneoId,
       ranking: r.ranking.map((row) => ({
@@ -99,8 +106,9 @@ export async function emitirRankingUpdate(
       minutoPartido,
       minutoLabel,
       statusShort,
+      elapsedAgeMs,
       pagados: r.pagados,
-      timestamp: Date.now(),
+      timestamp: emitAt,
     };
     io.to(roomTorneo(torneoId)).emit("ranking:update", payload);
   } catch (err) {

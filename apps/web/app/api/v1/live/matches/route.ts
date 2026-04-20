@@ -49,10 +49,11 @@ export async function GET() {
           }
         }
         // Bug #9: adjuntamos minuto + label del cache del poller.
-        // Hotfix #8 Bug #22: incluimos statusShort + fechaInicio para el
-        // reloj local (el cliente ancla a fechaInicio en 1H y al elapsed
-        // server en 2H/ET).
+        // Hotfix #8 Bug #22 + Ítem 4: incluimos statusShort + elapsedAgeMs
+        // para que el cliente ancle el reloj local al momento REAL en que
+        // el server capturó el elapsed (y no al momento del mount).
         const liveSnap = getLiveStatus(p.id);
+        const nowMs = Date.now();
         return {
           id: p.id,
           partido: {
@@ -67,6 +68,7 @@ export async function GET() {
             minutoLabel: liveSnap?.label ?? null,
             minutoPartido: liveSnap?.minuto ?? null,
             statusShort: liveSnap?.statusShort ?? null,
+            elapsedAgeMs: liveSnap ? nowMs - liveSnap.updatedAt : null,
           },
           torneoPrincipalId: torneoPrincipal?.id ?? null,
           torneos: p.torneos.map((t) => ({

@@ -7,12 +7,12 @@
 // string renderizable con fallback "—" cuando no hay suficientes datos
 // — nunca "?".
 //
-// Hotfix #8 Bug #22 (refactor simplificado post-feedback del PO): el
-// reloj se ancla a `Partido.fechaInicio` (persistido en BD, disponible
-// desde el primer render) en vez de `snapshotUpdatedAt` del cache
-// in-memory. Así el minuto avanza aunque el poller no haya escrito
-// todavía al cache. El `elapsed` del server actúa como ancla solo
-// para 2H/ET (donde el descanso variable rompe la heurística kickoff).
+// Hotfix #8 Bug #22 + Ítem 4: el reloj se ancla al momento REAL en que
+// el server capturó `elapsed` (vía `elapsedAgeMs` calculada server-side,
+// inmune a clock skew). Antes se usaba `fechaInicio` + heurística de HT
+// de 15 min que causaba desfase constante cuando el HT real difería o
+// el partido arrancaba tarde. La prop `fechaInicio` fue removida porque
+// no aportaba valor real y la heurística hacía más daño que bien.
 
 import { useMinutoEnVivo } from "@/hooks/useMinutoEnVivo";
 
@@ -24,15 +24,14 @@ interface LiveHeroProps {
   equipoVisita: string;
   golesLocal: number;
   golesVisita: number;
-  /** Hotfix #8 Bug #22: kickoff programado del partido (ISO string o Date).
-   *  Ancla primaria del reloj local en 1H. */
-  fechaInicio: string | Date;
-  /** Hotfix #8 Bug #22: `fixture.status.short` del poller. Null hasta que
-   *  el cache tenga datos — el hook usa heurística basada en fechaInicio
-   *  mientras tanto. */
+  /** Hotfix #8 Bug #22: `fixture.status.short` del poller. Null hasta
+   *  que el cache tenga datos — el hook muestra "—" hasta entonces. */
   statusShort: string | null;
-  /** Hotfix #8 Bug #22: minuto crudo del server. Ancla para 2H/ET. */
+  /** Hotfix #8 Bug #22: `fixture.status.elapsed` crudo del server. */
   elapsed: number | null;
+  /** Hotfix #8 Ítem 4: edad del snapshot al momento del SSR/emit del WS.
+   *  Null si el cache no tenía datos — el hook muestra "—". */
+  elapsedAgeMs: number | null;
   totalInscritos: number;
   pozoNeto: number;
   primerPremio: number;
@@ -52,22 +51,22 @@ export function LiveHero({
   equipoVisita,
   golesLocal,
   golesVisita,
-  fechaInicio,
   statusShort,
   elapsed,
+  elapsedAgeMs,
   totalInscritos,
   pozoNeto,
   primerPremio,
   ultimosEventos,
 }: LiveHeroProps) {
   const isLive = estado === "EN_VIVO";
-  // Hotfix #8 Bug #22: reloj local anclado a fechaInicio (1H) o al
-  // elapsed del server (2H/ET). En estados fijos (HT/FT/PEN/...) el
-  // hook delega al mapper `formatMinutoLabel` sin interval.
+  // Hotfix #8 Bug #22 + Ítem 4: reloj local anclado al momento REAL del
+  // snapshot del server (vía elapsedAgeMs calculado server-side). Para
+  // estados fijos (HT/FT/PEN/...) el hook delega al mapper sin interval.
   const labelRendered = useMinutoEnVivo({
-    fechaInicio,
     statusShort,
     elapsed,
+    elapsedAgeMs,
   });
   return (
     <section className="relative mb-5 overflow-hidden rounded-lg bg-stadium p-6 text-white shadow-xl">
