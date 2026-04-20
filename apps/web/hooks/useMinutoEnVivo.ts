@@ -85,32 +85,33 @@ export function computeMinutoLabel(input: {
   }
 
   // Statuses avanzables: 1H, 2H, ET.
-  if (statusShort === "1H") {
-    // Preferimos `fechaInicio` como ancla: es un timestamp fijo en BD
-    // que no depende del cache. Si el API reportó elapsed > 45 (descuento
-    // largo del PT), respetamos el server (no lo clampeamos a 45).
-    if (elapsed !== null && elapsed > 45) return `${elapsed}'`;
-    const start = toEpochMs(fechaInicio);
-    const mFromKickoff = Math.floor((now - start) / 60_000) + 1;
-    // Si server reporta `elapsed`, usamos el mayor de ambas fuentes —
-    // evita retroceder el minuto local si hay clock skew o si el
-    // partido arrancó tarde (fechaInicio < kickoff real).
-    const proyectado = elapsed !== null
-      ? Math.max(elapsed, mFromKickoff)
-      : mFromKickoff;
-    return `${Math.max(1, Math.min(45, proyectado))}'`;
-  }
+  // Regla unificada: si el server reporta `elapsed`, ESE es la fuente de
+  // verdad — proyectamos localmente sumando el tiempo transcurrido desde
+  // que lo recibimos (`elapsedAnchorAt`). Si NO hay `elapsed` (primer
+  // render antes del primer tick del poller, cache vacío post-restart),
+  // caemos a `fechaInicio` como heurística solo para 1H — en 2H/ET no
+  // podemos usar fechaInicio porque el HT es variable.
+  const cap = CAP_POR_STATUS[statusShort] ?? 200;
 
-  // 2H y ET: el descanso del HT es variable, `fechaInicio` ya no alcanza.
-  // Anclamos al `elapsed` del server + delta desde cuando lo recibimos.
   if (elapsed !== null) {
+    // Server-anclado: `elapsed + delta local`. Si el server ya superó
+    // el cap (p.ej. 1H con elapsed=48 por descuento largo del PT o 2H
+    // con elapsed=94), respetamos el server tal cual.
     const delta = Math.max(0, Math.floor((now - elapsedAnchorAt) / 60_000));
-    const cap = CAP_POR_STATUS[statusShort] ?? 200;
-    const final =
-      elapsed >= cap ? elapsed : Math.min(cap, elapsed + delta);
+    const final = elapsed >= cap ? elapsed : Math.min(cap, elapsed + delta);
     return statusShort === "ET" ? `Prór. ${final}'` : `${final}'`;
   }
-  // Sin elapsed + status 2H/ET: delegar al mapper (devuelve "2T" o "Prórroga").
+
+  // Sin `elapsed` del server:
+  if (statusShort === "1H") {
+    // Heurística basada en fechaInicio mientras esperamos el primer tick
+    // del poller. Se corrige automáticamente cuando llegue `elapsed`.
+    const start = toEpochMs(fechaInicio);
+    const mFromKickoff = Math.floor((now - start) / 60_000) + 1;
+    return `${Math.max(1, Math.min(45, mFromKickoff))}'`;
+  }
+  // 2H/ET sin elapsed: no podemos derivar del kickoff (HT variable).
+  // Delegar al mapper → devuelve "2T" / "Prórroga".
   return formatMinutoLabel({ statusShort, elapsed: null });
 }
 
