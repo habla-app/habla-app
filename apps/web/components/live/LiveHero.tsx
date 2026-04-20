@@ -1,3 +1,4 @@
+"use client";
 // LiveHero — hero oscuro estilo estadio con score gigante + stats.
 // Replica `.live-hero` del mockup.
 //
@@ -7,8 +8,14 @@
 // codes de api-football (HT, ET, FT, PEN, etc.) a labels legibles.
 // Si `minutoLabel` llega null (ej. antes del primer WS, cache stale),
 // mostramos "—" — nunca "?".
+//
+// Hotfix #8 Bug #22: además del label server-rendered, aceptamos
+// `statusShort` + `elapsed` + `snapshotUpdatedAt` para que el hook
+// `useMinutoEnVivo` corra un reloj local que avance segundo a segundo
+// en 1H/2H/ET entre ticks del poller (30s). El `minutoLabel` queda
+// como fallback para SSR y estados fijos (HT/FT/PEN/...).
 
-import { renderMinutoLabel } from "@/lib/utils/minuto-label";
+import { useMinutoEnVivo } from "@/hooks/useMinutoEnVivo";
 
 interface LiveHeroProps {
   liga: string;
@@ -19,8 +26,17 @@ interface LiveHeroProps {
   golesLocal: number;
   golesVisita: number;
   /** Label ya renderizado ("23'", "ENT", "FIN", etc.). Si es null,
-   *  mostramos "—". El helper renderMinutoLabel garantiza el fallback. */
+   *  mostramos "—". El hook useMinutoEnVivo lo usa como fallback. */
   minutoLabel: string | null;
+  /** Hotfix #8 Bug #22: `fixture.status.short` del poller. Habilita el
+   *  reloj local cuando es 1H/2H/ET. */
+  statusShort: string | null;
+  /** Hotfix #8 Bug #22: minuto anclado al snapshot del server. */
+  elapsed: number | null;
+  /** Hotfix #8 Bug #22: epoch ms del snapshot del server. Null si el
+   *  cache no tiene datos del partido — en ese caso el hook degrada
+   *  al fallbackLabel (label server-rendered). */
+  snapshotUpdatedAt: number | null;
   totalInscritos: number;
   pozoNeto: number;
   primerPremio: number;
@@ -41,13 +57,23 @@ export function LiveHero({
   golesLocal,
   golesVisita,
   minutoLabel,
+  statusShort,
+  elapsed,
+  snapshotUpdatedAt,
   totalInscritos,
   pozoNeto,
   primerPremio,
   ultimosEventos,
 }: LiveHeroProps) {
   const isLive = estado === "EN_VIVO";
-  const labelRendered = renderMinutoLabel(minutoLabel);
+  // Hotfix #8 Bug #22: reloj local. En estados fijos o sin snapshot,
+  // el hook delega al fallback server-rendered.
+  const labelRendered = useMinutoEnVivo({
+    statusShort,
+    elapsed,
+    snapshotUpdatedAt,
+    fallbackLabel: minutoLabel,
+  });
   return (
     <section className="relative mb-5 overflow-hidden rounded-lg bg-stadium p-6 text-white shadow-xl">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-2">

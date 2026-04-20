@@ -268,11 +268,48 @@ export async function finalizarTorneo(
   // Idempotencia: si ya está FINALIZADO, no re-acreditamos. Esta es la
   // barrera dura contra doble crédito si el poller dispara
   // `finalizarTorneo` dos veces por reconexión o re-entrega de eventos.
+  //
+  // Hotfix #8 Bug #23: antes el early-return era incondicional. Resultado:
+  // si un torneo llegó a FINALIZADO sin crédito (ej. finalizó en prod
+  // antes del deploy del Hotfix #7, o el poller marcó FINALIZADO pero la
+  // transacción del credit falló silenciosamente), la próxima corrida
+  // del poller veía `alreadyFinalized=true` y nunca reparaba el estado.
+  // Ahora el guard verifica antes de retornar: si hay tickets con
+  // `premioLukas > 0` Y no hay TransaccionLukas PREMIO_TORNEO, el
+  // crédito está incompleto — disparamos `reconciliarTorneoFinalizado`
+  // automáticamente. Es idempotente y sólo acredita deltas > 0.
   if (preTorneo.estado === "FINALIZADO") {
-    logger.info(
-      { torneoId },
-      "finalizarTorneo: torneo ya está FINALIZADO — skip (idempotencia)",
-    );
+    const incompleto = await detectarCreditoIncompleto(torneoId);
+    if (incompleto) {
+      logger.warn(
+        { torneoId, ...incompleto.stats },
+        "finalizarTorneo: torneo FINALIZADO sin crédito completo — auto-reconciliando (Hotfix #8 Bug #23)",
+      );
+      try {
+        const rec = await reconciliarTorneoFinalizado(torneoId);
+        logger.info(
+          {
+            torneoId,
+            ticketsAjustados: rec.ajustes.length,
+            totalDeltaAcreditado: rec.totalDeltaAcreditado,
+          },
+          "finalizarTorneo: auto-reconcile completado",
+        );
+      } catch (err) {
+        // No propagamos el error: el caller (poller) no debe fallar el
+        // tick por un guard defensivo. El admin puede correr el endpoint
+        // /api/v1/admin/torneos/:id/reconciliar manualmente.
+        logger.error(
+          { err, torneoId },
+          "finalizarTorneo: auto-reconcile falló",
+        );
+      }
+    } else {
+      logger.info(
+        { torneoId },
+        "finalizarTorneo: torneo ya está FINALIZADO — skip (idempotencia)",
+      );
+    }
     return { torneoId, ganadores: [], alreadyFinalized: true };
   }
 
@@ -564,5 +601,68 @@ export async function reconciliarTorneoFinalizado(
     ajustes: result,
     totalDeltaAcreditado,
     puntosRecalculados: true,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// detectarCreditoIncompleto — Hotfix #8 Bug #23.
+//
+// Helper defensivo que `finalizarTorneo` llama al detectar un torneo ya
+// FINALIZADO. Compara lo que "debería haber" (tickets con premioLukas>0)
+// contra lo que "hay acreditado" (TransaccionLukas PREMIO_TORNEO con
+// refId=torneoId). Si la suma acreditada es estrictamente menor a la
+// suma esperada, el crédito está incompleto y disparamos reconciliación.
+//
+// Devuelve null si el crédito está completo (o si el torneo no tiene
+// ganadores — p.ej. no había pozo a distribuir). Devuelve `{ stats }`
+// con los totales calculados para que el log de WARN tenga contexto.
+//
+// Se expone como función pura que consulta BD. No corre dentro de una
+// transacción — no necesitamos atomicidad acá, solo la lectura.
+// ---------------------------------------------------------------------------
+
+export interface CreditoIncompletoStats {
+  stats: {
+    ticketsPremiados: number;
+    totalPremiosEsperado: number;
+    totalPremiosAcreditado: number;
+    deltaPendiente: number;
+  };
+}
+
+export async function detectarCreditoIncompleto(
+  torneoId: string,
+): Promise<CreditoIncompletoStats | null> {
+  const [ticketsPremiados, transacciones] = await Promise.all([
+    prisma.ticket.findMany({
+      where: { torneoId, premioLukas: { gt: 0 } },
+      select: { id: true, premioLukas: true },
+    }),
+    prisma.transaccionLukas.findMany({
+      where: { tipo: "PREMIO_TORNEO", refId: torneoId },
+      select: { monto: true },
+    }),
+  ]);
+
+  const totalPremiosEsperado = ticketsPremiados.reduce(
+    (a, t) => a + t.premioLukas,
+    0,
+  );
+  const totalPremiosAcreditado = transacciones.reduce(
+    (a, t) => a + t.monto,
+    0,
+  );
+  const deltaPendiente = totalPremiosEsperado - totalPremiosAcreditado;
+
+  if (ticketsPremiados.length === 0) return null;
+  if (deltaPendiente <= 0) return null;
+
+  return {
+    stats: {
+      ticketsPremiados: ticketsPremiados.length,
+      totalPremiosEsperado,
+      totalPremiosAcreditado,
+      deltaPendiente,
+    },
   };
 }
