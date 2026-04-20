@@ -41,6 +41,12 @@ export interface RankingSnapshot {
    *  Consumido por `useMinutoEnVivo` para decidir qué fase del partido
    *  está en curso (1H/2H/HT/FT/...). */
   statusShort: string | null;
+  /** Hotfix #8 Ítem 4: edad del snapshot al momento en que el server
+   *  armó el último payload (WS o REST). Refresca en cada update.
+   *  El hook `useMinutoEnVivo` usa `Date.now() - elapsedAgeMs` para
+   *  anclar el reloj al momento REAL de captura del server — evita el
+   *  desfase que aparecía al abrir la pestaña con cache stale. */
+  elapsedAgeMs: number | null;
   /** Hotfix #6: posiciones pagadas. 0 hasta que llegue el primer fetch. */
   pagados: number;
   miPosicion: MiPosicion | null;
@@ -61,6 +67,7 @@ export function useRankingEnVivo(
     minutoPartido: null,
     minutoLabel: null,
     statusShort: null,
+    elapsedAgeMs: null,
     pagados: 0,
     miPosicion: null,
     isLoading: true,
@@ -85,6 +92,7 @@ export function useRankingEnVivo(
       minutoLabel?: string | null;
       minutoPartido?: number | null;
       statusShort?: string | null;
+      elapsedAgeMs?: number | null;
       miPosicion?: {
         posicion: number;
         ticketId: string;
@@ -111,6 +119,12 @@ export function useRankingEnVivo(
         // (cache stale) — un WS previo o SSR nos dio el valor real, no
         // queremos borrarlo por una respuesta tardía.
         statusShort: d.statusShort ?? s.statusShort,
+        // Hotfix #8 Ítem 4: el server envía edad del snapshot. Cada
+        // respuesta lo refresca (es crítico para que el reloj re-ancle
+        // correctamente). Si llega null/undefined preservamos el valor
+        // previo (misma política que statusShort).
+        elapsedAgeMs:
+          d.elapsedAgeMs !== undefined ? d.elapsedAgeMs : s.elapsedAgeMs,
         miPosicion: d.miPosicion
           ? {
               posicion: d.miPosicion.posicion,
@@ -173,6 +187,10 @@ export function useRankingEnVivo(
           // poller. El hook `useMinutoEnVivo` re-ancla el reloj cuando
           // cambia `elapsed`/`statusShort`.
           statusShort: payload.statusShort,
+          // Hotfix #8 Ítem 4: edad del snapshot calculada por el server
+          // al momento del emit. Pisa siempre — cada WS trae el valor
+          // "al momento del emit", el cliente re-ancla.
+          elapsedAgeMs: payload.elapsedAgeMs,
           pagados: payload.pagados ?? s.pagados,
           lastUpdate: payload.timestamp,
         }));

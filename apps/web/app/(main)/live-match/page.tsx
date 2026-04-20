@@ -227,6 +227,7 @@ export default async function LiveMatchPage({ searchParams }: Props) {
 
 function buildLiveTabs(partidos: PartidoLive[]): LiveMatchTab[] {
   const tabs: LiveMatchTab[] = [];
+  const nowMs = Date.now();
   for (const p of partidos) {
     const main = elegirTorneoPrincipal(p.torneos);
     if (!main) continue;
@@ -251,13 +252,14 @@ function buildLiveTabs(partidos: PartidoLive[]): LiveMatchTab[] {
       pozoNeto: main.pozoNeto,
       totalInscritos: main.totalInscritos,
       minutoLabel: snap?.label ?? null,
-      // Hotfix #8 Bug #22: fechaInicio como ancla PERMANENTE del reloj
-      // local (persistida en BD). El snap aporta statusShort + elapsed
-      // para precisar la fase; si está vacío, el hook aplica heurística
-      // basada solo en fechaInicio.
       fechaInicio: p.fechaInicio.toISOString(),
+      // Hotfix #8 Ítem 4: el reloj local se ancla al momento REAL en que
+      // el server capturó `elapsed`. Sin `elapsedAgeMs` el cliente asumía
+      // "lo recibí ahora" aunque el cache tuviera un snap de hace 5 min,
+      // causando el desfase que el PO reportó cada vez que abría la pestaña.
       statusShort: snap?.statusShort ?? null,
       elapsed: snap?.minuto ?? null,
+      elapsedAgeMs: snap ? nowMs - snap.updatedAt : null,
     });
   }
   return tabs;
@@ -269,6 +271,7 @@ async function tryBuildFinalizedTab(
   torneoId: string,
   finalizadosRaw: PartidoLive[],
 ): Promise<LiveMatchTab | null> {
+  const nowMs = Date.now();
   for (const p of finalizadosRaw) {
     const match = p.torneos.find((t) => t.id === torneoId);
     if (!match) continue;
@@ -298,6 +301,7 @@ async function tryBuildFinalizedTab(
       fechaInicio: p.fechaInicio.toISOString(),
       statusShort: snap?.statusShort ?? null,
       elapsed: snap?.minuto ?? null,
+      elapsedAgeMs: snap ? nowMs - snap.updatedAt : null,
     };
   }
   return null;
