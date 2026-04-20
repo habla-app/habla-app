@@ -34,6 +34,7 @@ import {
 } from "./errors";
 import { logger } from "./logger";
 import type { CrearTicketBody } from "./tickets.schema";
+import { verificarLimiteInscripcion, bloquearSiAutoExcluido } from "./limites.service";
 
 // ---------------------------------------------------------------------------
 // Constantes
@@ -177,28 +178,19 @@ export async function crear(
       );
     }
 
-    // 4. Límite diario de tickets del usuario (suma de todos los torneos
-    //    en las últimas 24h). Los placeholders contaron como inscripción
-    //    del sub-sprint 3: los excluimos del conteo porque en realidad
-    //    representan "1 inscripción, múltiples edits" y ya se cobraron
-    //    al momento de inscribirse.
-    const hace24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const ticketsUltimoDia = await tx.ticket.count({
-      where: {
-        usuarioId,
-        creadoEn: { gte: hace24h },
-      },
-    });
-    // Si vamos a crear uno nuevo (no reemplazar placeholder), este
-    // ticket extra entra en la cuenta.
+    // 4. Enforcement de límites (Sub-Sprint 7).
+    //    - Auto-exclusión SIEMPRE bloquea (aplica a placeholder update también).
+    //    - Límite diario de tickets solo cuenta cuando se crea uno NUEVO; un
+    //      placeholder update no suma al contador (misma "inscripción" lógica).
     const creamosNuevo = placeholders.length === 0;
-    const limiteDiario = await obtenerLimiteDiario(tx, usuarioId);
-    const proyectado = ticketsUltimoDia + (creamosNuevo ? 1 : 0);
-    if (proyectado > limiteDiario) {
-      throw new LimiteExcedido(
-        `Máximo ${limiteDiario} tickets por día. Llevas ${ticketsUltimoDia}.`,
-        { actual: ticketsUltimoDia, max: limiteDiario },
-      );
+    if (creamosNuevo) {
+      await verificarLimiteInscripcion({
+        tx,
+        usuarioId,
+        entradaLukas: torneo.entradaLukas,
+      });
+    } else {
+      await bloquearSiAutoExcluido(usuarioId, tx);
     }
 
     // 5. Reemplazo de placeholder si existe
@@ -322,17 +314,9 @@ export async function crear(
   });
 }
 
-async function obtenerLimiteDiario(
-  tx: Prisma.TransactionClient,
-  usuarioId: string,
-): Promise<number> {
-  // El modelo LimitesJuego no está creado todavía en el schema (es
-  // Sub-Sprint 7). Por ahora devolvemos el default. Cuando el modelo
-  // exista, leemos de ahí con fallback al default.
-  void tx;
-  void usuarioId;
-  return DEFAULT_LIMITE_DIARIO_TICKETS;
-}
+// `obtenerLimiteDiario` fue reemplazado por `verificarLimiteInscripcion` del
+// nuevo `limites.service` (Sub-Sprint 7) que ahora consulta `LimitesJuego`
+// real + chequea auto-exclusión.
 
 // ---------------------------------------------------------------------------
 // listarMisTickets
