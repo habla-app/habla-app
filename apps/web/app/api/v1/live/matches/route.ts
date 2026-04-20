@@ -49,8 +49,9 @@ export async function GET() {
           }
         }
         // Bug #9: adjuntamos minuto + label del cache del poller.
-        // Hotfix #8 Bug #22: incluimos statusShort + snapshotUpdatedAt
-        // para el reloj local del sidebar.
+        // Hotfix #8 Bug #22: incluimos statusShort + fechaInicio para el
+        // reloj local (el cliente ancla a fechaInicio en 1H y al elapsed
+        // server en 2H/ET).
         const liveSnap = getLiveStatus(p.id);
         return {
           id: p.id,
@@ -62,10 +63,10 @@ export async function GET() {
             golesLocal: p.golesLocal ?? 0,
             golesVisita: p.golesVisita ?? 0,
             round: p.round,
+            fechaInicio: p.fechaInicio.toISOString(),
             minutoLabel: liveSnap?.label ?? null,
             minutoPartido: liveSnap?.minuto ?? null,
             statusShort: liveSnap?.statusShort ?? null,
-            snapshotUpdatedAt: liveSnap?.updatedAt ?? null,
           },
           torneoPrincipalId: torneoPrincipal?.id ?? null,
           torneos: p.torneos.map((t) => ({

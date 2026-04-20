@@ -1,11 +1,16 @@
-// Tests antidrift del Hotfix #4 Bug #9. El LiveHero solía renderizar
+// Tests antidrift del Hotfix #4 Bug #9 actualizados post Hotfix #8 Bug
+// #22 (refactor simplificado). El LiveHero solía renderizar
 // `{minuto ?? "?"}'` que mostraba literalmente "?" cuando el poller
-// aún no había entregado un número. Ahora:
-//   - Recibe `minutoLabel: string | null` (NO `minuto: number | null`).
-//   - Usa `useMinutoEnVivo` para correr un reloj local (Hotfix #8 Bug
-//     #22). El hook internamente delega a `formatMinutoLabel` +
-//     `renderMinutoLabel` — garantiza "—" en lugar de "?" igual que antes.
-//   - Nunca tiene "?" hardcodeado como fallback.
+// aún no había entregado un número. El Hotfix #4 lo migró a `minutoLabel`.
+// El Hotfix #8 reescribió el flujo: ahora el LiveHero recibe los inputs
+// crudos (`fechaInicio`, `statusShort`, `elapsed`) y el hook
+// `useMinutoEnVivo` es el único que decide qué string mostrar — corre
+// un reloj local segundo a segundo anclado a `fechaInicio` (persistido
+// en BD) o al `elapsed` del server (para 2H/ET).
+//
+// Invariante preservado: NUNCA se muestra "?" como fallback — el hook
+// delega a `formatMinutoLabel` para estados fijos o a la heurística
+// basada en fechaInicio cuando falta statusShort.
 
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
@@ -21,16 +26,20 @@ const LIVE_MATCH_VIEW_SRC = readFileSync(
   "utf-8",
 );
 
-describe("LiveHero — Bug #9: minute display", () => {
-  it("recibe `minutoLabel: string | null` como prop", () => {
-    expect(LIVE_HERO_SRC).toMatch(
-      /minutoLabel\s*:\s*string\s*\|\s*null/,
-    );
+describe("LiveHero — Bug #9 + Hotfix #8 Bug #22", () => {
+  it("recibe `fechaInicio: string | Date` como ancla del reloj local", () => {
+    expect(LIVE_HERO_SRC).toMatch(/fechaInicio\s*:\s*string\s*\|\s*Date/);
   });
 
-  it("ya NO declara `minuto: number | null` como prop", () => {
-    // El prop legacy se removió — el LiveHero solo recibe label
-    // ya renderizado, no construye el string en UI.
+  it("recibe `statusShort: string | null` (fase del partido)", () => {
+    expect(LIVE_HERO_SRC).toMatch(/statusShort\s*:\s*string\s*\|\s*null/);
+  });
+
+  it("recibe `elapsed: number | null` (ancla para 2H/ET)", () => {
+    expect(LIVE_HERO_SRC).toMatch(/elapsed\s*:\s*number\s*\|\s*null/);
+  });
+
+  it("ya NO declara `minuto: number | null` como prop (legacy pre-Hotfix #4)", () => {
     expect(LIVE_HERO_SRC).not.toMatch(/\n\s*minuto:\s*number\s*\|\s*null/);
   });
 
@@ -58,22 +67,29 @@ describe("LiveHero — Bug #9: minute display", () => {
   });
 });
 
-describe("LiveMatchView — pasa minutoLabel a LiveHero", () => {
-  it("propaga `minutoLabel={...}` al LiveHero", () => {
-    expect(LIVE_MATCH_VIEW_SRC).toMatch(/minutoLabel=\{/);
+describe("LiveMatchView — propaga inputs crudos al LiveHero", () => {
+  it("propaga `fechaInicio={...}` al LiveHero (ancla del reloj)", () => {
+    expect(LIVE_MATCH_VIEW_SRC).toMatch(/fechaInicio=\{active\.fechaInicio\}/);
   });
 
-  it("ya NO pasa `minuto={...}` como prop", () => {
-    // La prop cambió de `minuto` a `minutoLabel` — bug antidrift.
-    expect(LIVE_MATCH_VIEW_SRC).not.toMatch(
-      /<LiveHero[\s\S]*?\n\s*minuto=\{/,
+  it("propaga `statusShort={...}` al LiveHero con fallback WS→SSR", () => {
+    expect(LIVE_MATCH_VIEW_SRC).toMatch(
+      /statusShort=\{live\.statusShort\s*\?\?\s*active\.statusShort\}/,
     );
   });
 
-  it("LiveMatchTab.minutoLabel está tipado string | null", () => {
+  it("propaga `elapsed={...}` al LiveHero", () => {
+    expect(LIVE_MATCH_VIEW_SRC).toMatch(/elapsed=\{live\.minutoPartido/);
+  });
+
+  it("LiveMatchTab.minutoLabel sigue tipado string | null (fallback SSR del Hotfix #4)", () => {
     expect(LIVE_MATCH_VIEW_SRC).toMatch(
       /minutoLabel\s*:\s*string\s*\|\s*null/,
     );
+  });
+
+  it("LiveMatchTab.fechaInicio agregado para ancla del reloj (Hotfix #8)", () => {
+    expect(LIVE_MATCH_VIEW_SRC).toMatch(/fechaInicio\s*:\s*string/);
   });
 });
 
@@ -94,7 +110,7 @@ describe("poller-partidos.job — escribe al cache en cada tick", () => {
   });
 });
 
-describe("emitirRankingUpdate — incluye minutoLabel desde el cache", () => {
+describe("emitirRankingUpdate — incluye minutoLabel + statusShort", () => {
   const SRC = readFileSync(
     resolve(ROOT, "lib", "realtime", "emitters.ts"),
     "utf-8",
@@ -106,6 +122,10 @@ describe("emitirRankingUpdate — incluye minutoLabel desde el cache", () => {
 
   it("el payload incluye minutoLabel (no solo minutoPartido)", () => {
     expect(SRC).toMatch(/minutoLabel/);
+  });
+
+  it("el payload incluye statusShort (Hotfix #8)", () => {
+    expect(SRC).toMatch(/statusShort/);
   });
 });
 
@@ -120,9 +140,15 @@ describe("RankingUpdatePayload — shape del tipo compartido", () => {
       /minutoLabel\s*:\s*string\s*\|\s*null/,
     );
   });
+
+  it("RankingUpdatePayload tiene `statusShort: string | null` (Hotfix #8)", () => {
+    expect(SRC).toMatch(
+      /statusShort\s*:\s*string\s*\|\s*null/,
+    );
+  });
 });
 
-describe("/api/v1/live/matches — expone minutoLabel en la respuesta", () => {
+describe("/api/v1/live/matches — expone minutoLabel + fechaInicio", () => {
   const SRC = readFileSync(
     resolve(ROOT, "app", "api", "v1", "live", "matches", "route.ts"),
     "utf-8",
@@ -134,5 +160,9 @@ describe("/api/v1/live/matches — expone minutoLabel en la respuesta", () => {
 
   it("incluye minutoLabel en el payload de cada partido", () => {
     expect(SRC).toMatch(/minutoLabel/);
+  });
+
+  it("incluye fechaInicio serializada (Hotfix #8)", () => {
+    expect(SRC).toMatch(/fechaInicio\s*:\s*p\.fechaInicio\.toISOString\(\)/);
   });
 });

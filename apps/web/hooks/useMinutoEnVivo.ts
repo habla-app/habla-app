@@ -1,51 +1,55 @@
 "use client";
 // useMinutoEnVivo — reloj local del minuto del partido en vivo.
-// Hotfix #8 Bug #22.
+// Hotfix #8 Bug #22 (refactor simplificado post-feedback del PO).
 //
-// El poller corre cada 30s y actualiza el cache in-memory con
-// `{ statusShort, elapsed, updatedAt }` del fixture. Antes el LiveHero
-// se quedaba pegado al último snapshot entre ticks (siempre mostrando
-// "23'" por 30s aunque el partido avanzara). Este hook mantiene la UX
-// de reloj de estadio: cada segundo re-evalúa cuánto tiempo pasó desde
-// el snapshot del server y recalcula el minuto localmente.
+// Diseño:
+//   - `Partido.fechaInicio` (persistido en BD desde el import del fixture)
+//     es el ancla PERMANENTE del reloj. Disponible SIEMPRE desde el SSR,
+//     aun con el cache in-memory vacío post-restart.
+//   - `fixture.status.short` del poller nos dice la fase actual:
+//     NS → 1H → HT → 2H → (ET → BT → ET)? → FT/AET/PEN.
+//   - Cuando la fase es 1H, el cliente proyecta desde `fechaInicio`:
+//     minuto = clamp(1, 45, floor((now - fechaInicio) / 60000) + 1).
+//     Esto funciona aunque el poller no haya escrito al cache todavía.
+//   - Cuando la fase es 2H o ET, NO podemos usar `fechaInicio` directo
+//     (el descanso del HT es variable — 10 a 25 min). Acá el `elapsed`
+//     del server es el ancla y el reloj local proyecta desde él usando
+//     un `useRef` que trackea cuándo lo recibimos por última vez.
+//   - Los estados fijos (HT, FT, AET, PEN, NS, SUSP, ABD, ...) delegan
+//     al mapper `formatMinutoLabel` y no levantan interval (sin gasto
+//     de CPU).
 //
-// Contrato:
-//   - Recibe el snapshot del server (statusShort + elapsed + updatedAt).
-//   - Solo avanza el minuto local si statusShort es "activo" (1H/2H/ET).
-//     En HT/FT/NS/PEN/P/SUSP/etc. el label es fijo y no se incrementa.
-//   - Cap por tiempo: 45' en 1H, 90' en 2H, 120' en ET. Si el API
-//     reporta más minutos (prórroga largas, descuento), respetamos el
-//     valor del server — el cap solo aplica a la extensión LOCAL.
-//   - Al llegar un snapshot nuevo (nuevo `updatedAt`), el hook reinicia
-//     el cómputo y ancla al nuevo valor.
-//   - El interval se limpia al unmount y al cambiar de status inactivo.
+// Diferencia vs. la versión original del Hotfix #8:
+//   - Eliminamos `snapshotUpdatedAt` del payload del server. El 1H se
+//     ancla a `fechaInicio` (persistido, no depende del cache); el 2H/ET
+//     se ancla a un `useRef` que se resetea cuando cambia `elapsed` o
+//     `statusShort`.
+//   - Beneficio: `⏱` avanza DESDE EL PRIMER RENDER aunque el poller no
+//     haya escrito al cache, mientras la hora de kickoff del partido sea
+//     la programada (caso normal). Si el partido arranca tarde, el
+//     primer tick del poller corrige con `elapsed` real.
 
-import { useEffect, useState } from "react";
-import {
-  formatMinutoLabel,
-  renderMinutoLabel,
-} from "@/lib/utils/minuto-label";
+import { useEffect, useRef, useState } from "react";
+import { formatMinutoLabel } from "@/lib/utils/minuto-label";
 
 export interface MinutoEnVivoInput {
-  /** `fixture.status.short` del snapshot del server. */
+  /** Kickoff programado del partido (ISO string o Date). Persistido en
+   *  BD desde el import del fixture — disponible desde el primer render. */
+  fechaInicio: string | Date;
+  /** `fixture.status.short` del snapshot del server. Null hasta el primer
+   *  tick del poller. El hook tolera null para no bloquear el render. */
   statusShort: string | null;
-  /** `fixture.status.elapsed` numérico (minuto anclado al snapshot). */
+  /** `fixture.status.elapsed` numérico — minuto anclado al momento en
+   *  que el server lo capturó. Ancla primaria del reloj en 2H/ET. */
   elapsed: number | null;
-  /** Timestamp epoch ms en que el server capturó el snapshot. */
-  snapshotUpdatedAt: number | null;
-  /** Label server-rendered como fallback: si el hook no corre (SSR o
-   *  status no-avanzable), se usa este. Evita flicker entre hydration
-   *  y primer tick del interval. */
-  fallbackLabel: string | null;
 }
 
-/** Status codes de api-football que representan un partido avanzando
- *  cronológicamente. En estos el reloj local incrementa segundo a
- *  segundo (convertido a minutos enteros). */
+/** Statuses donde el minuto avanza cronológicamente (disparan interval). */
 const STATUSES_AVANZANDO = new Set(["1H", "2H", "ET"]);
 
-/** Cap del minuto local por status. Si el server reporta más, respeta
- *  el valor del server (prórroga extendida, descuento largo). */
+/** Cap del minuto proyectado local por status. No se aplica al valor
+ *  directo del server: si el API reporta `elapsed > cap` por descuento
+ *  largo, respetamos el server. El cap solo limita la extensión LOCAL. */
 const CAP_POR_STATUS: Record<string, number> = {
   "1H": 45,
   "2H": 90,
@@ -53,96 +57,129 @@ const CAP_POR_STATUS: Record<string, number> = {
 };
 
 /**
- * Calcula el minuto efectivo (server elapsed + tiempo local transcurrido)
- * capped al máximo del status. Función pura para testear sin fake timers.
+ * Función pura: dado el kickoff + status + elapsed opcional + "cuándo
+ * vimos el último elapsed" + now, devuelve el label a mostrar.
+ * Testeable sin fake timers.
  */
-export function computeElapsedLocal(input: {
+export function computeMinutoLabel(input: {
+  fechaInicio: string | Date;
   statusShort: string | null;
   elapsed: number | null;
-  snapshotUpdatedAt: number | null;
+  /** Epoch ms en que el cliente recibió el `elapsed` actual. Se resetea
+   *  cada vez que el server envía un valor nuevo. Se usa para proyectar
+   *  en 2H/ET. Ignorado en 1H (el ancla es `fechaInicio`). */
+  elapsedAnchorAt: number;
   now: number;
-}): number | null {
-  const { statusShort, elapsed, snapshotUpdatedAt, now } = input;
-  if (!statusShort || !STATUSES_AVANZANDO.has(statusShort)) return elapsed;
-  if (elapsed === null || snapshotUpdatedAt === null) return elapsed;
-  const deltaMs = Math.max(0, now - snapshotUpdatedAt);
-  const deltaMin = Math.floor(deltaMs / 60_000);
-  const proyectado = elapsed + deltaMin;
-  const cap = CAP_POR_STATUS[statusShort];
-  // Si el server ya superó el cap (ej. 2H con elapsed=94 por descuento),
-  // no revertimos — respetamos el server.
-  if (cap !== undefined && elapsed >= cap) return elapsed;
-  if (cap !== undefined) return Math.min(cap, proyectado);
-  return proyectado;
+}): string {
+  const { fechaInicio, statusShort, elapsed, elapsedAnchorAt, now } = input;
+
+  // Sin status del server: heurística basada solo en fechaInicio —
+  // útil para SSR antes del primer tick del poller.
+  if (!statusShort) {
+    return heuristicaSinStatus(fechaInicio, now);
+  }
+
+  // Statuses fijos: delegar al mapper, no hay reloj que correr.
+  if (!STATUSES_AVANZANDO.has(statusShort)) {
+    return formatMinutoLabel({ statusShort, elapsed });
+  }
+
+  // Statuses avanzables: 1H, 2H, ET.
+  if (statusShort === "1H") {
+    // Preferimos `fechaInicio` como ancla: es un timestamp fijo en BD
+    // que no depende del cache. Si el API reportó elapsed > 45 (descuento
+    // largo del PT), respetamos el server (no lo clampeamos a 45).
+    if (elapsed !== null && elapsed > 45) return `${elapsed}'`;
+    const start = toEpochMs(fechaInicio);
+    const mFromKickoff = Math.floor((now - start) / 60_000) + 1;
+    // Si server reporta `elapsed`, usamos el mayor de ambas fuentes —
+    // evita retroceder el minuto local si hay clock skew o si el
+    // partido arrancó tarde (fechaInicio < kickoff real).
+    const proyectado = elapsed !== null
+      ? Math.max(elapsed, mFromKickoff)
+      : mFromKickoff;
+    return `${Math.max(1, Math.min(45, proyectado))}'`;
+  }
+
+  // 2H y ET: el descanso del HT es variable, `fechaInicio` ya no alcanza.
+  // Anclamos al `elapsed` del server + delta desde cuando lo recibimos.
+  if (elapsed !== null) {
+    const delta = Math.max(0, Math.floor((now - elapsedAnchorAt) / 60_000));
+    const cap = CAP_POR_STATUS[statusShort] ?? 200;
+    const final =
+      elapsed >= cap ? elapsed : Math.min(cap, elapsed + delta);
+    return statusShort === "ET" ? `Prór. ${final}'` : `${final}'`;
+  }
+  // Sin elapsed + status 2H/ET: delegar al mapper (devuelve "2T" o "Prórroga").
+  return formatMinutoLabel({ statusShort, elapsed: null });
 }
 
 /**
- * Hook: devuelve el label del minuto, actualizado segundo a segundo
- * cuando el status es avanzable. En estados fijos (HT/FT/PEN/...)
- * devuelve el label del mapper `formatMinutoLabel` o el fallback.
+ * Heurística cuando el server no envió statusShort todavía (SSR inicial,
+ * cache vacío post-restart). Deriva una estimación basada solo en
+ * `fechaInicio` asumiendo ritmo estándar: 45 min 1T + 15 min HT + 45 min 2T.
+ * Mejor que mostrar "—". Se corrige en el próximo tick del poller (≤30s).
+ */
+function heuristicaSinStatus(fechaInicio: string | Date, now: number): string {
+  const start = toEpochMs(fechaInicio);
+  const deltaMin = Math.floor((now - start) / 60_000);
+  if (deltaMin < 0) return "Por empezar";
+  if (deltaMin < 45) return `${Math.max(1, deltaMin + 1)}'`;
+  if (deltaMin < 60) return "ENT";
+  if (deltaMin < 105) return `${Math.min(90, deltaMin - 15 + 1)}'`;
+  return "—";
+}
+
+function toEpochMs(d: string | Date): number {
+  return typeof d === "string" ? new Date(d).getTime() : d.getTime();
+}
+
+/**
+ * Hook: retorna el label del minuto, actualizado cada segundo en
+ * statuses avanzables. En estados fijos retorna un string estable
+ * sin levantar interval.
  */
 export function useMinutoEnVivo(input: MinutoEnVivoInput): string {
-  const { statusShort, elapsed, snapshotUpdatedAt, fallbackLabel } = input;
+  const { fechaInicio, statusShort, elapsed } = input;
 
-  // Si el status no avanza o falta data, el label es estático: usamos
-  // el mapper o el fallback del server. No levantamos interval para no
-  // quemar renders sin razón.
-  const esAvanzable =
-    !!statusShort &&
-    STATUSES_AVANZANDO.has(statusShort) &&
-    elapsed !== null &&
-    snapshotUpdatedAt !== null;
-
-  // Estado del minuto local efectivo. Iniciamos con el cómputo de
-  // `Date.now()` al mount — evita que el primer render pinte el
-  // `elapsed` raw si ya pasó tiempo desde `snapshotUpdatedAt`.
-  const [elapsedLocal, setElapsedLocal] = useState<number | null>(() =>
-    computeElapsedLocal({
-      statusShort,
-      elapsed,
-      snapshotUpdatedAt,
-      now: Date.now(),
-    }),
-  );
-
-  useEffect(() => {
-    // Reset al cambiar snapshot: recalculamos inmediatamente con el
-    // nuevo ancla (`snapshotUpdatedAt`). Si el status dejó de ser
-    // avanzable, el próximo render usará el path estático.
-    setElapsedLocal(
-      computeElapsedLocal({
-        statusShort,
-        elapsed,
-        snapshotUpdatedAt,
-        now: Date.now(),
-      }),
-    );
-
-    if (!esAvanzable) return;
-
-    // Reloj local: cada 1s re-evaluamos el minuto. Solo se re-rendera
-    // cuando el minuto entero cambia (setState diffa contra prev).
-    const id = setInterval(() => {
-      const nuevo = computeElapsedLocal({
-        statusShort,
-        elapsed,
-        snapshotUpdatedAt,
-        now: Date.now(),
-      });
-      setElapsedLocal((prev) => (prev === nuevo ? prev : nuevo));
-    }, 1000);
-    return () => clearInterval(id);
-  }, [statusShort, elapsed, snapshotUpdatedAt, esAvanzable]);
-
-  if (!esAvanzable) {
-    // Estado fijo: derivamos del mapper si tenemos statusShort, sino
-    // usamos el fallback del server (para preservar label SSR).
-    if (statusShort) {
-      return formatMinutoLabel({ statusShort, elapsed });
-    }
-    return renderMinutoLabel(fallbackLabel);
+  // Ancla del elapsed para 2H/ET: cuándo el cliente vio el valor actual.
+  // Resetea cuando `elapsed` o `statusShort` cambian.
+  const elapsedAnchorAt = useRef<number>(Date.now());
+  const prevElapsedRef = useRef<number | null>(elapsed);
+  const prevStatusRef = useRef<string | null>(statusShort);
+  if (
+    elapsed !== prevElapsedRef.current ||
+    statusShort !== prevStatusRef.current
+  ) {
+    elapsedAnchorAt.current = Date.now();
+    prevElapsedRef.current = elapsed;
+    prevStatusRef.current = statusShort;
   }
 
-  // Estado avanzable: el label se deriva del minuto local computado.
-  return formatMinutoLabel({ statusShort, elapsed: elapsedLocal });
+  // `tick` no se usa en el cómputo — solo fuerza re-render en cada tick
+  // del interval. `computeMinutoLabel` lee `Date.now()` directo para
+  // que SSR y CSR coincidan con el estado real.
+  const [, setTick] = useState(0);
+
+  const esAvanzable =
+    !!statusShort && STATUSES_AVANZANDO.has(statusShort);
+
+  useEffect(() => {
+    if (!esAvanzable && statusShort !== null) return;
+    // Si no hay statusShort, también corremos el interval — la heurística
+    // (`heuristicaSinStatus`) cruza las fases (1T → ENT → 2T) conforme
+    // pasa el tiempo real.
+    const id = setInterval(() => {
+      setTick((t) => (t + 1) % 1_000_000);
+    }, 1_000);
+    return () => clearInterval(id);
+  }, [esAvanzable, statusShort]);
+
+  return computeMinutoLabel({
+    fechaInicio,
+    statusShort,
+    elapsed,
+    elapsedAnchorAt: elapsedAnchorAt.current,
+    now: Date.now(),
+  });
 }
