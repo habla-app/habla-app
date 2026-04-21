@@ -1,4 +1,10 @@
 // Tests AST + smoke del service de premios. Sub-Sprint 6.
+//
+// Nota Hotfix #9: el catálogo de 25 premios se movió de
+// `packages/db/prisma/seed.ts` a `packages/db/src/catalog.ts` (fuente de
+// verdad única reusada por el endpoint admin `/api/v1/admin/seed/premios`).
+// Estos tests apuntan ahora al archivo compartido — la estructura de
+// datos es idéntica.
 
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
@@ -11,7 +17,7 @@ const SERVICE_SRC = readFileSync(
   "utf-8",
 );
 const SEED_SRC = readFileSync(
-  resolve(ROOT, "..", "..", "packages/db/prisma/seed.ts"),
+  resolve(ROOT, "..", "..", "packages/db/src/catalog.ts"),
   "utf-8",
 );
 
@@ -42,15 +48,18 @@ describe("premios.service — contrato público", () => {
   });
 });
 
-describe("seed de premios — cumple requisitos de catálogo", () => {
+describe("catálogo de premios compartido — cumple requisitos MVP", () => {
   it("define al menos 20 premios", () => {
     const matches = SEED_SRC.match(/\{\s*nombre:/g);
     expect(matches?.length ?? 0).toBeGreaterThanOrEqual(20);
   });
 
   it("cubre las 5 categorías", () => {
+    // Post-Hotfix #9: el catálogo usa tipo fuerte `CatalogoCategoria` en vez
+    // de `as const` inline; las categorías aparecen como strings literales
+    // dentro de `categoria: "X",`.
     for (const cat of CATEGORIAS_VALIDAS) {
-      expect(SEED_SRC).toContain(`"${cat}" as const`);
+      expect(SEED_SRC).toMatch(new RegExp(`categoria:\\s*["']${cat}["']`));
     }
   });
 
@@ -59,9 +68,9 @@ describe("seed de premios — cumple requisitos de catálogo", () => {
   });
 
   it("usa badges POPULAR, NUEVO o LIMITADO", () => {
-    expect(SEED_SRC).toMatch(/"POPULAR"\s+as\s+const/);
-    expect(SEED_SRC).toMatch(/"NUEVO"\s+as\s+const/);
-    expect(SEED_SRC).toMatch(/"LIMITADO"\s+as\s+const/);
+    expect(SEED_SRC).toMatch(/badge:\s*["']POPULAR["']/);
+    expect(SEED_SRC).toMatch(/badge:\s*["']NUEVO["']/);
+    expect(SEED_SRC).toMatch(/badge:\s*["']LIMITADO["']/);
   });
 
   it("marca requiereDireccion en productos físicos (camisetas y tech)", () => {

@@ -9,6 +9,13 @@
 // `<LiveCountBadge>` como overlay absoluto sobre el icono; si no hay
 // partidos en vivo, el badge devuelve null y no aparece nada (antes el
 // NavBar mostraba "2" hardcoded aunque no hubiera nada).
+//
+// Hotfix #9 (21 Abr): "Wallet" fue reemplazado por "Perfil" como último item
+// del BottomNav. Razón: el BalanceBadge del NavBar ya linkea a /wallet y es
+// visible en todas las pantallas (1 tap); /perfil no tenía entrada visible
+// en la nav mobile y todo el Sub-Sprint 7 (verificación, límites, preferencias)
+// quedaba atrapado detrás del avatar dropdown del UserMenu (no intuitivo en
+// mobile). Wallet sigue accesible en 1 tap desde el BalanceBadge del header.
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LiveCountBadge } from "@/components/layout/LiveCountBadge";
@@ -49,10 +56,10 @@ const ITEMS: Item[] = [
     match: (p) => p.startsWith("/tienda"),
   },
   {
-    href: "/wallet",
-    label: "Wallet",
-    icon: "🪙",
-    match: (p) => p.startsWith("/wallet"),
+    href: "/perfil",
+    label: "Perfil",
+    icon: "👤",
+    match: (p) => p.startsWith("/perfil"),
   },
 ];
 

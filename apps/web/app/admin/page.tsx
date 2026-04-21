@@ -5,6 +5,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { AdminTorneosPanel } from "@/components/admin/AdminTorneosPanel";
+import { AdminSeedPremiosPanel } from "@/components/admin/AdminSeedPremiosPanel";
 
 export default async function AdminPage() {
   const session = await auth();
@@ -31,6 +32,7 @@ export default async function AdminPage() {
       </header>
 
       <AdminTorneosPanel />
+      <AdminSeedPremiosPanel />
     </div>
   );
 }
