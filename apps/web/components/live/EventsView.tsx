@@ -72,7 +72,7 @@ export function EventsView({
                     className={`mr-1.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] ${
                       e.equipo === "LOCAL"
                         ? "bg-pred-wrong-bg text-accent-clasico-dark"
-                        : "bg-accent-champions-bg text-[#1E40AF]"
+                        : "bg-accent-champions-bg text-accent-champions-dark"
                     }`}
                   >
                     {cortoNombre(e.equipo === "LOCAL" ? equipoLocal : equipoVisita)}

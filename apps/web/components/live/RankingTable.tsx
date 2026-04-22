@@ -106,9 +106,9 @@ export function RankingTable({
             : row.rank === 1
               ? "bg-gradient-to-r from-brand-gold/[0.1] to-transparent border-l-4 border-l-brand-gold pl-[14px]"
               : row.rank === 2
-                ? "bg-gradient-to-r from-[#C0C0C0]/[0.08] to-transparent border-l-4 border-l-[#C0C0C0] pl-[14px]"
+                ? "bg-gradient-to-r from-medal-silver/[0.08] to-transparent border-l-4 border-l-medal-silver pl-[14px]"
                 : row.rank === 3
-                  ? "bg-gradient-to-r from-[#CD7F32]/[0.1] to-transparent border-l-4 border-l-[#CD7F32] pl-[14px]"
+                  ? "bg-gradient-to-r from-medal-bronze/[0.1] to-transparent border-l-4 border-l-medal-bronze pl-[14px]"
                   : "hover:bg-subtle";
           const afterCut = row.rank > pagados && !isMe;
 
@@ -221,7 +221,7 @@ export function RankingTable({
         })}
 
         {visibles.some((r) => r.rank === pagados) && !expanded ? (
-          <li className="flex items-center gap-2.5 border-y border-dashed border-urgent-high bg-gradient-to-r from-urgent-high/[0.08] to-transparent px-4 py-2.5 text-[11px] font-extrabold uppercase tracking-[0.08em] text-[#9A3412]">
+          <li className="flex items-center gap-2.5 border-y border-dashed border-urgent-high bg-gradient-to-r from-urgent-high/[0.08] to-transparent px-4 py-2.5 text-[11px] font-extrabold uppercase tracking-[0.08em] text-urgent-high-dark">
             <span aria-hidden>✂️</span>
             Corte · Del {pagados + 1}° en adelante no reciben premio
           </li>

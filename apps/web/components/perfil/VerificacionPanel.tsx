@@ -132,7 +132,7 @@ function VerifRow({
   const iconCls =
     estado === "done"
       ? "bg-alert-success-bg text-alert-success-text"
-      : "bg-urgent-med-bg text-[#92400E]";
+      : "bg-urgent-med-bg text-urgent-high-dark";
   return (
     <div className="flex items-center gap-3.5 border-b border-light px-5 py-3.5 last:border-b-0">
       <div
