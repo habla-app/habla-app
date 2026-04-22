@@ -127,15 +127,15 @@ export function MatchGroup({
         <span className="font-display text-[17px] font-extrabold uppercase text-dark">
           {partido.equipoLocal}
         </span>
-        <span
-          className={`rounded-sm px-3 py-1 font-display text-[20px] font-black ${
-            hayScore
-              ? "bg-dark-surface text-white"
-              : "bg-brand-blue-main/10 text-muted-d"
-          }`}
-        >
-          {hayScore ? `${scoreLocal} — ${scoreVisita}` : "VS"}
-        </span>
+        {hayScore ? (
+          <span className="rounded-sm border border-brand-gold/30 bg-brand-gold-dim px-3 py-0.5 font-display text-[26px] font-black text-brand-gold-dark">
+            {scoreLocal} — {scoreVisita}
+          </span>
+        ) : (
+          <span className="rounded-sm border border-light bg-subtle px-3 py-0.5 font-display text-[20px] font-black text-muted-d">
+            VS
+          </span>
+        )}
         <span className="font-display text-[17px] font-extrabold uppercase text-dark">
           {partido.equipoVisita}
         </span>
