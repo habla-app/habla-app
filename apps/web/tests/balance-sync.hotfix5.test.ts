@@ -158,23 +158,40 @@ describe("WalletBalanceHero.tsx — hero de /wallet migrado al store", () => {
   });
 });
 
-describe("/wallet/page.tsx — delega el hero al client component", () => {
+describe("/wallet/page.tsx — delega la UI al orquestador client", () => {
   const SRC = readSrc("app/(main)/wallet/page.tsx");
 
-  it("importa WalletBalanceHero", () => {
+  it("importa WalletView (que internamente usa WalletBalanceHero)", () => {
     expect(SRC).toMatch(
-      /import\s*\{\s*WalletBalanceHero\s*\}\s*from\s*["']@\/components\/wallet\/WalletBalanceHero["']/,
+      /import\s*\{\s*WalletView\s*\}\s*from\s*["']@\/components\/wallet\/WalletView["']/,
     );
   });
 
-  it("renderiza <WalletBalanceHero initialBalance={balance} />", () => {
-    expect(SRC).toMatch(/<WalletBalanceHero\s+initialBalance=\{balance\}/);
+  it("pasa initialBalance={vista.balance} al orquestador", () => {
+    expect(SRC).toMatch(/initialBalance=\{vista\.balance\}/);
   });
 
   it("YA NO renderiza el monto inline en JSX", () => {
-    // El viejo `{balance.toLocaleString("es-PE")}` dentro de un
-    // `<div className="... text-[64px] ...">` ya no debe estar.
     expect(SRC).not.toMatch(/text-\[64px\][\s\S]*?balance\.toLocaleString/);
+    expect(SRC).not.toMatch(/text-\[80px\][\s\S]*?balance\.toLocaleString/);
+  });
+});
+
+describe("WalletView.tsx — cadena balance: page → WalletView → WalletBalanceHero", () => {
+  const SRC = readSrc("components/wallet/WalletView.tsx");
+
+  it('declara "use client"', () => {
+    expect(SRC).toMatch(/^\s*["']use client["']/);
+  });
+
+  it("importa WalletBalanceHero", () => {
+    expect(SRC).toMatch(
+      /import\s*\{\s*WalletBalanceHero\s*\}\s*from\s*["']\.\/WalletBalanceHero["']/,
+    );
+  });
+
+  it("reenvía initialBalance al hero (se hidrata via store en el hero)", () => {
+    expect(SRC).toMatch(/initialBalance=\{initialBalance\}/);
   });
 });
 
