@@ -28,7 +28,9 @@ describe("/perfil — page.tsx (RSC)", () => {
     expect(SRC).toMatch(/DatosPersonalesPanel/);
     expect(SRC).toMatch(/PreferenciasPanel/);
     expect(SRC).toMatch(/LimitesPanel/);
-    expect(SRC).toMatch(/DatosYPrivacidadPanel/);
+    // Rediseño mockup v1: DatosYPrivacidadPanel se absorbió en
+    // ProfileFooterSections, que también trae Seguridad, Ayuda y Legal.
+    expect(SRC).toMatch(/ProfileFooterSections/);
   });
 
   it("obtiene perfil, preferencias y límites en paralelo", () => {
@@ -47,13 +49,24 @@ describe("/perfil — ProfileHero", () => {
     expect(SRC).toMatch(/nivel\.actual\.label/);
   });
 
+  it("copy 'en N torneos' cuando hay siguiente nivel", () => {
+    // Rediseño mockup v1: el balance ya no está en el hero (pasó a
+    // StatsGrid con mounted-guard). El level-card mantiene "Próximo: X
+    // en N torneos" usando faltanParaSiguiente.
+    expect(SRC).toMatch(/faltanParaSiguiente/);
+    expect(SRC).toMatch(/nivel\.siguiente/);
+  });
+});
+
+describe("/perfil — StatsGrid (consumidor del balance via store)", () => {
+  const SRC = read("components/perfil/StatsGrid.tsx");
+
   it("balance con mounted-guard pattern (Hotfix #5)", () => {
-    expect(SRC).toMatch(/mounted\s*\?\s*balanceStore\s*:\s*initialBalance/);
+    expect(SRC).toMatch(/mounted\s*\?\s*storeBalance\s*:\s*balanceLukas/);
   });
 
-  it("copy 'Te faltan X para Y' cuando hay siguiente nivel", () => {
-    expect(SRC).toMatch(/faltan.*faltanParaSiguiente/);
-    expect(SRC).toMatch(/nivel\.siguiente/);
+  it("lee useLukasStore con selector s => s.balance", () => {
+    expect(SRC).toMatch(/useLukasStore\s*\(\s*\(\s*s\s*\)\s*=>\s*s\.balance\s*\)/);
   });
 });
 
@@ -61,10 +74,11 @@ describe("/perfil — VerificacionPanel", () => {
   const SRC = read("components/perfil/VerificacionPanel.tsx");
 
   it("4 rows: email, edad, teléfono, DNI", () => {
-    expect(SRC).toMatch(/label="Email"/);
-    expect(SRC).toMatch(/label="Edad/);
-    expect(SRC).toMatch(/label="Teléfono"/);
-    expect(SRC).toMatch(/DNI/);
+    // Rediseño mockup v1: usa prop `title=` en VerifRow en vez de `label=`.
+    expect(SRC).toMatch(/title="Correo electrónico"/);
+    expect(SRC).toMatch(/title="Edad \(\+18\)"/);
+    expect(SRC).toMatch(/title="Teléfono"/);
+    expect(SRC).toMatch(/title="DNI"/);
   });
 
   it("usa authedFetch (§14)", () => {
@@ -138,8 +152,8 @@ describe("/perfil — LimitesPanel", () => {
   });
 });
 
-describe("/perfil — DatosYPrivacidadPanel", () => {
-  const SRC = read("components/perfil/DatosYPrivacidadPanel.tsx");
+describe("/perfil — ProfileFooterSections (absorbió DatosYPrivacidadPanel)", () => {
+  const SRC = read("components/perfil/ProfileFooterSections.tsx");
 
   it("flujos: descargar datos + eliminar cuenta con advertencia de saldo", () => {
     expect(SRC).toMatch(/Descargar mis datos/);
@@ -151,5 +165,14 @@ describe("/perfil — DatosYPrivacidadPanel", () => {
     expect(SRC).toMatch(/\/api\/v1\/usuarios\/me\/datos-download/);
     expect(SRC).toMatch(/\/api\/v1\/usuarios\/me\/eliminar/);
     expect(SRC).toMatch(/authedFetch/);
+  });
+
+  it("agrupa Seguridad / Ayuda / Legal / Danger zone en 4 SectionShell", () => {
+    expect(SRC).toMatch(/title="Seguridad"/);
+    expect(SRC).toMatch(/title="Ayuda y soporte"/);
+    expect(SRC).toMatch(/title="Información legal"/);
+    // Danger zone es una sección propia inline (no SectionShell).
+    expect(SRC).toMatch(/Acciones de cuenta/);
+    expect(SRC).toMatch(/Cerrar sesión/);
   });
 });

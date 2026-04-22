@@ -1,9 +1,12 @@
-// PreferenciasPanel — 7 toggles con debounce 500ms. Sub-Sprint 7.
 "use client";
+// PreferenciasPanel — 7 toggles con debounce 500ms (mockup `.toggle-row`).
+// Debounce debounce y estado idénticos a la versión anterior; lo que
+// cambia es la envoltura visual (SectionShell + switch styling del mockup).
 
 import { useEffect, useRef, useState } from "react";
 import { authedFetch } from "@/lib/api-client";
 import type { PreferenciasNotificaciones } from "@/lib/services/notificaciones.service";
+import { SectionShell } from "./SectionShell";
 
 interface PreferenciasPanelProps {
   inicial: PreferenciasNotificaciones;
@@ -11,51 +14,43 @@ interface PreferenciasPanelProps {
 
 const LABELS: Array<{
   key: keyof Omit<PreferenciasNotificaciones, "usuarioId">;
-  icono: string;
   titulo: string;
   descripcion: string;
 }> = [
   {
     key: "notifInicioTorneo",
-    icono: "🏁",
-    titulo: "Inicio de torneos",
-    descripcion: "Avisos cuando un torneo al que estás inscrito arranca.",
+    titulo: "Inicio de tus torneos",
+    descripcion: "Aviso cuando empiece un partido donde estás inscrito",
   },
   {
     key: "notifResultados",
-    icono: "🎯",
-    titulo: "Resultados y puntuación",
-    descripcion: "Resultados de tus combinadas al finalizar partidos.",
+    titulo: "Resultados de tus combinadas",
+    descripcion: "Puntos actualizados en vivo y resultado final",
   },
   {
     key: "notifPremios",
-    icono: "🏆",
-    titulo: "Premios ganados",
-    descripcion: "Emails cuando ganás Lukas en un torneo.",
+    titulo: "Premios ganados 🏆",
+    descripcion: "Cuando ganes un premio en un torneo",
   },
   {
     key: "notifSugerencias",
-    icono: "💡",
     titulo: "Sugerencias de torneos",
-    descripcion: "Torneos destacados que pueden interesarte.",
+    descripcion: "Torneos de tus equipos o ligas favoritas",
   },
   {
     key: "notifCierreTorneo",
-    icono: "⏰",
-    titulo: "Cierre próximo",
-    descripcion: "Recordatorio 30min antes del cierre de un torneo sin tu ticket.",
+    titulo: "Cierre de torneos ⏰",
+    descripcion: "Recordatorio cuando un torneo de tus favoritos esté por cerrar",
   },
   {
     key: "notifPromos",
-    icono: "🎁",
-    titulo: "Novedades y promos",
-    descripcion: "Descuentos, nuevos premios, eventos especiales.",
+    titulo: "Novedades y promociones",
+    descripcion: "Nuevas ligas, premios destacados y promos",
   },
   {
     key: "emailSemanal",
-    icono: "📬",
-    titulo: "Resumen semanal",
-    descripcion: "Tus stats de la semana cada lunes.",
+    titulo: "Email semanal de resumen",
+    descripcion: "Tu balance, mejores partidos y estadísticas cada domingo",
   },
 ];
 
@@ -82,46 +77,42 @@ export function PreferenciasPanel({ inicial }: PreferenciasPanelProps) {
     }, 500);
   }
 
-  useEffect(() => () => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    },
+    [],
+  );
 
   return (
-    <section className="rounded-md border border-light bg-card p-5 shadow-sm">
-      <div className="flex items-baseline justify-between">
-        <h2 className="font-display text-[16px] font-extrabold uppercase tracking-[0.06em] text-dark">
-          Notificaciones
-        </h2>
-        {guardando && (
-          <span className="text-[11px] text-muted-d">Guardando...</span>
-        )}
-      </div>
-      <div className="mt-4 divide-y divide-border-light">
-        {LABELS.map((item) => (
-          <ToggleRow
-            key={item.key}
-            icono={item.icono}
-            titulo={item.titulo}
-            descripcion={item.descripcion}
-            value={prefs[item.key]}
-            onToggle={() => toggle(item.key)}
-            testId={`pref-${item.key}`}
-          />
-        ))}
-      </div>
-    </section>
+    <SectionShell
+      title="Notificaciones"
+      subtitle="Elige qué avisos quieres recibir"
+      icon="🔔"
+      iconTone="notif"
+      badge={guardando ? "Guardando…" : undefined}
+    >
+      {LABELS.map((item) => (
+        <ToggleRow
+          key={item.key}
+          titulo={item.titulo}
+          descripcion={item.descripcion}
+          value={prefs[item.key]}
+          onToggle={() => toggle(item.key)}
+          testId={`pref-${item.key}`}
+        />
+      ))}
+    </SectionShell>
   );
 }
 
 function ToggleRow({
-  icono,
   titulo,
   descripcion,
   value,
   onToggle,
   testId,
 }: {
-  icono: string;
   titulo: string;
   descripcion: string;
   value: boolean;
@@ -129,13 +120,10 @@ function ToggleRow({
   testId?: string;
 }) {
   return (
-    <div className="flex items-center gap-3 py-3">
-      <span className="text-xl" aria-hidden>
-        {icono}
-      </span>
+    <div className="flex items-center gap-3.5 border-b border-light px-5 py-3.5 last:border-b-0">
       <div className="min-w-0 flex-1">
-        <div className="text-[14px] font-bold text-dark">{titulo}</div>
-        <div className="text-[12px] text-muted-d">{descripcion}</div>
+        <div className="text-sm font-semibold text-dark">{titulo}</div>
+        <div className="text-xs leading-[1.4] text-muted-d">{descripcion}</div>
       </div>
       <button
         type="button"
@@ -143,13 +131,14 @@ function ToggleRow({
         aria-checked={value}
         onClick={onToggle}
         data-testid={testId}
-        className={`relative h-6 w-11 rounded-full transition-colors ${
-          value ? "bg-brand-green" : "bg-subtle"
+        className={`relative h-6 w-11 flex-shrink-0 rounded-full transition ${
+          value ? "bg-brand-green" : "bg-border-strong"
         }`}
       >
         <span
-          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-            value ? "translate-x-5" : "translate-x-0.5"
+          aria-hidden
+          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-[0_2px_4px_rgba(0,0,0,0.2)] transition ${
+            value ? "left-[22px]" : "left-0.5"
           }`}
         />
       </button>
