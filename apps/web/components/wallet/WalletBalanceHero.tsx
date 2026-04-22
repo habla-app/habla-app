@@ -13,7 +13,9 @@ interface Props {
   initialBalance: number;
   proxVencimiento?: {
     lukas: number;
-    fecha: Date;
+    /** Serializada como string ISO al cruzar server→client; envolvemos en
+     *  `new Date()` al formatear. */
+    fecha: Date | string;
   } | null;
 }
 
@@ -69,11 +71,15 @@ export function WalletBalanceHero({ initialBalance, proxVencimiento }: Props) {
   );
 }
 
-function formatVencimiento(fecha: Date): string {
+function formatVencimiento(fecha: Date | string): string {
+  // `fecha` llega como string al atravesar la frontera server→client
+  // (Next.js serializa Date a ISO). `Intl.DateTimeFormat.format(string)`
+  // tira RangeError "Invalid time value" → 500 en SSR. Envolvemos en
+  // `new Date()` para aceptar ambas formas.
   return new Intl.DateTimeFormat("es-PE", {
     day: "numeric",
     month: "long",
     year: "numeric",
     timeZone: "America/Lima",
-  }).format(fecha);
+  }).format(new Date(fecha));
 }
