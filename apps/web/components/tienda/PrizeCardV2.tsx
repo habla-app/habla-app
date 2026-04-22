@@ -1,12 +1,14 @@
-// PrizeCardV2 — card de premio en /tienda.
+"use client";
+// PrizeCardV2 — card de premio (mockup `.prize-card-v2`).
 //
 // Estados visuales:
-//  - Afordable + con stock → borde verde, CTA dorado "Canjear ahora".
-//  - No afordable → progress bar dorada al X%, label "Te faltan Y 🪙".
-//  - Agotado → badge rojo "Agotado", CTA deshabilitado.
+//   - Afordable + con stock → borde verde, strip top verde, CTA dorado.
+//   - No afordable → progress bar "Te faltan X 🪙".
+//   - Agotado → badge rojo "Agotado", CTA deshabilitado.
 //
-// Badges: POPULAR (rosa), NUEVO (azul), LIMITADO (dorado).
-"use client";
+// Badges: POPULAR (🔥 orange), NUEVO (⭐ green), LIMITADO (💎 red pulsante).
+// Imagen: fondo pastel por categoría (tech=azul, clothing=verde,
+// entertainment=rosa, giftcard=púrpura, default=dorado claro).
 
 import { useState } from "react";
 import type { PremioDTO } from "@/lib/services/premios.service";
@@ -20,76 +22,115 @@ interface PrizeCardV2Props {
 
 const BADGE_STYLES: Record<
   NonNullable<PremioDTO["badge"]>,
-  { bg: string; text: string; label: string }
+  { cls: string; label: string }
 > = {
-  POPULAR: { bg: "bg-brand-orange", text: "text-white", label: "🔥 Popular" },
-  NUEVO: { bg: "bg-brand-blue-light", text: "text-white", label: "⭐ Nuevo" },
-  LIMITADO: { bg: "bg-brand-gold", text: "text-dark", label: "💎 Limitado" },
+  POPULAR: { cls: "bg-urgent-high text-white", label: "🔥 Popular" },
+  NUEVO: { cls: "bg-brand-green text-black", label: "⭐ Nuevo" },
+  LIMITADO: {
+    cls: "bg-urgent-critical text-white animate-pulse",
+    label: "💎 Limitada",
+  },
 };
 
-export function PrizeCardV2({ premio, balanceActual, onCanjeSuccess }: PrizeCardV2Props) {
+function imagenBg(categoria: PremioDTO["categoria"]): string {
+  switch (categoria) {
+    case "TECH":
+      return "bg-gradient-to-br from-[#E0E7FF] to-[#C7D2FE]";
+    case "CAMISETA":
+      return "bg-gradient-to-br from-[#D1FAE5] to-[#6EE7B7]";
+    case "ENTRADA":
+    case "EXPERIENCIA":
+      return "bg-gradient-to-br from-[#FCE7F3] to-[#F9A8D4]";
+    case "GIFT":
+      return "bg-gradient-to-br from-[#DDD6FE] to-[#A78BFA]";
+    default:
+      return "bg-gradient-to-br from-[#FFF8E5] to-[#FFE9A3]";
+  }
+}
+
+export function PrizeCardV2({
+  premio,
+  balanceActual,
+  onCanjeSuccess,
+}: PrizeCardV2Props) {
   const [open, setOpen] = useState(false);
 
   const afordable = balanceActual >= premio.costeLukas;
   const agotado = premio.stock <= 0;
   const faltan = Math.max(0, premio.costeLukas - balanceActual);
-  const progreso = Math.min(100, Math.round((balanceActual / premio.costeLukas) * 100));
+  const progreso = Math.min(
+    100,
+    Math.round((balanceActual / premio.costeLukas) * 100),
+  );
 
-  const borderCls = agotado
-    ? "border-2 border-border-light"
-    : afordable
-      ? "border-2 border-brand-green"
-      : "border border-border-light";
+  const cardCls = afordable
+    ? "relative flex flex-col overflow-hidden rounded-md border border-pred-correct/30 bg-card shadow-sm transition hover:-translate-y-0.5 hover:border-brand-gold hover:shadow-lg"
+    : "relative flex flex-col overflow-hidden rounded-md border border-light bg-card shadow-sm transition hover:-translate-y-0.5 hover:border-brand-gold hover:shadow-lg";
 
   return (
     <>
-      <article
-        className={`group flex flex-col rounded-lg bg-card ${borderCls} overflow-hidden shadow-sm transition-all hover:shadow-md`}
-        data-testid={`prize-card-${premio.id}`}
-      >
-        <div className="relative aspect-[4/3] flex items-center justify-center bg-subtle text-6xl">
-          {premio.imagen ?? "🎁"}
-          {premio.badge && (
-            <span
-              className={`absolute top-3 right-3 rounded-full px-3 py-1 text-[11px] font-bold ${BADGE_STYLES[premio.badge].bg} ${BADGE_STYLES[premio.badge].text}`}
-            >
-              {BADGE_STYLES[premio.badge].label}
-            </span>
-          )}
-          {agotado && (
-            <span className="absolute top-3 left-3 rounded-full bg-urgent-critical px-3 py-1 text-[11px] font-bold text-white">
-              Agotado
-            </span>
-          )}
+      <article className={cardCls} data-testid={`prize-card-${premio.id}`}>
+        {afordable ? (
+          <span
+            aria-hidden
+            className="absolute inset-x-0 top-0 z-[1] h-[3px] bg-brand-green"
+          />
+        ) : null}
+
+        {premio.badge ? (
+          <span
+            className={`absolute right-2.5 top-2.5 z-[2] rounded-full px-2 py-1 text-[10px] font-extrabold uppercase tracking-[0.04em] ${BADGE_STYLES[premio.badge].cls}`}
+          >
+            {BADGE_STYLES[premio.badge].label}
+          </span>
+        ) : null}
+
+        {agotado ? (
+          <span className="absolute left-2.5 top-2.5 z-[2] rounded-full bg-urgent-critical px-2 py-1 text-[10px] font-extrabold uppercase tracking-[0.04em] text-white">
+            Agotado
+          </span>
+        ) : null}
+
+        <div
+          className={`flex h-[130px] items-center justify-center text-[56px] leading-none ${imagenBg(premio.categoria)}`}
+        >
+          <span aria-hidden>{premio.imagen ?? "🎁"}</span>
         </div>
 
-        <div className="flex flex-1 flex-col p-4">
-          <h3 className="font-display text-[17px] font-bold text-dark">
+        <div className="flex flex-1 flex-col px-4 pb-4 pt-3.5">
+          <h3 className="text-[13px] font-bold leading-snug text-dark">
             {premio.nombre}
           </h3>
-          <p className="mt-1 text-[13px] leading-snug text-body line-clamp-2">
+          <p className="mt-0.5 line-clamp-2 text-[11px] leading-[1.4] text-muted-d">
             {premio.descripcion}
           </p>
 
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="font-display text-[24px] font-extrabold text-brand-gold-dark">
-              {premio.costeLukas}
-            </span>
-            <span className="text-base">🪙</span>
+          <div className="mt-3 flex items-baseline justify-between gap-2">
+            <div className="font-display text-[22px] font-black leading-none text-brand-gold-dark">
+              {premio.costeLukas.toLocaleString("es-PE")}{" "}
+              <span aria-hidden className="text-[0.65em]">
+                🪙
+              </span>
+            </div>
+            <div
+              className={`text-[10px] font-semibold uppercase tracking-[0.05em] ${
+                premio.stock > 0 && premio.stock <= 10
+                  ? "font-bold text-urgent-critical"
+                  : "text-muted-d"
+              }`}
+            >
+              {premio.stock > 0 && premio.stock <= 10
+                ? `⚠ Stock: ${premio.stock}`
+                : `Stock: ${premio.stock}`}
+            </div>
           </div>
 
-          {premio.stock > 0 && premio.stock <= 10 && (
-            <div className="mt-1 text-[11px] text-urgent-critical">
-              Quedan {premio.stock}
-            </div>
-          )}
-
-          <div className="mt-auto pt-4">
+          <div className="mt-auto pt-2.5">
             {agotado ? (
               <button
                 type="button"
                 disabled
-                className="w-full rounded-md bg-subtle px-4 py-2.5 text-[14px] font-bold text-soft"
+                className="w-full rounded-sm bg-subtle px-3 py-2.5 text-xs font-bold text-soft"
               >
                 Agotado
               </button>
@@ -97,21 +138,24 @@ export function PrizeCardV2({ premio, balanceActual, onCanjeSuccess }: PrizeCard
               <button
                 type="button"
                 onClick={() => setOpen(true)}
-                className="w-full rounded-md bg-brand-gold px-4 py-2.5 text-[14px] font-bold text-dark shadow-gold-btn transition-colors hover:bg-brand-gold-light"
+                className="flex w-full items-center justify-center gap-1 rounded-sm bg-brand-gold px-3 py-2.5 text-xs font-bold text-black shadow-gold-btn transition hover:bg-brand-gold-light"
                 data-testid={`canjear-btn-${premio.id}`}
               >
                 ✓ Canjear ahora
               </button>
             ) : (
               <div>
-                <div className="mb-2 h-2 overflow-hidden rounded-full bg-subtle">
+                <div className="mb-1.5 h-1.5 overflow-hidden rounded-full bg-subtle">
                   <div
-                    className="h-full rounded-full bg-brand-gold transition-all"
+                    className="h-full rounded-full bg-gold-shimmer bg-[length:200%_100%] transition-all"
                     style={{ width: `${progreso}%` }}
                   />
                 </div>
-                <div className="text-[12px] text-muted-d">
-                  Te faltan <strong className="text-brand-gold-dark">{faltan} 🪙</strong>
+                <div className="text-center text-[11px] font-semibold text-muted-d">
+                  Te faltan{" "}
+                  <strong className="text-dark">
+                    {faltan.toLocaleString("es-PE")} 🪙
+                  </strong>
                 </div>
               </div>
             )}
@@ -119,7 +163,7 @@ export function PrizeCardV2({ premio, balanceActual, onCanjeSuccess }: PrizeCard
         </div>
       </article>
 
-      {open && (
+      {open ? (
         <CanjearModal
           premio={premio}
           balanceActual={balanceActual}
@@ -129,7 +173,7 @@ export function PrizeCardV2({ premio, balanceActual, onCanjeSuccess }: PrizeCard
             onCanjeSuccess?.();
           }}
         />
-      )}
+      ) : null}
     </>
   );
 }

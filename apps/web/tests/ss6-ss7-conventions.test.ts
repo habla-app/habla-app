@@ -17,7 +17,9 @@ describe("§14 — authedFetch en nuevos hooks/components", () => {
     "components/perfil/DatosPersonalesPanel.tsx",
     "components/perfil/PreferenciasPanel.tsx",
     "components/perfil/LimitesPanel.tsx",
-    "components/perfil/DatosYPrivacidadPanel.tsx",
+    // Rediseño mockup v1: DatosYPrivacidadPanel se absorbió en
+    // ProfileFooterSections (Seguridad / Ayuda / Legal / Danger zone).
+    "components/perfil/ProfileFooterSections.tsx",
     "components/admin/AdminCanjesPanel.tsx",
   ];
 

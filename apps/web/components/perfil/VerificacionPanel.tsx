@@ -1,17 +1,29 @@
-// VerificacionPanel — email + edad + teléfono (con flujo SMS) + DNI.
 "use client";
+// VerificacionPanel — email + edad + teléfono + DNI (mockup `.verif-row`).
+// Modals (teléfono, DNI) usan createPortal via <Modal> y mantienen el
+// flujo existente. El badge "N pendientes" aparece si hay teléfono o
+// DNI no verificados.
 
 import { useState } from "react";
 import { authedFetch } from "@/lib/api-client";
 import type { PerfilCompleto } from "@/lib/services/usuarios.service";
-import { Modal, ModalHeader, ModalBody, ModalFooter } from "@/components/ui/Modal";
+import {
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+} from "@/components/ui/Modal";
+import { SectionShell } from "./SectionShell";
 
 interface VerificacionPanelProps {
   perfil: PerfilCompleto;
   onActualizar: () => void;
 }
 
-export function VerificacionPanel({ perfil, onActualizar }: VerificacionPanelProps) {
+export function VerificacionPanel({
+  perfil,
+  onActualizar,
+}: VerificacionPanelProps) {
   const [openTel, setOpenTel] = useState(false);
   const [openDni, setOpenDni] = useState(false);
 
@@ -22,46 +34,65 @@ export function VerificacionPanel({ perfil, onActualizar }: VerificacionPanelPro
     }
   }
 
-  return (
-    <section className="rounded-md border border-light bg-card p-5 shadow-sm">
-      <h2 className="font-display text-[16px] font-extrabold uppercase tracking-[0.06em] text-dark">
-        Verificación
-      </h2>
-      <p className="mt-1 text-[13px] text-muted-d">
-        Verificá tu cuenta para mantenerla segura y habilitar canjes grandes.
-      </p>
-      <div className="mt-4 divide-y divide-border-light">
-        <VerifRow
-          icono="📧"
-          label="Email"
-          estado={perfil.emailVerified ? "verificado" : "pendiente"}
-          texto={perfil.email}
-        />
-        <VerifRow
-          icono="🎂"
-          label="Edad (18+)"
-          estado={perfil.fechaNac ? "verificado" : "pendiente"}
-          texto={perfil.fechaNac ? "Verificada" : "Pendiente"}
-        />
-        <VerifRow
-          icono="📱"
-          label="Teléfono"
-          estado={perfil.telefonoVerif ? "verificado" : perfil.telefono ? "pendiente" : "ausente"}
-          texto={perfil.telefono ?? "No agregado"}
-          ctaLabel={perfil.telefonoVerif ? undefined : "Verificar"}
-          onCta={() => setOpenTel(true)}
-        />
-        <VerifRow
-          icono="🪪"
-          label="DNI (para canjes > S/500)"
-          estado={perfil.dniVerif ? "verificado" : "ausente"}
-          texto={perfil.dniVerif ? "Verificado" : "No verificado"}
-          ctaLabel={perfil.dniVerif ? undefined : "Verificar"}
-          onCta={() => setOpenDni(true)}
-        />
-      </div>
+  const pendientes =
+    (perfil.telefonoVerif ? 0 : 1) + (perfil.dniVerif ? 0 : 1);
+  const urgent = pendientes > 0;
 
-      {openTel && (
+  return (
+    <SectionShell
+      title="Verificación de cuenta"
+      subtitle="Completa tu verificación para desbloquear todos los premios"
+      icon="🛡️"
+      iconTone="verif"
+      urgent={urgent}
+      badge={urgent ? `${pendientes} pendiente${pendientes > 1 ? "s" : ""}` : undefined}
+    >
+      <VerifRow
+        estado={perfil.emailVerified ? "done" : "pending"}
+        title="Correo electrónico"
+        desc={
+          perfil.emailVerified
+            ? `${perfil.email} · Verificado al registrarte`
+            : perfil.email
+        }
+        chip={perfil.emailVerified ? "done" : "pending"}
+      />
+      <VerifRow
+        estado={perfil.fechaNac ? "done" : "pending"}
+        title="Edad (+18)"
+        desc={
+          perfil.fechaNac
+            ? "Edad confirmada por fecha de nacimiento"
+            : "Falta confirmar fecha de nacimiento"
+        }
+        chip={perfil.fechaNac ? "done" : "pending"}
+      />
+      <VerifRow
+        estado={perfil.telefonoVerif ? "done" : "pending"}
+        title="Teléfono"
+        desc={
+          perfil.telefonoVerif
+            ? perfil.telefono ?? "Teléfono verificado"
+            : "Recomendado para recuperación de cuenta y seguridad"
+        }
+        chip={perfil.telefonoVerif ? "done" : undefined}
+        ctaLabel={perfil.telefonoVerif ? undefined : perfil.telefono ? "Verificar" : "Agregar"}
+        onCta={() => setOpenTel(true)}
+      />
+      <VerifRow
+        estado={perfil.dniVerif ? "done" : "pending"}
+        title="DNI"
+        desc={
+          perfil.dniVerif
+            ? "DNI verificado"
+            : "Requerido solo para canjes de premios mayores a S/ 500"
+        }
+        chip={perfil.dniVerif ? "done" : undefined}
+        ctaLabel={perfil.dniVerif ? undefined : "Verificar"}
+        onCta={() => setOpenDni(true)}
+      />
+
+      {openTel ? (
         <TelefonoModal
           onClose={() => setOpenTel(false)}
           onSuccess={() => {
@@ -69,8 +100,8 @@ export function VerificacionPanel({ perfil, onActualizar }: VerificacionPanelPro
             triggerRefresh();
           }}
         />
-      )}
-      {openDni && (
+      ) : null}
+      {openDni ? (
         <DniModal
           onClose={() => setOpenDni(false)}
           onSuccess={() => {
@@ -78,66 +109,69 @@ export function VerificacionPanel({ perfil, onActualizar }: VerificacionPanelPro
             triggerRefresh();
           }}
         />
-      )}
-    </section>
+      ) : null}
+    </SectionShell>
   );
 }
 
 function VerifRow({
-  icono,
-  label,
   estado,
-  texto,
+  title,
+  desc,
+  chip,
   ctaLabel,
   onCta,
 }: {
-  icono: string;
-  label: string;
-  estado: "verificado" | "pendiente" | "ausente";
-  texto: string;
+  estado: "done" | "pending";
+  title: string;
+  desc: string;
+  chip?: "done" | "pending";
   ctaLabel?: string;
   onCta?: () => void;
 }) {
-  const badge =
-    estado === "verificado" ? (
-      <span className="inline-flex items-center rounded-full bg-pred-correct-bg px-2.5 py-0.5 text-[11px] font-bold text-pred-correct">
-        ✓ Verificado
-      </span>
-    ) : estado === "pendiente" ? (
-      <span className="inline-flex items-center rounded-full bg-urgent-med-bg px-2.5 py-0.5 text-[11px] font-bold text-urgent-high">
-        ⚠ Pendiente
-      </span>
-    ) : (
-      <span className="inline-flex items-center rounded-full bg-subtle px-2.5 py-0.5 text-[11px] font-bold text-muted-d">
-        Sin agregar
-      </span>
-    );
+  const iconCls =
+    estado === "done"
+      ? "bg-alert-success-bg text-alert-success-text"
+      : "bg-urgent-med-bg text-urgent-high-dark";
   return (
-    <div className="flex items-center gap-3 py-3">
-      <span className="text-xl" aria-hidden>
-        {icono}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="text-[14px] font-bold text-dark">{label}</div>
-        <div className="truncate text-[12px] text-muted-d">{texto}</div>
+    <div className="flex items-center gap-3.5 border-b border-light px-5 py-3.5 last:border-b-0">
+      <div
+        aria-hidden
+        className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-base font-bold ${iconCls}`}
+      >
+        {estado === "done" ? "✓" : "!"}
       </div>
-      {badge}
-      {ctaLabel && (
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-bold text-dark">{title}</div>
+        <div className="text-xs leading-[1.4] text-muted-d">{desc}</div>
+      </div>
+      {chip === "done" ? (
+        <span className="flex-shrink-0 rounded-full bg-alert-success-bg px-3 py-1 text-[11px] font-bold uppercase tracking-[0.04em] text-alert-success-text">
+          ✓ Verificado
+        </span>
+      ) : null}
+      {ctaLabel ? (
         <button
           type="button"
           onClick={onCta}
-          className="rounded-md border border-brand-blue-main px-3 py-1.5 text-[12px] font-bold text-brand-blue-main hover:bg-brand-blue-main hover:text-white"
+          className="flex-shrink-0 whitespace-nowrap rounded-sm bg-brand-blue-main px-3.5 py-1.5 text-xs font-bold text-white transition hover:-translate-y-0.5 hover:bg-brand-blue-light"
         >
           {ctaLabel}
         </button>
-      )}
+      ) : null}
     </div>
   );
 }
 
-// ---- Modal: verificar teléfono ----
+// ---- Modals (funcionalidad preservada del diseño anterior) ----
 
-function TelefonoModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+function TelefonoModal({
+  onClose,
+  onSuccess,
+}: {
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
   const [paso, setPaso] = useState<"telefono" | "codigo">("telefono");
   const [telefono, setTelefono] = useState("");
   const [codigo, setCodigo] = useState("");
@@ -192,7 +226,9 @@ function TelefonoModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
   return (
     <Modal isOpen onClose={onClose} label="Verificar teléfono" maxWidth="420px">
       <ModalHeader onClose={onClose} eyebrow="Verificación">
-        <h2 className="font-display text-[22px] font-extrabold">📱 Verificar teléfono</h2>
+        <h2 className="font-display text-[22px] font-extrabold">
+          📱 Verificar teléfono
+        </h2>
       </ModalHeader>
       <ModalBody>
         {paso === "telefono" ? (
@@ -226,21 +262,21 @@ function TelefonoModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
               onChange={(e) => setCodigo(e.target.value.replace(/\D/g, ""))}
               className="mt-1 w-full rounded-md border border-light px-3 py-2 text-center font-display text-[24px] font-extrabold tracking-widest"
             />
-            {devCode && (
+            {devCode ? (
               <p className="mt-2 rounded-md bg-alert-info-bg px-3 py-2 text-[12px] text-alert-info-text">
                 🔧 Modo dev: tu código es <strong>{devCode}</strong>
               </p>
-            )}
+            ) : null}
             <p className="mt-2 text-[12px] text-muted-d">
               Expira en 10 minutos. 3 intentos máximos.
             </p>
           </div>
         )}
-        {error && (
+        {error ? (
           <div className="mt-3 rounded-md bg-pred-wrong-bg px-3 py-2 text-[13px] text-pred-wrong">
             {error}
           </div>
-        )}
+        ) : null}
       </ModalBody>
       <ModalFooter>
         {paso === "telefono" ? (
@@ -267,9 +303,13 @@ function TelefonoModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
   );
 }
 
-// ---- Modal: verificar DNI ----
-
-function DniModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+function DniModal({
+  onClose,
+  onSuccess,
+}: {
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
   const [dni, setDni] = useState("");
   const [imagen, setImagen] = useState<string>("");
   const [preview, setPreview] = useState<string>("");
@@ -311,7 +351,9 @@ function DniModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () =
   return (
     <Modal isOpen onClose={onClose} label="Verificar DNI" maxWidth="480px">
       <ModalHeader onClose={onClose} eyebrow="Verificación">
-        <h2 className="font-display text-[22px] font-extrabold">🪪 Verificar DNI</h2>
+        <h2 className="font-display text-[22px] font-extrabold">
+          🪪 Verificar DNI
+        </h2>
       </ModalHeader>
       <ModalBody>
         <label className="text-[13px] font-bold text-dark">Número de DNI</label>
@@ -333,20 +375,21 @@ function DniModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () =
           onChange={onFile}
           className="mt-1 w-full rounded-md border border-light bg-subtle px-3 py-2 text-[13px]"
         />
-        {preview && (
+        {preview ? (
           <div className="mt-3 overflow-hidden rounded-md border border-light">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={preview} alt="Preview DNI" className="w-full" />
           </div>
-        )}
+        ) : null}
         <p className="mt-3 text-[12px] text-muted-d">
-          Tu DNI será revisado por nuestro equipo en 24-48 horas. Te avisamos por email.
+          Tu DNI será revisado por nuestro equipo en 24-48 horas. Te avisamos por
+          email.
         </p>
-        {error && (
+        {error ? (
           <div className="mt-3 rounded-md bg-pred-wrong-bg px-3 py-2 text-[13px] text-pred-wrong">
             {error}
           </div>
-        )}
+        ) : null}
       </ModalBody>
       <ModalFooter>
         <button

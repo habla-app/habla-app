@@ -67,9 +67,9 @@ export function TicketCard({
           )}
         </div>
         <div
-          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold ${
+          className={`inline-flex items-center gap-1.5 rounded-sm border px-2.5 py-1 text-[11px] font-bold ${
             pending
-              ? "border-light bg-subtle text-muted-d"
+              ? "border-alert-info-border bg-alert-info-bg text-alert-info-text"
               : inTop || isWinner
                 ? "border-brand-gold/40 bg-brand-gold-dim text-brand-gold-dark"
                 : "border-light bg-subtle text-dark"

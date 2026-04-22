@@ -1,6 +1,7 @@
 "use client";
-// EventsView — timeline cronológica de eventos del partido. Se actualiza
-// en vivo via el hook useEventosPartido.
+// EventsView — timeline cronológica de eventos (mockup `.events-detailed`).
+// Grid 60/44/1fr. Goles tienen highlight dorado. Pill de equipo inline al
+// principio del título (no separada).
 
 import type { EventoTimeline } from "@/hooks/useEventosPartido";
 
@@ -19,69 +20,74 @@ export function EventsView({
 }: EventsViewProps) {
   if (isLoading) {
     return (
-      <div className="rounded-md border border-light bg-card p-6 text-center text-[13px] text-muted-d">
+      <div className="rounded-md border border-light bg-card p-6 text-center text-sm text-muted-d shadow-sm">
         Cargando eventos…
       </div>
     );
   }
   if (eventos.length === 0) {
     return (
-      <div className="rounded-md border border-light bg-card p-6 text-center text-[13px] text-muted-d">
+      <div className="rounded-md border border-light bg-card p-6 text-center text-sm text-muted-d shadow-sm">
         Todavía no hubo eventos. Los goles, tarjetas y cambios aparecerán acá.
       </div>
     );
   }
   return (
-    <ul className="overflow-hidden rounded-md border border-light bg-card shadow-sm divide-y divide-light">
-      {eventos.map((e, i) => (
-        <li
-          key={e.id ?? i}
-          className="flex items-center gap-4 px-5 py-3 transition-colors hover:bg-hover"
-        >
-          <span className="flex h-10 w-12 flex-shrink-0 items-center justify-center rounded-sm bg-subtle font-display text-[14px] font-black text-dark">
-            {e.minuto}&apos;
-          </span>
-          <span
-            aria-hidden
-            className={`inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${
-              e.tipo === "GOL"
-                ? "bg-brand-green/20"
-                : e.tipo === "TARJETA_ROJA"
-                  ? "bg-urgent-critical/20"
-                  : e.tipo === "TARJETA_AMARILLA"
-                    ? "bg-brand-gold/25"
-                    : "bg-subtle"
-            }`}
+    <div className="overflow-hidden rounded-md border border-light bg-card shadow-sm">
+      {eventos.map((e, i) => {
+        const gol = e.tipo === "GOL";
+        const rowBg = gol
+          ? "bg-gradient-to-r from-brand-gold/[0.15] to-transparent"
+          : i > 0
+            ? "border-t border-light"
+            : "";
+        return (
+          <div
+            key={e.id ?? i}
+            className={`grid grid-cols-[60px_44px_1fr] items-center gap-3.5 px-5 py-3.5 transition hover:bg-subtle ${i > 0 && !gol ? "border-t border-light" : ""} ${rowBg}`}
           >
-            {icono(e.tipo)}
-          </span>
-          <span
-            className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
-              e.equipo === "LOCAL"
-                ? "bg-brand-blue-main/10 text-brand-blue-main"
-                : e.equipo === "VISITA"
-                  ? "bg-brand-gold/15 text-brand-gold-dark"
-                  : "bg-subtle text-muted-d"
-            }`}
-          >
-            {e.equipo === "LOCAL"
-              ? cortoNombre(equipoLocal)
-              : e.equipo === "VISITA"
-                ? cortoNombre(equipoVisita)
-                : "—"}
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="text-[14px] font-semibold text-dark">
-              {titulo(e.tipo)}
+            <div className="text-center font-display text-xl font-black leading-none text-muted-d">
+              {e.minuto}&apos;
             </div>
-            <div className="truncate text-[12px] text-muted-d">
-              {e.jugador ?? ""}
-              {e.detalle && (e.jugador ? " · " : "") + e.detalle}
+            <div
+              aria-hidden
+              className={`flex h-10 w-10 items-center justify-center rounded-full text-lg ${
+                gol
+                  ? "bg-alert-success-bg"
+                  : e.tipo === "TARJETA_ROJA"
+                    ? "bg-pred-wrong-bg"
+                    : e.tipo === "TARJETA_AMARILLA"
+                      ? "bg-urgent-med-bg"
+                      : e.tipo === "SUSTITUCION"
+                        ? "bg-accent-champions-bg"
+                        : "bg-subtle"
+              }`}
+            >
+              {icono(e.tipo)}
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-bold text-dark">
+                {e.equipo === "LOCAL" || e.equipo === "VISITA" ? (
+                  <span
+                    className={`mr-1.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] ${
+                      e.equipo === "LOCAL"
+                        ? "bg-pred-wrong-bg text-accent-clasico-dark"
+                        : "bg-accent-champions-bg text-accent-champions-dark"
+                    }`}
+                  >
+                    {cortoNombre(e.equipo === "LOCAL" ? equipoLocal : equipoVisita)}
+                  </span>
+                ) : null}
+                {tituloConJugador(e.tipo, e.jugador)}
+              </div>
+              {e.detalle ? (
+                <div className="text-xs text-muted-d">{e.detalle}</div>
+              ) : null}
             </div>
           </div>
-        </li>
-      ))}
-    </ul>
+        );
+      })}
+    </div>
   );
 }
 
@@ -89,17 +95,21 @@ function icono(tipo: string): string {
   if (tipo === "GOL") return "⚽";
   if (tipo === "TARJETA_ROJA") return "🟥";
   if (tipo === "TARJETA_AMARILLA") return "🟨";
-  if (tipo === "SUSTITUCION") return "🔁";
+  if (tipo === "SUSTITUCION") return "🔄";
   if (tipo === "FIN_PARTIDO") return "🏁";
   if (tipo === "HALFTIME") return "⏸";
   return "•";
 }
 
-function titulo(tipo: string): string {
-  if (tipo === "GOL") return "Gol";
-  if (tipo === "TARJETA_ROJA") return "Tarjeta roja";
-  if (tipo === "TARJETA_AMARILLA") return "Tarjeta amarilla";
-  if (tipo === "SUSTITUCION") return "Sustitución";
+function tituloConJugador(tipo: string, jugador: string | null): string {
+  const nombre = jugador ?? "";
+  if (tipo === "GOL") return nombre ? `Gol de ${nombre}` : "Gol";
+  if (tipo === "TARJETA_ROJA")
+    return nombre ? `Tarjeta roja a ${nombre}` : "Tarjeta roja";
+  if (tipo === "TARJETA_AMARILLA")
+    return nombre ? `Tarjeta amarilla a ${nombre}` : "Tarjeta amarilla";
+  if (tipo === "SUSTITUCION")
+    return nombre ? `Sustitución: ${nombre}` : "Sustitución";
   if (tipo === "FIN_PARTIDO") return "Fin del partido";
   if (tipo === "HALFTIME") return "Descanso";
   return tipo;

@@ -20,6 +20,7 @@ import { StatsPill } from "@/components/tickets/StatsPill";
 import { BalancePill } from "@/components/tickets/BalancePill";
 import { MisTicketsTabs, type TicketsTab } from "@/components/tickets/MisTicketsTabs";
 import { MatchGroup } from "@/components/tickets/MatchGroup";
+import { HistoryList } from "@/components/tickets/HistoryList";
 import type { TicketConContexto } from "@/components/tickets/adapter";
 
 export const dynamic = "force-dynamic";
@@ -80,16 +81,16 @@ export default async function MisCombinadasPage({ searchParams }: Props) {
         </p>
       </header>
 
-      <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-5">
+      <div className="mb-7 grid grid-cols-2 gap-3 md:grid-cols-5">
         <StatsPill
           icon="⚽"
           value={stats.jugadas.toString()}
-          label="Jugadas"
+          label="Combinadas jugadas"
         />
         <StatsPill
           icon="🏆"
           value={stats.ganadas.toString()}
-          label="Ganadas"
+          label="Ganadas con premio"
           tone="gold"
         />
         <StatsPill
@@ -124,6 +125,8 @@ export default async function MisCombinadasPage({ searchParams }: Props) {
 
       {grupos.length === 0 ? (
         <EmptyState tab={tab} />
+      ) : tab === "historial" ? (
+        <HistoryList grupos={grupos} />
       ) : (
         <div>
           {grupos.map((grupo) => (

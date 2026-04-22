@@ -1,50 +1,58 @@
-// DatosPersonalesPanel — editar nombre, @handle, ubicación. Sub-Sprint 7.
-// Email y fecha de nacimiento son inmutables (copy: "🔒").
 "use client";
+// DatosPersonalesPanel — filas editables al estilo mockup `.data-row`.
+// Click en "Editar" abre un input inline; el resto son display.
+// Email y fecha de nacimiento son inmutables (🔒).
+// PATCH /api/v1/usuarios/me via authedFetch al guardar cualquier campo.
 
 import { useState } from "react";
 import { authedFetch } from "@/lib/api-client";
 import type { PerfilCompleto } from "@/lib/services/usuarios.service";
+import { SectionShell } from "./SectionShell";
 
 interface DatosPersonalesPanelProps {
   perfil: PerfilCompleto;
   onActualizar: () => void;
 }
 
+type CampoEditable = "nombre" | "username" | "ubicacion";
+
+const FECHA_NAC_FMT = new Intl.DateTimeFormat("es-PE", {
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+  timeZone: "America/Lima",
+});
+
 export function DatosPersonalesPanel({
   perfil,
   onActualizar,
 }: DatosPersonalesPanelProps) {
-  const [nombre, setNombre] = useState(perfil.nombre);
-  const [username, setUsername] = useState(perfil.username ?? "");
-  const [ubicacion, setUbicacion] = useState(perfil.ubicacion ?? "");
-  const [msg, setMsg] = useState<{ tipo: "ok" | "error"; texto: string } | null>(
-    null,
-  );
+  const [editing, setEditing] = useState<CampoEditable | null>(null);
+  const [valores, setValores] = useState({
+    nombre: perfil.nombre ?? "",
+    username: perfil.username ?? "",
+    ubicacion: perfil.ubicacion ?? "",
+  });
   const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  async function guardar() {
+  async function guardar(campo: CampoEditable) {
     setCargando(true);
-    setMsg(null);
+    setError(null);
     try {
+      const body: Record<string, unknown> = {};
+      body[campo] = valores[campo] || null;
       const resp = await authedFetch("/api/v1/usuarios/me", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          nombre,
-          username: username || undefined,
-          ubicacion,
-        }),
+        body: JSON.stringify(body),
       });
       const json = await resp.json();
       if (!resp.ok) {
-        setMsg({
-          tipo: "error",
-          texto: json?.error?.message ?? "No se pudo guardar.",
-        });
+        setError(json?.error?.message ?? "No se pudo guardar.");
         return;
       }
-      setMsg({ tipo: "ok", texto: "Datos guardados." });
+      setEditing(null);
       onActualizar();
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("perfil:refresh"));
@@ -55,110 +63,175 @@ export function DatosPersonalesPanel({
   }
 
   return (
-    <section className="rounded-md border border-light bg-card p-5 shadow-sm">
-      <h2 className="font-display text-[16px] font-extrabold uppercase tracking-[0.06em] text-dark">
-        Datos personales
-      </h2>
-      <div className="mt-4 space-y-3">
-        <Field label="Nombre">
+    <SectionShell
+      title="Datos personales"
+      subtitle="Esta información se usa solo para tu cuenta y verificación"
+      icon="👤"
+      iconTone="data"
+    >
+      <DataRow
+        label="Nombre completo"
+        value={perfil.nombre || "—"}
+        editing={editing === "nombre"}
+        onEdit={() => setEditing("nombre")}
+        onCancel={() => setEditing(null)}
+        onSave={() => guardar("nombre")}
+        input={
           <input
             type="text"
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-            className="w-full rounded-md border border-light px-3 py-2 text-[14px]"
+            value={valores.nombre}
+            onChange={(e) =>
+              setValores((v) => ({ ...v, nombre: e.target.value }))
+            }
+            className="w-full rounded-sm border border-light px-3 py-1.5 text-sm"
+            autoFocus
           />
-        </Field>
-        <Field label="Usuario (@handle)">
+        }
+      />
+      <DataRow
+        label="Usuario (ranking)"
+        value={perfil.username ? `@${perfil.username}` : "—"}
+        editing={editing === "username"}
+        onEdit={() => setEditing("username")}
+        onCancel={() => setEditing(null)}
+        onSave={() => guardar("username")}
+        input={
           <input
             type="text"
             placeholder="tu_handle"
-            value={username}
-            onChange={(e) => setUsername(e.target.value.toLowerCase())}
-            className="w-full rounded-md border border-light px-3 py-2 text-[14px]"
-          />
-        </Field>
-        <Field label="Correo" lock>
-          <input
-            type="email"
-            value={perfil.email}
-            disabled
-            className="w-full cursor-not-allowed rounded-md border border-light bg-subtle px-3 py-2 text-[14px] text-muted-d"
-          />
-        </Field>
-        <Field label="Teléfono">
-          <input
-            type="tel"
-            value={perfil.telefono ?? ""}
-            disabled
-            className="w-full cursor-not-allowed rounded-md border border-light bg-subtle px-3 py-2 text-[14px] text-muted-d"
-          />
-          <p className="mt-1 text-[11px] text-muted-d">
-            Para cambiar tu teléfono, verificá uno nuevo arriba.
-          </p>
-        </Field>
-        <Field label="Fecha de nacimiento" lock>
-          <input
-            type="text"
-            value={
-              perfil.fechaNac
-                ? new Date(perfil.fechaNac).toLocaleDateString("es-PE", {
-                    timeZone: "America/Lima",
-                  })
-                : "No verificada"
+            value={valores.username}
+            onChange={(e) =>
+              setValores((v) => ({ ...v, username: e.target.value.toLowerCase() }))
             }
-            disabled
-            className="w-full cursor-not-allowed rounded-md border border-light bg-subtle px-3 py-2 text-[14px] text-muted-d"
+            className="w-full rounded-sm border border-light px-3 py-1.5 text-sm"
+            autoFocus
           />
-        </Field>
-        <Field label="Ubicación">
+        }
+      />
+      <DataRow label="Correo" value={perfil.email} locked />
+      <DataRow
+        label="Teléfono"
+        value={perfil.telefono ?? "No agregado"}
+        emptyValue={!perfil.telefono}
+        hint="Para cambiar, verificá uno nuevo arriba"
+      />
+      <DataRow
+        label="Fecha nacimiento"
+        value={
+          perfil.fechaNac
+            ? FECHA_NAC_FMT.format(new Date(perfil.fechaNac))
+            : "No verificada"
+        }
+        locked
+      />
+      <DataRow
+        label="Ubicación"
+        value={perfil.ubicacion ?? "—"}
+        emptyValue={!perfil.ubicacion}
+        editing={editing === "ubicacion"}
+        onEdit={() => setEditing("ubicacion")}
+        onCancel={() => setEditing(null)}
+        onSave={() => guardar("ubicacion")}
+        input={
           <input
             type="text"
             placeholder="Lima, Perú"
-            value={ubicacion}
-            onChange={(e) => setUbicacion(e.target.value)}
-            className="w-full rounded-md border border-light px-3 py-2 text-[14px]"
+            value={valores.ubicacion}
+            onChange={(e) =>
+              setValores((v) => ({ ...v, ubicacion: e.target.value }))
+            }
+            className="w-full rounded-sm border border-light px-3 py-1.5 text-sm"
+            autoFocus
           />
-        </Field>
-      </div>
-      {msg && (
-        <div
-          className={`mt-3 rounded-md px-3 py-2 text-[13px] ${
-            msg.tipo === "ok"
-              ? "bg-alert-success-bg text-alert-success-text"
-              : "bg-pred-wrong-bg text-pred-wrong"
-          }`}
-        >
-          {msg.texto}
+        }
+      />
+      {error ? (
+        <div className="mx-5 mb-4 rounded-sm bg-pred-wrong-bg px-3 py-2 text-xs text-pred-wrong">
+          {error}
         </div>
-      )}
-      <button
-        type="button"
-        onClick={guardar}
-        disabled={cargando}
-        className="mt-4 rounded-md bg-brand-blue-main px-5 py-2.5 font-bold text-white disabled:opacity-50"
-      >
-        {cargando ? "Guardando..." : "Guardar cambios"}
-      </button>
-    </section>
+      ) : null}
+      {cargando ? (
+        <div className="px-5 pb-4 text-xs text-muted-d">Guardando…</div>
+      ) : null}
+    </SectionShell>
   );
 }
 
-function Field({
+function DataRow({
   label,
-  lock,
-  children,
+  value,
+  emptyValue = false,
+  locked = false,
+  editing = false,
+  onEdit,
+  onCancel,
+  onSave,
+  input,
+  hint,
 }: {
   label: string;
-  lock?: boolean;
-  children: React.ReactNode;
+  value: string;
+  emptyValue?: boolean;
+  locked?: boolean;
+  editing?: boolean;
+  onEdit?: () => void;
+  onCancel?: () => void;
+  onSave?: () => void;
+  input?: React.ReactNode;
+  hint?: string;
 }) {
   return (
-    <div>
-      <label className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-wide text-muted-d">
+    <div className="flex flex-wrap items-center gap-3 border-b border-light px-5 py-3.5 last:border-b-0">
+      <div className="min-w-[140px] flex-shrink-0 text-[11px] font-bold uppercase tracking-[0.06em] text-muted-d">
         {label}
-        {lock && <span aria-hidden>🔒</span>}
-      </label>
-      <div className="mt-1">{children}</div>
+      </div>
+      {editing && input ? (
+        <div className="flex min-w-[200px] flex-1 items-center gap-2">
+          {input}
+          <button
+            type="button"
+            onClick={onSave}
+            className="rounded-sm bg-brand-green px-3 py-1.5 text-xs font-bold text-black"
+          >
+            Guardar
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-sm bg-subtle px-3 py-1.5 text-xs font-bold text-muted-d"
+          >
+            Cancelar
+          </button>
+        </div>
+      ) : (
+        <>
+          <div
+            className={`min-w-[120px] flex-1 text-sm ${emptyValue ? "italic text-muted-d" : "font-medium text-dark"}`}
+          >
+            {value}
+            {hint ? (
+              <span className="ml-2 text-xs text-muted-d">({hint})</span>
+            ) : null}
+          </div>
+          {locked ? (
+            <span className="flex-shrink-0 cursor-default rounded-sm bg-transparent px-2.5 py-1.5 text-[11px] text-muted-d">
+              🔒 Bloqueado
+            </span>
+          ) : onEdit ? (
+            <button
+              type="button"
+              onClick={onEdit}
+              className={`flex-shrink-0 rounded-sm px-3 py-1.5 text-xs font-bold transition ${
+                emptyValue
+                  ? "border border-brand-gold/30 bg-brand-gold-dim text-brand-gold-dark hover:bg-brand-gold hover:text-black"
+                  : "bg-transparent text-brand-blue-main hover:bg-brand-blue-main hover:text-white"
+              }`}
+            >
+              {emptyValue ? "+ Agregar" : "Editar"}
+            </button>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }

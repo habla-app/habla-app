@@ -98,11 +98,14 @@ const config: Config = {
         danger: "#C9302C",
 
         /* medal.* — colores para posiciones 1°/2°/3° en rankings
-           (top-pos.gold/silver/bronze del mockup) */
+           (top-pos.gold/silver/bronze del mockup). Los valores silver y
+           bronze se alinearon al mockup v5 (antes #737373 / #A0522D).
+           Los tints 8-10% se usan inline como border-l-[color] en
+           RankingTable para las filas top-1/2/3. */
         medal: {
           gold: "#B8860B",
-          silver: "#737373",
-          bronze: "#A0522D",
+          silver: "#C0C0C0",
+          bronze: "#CD7F32",
         },
       },
 
