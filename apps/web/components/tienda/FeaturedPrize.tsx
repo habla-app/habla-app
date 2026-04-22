@@ -1,5 +1,11 @@
-// FeaturedPrize — hero card para el premio destacado. Sub-Sprint 6.
 "use client";
+// FeaturedPrize — hero card "premio destacado" del mockup:
+// superficie dark estadio + shimmer dorado superior + grid 2 cols
+// (imagen dorada con emoji gigante + body con badge, nombre, precio,
+// stock pill, CTA dorado).
+//
+// Click CTA abre CanjearModal (portal). Edge cases: agotado → CTA
+// deshabilitado; no afordable → mensaje de "te faltan X".
 
 import { useState } from "react";
 import type { PremioDTO } from "@/lib/services/premios.service";
@@ -14,46 +20,49 @@ export function FeaturedPrize({ premio, balanceActual }: FeaturedPrizeProps) {
   const [open, setOpen] = useState(false);
   const afordable = balanceActual >= premio.costeLukas;
   const agotado = premio.stock <= 0;
+  const faltan = Math.max(0, premio.costeLukas - balanceActual);
 
   return (
     <>
-      <div className="relative overflow-hidden rounded-xl bg-hero-blue px-6 py-8 text-white shadow-lg md:px-10 md:py-10">
+      <section className="relative mb-7 grid overflow-hidden rounded-lg bg-gradient-to-br from-dark-surface to-[#000530] text-white shadow-lg md:grid-cols-2">
         <span
           aria-hidden
-          className="absolute inset-x-0 top-0 h-1 animate-shimmer bg-gold-shimmer bg-[length:200%_100%]"
+          className="pointer-events-none absolute inset-x-0 top-0 z-10 h-1 bg-gold-shimmer bg-[length:200%_100%] animate-shimmer"
         />
-        <div className="grid gap-6 md:grid-cols-[1fr_auto] md:items-center">
-          <div>
-            <span className="inline-flex items-center gap-2 rounded-full bg-brand-gold/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-brand-gold-light">
-              ⭐ Destacado
-            </span>
-            <h2 className="mt-3 font-display text-[28px] font-extrabold md:text-[36px]">
-              {premio.nombre}
-            </h2>
-            <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-white/85 md:text-[15px]">
-              {premio.descripcion}
-            </p>
-            <div className="mt-4 flex items-baseline gap-3">
-              <span className="font-display text-[40px] font-extrabold text-brand-gold md:text-[48px]">
-                {premio.costeLukas}
+        <div className="flex min-h-[250px] items-center justify-center bg-gradient-to-br from-[#FFF8E5] to-[#FFD060] text-[110px] leading-none">
+          <span aria-hidden>{premio.imagen ?? "🎁"}</span>
+        </div>
+
+        <div className="flex flex-col justify-center p-7 md:p-8">
+          <span className="mb-3 inline-flex w-fit items-center gap-1.5 rounded-full bg-brand-gold px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.06em] text-black">
+            🔥 Premio destacado
+          </span>
+          <h3 className="font-display text-[30px] font-black uppercase leading-[1.1] text-white">
+            {premio.nombre}
+          </h3>
+          <p className="mt-1.5 text-[13px] leading-relaxed text-white/75">
+            {premio.descripcion}
+          </p>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <div className="font-display text-[34px] font-black leading-none text-brand-gold">
+              {premio.costeLukas.toLocaleString("es-PE")}{" "}
+              <span aria-hidden className="text-[0.65em]">
+                🪙
               </span>
-              <span className="text-2xl">🪙</span>
-              {premio.stock > 0 && premio.stock <= 10 && (
-                <span className="ml-2 rounded-full bg-urgent-critical px-3 py-1 text-[11px] font-bold">
-                  Quedan {premio.stock}
-                </span>
-              )}
             </div>
+            {premio.stock > 0 && premio.stock <= 12 ? (
+              <span className="rounded-full bg-white/[0.08] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.06em] text-white/60">
+                ⚠ Solo {premio.stock} disponibles
+              </span>
+            ) : null}
           </div>
-          <div className="flex flex-col items-center gap-4">
-            <div className="flex h-32 w-32 items-center justify-center rounded-xl bg-white/10 text-7xl backdrop-blur-sm">
-              {premio.imagen ?? "🎁"}
-            </div>
+
+          <div className="mt-4">
             {agotado ? (
               <button
                 type="button"
                 disabled
-                className="w-full cursor-not-allowed rounded-md bg-white/10 px-6 py-3 font-bold text-white/50"
+                className="w-full max-w-[260px] cursor-not-allowed rounded-sm bg-white/10 px-5 py-3 text-sm font-bold text-white/50 md:w-auto"
               >
                 Agotado
               </button>
@@ -61,27 +70,28 @@ export function FeaturedPrize({ premio, balanceActual }: FeaturedPrizeProps) {
               <button
                 type="button"
                 onClick={() => setOpen(true)}
-                className="w-full rounded-md bg-brand-gold px-6 py-3 font-bold text-dark shadow-gold-cta transition-colors hover:bg-brand-gold-light"
+                className="inline-flex items-center gap-2 self-start rounded-sm bg-brand-gold px-5 py-3 font-display text-sm font-extrabold uppercase tracking-[0.04em] text-black shadow-gold transition hover:-translate-y-0.5 hover:bg-brand-gold-light"
+                data-testid={`canjear-btn-${premio.id}`}
               >
-                ✓ Canjear ahora
+                Canjear ahora →
               </button>
             ) : (
-              <div className="w-full rounded-md border border-white/20 px-6 py-3 text-center text-[13px] text-white/80">
-                Te faltan {premio.costeLukas - balanceActual} 🪙
+              <div className="inline-flex items-center rounded-sm border border-white/20 px-5 py-3 text-[13px] text-white/80">
+                Te faltan {faltan.toLocaleString("es-PE")} 🪙
               </div>
             )}
           </div>
         </div>
-      </div>
+      </section>
 
-      {open && (
+      {open ? (
         <CanjearModal
           premio={premio}
           balanceActual={balanceActual}
           onClose={() => setOpen(false)}
           onSuccess={() => setOpen(false)}
         />
-      )}
+      ) : null}
     </>
   );
 }
