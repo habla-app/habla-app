@@ -70,10 +70,16 @@ function TxItem({ tx }: { tx: WalletTransaccion }) {
       </div>
       <div className="min-w-0 flex-1">
         <div className="truncate text-[13px] font-semibold text-dark">
-          {tx.descripcion}
+          {tx.partido ? tx.partido.resumen : tx.descripcion}
         </div>
         <div className="text-[11px] text-muted-d">
-          {formatTxDate(tx.creadoEn)}
+          {tx.partido ? (
+            <>
+              {tx.partido.liga} · {formatTxDate(tx.creadoEn)}
+            </>
+          ) : (
+            formatTxDate(tx.creadoEn)
+          )}
         </div>
       </div>
       <div

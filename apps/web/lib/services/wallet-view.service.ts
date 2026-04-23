@@ -2,6 +2,12 @@
 // próximo vencimiento (Lukas COMPRADOS con venceEn > ahora) e historial
 // ordenado. No es un endpoint — el page.tsx lo consume directo en SSR.
 //
+// Abr 2026: las transacciones `ENTRADA_TORNEO` y `PREMIO_TORNEO` ahora
+// incluyen el partido relacionado (resuelto vía refId → Torneo → Partido)
+// para que el historial del wallet muestre "Alianza vs Cristal" y no
+// dependa sólo del `descripcion` del torneo. El filtro "Inscripciones"
+// del wallet muestra este enriquecimiento.
+//
 // Nota Sub-Sprint 2: cuando llegue Culqi habrá endpoints `/lukas/balance`
 // y `/lukas/historial`. Este helper puede convivir (para SSR) o reemplazarse
 // por `authedFetch` si se prefiere mover todo a client-side.
@@ -20,6 +26,14 @@ export interface WalletProxVencimiento {
   fecha: Date;
 }
 
+export interface WalletTxPartido {
+  liga: string;
+  equipoLocal: string;
+  equipoVisita: string;
+  /** "Alianza 2-1 Cristal" si ya hay goles, "Alianza vs Cristal" si no. */
+  resumen: string;
+}
+
 export interface WalletTransaccion {
   id: string;
   tipo: TipoTransaccion;
@@ -27,6 +41,9 @@ export interface WalletTransaccion {
   descripcion: string;
   refId: string | null;
   creadoEn: Date;
+  /** Solo presente para tipos que referencian un torneo — ENTRADA_TORNEO,
+   *  PREMIO_TORNEO, REEMBOLSO. Resuelto vía refId → Torneo → Partido. */
+  partido: WalletTxPartido | null;
 }
 
 export interface WalletView {
@@ -39,11 +56,30 @@ export interface WalletView {
 
 const HISTORIAL_LIMITE = 100;
 
+const TIPOS_CON_TORNEO: TipoTransaccion[] = [
+  "ENTRADA_TORNEO",
+  "PREMIO_TORNEO",
+  "REEMBOLSO",
+];
+
+function resumenPartido(p: {
+  equipoLocal: string;
+  equipoVisita: string;
+  golesLocal: number | null;
+  golesVisita: number | null;
+  estado: string;
+}): string {
+  if (p.estado === "FINALIZADO" && p.golesLocal !== null && p.golesVisita !== null) {
+    return `${p.equipoLocal} ${p.golesLocal}-${p.golesVisita} ${p.equipoVisita}`;
+  }
+  return `${p.equipoLocal} vs ${p.equipoVisita}`;
+}
+
 export async function obtenerWalletView(
   usuarioId: string,
   balance: number,
 ): Promise<WalletView> {
-  const [agregado, proxVenc, transacciones, totalMovimientos] =
+  const [agregado, proxVenc, transaccionesRaw, totalMovimientos] =
     await Promise.all([
       prisma.transaccionLukas.groupBy({
         by: ["tipo"],
@@ -75,6 +111,38 @@ export async function obtenerWalletView(
       }),
       prisma.transaccionLukas.count({ where: { usuarioId } }),
     ]);
+
+  // Resolver partidos para las transacciones referentes a torneos.
+  const torneoIds = Array.from(
+    new Set(
+      transaccionesRaw
+        .filter((t) => TIPOS_CON_TORNEO.includes(t.tipo) && t.refId)
+        .map((t) => t.refId!),
+    ),
+  );
+  const partidosPorTorneo = new Map<string, WalletTxPartido>();
+  if (torneoIds.length > 0) {
+    const torneos = await prisma.torneo.findMany({
+      where: { id: { in: torneoIds } },
+      include: { partido: true },
+    });
+    for (const t of torneos) {
+      partidosPorTorneo.set(t.id, {
+        liga: t.partido.liga,
+        equipoLocal: t.partido.equipoLocal,
+        equipoVisita: t.partido.equipoVisita,
+        resumen: resumenPartido(t.partido),
+      });
+    }
+  }
+
+  const transacciones: WalletTransaccion[] = transaccionesRaw.map((t) => ({
+    ...t,
+    partido:
+      TIPOS_CON_TORNEO.includes(t.tipo) && t.refId
+        ? partidosPorTorneo.get(t.refId) ?? null
+        : null,
+  }));
 
   const totales: WalletTotales = {
     comprado: 0,
