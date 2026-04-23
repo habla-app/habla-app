@@ -6,10 +6,11 @@
 //      ordenados por pozoBruto DESC, top 5)
 //   3. 🪙 Tu balance (rediseñado, tipografía grande + CTA /wallet)
 //   4. 📐 Cómo se pagan los premios (PrizeRulesCard)
-//   5. 🏅 Top de la Semana (data real 7d)
+//   5. 🏅 Los más pagados de la semana (suma de premios de torneo por
+//      usuario en la semana calendario, top 10)
 //
 // Se comparte entre `/` (landing) y `/matches`. Los widgets de en vivo,
-// pozos y top semana son iguales con o sin sesión; el de balance muta:
+// pozos y más pagados son iguales con o sin sesión; el de balance muta:
 // con sesión muestra hero + CTAs, sin sesión muestra un mensaje con CTA
 // a /auth/signin.
 //
@@ -25,10 +26,10 @@ import {
   obtenerLiveMatches,
 } from "@/lib/services/live-matches.service";
 import {
+  listarMasPagadosSemana,
   listarPozosMasGrandesSemana,
-  listarTopSemana,
+  type MasPagadoSemanaRow,
   type PozoSemanaRow,
-  type TopSemanaRow,
 } from "@/lib/services/stats-semana.service";
 import { getTeamColor } from "@/lib/utils/team-colors";
 import { SidebarBalanceWidget } from "@/components/matches/SidebarBalanceWidget";
@@ -116,10 +117,10 @@ export async function MatchesSidebar() {
   const session = await auth();
   const balance = session?.user?.balanceLukas ?? null;
 
-  const [liveMatches, pozosSemana, topSemana] = await Promise.all([
+  const [liveMatches, pozosSemana, masPagadosSemana] = await Promise.all([
     fetchLiveMatches(),
     listarPozosMasGrandesSemana({ limit: 5 }),
-    listarTopSemana({ sinceDays: 7, limit: 5 }),
+    listarMasPagadosSemana({ limit: 10 }),
   ]);
 
   return (
@@ -128,7 +129,7 @@ export async function MatchesSidebar() {
       <PozosSemanaWidget rows={pozosSemana} />
       <SidebarBalanceWidget initialBalance={balance} />
       <PrizeRulesCard />
-      <TopSemanaWidget rows={topSemana} />
+      <MasPagadosSemanaWidget rows={masPagadosSemana} />
     </aside>
   );
 }
@@ -332,10 +333,10 @@ function PozosSemanaWidget({ rows }: { rows: PozoSemanaRow[] }) {
 }
 
 // ---------------------------------------------------------------------------
-// Widget 5: 🏅 Top de la Semana
+// Widget 5: 🏅 Los más pagados de la semana
 // ---------------------------------------------------------------------------
 
-function TopSemanaWidget({ rows }: { rows: TopSemanaRow[] }) {
+function MasPagadosSemanaWidget({ rows }: { rows: MasPagadoSemanaRow[] }) {
   const posColor = (pos: number) => {
     if (pos === 1) return "text-medal-gold";
     if (pos === 2) return "text-medal-silver";
@@ -350,10 +351,7 @@ function TopSemanaWidget({ rows }: { rows: TopSemanaRow[] }) {
           🏅
         </span>
         <span className="font-display text-[13px] font-extrabold uppercase tracking-[0.06em] text-dark">
-          Top de la Semana
-        </span>
-        <span className="ml-auto text-[10px] font-bold uppercase tracking-[0.04em] text-muted-d">
-          7 días
+          Los más pagados de la semana
         </span>
       </div>
 
@@ -364,7 +362,7 @@ function TopSemanaWidget({ rows }: { rows: TopSemanaRow[] }) {
       ) : (
         rows.map((row, idx) => (
           <div
-            key={row.ticketId}
+            key={row.usuarioId}
             className={`flex items-center gap-2.5 px-3.5 py-2.5 ${idx < rows.length - 1 ? "border-b border-light" : ""}`}
           >
             <span
@@ -376,12 +374,9 @@ function TopSemanaWidget({ rows }: { rows: TopSemanaRow[] }) {
               <div className="truncate text-[13px] font-extrabold text-dark">
                 @{row.username}
               </div>
-              <div className="truncate text-[10px] text-muted-d">
-                {row.resumenPartido}
-              </div>
             </div>
             <span className="flex-shrink-0 font-display text-[14px] font-black text-brand-gold-dark">
-              {row.premioLukas.toLocaleString("es-PE")} 🪙
+              {row.totalGanado.toLocaleString("es-PE")} 🪙
             </span>
           </div>
         ))

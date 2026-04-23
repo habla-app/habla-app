@@ -21,21 +21,13 @@ export interface PozoSemanaRow {
   fechaPartido: Date;
 }
 
-export interface TopSemanaRow {
-  /** ID del ticket — clave para React. */
-  ticketId: string;
-  /** @handle del ganador. */
+export interface MasPagadoSemanaRow {
+  /** ID del usuario — clave para React. */
+  usuarioId: string;
+  /** @handle del ganador (sin @). */
   username: string;
-  /** Lukas que ganó este ticket. */
-  premioLukas: number;
-  /** Posición final en el torneo (1, 2, 3, ...). */
-  posicionFinal: number | null;
-  /** Liga del partido relacionado. */
-  liga: string;
-  /** "Alianza 2-1 Cristal" — línea corta lista para pintar. */
-  resumenPartido: string;
-  /** Cuándo se disputó el partido. */
-  fechaPartido: Date;
+  /** Lukas acumulados en premios de torneo en la semana (bruto). */
+  totalGanado: number;
 }
 
 export interface PozosSemanaInput {
@@ -43,16 +35,9 @@ export interface PozosSemanaInput {
   limit?: number;
 }
 
-export interface StatsSemanaInput {
-  /** Ventana hacia atrás en días. Default 7. */
-  sinceDays?: number;
-  /** Límite de filas. Default 5. */
+export interface MasPagadosSemanaInput {
+  /** Límite de filas. Default 10, máx 50. */
   limit?: number;
-}
-
-function windowSince(sinceDays: number | undefined): Date {
-  const days = Math.max(1, sinceDays ?? 7);
-  return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 }
 
 function resumenPartido(p: {
@@ -105,38 +90,41 @@ export async function listarPozosMasGrandesSemana(
 }
 
 /**
- * Top ganadores del período: tickets con mayor premio en los últimos N días.
- * Ordenado por premioLukas DESC.
+ * Usuarios más pagados de la semana: suma de `TransaccionLukas.monto`
+ * con `tipo = PREMIO_TORNEO` dentro de la semana calendario en curso
+ * (bruto, sin netear la entrada del torneo). Ordenado DESC, top N.
  */
-export async function listarTopSemana(
-  input: StatsSemanaInput = {},
-): Promise<TopSemanaRow[]> {
-  const limit = Math.min(20, Math.max(1, input.limit ?? 5));
-  const since = windowSince(input.sinceDays);
+export async function listarMasPagadosSemana(
+  input: MasPagadosSemanaInput = {},
+): Promise<MasPagadoSemanaRow[]> {
+  const limit = Math.min(50, Math.max(1, input.limit ?? 10));
+  const { desde, hasta } = getWeekBounds();
 
-  const tickets = await prisma.ticket.findMany({
+  const grouped = await prisma.transaccionLukas.groupBy({
+    by: ["usuarioId"],
     where: {
-      premioLukas: { gt: 0 },
-      torneo: {
-        estado: "FINALIZADO",
-        partido: { fechaInicio: { gte: since } },
-      },
+      tipo: "PREMIO_TORNEO",
+      creadoEn: { gte: desde, lte: hasta },
     },
-    include: {
-      usuario: { select: { username: true } },
-      torneo: { include: { partido: true } },
-    },
-    orderBy: { premioLukas: "desc" },
+    _sum: { monto: true },
+    orderBy: { _sum: { monto: "desc" } },
     take: limit,
   });
 
-  return tickets.map((t) => ({
-    ticketId: t.id,
-    username: t.usuario.username,
-    premioLukas: t.premioLukas,
-    posicionFinal: t.posicionFinal,
-    liga: t.torneo.partido.liga,
-    resumenPartido: resumenPartido(t.torneo.partido),
-    fechaPartido: t.torneo.partido.fechaInicio,
+  const rows = grouped
+    .map((g) => ({ usuarioId: g.usuarioId, total: g._sum?.monto ?? 0 }))
+    .filter((g) => g.total > 0);
+  if (rows.length === 0) return [];
+
+  const usuarios = await prisma.usuario.findMany({
+    where: { id: { in: rows.map((r) => r.usuarioId) } },
+    select: { id: true, username: true },
+  });
+  const usernameByUserId = new Map(usuarios.map((u) => [u.id, u.username]));
+
+  return rows.map((r) => ({
+    usuarioId: r.usuarioId,
+    username: usernameByUserId.get(r.usuarioId) ?? "",
+    totalGanado: r.total,
   }));
 }
