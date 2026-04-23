@@ -89,11 +89,6 @@ export async function MatchesPageContent({
   }
   const totalCount = torneosVentana.length;
 
-  const { torneos: finalizados } = await listar({
-    estado: "FINALIZADO",
-    limit: 10,
-  });
-
   // Bug #15: el h1 antes decía literal "Partidos de hoy" siempre. Ahora
   // lo derivamos de los filtros activos (liga + día) vía helper puro.
   const { title: pageTitle } = buildMatchesPageTitle({
@@ -167,59 +162,6 @@ export async function MatchesPageContent({
                 );
               })}
             </div>
-          )}
-
-          {/* SECTION BAR — finalizados */}
-          <div className="mb-4 flex items-center gap-4 rounded-r-sm border-l-4 border-brand-green bg-section-finalized px-4 py-3">
-            <span
-              aria-hidden
-              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-sm bg-brand-green text-[20px] text-black shadow-green-glow"
-            >
-              🏆
-            </span>
-            <div className="min-w-0 flex-1">
-              <h2 className="mb-0.5 font-display text-[22px] font-black uppercase leading-none tracking-[0.02em] text-dark">
-                Ya ganaron hoy
-              </h2>
-              <p className="text-[13px] leading-tight text-muted-d">
-                Resultados de los torneos que cerraron hoy
-              </p>
-            </div>
-          </div>
-
-          {finalizados.length === 0 ? (
-            <div className="rounded-md border border-light bg-card px-6 py-10 text-center shadow-sm">
-              <div aria-hidden className="mb-3 text-4xl">
-                🕓
-              </div>
-              <p className="text-sm font-semibold text-dark">
-                Aún no hay resultados hoy
-              </p>
-              <p className="mt-1 text-[13px] text-muted-d">
-                Los torneos que cierren durante el día aparecerán aquí.
-              </p>
-            </div>
-          ) : (
-            <ul className="divide-y divide-light overflow-hidden rounded-md border border-light bg-card shadow-sm">
-              {finalizados.map((t) => (
-                <li
-                  key={t.id}
-                  className="flex items-center justify-between px-4 py-3 hover:bg-subtle"
-                >
-                  <div className="min-w-0">
-                    <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-muted-d">
-                      {t.partido.liga}
-                    </div>
-                    <div className="truncate font-display text-[16px] font-extrabold uppercase text-dark">
-                      {t.partido.equipoLocal} vs {t.partido.equipoVisita}
-                    </div>
-                  </div>
-                  <div className="flex-shrink-0 rounded-sm bg-brand-gold-dim px-3 py-1.5 font-display text-[14px] font-black text-brand-gold-dark">
-                    {t.pozoNeto.toLocaleString("es-PE")} 🪙
-                  </div>
-                </li>
-              ))}
-            </ul>
           )}
         </div>
 

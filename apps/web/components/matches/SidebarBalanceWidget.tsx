@@ -28,32 +28,16 @@ interface Props {
 export function SidebarBalanceWidget({ initialBalance }: Props) {
   if (initialBalance === null) {
     return (
-      <section className="overflow-hidden rounded-md border border-light bg-card shadow-sm">
-        <div className="flex items-center gap-2 border-b border-light px-3.5 py-3">
-          <span aria-hidden className="text-[15px]">
-            🪙
-          </span>
-          <span className="font-display text-[13px] font-extrabold uppercase tracking-[0.06em] text-dark">
-            Tu balance
-          </span>
-        </div>
+      <section className="overflow-hidden rounded-md border border-brand-gold/30 bg-card shadow-sm">
         <UnloggedBalance />
       </section>
     );
   }
   return (
     <section
-      className="overflow-hidden rounded-md border border-light bg-card shadow-sm"
+      className="overflow-hidden rounded-md border-2 border-brand-gold/40 bg-gradient-to-br from-brand-gold-dim to-card shadow-sm"
       data-testid="sidebar-balance-widget"
     >
-      <div className="flex items-center gap-2 border-b border-light px-3.5 py-3">
-        <span aria-hidden className="text-[15px]">
-          🪙
-        </span>
-        <span className="font-display text-[13px] font-extrabold uppercase tracking-[0.06em] text-dark">
-          Tu balance
-        </span>
-      </div>
       <LoggedBalance initialBalance={initialBalance} />
     </section>
   );
@@ -70,40 +54,37 @@ function LoggedBalance({ initialBalance }: { initialBalance: number }) {
   const amount = mounted ? storeBalance : initialBalance;
 
   return (
-    <div className="p-[18px] text-center">
-      <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.08em] text-muted-d">
-        Disponible
+    <div className="px-5 py-5">
+      <div className="mb-2 flex items-center gap-2">
+        <span aria-hidden className="text-[14px]">
+          🪙
+        </span>
+        <span className="font-display text-[11px] font-extrabold uppercase tracking-[0.08em] text-muted-d">
+          Tu balance
+        </span>
       </div>
       <div
-        className="font-display text-[40px] font-black leading-none text-brand-gold-dark"
+        className="font-display text-[52px] font-black leading-[0.95] tracking-tight text-brand-gold-dark"
         data-testid="sidebar-balance-amount"
       >
         {amount.toLocaleString("es-PE")}
       </div>
-      <div className="mt-1 text-[11px] text-muted-d">
-        ≈ S/ {amount.toLocaleString("es-PE")} en créditos
+      <div className="mt-1 text-[11px] font-semibold text-muted-d">
+        Lukas · ≈ S/ {amount.toLocaleString("es-PE")} en créditos
       </div>
-      <div className="mt-3.5 flex gap-2">
-        <Link
-          href="/wallet"
-          className="flex-1 rounded-sm bg-brand-gold px-2.5 py-2.5 text-center text-[12px] font-bold text-black transition-colors hover:bg-brand-gold-light"
-        >
-          💳 Comprar
-        </Link>
-        <Link
-          href="/tienda"
-          className="flex-1 rounded-sm border border-light bg-subtle px-2.5 py-2.5 text-center text-[12px] font-bold text-dark transition-colors hover:border-brand-gold"
-        >
-          🎁 Tienda
-        </Link>
-      </div>
+      <Link
+        href="/wallet"
+        className="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-sm border border-brand-gold/40 bg-card/80 px-3 py-2.5 text-center text-[12px] font-bold text-brand-gold-dark transition-colors hover:border-brand-gold hover:bg-brand-gold hover:text-black"
+      >
+        Ver billetera →
+      </Link>
     </div>
   );
 }
 
 function UnloggedBalance() {
   return (
-    <div className="p-[18px] text-center">
+    <div className="px-5 py-5 text-center">
       <div aria-hidden className="mb-2 text-[28px] leading-none">
         🔒
       </div>
