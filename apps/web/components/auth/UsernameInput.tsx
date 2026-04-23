@@ -22,8 +22,9 @@ interface Props {
   id?: string;
 }
 
-const USERNAME_REGEX_PARCIAL = /^[a-z0-9_]*$/;
-const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
+// Abr 2026: case-sensitive display, unicidad case-insensitive en server.
+const USERNAME_REGEX_PARCIAL = /^[a-zA-Z0-9_]*$/;
+const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/;
 
 export function UsernameInput({
   value,
@@ -54,7 +55,7 @@ export function UsernameInput({
           ? "Mínimo 3 caracteres."
           : value.length > 20
             ? "Máximo 20 caracteres."
-            : "Solo letras minúsculas, números y guión bajo.",
+            : "Solo letras, números y guión bajo.",
       );
       onValidityChange?.(false);
       return;
@@ -70,7 +71,7 @@ export function UsernameInput({
         );
         const json = (await resp.json()) as {
           disponible: boolean;
-          razon?: "FORMATO_INVALIDO" | "RESERVADO" | "TOMADO";
+          razon?: "FORMATO_INVALIDO" | "RESERVADO" | "OFENSIVO" | "TOMADO";
         };
         if (pid !== pedidoRef.current) return; // llegó tarde, otro pedido ganó
         if (json.disponible) {
@@ -84,7 +85,9 @@ export function UsernameInput({
               ? "Ese nombre está reservado."
               : json.razon === "TOMADO"
                 ? "Ya está tomado."
-                : "Formato inválido.",
+                : json.razon === "OFENSIVO"
+                  ? "Ese nombre no está permitido."
+                  : "Formato inválido.",
           );
           onValidityChange?.(false);
         }
@@ -142,9 +145,10 @@ export function UsernameInput({
           placeholder={placeholder}
           value={value}
           onChange={(e) => {
-            const raw = e.target.value.toLowerCase();
-            // Deja entrar caracteres válidos o vacío — filtra silenciosamente
-            // el resto para que el usuario vea su intención reflejada.
+            const raw = e.target.value;
+            // Preservamos el case que tipea el usuario — "Gustavo" se
+            // guarda como "Gustavo". La unicidad en BD es case-insensitive.
+            // Sólo filtramos caracteres fuera del set permitido.
             if (USERNAME_REGEX_PARCIAL.test(raw)) onChange(raw);
           }}
           className={`w-full rounded-sm border-[1.5px] bg-card pl-8 pr-10 py-[13px] text-sm text-dark outline-none transition-all focus:ring-4 ${borderCls}`}
@@ -160,7 +164,7 @@ export function UsernameInput({
       </div>
       <p className={`mt-1.5 text-[11px] ${msgCls}`}>
         {mensaje ??
-          "3-20 caracteres. Solo letras minúsculas, números y _. No se puede cambiar después."}
+          "3-20 caracteres. Letras, números y _. No se puede cambiar después."}
       </p>
     </div>
   );

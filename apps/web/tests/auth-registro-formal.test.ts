@@ -102,13 +102,18 @@ describe("POST /api/v1/auth/signup — contrato del endpoint", () => {
     expect(SRC).toMatch(/aceptaTyc:\s*z\.boolean/);
   });
 
-  it("valida formato [a-z0-9_]{3,20}", () => {
-    expect(SRC).toMatch(/\^\[a-z0-9_\]\{3,20\}\$/);
+  it("valida formato [a-zA-Z0-9_]{3,20} (case-sensitive, Abr 2026)", () => {
+    expect(SRC).toMatch(/\^\[a-zA-Z0-9_\]\{3,20\}\$/);
   });
 
   it("rechaza usernames reservados (USERNAME_RESERVADO 409)", () => {
     expect(SRC).toMatch(/esReservado/);
     expect(SRC).toMatch(/USERNAME_RESERVADO/);
+  });
+
+  it("rechaza usernames ofensivos (USERNAME_OFENSIVO 409)", () => {
+    expect(SRC).toMatch(/esUsernameOfensivo/);
+    expect(SRC).toMatch(/USERNAME_OFENSIVO/);
   });
 
   it("crea usuario con usernameLocked=true + tycAceptadosAt=now + bonus 500", () => {

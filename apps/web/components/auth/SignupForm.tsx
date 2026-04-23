@@ -41,7 +41,8 @@ export function SignupForm({ emailInicial = "", callbackUrl = "/" }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: email.trim().toLowerCase(),
-          username: username.trim().toLowerCase(),
+          // Preservamos el case del @handle: "Gustavo" se guarda tal cual.
+          username: username.trim(),
           aceptaTyc,
         }),
       });

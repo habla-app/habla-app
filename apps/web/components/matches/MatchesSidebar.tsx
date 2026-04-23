@@ -1,20 +1,21 @@
-// Sidebar sticky — réplica de `.sidebar` + `.widget` del mockup
-// (docs/habla-mockup-completo.html líneas 313-367, 1903-1991). Tres
-// widgets en orden: 🔴 En vivo ahora · 🏅 Top del día · 🪙 Tu balance.
+// Sidebar sticky — réplica del mockup + rediseño Abr 2026.
 //
-// Se comparte entre `/` (landing) y `/matches` (Sub-Sprint 3). Los dos
-// primeros widgets son iguales con o sin sesión; el widget de balance
-// cambia: con sesión muestra el monto + CTAs; sin sesión muestra un
+// Orden (top→bottom):
+//   1. 🔴 En vivo ahora
+//   2. 🏅 Ya ganaron en la semana (ex "Ya ganaron hoy" del flow principal)
+//   3. 🪙 Tu balance (rediseñado, tipografía grande + CTA /wallet)
+//   4. 📐 Cómo se pagan los premios (PrizeRulesCard)
+//   5. 🏆 Top de la Semana (ex "Top del día", ahora con data real 7d)
+//
+// Se comparte entre `/` (landing) y `/matches`. Los widgets de en vivo,
+// ganadores de la semana y top semana son iguales con o sin sesión; el
+// de balance muta: con sesión muestra hero + CTAs, sin sesión muestra un
 // mensaje con CTA a /auth/signin.
 //
-// Server Component — llama a auth() para saber si hay sesión. La data
-// de en-vivo y top-del-día es mock hasta los Sub-Sprints 5 y 3
-// respectivamente.
-//
-// Bug #14 (Hotfix #5): el widget de balance delega a
-// `SidebarBalanceWidget` (client) — antes renderizaba el monto desde
-// `session.user.balanceLukas` (SSR) y quedaba desincronizado tras
-// inscripciones que el store sí reflejaba en header y /mis-combinadas.
+// Server Component — llama a auth() y a los services de ranking +
+// live-matches + stats-semana. El widget de balance delega a
+// `SidebarBalanceWidget` (client) para mantener el store de Lukas
+// sincronizado (Hotfix #5 Bug #14).
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { listarRanking } from "@/lib/services/ranking.service";
@@ -22,13 +23,18 @@ import {
   elegirTorneoPrincipal,
   obtenerLiveMatches,
 } from "@/lib/services/live-matches.service";
+import {
+  listarTopSemana,
+  listarYaGanaronSemana,
+  type TopSemanaRow,
+  type YaGanaronSemanaRow,
+} from "@/lib/services/stats-semana.service";
 import { getTeamColor } from "@/lib/utils/team-colors";
 import { SidebarBalanceWidget } from "@/components/matches/SidebarBalanceWidget";
 import { PrizeRulesCard } from "@/components/matches/PrizeRulesCard";
 
 // ---------------------------------------------------------------------------
-// Mock data — reemplazado por fetch real en Sub-Sprints 3 (ranking) y 5
-// (partidos en vivo vía api-football poller).
+// Live matches
 // ---------------------------------------------------------------------------
 
 interface LiveMini {
@@ -51,8 +57,6 @@ interface LiveMini {
 }
 
 async function fetchLiveMatches(): Promise<LiveMini[]> {
-  // Hotfix Bug #2: usar el helper compartido para que el widget vea los
-  // mismos partidos que `/live-match` y el endpoint `/api/v1/live/matches`.
   const partidos = await obtenerLiveMatches({
     limit: 3,
     incluirFinalizados: false,
@@ -103,21 +107,6 @@ function cortoNombre(nombre: string): string {
   return n.split(/\s+/)[0] ?? n.slice(0, 8);
 }
 
-interface TopDayRow {
-  pos: number;
-  nombre: string;
-  avatarIcon: string;
-  avatarBg: string; /* Tailwind bg-* */
-  puntos: number;
-}
-
-const TOP_DAY_MOCK: TopDayRow[] = [
-  { pos: 1, nombre: "LeonardoPred", avatarIcon: "🦁", avatarBg: "bg-orange-500", puntos: 18 },
-  { pos: 2, nombre: "CrackPeruano", avatarIcon: "⚡", avatarBg: "bg-blue-500", puntos: 16 },
-  { pos: 3, nombre: "PredictoPro99", avatarIcon: "🎯", avatarBg: "bg-purple-500", puntos: 15 },
-  { pos: 4, nombre: "FutboleroLima", avatarIcon: "🔥", avatarBg: "bg-emerald-500", puntos: 14 },
-];
-
 // ---------------------------------------------------------------------------
 // Root
 // ---------------------------------------------------------------------------
@@ -125,14 +114,20 @@ const TOP_DAY_MOCK: TopDayRow[] = [
 export async function MatchesSidebar() {
   const session = await auth();
   const balance = session?.user?.balanceLukas ?? null;
-  const liveMatches = await fetchLiveMatches();
+
+  const [liveMatches, yaGanaron, topSemana] = await Promise.all([
+    fetchLiveMatches(),
+    listarYaGanaronSemana({ sinceDays: 7, limit: 5 }),
+    listarTopSemana({ sinceDays: 7, limit: 5 }),
+  ]);
 
   return (
     <aside className="flex flex-col gap-3.5">
       <LiveAhoraWidget matches={liveMatches} />
-      <TopDelDiaWidget rows={TOP_DAY_MOCK} />
-      <PrizeRulesCard />
+      <YaGanaronSemanaWidget rows={yaGanaron} />
       <SidebarBalanceWidget initialBalance={balance} />
+      <PrizeRulesCard />
+      <TopSemanaWidget rows={topSemana} />
     </aside>
   );
 }
@@ -290,10 +285,59 @@ function TeamMini({
 }
 
 // ---------------------------------------------------------------------------
-// Widget 2: 🏅 Top del día
+// Widget 2: 🏆 Ya ganaron en la semana
 // ---------------------------------------------------------------------------
 
-function TopDelDiaWidget({ rows }: { rows: TopDayRow[] }) {
+function YaGanaronSemanaWidget({ rows }: { rows: YaGanaronSemanaRow[] }) {
+  return (
+    <section className="overflow-hidden rounded-md border border-light bg-card shadow-sm">
+      <div className="flex items-center gap-2 border-b border-light bg-section-finalized px-3.5 py-3">
+        <span aria-hidden className="text-[15px]">
+          🏆
+        </span>
+        <span className="font-display text-[13px] font-extrabold uppercase tracking-[0.06em] text-dark">
+          Ya ganaron en la semana
+        </span>
+        <span className="ml-auto text-[10px] font-bold uppercase tracking-[0.04em] text-muted-d">
+          7 días
+        </span>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="px-4 py-6 text-center text-[12px] text-muted-d">
+          Aún no hay torneos pagados esta semana.
+        </div>
+      ) : (
+        <ul>
+          {rows.map((row, idx) => (
+            <li
+              key={row.torneoId}
+              className={`flex items-center justify-between gap-2 px-3.5 py-2.5 ${idx < rows.length - 1 ? "border-b border-light" : ""}`}
+            >
+              <div className="min-w-0">
+                <div className="truncate text-[10px] font-bold uppercase tracking-[0.06em] text-muted-d">
+                  {row.liga}
+                </div>
+                <div className="truncate font-display text-[13px] font-extrabold uppercase text-dark">
+                  {row.resumenPartido}
+                </div>
+              </div>
+              <div className="flex-shrink-0 rounded-sm bg-brand-gold-dim px-2.5 py-1 font-display text-[12px] font-black text-brand-gold-dark">
+                {row.pozoNeto.toLocaleString("es-PE")} 🪙
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Widget 5: 🏅 Top de la Semana
+// ---------------------------------------------------------------------------
+
+function TopSemanaWidget({ rows }: { rows: TopSemanaRow[] }) {
   const posColor = (pos: number) => {
     if (pos === 1) return "text-medal-gold";
     if (pos === 2) return "text-medal-silver";
@@ -308,39 +352,38 @@ function TopDelDiaWidget({ rows }: { rows: TopDayRow[] }) {
           🏅
         </span>
         <span className="font-display text-[13px] font-extrabold uppercase tracking-[0.06em] text-dark">
-          Top del día
+          Top de la Semana
         </span>
         <span className="ml-auto text-[10px] font-bold uppercase tracking-[0.04em] text-muted-d">
-          Hoy
+          7 días
         </span>
       </div>
 
       {rows.length === 0 ? (
         <div className="px-4 py-6 text-center text-[12px] text-muted-d">
-          Aún no hay puntajes del día.
+          Aún no hay premios pagados esta semana.
         </div>
       ) : (
         rows.map((row, idx) => (
           <div
-            key={`${row.pos}-${row.nombre}`}
+            key={row.ticketId}
             className={`flex items-center gap-2.5 px-3.5 py-2.5 ${idx < rows.length - 1 ? "border-b border-light" : ""}`}
           >
             <span
-              className={`w-5 text-center font-display text-[15px] font-black ${posColor(row.pos)}`}
+              className={`w-5 text-center font-display text-[15px] font-black ${posColor(idx + 1)}`}
             >
-              {row.pos}
+              {idx + 1}
             </span>
-            <div
-              aria-hidden
-              className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-[13px] ${row.avatarBg}`}
-            >
-              {row.avatarIcon}
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[13px] font-extrabold text-dark">
+                @{row.username}
+              </div>
+              <div className="truncate text-[10px] text-muted-d">
+                {row.resumenPartido}
+              </div>
             </div>
-            <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-dark">
-              {row.nombre}
-            </span>
-            <span className="font-display text-[15px] font-black text-brand-gold-dark">
-              {row.puntos}
+            <span className="flex-shrink-0 font-display text-[14px] font-black text-brand-gold-dark">
+              {row.premioLukas.toLocaleString("es-PE")} 🪙
             </span>
           </div>
         ))

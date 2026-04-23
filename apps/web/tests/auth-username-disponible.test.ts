@@ -41,15 +41,17 @@ describe("lib/config/usernames-reservados", () => {
   });
 });
 
-describe("username regex /^[a-z0-9_]{3,20}$/", () => {
-  const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
+describe("username regex /^[a-zA-Z0-9_]{3,20}$/ (Abr 2026: case-sensitive)", () => {
+  const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/;
 
-  it("acepta handles válidos", () => {
+  it("acepta handles válidos incluyendo mayúsculas", () => {
     expect(USERNAME_REGEX.test("juan")).toBe(true);
+    expect(USERNAME_REGEX.test("Gustavo")).toBe(true);
+    expect(USERNAME_REGEX.test("JUAN_LIMA24")).toBe(true);
     expect(USERNAME_REGEX.test("juan_lima24")).toBe(true);
     expect(USERNAME_REGEX.test("a_b_c")).toBe(true);
     expect(USERNAME_REGEX.test("abc")).toBe(true); // mínimo 3
-    expect(USERNAME_REGEX.test("a".repeat(20))).toBe(true); // máximo 20
+    expect(USERNAME_REGEX.test("A".repeat(20))).toBe(true); // máximo 20
     expect(USERNAME_REGEX.test("123")).toBe(true); // solo números OK
   });
 
@@ -59,8 +61,7 @@ describe("username regex /^[a-z0-9_]{3,20}$/", () => {
     expect(USERNAME_REGEX.test("a".repeat(21))).toBe(false);
   });
 
-  it("rechaza mayúsculas, espacios, símbolos", () => {
-    expect(USERNAME_REGEX.test("Juan")).toBe(false);
+  it("rechaza espacios y símbolos (pero NO mayúsculas)", () => {
     expect(USERNAME_REGEX.test("juan lima")).toBe(false);
     expect(USERNAME_REGEX.test("juan-lima")).toBe(false);
     expect(USERNAME_REGEX.test("juan.lima")).toBe(false);

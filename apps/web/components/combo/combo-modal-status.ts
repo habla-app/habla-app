@@ -52,12 +52,14 @@ export interface ComboModalUIState {
   /** CTA principal del footer. Null = no renderizar footer principal. */
   primaryCta: {
     label: string;
-    /** Si es link interno, pasar href. Si es botón, handler === "retry" |
-     *  "close" | "submit" según el status. */
-    kind: "link" | "retry" | "close" | "submit";
+    /** Si es link interno, pasar href. Si es botón, handler ===
+     *  "retry" | "close" | "submit" | "reset" según el status.
+     *  `reset` se usa desde Abr 2026 en el panel de éxito (primary =
+     *  "Crear otra combinada" → reabre el form del modal). */
+    kind: "link" | "retry" | "close" | "submit" | "reset";
     href?: string;
   } | null;
-  /** CTA secundario opcional (ej. "Crear otra" en éxito). */
+  /** CTA secundario opcional (ej. "Ver mis combinadas" en éxito). */
   secondaryCta: {
     label: string;
     kind: "link" | "retry" | "close" | "submit" | "reset";
@@ -105,14 +107,16 @@ export function computeComboModalUIState(
           : "Tu ticket quedó sellado. Te toca seguir el partido en vivo y ver cómo vas en el ranking.",
         icon: "🎉",
         tone: "success",
+        // Énfasis invertido (Abr 2026): el PO quiere empujar a armar más
+        // combinadas antes que sacar al usuario a otra pantalla.
         primaryCta: {
+          label: "Crear otra combinada",
+          kind: "reset",
+        },
+        secondaryCta: {
           label: "Ver mis combinadas",
           kind: "link",
           href: "/mis-combinadas",
-        },
-        secondaryCta: {
-          label: "Crear otra",
-          kind: "reset",
         },
       };
 

@@ -68,28 +68,29 @@ describe("computeComboModalUIState", () => {
     expect(ui.bodyTitle).toMatch(/Enviando/);
   });
 
-  it("success sin placeholder: CTA 'Ver mis combinadas' + 'Crear otra'", () => {
+  it("success sin placeholder: CTA primario 'Crear otra' + secundario 'Ver mis combinadas'", () => {
     const ui = computeComboModalUIState({
       status: "success",
       tienePlaceholder: false,
       entradaLukas: 5,
     });
-    expect(ui.primaryCta?.kind).toBe("link");
-    expect(ui.primaryCta?.href).toBe("/mis-combinadas");
-    expect(ui.primaryCta?.label).toMatch(/mis combinadas/i);
-    expect(ui.secondaryCta?.kind).toBe("reset");
-    expect(ui.secondaryCta?.label).toMatch(/Crear otra/);
+    // Énfasis invertido (Abr 2026): primary = reset para reabrir el form.
+    expect(ui.primaryCta?.kind).toBe("reset");
+    expect(ui.primaryCta?.label).toMatch(/Crear otra/i);
+    expect(ui.secondaryCta?.kind).toBe("link");
+    expect(ui.secondaryCta?.href).toBe("/mis-combinadas");
+    expect(ui.secondaryCta?.label).toMatch(/mis combinadas/i);
     expect(ui.tone).toBe("success");
   });
 
-  it("success con placeholder: copy 'Confirmada', CTA mis-combinadas sigue", () => {
+  it("success con placeholder: copy 'Confirmada', secondary sigue apuntando a mis-combinadas", () => {
     const ui = computeComboModalUIState({
       status: "success",
       tienePlaceholder: true,
       entradaLukas: 5,
     });
     expect(ui.bodyTitle).toMatch(/confirmada/i);
-    expect(ui.primaryCta?.href).toBe("/mis-combinadas");
+    expect(ui.secondaryCta?.href).toBe("/mis-combinadas");
   });
 
   it("insufficient-balance: CTA a /wallet + copy con faltantes", () => {

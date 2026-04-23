@@ -20,21 +20,23 @@ import {
   ValidacionFallida,
 } from "@/lib/services/errors";
 import { esReservado } from "@/lib/config/usernames-reservados";
+import { esUsernameOfensivo } from "@/lib/utils/username-filter";
 import { logger } from "@/lib/services/logger";
 
 export const dynamic = "force-dynamic";
 
 const BONUS_BIENVENIDA_LUKAS = 500;
-const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
+// Abr 2026: case-sensitive para display (Gustavo ≠ gustavo en UI), pero
+// unicidad case-insensitive en BD para evitar colisiones homográficas.
+const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/;
 
 const SignupSchema = z.object({
   email: z
     .string()
     .email("Email inválido.")
     .transform((s) => s.trim().toLowerCase()),
-  username: z
-    .string()
-    .transform((s) => s.trim().toLowerCase()),
+  // Preservamos el case que el usuario tipea; sólo recortamos espacios.
+  username: z.string().transform((s) => s.trim()),
   aceptaTyc: z.boolean(),
 });
 
@@ -59,12 +61,14 @@ export async function POST(req: NextRequest) {
 
     if (!USERNAME_REGEX.test(username)) {
       throw new ValidacionFallida(
-        "El usuario debe tener 3-20 caracteres (letras minúsculas, números o guión bajo).",
+        "El usuario debe tener 3-20 caracteres (letras, números o guión bajo).",
         { field: "username" },
       );
     }
 
-    if (esReservado(username)) {
+    // `esReservado` compara contra su lista; nuestra lista está en
+    // minúsculas, así que normalizamos sólo para la comparación.
+    if (esReservado(username.toLowerCase())) {
       throw new DomainError(
         "USERNAME_RESERVADO",
         "Ese nombre de usuario no está disponible.",
@@ -73,11 +77,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (esUsernameOfensivo(username)) {
+      throw new DomainError(
+        "USERNAME_OFENSIVO",
+        "Ese nombre de usuario no está permitido.",
+        409,
+        { field: "username" },
+      );
+    }
+
     // Verificar ambos campos únicos antes de crear para dar error claro.
+    // Unicidad de username es case-insensitive (Gustavo y gustavo colisionan).
     const [emailExistente, usernameExistente] = await Promise.all([
       prisma.usuario.findUnique({ where: { email }, select: { id: true } }),
-      prisma.usuario.findUnique({
-        where: { username },
+      prisma.usuario.findFirst({
+        where: { username: { equals: username, mode: "insensitive" } },
         select: { id: true },
       }),
     ]);
@@ -104,10 +118,10 @@ export async function POST(req: NextRequest) {
       const usuario = await tx.usuario.create({
         data: {
           email,
-          // Nombre inicial igual al username — el usuario puede editarlo
-          // después en /perfil. Esto evita dejar el campo vacío si Google
-          // no devuelve nombre y dar un valor reconocible.
-          nombre: username,
+          // Nombre vacío hasta que el usuario lo complete en /perfil.
+          // Antes copiábamos el username pero confundía la UI (el row de
+          // "Nombre completo" se veía pre-llenado).
+          nombre: "",
           username,
           usernameLocked: true,
           tycAceptadosAt: new Date(),
