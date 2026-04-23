@@ -80,7 +80,7 @@ export default async function LiveMatchPage({ searchParams }: Props) {
   // Tabs del switcher — solo los live-filtered. Cuando el filtro
   // deja la lista vacía pero había live-raw, LiveMatchView muestra
   // un empty state dentro del switcher.
-  const liveTabs = buildLiveTabs(liveFiltered);
+  const liveTabs = await buildLiveTabs(liveFiltered);
 
   // Cards finalizadas (sin filtrar por liga por decisión del PO).
   // Bug #16: enriquecidas con las 5 chips del ganador + premio real.
@@ -226,13 +226,13 @@ export default async function LiveMatchPage({ searchParams }: Props) {
 // Helpers locales
 // ---------------------------------------------------------------------------
 
-function buildLiveTabs(partidos: PartidoLive[]): LiveMatchTab[] {
+async function buildLiveTabs(partidos: PartidoLive[]): Promise<LiveMatchTab[]> {
   const tabs: LiveMatchTab[] = [];
   const nowMs = Date.now();
   for (const p of partidos) {
     const main = elegirTorneoPrincipal(p.torneos);
     if (!main) continue;
-    const snap = getLiveStatus(p.id);
+    const snap = await getLiveStatus(p.id);
     tabs.push({
       torneoId: main.id,
       partidoId: p.id,
@@ -277,7 +277,7 @@ async function tryBuildFinalizedTab(
   for (const p of finalizadosRaw) {
     const match = p.torneos.find((t) => t.id === torneoId);
     if (!match) continue;
-    const snap = getLiveStatus(p.id);
+    const snap = await getLiveStatus(p.id);
     return {
       torneoId: match.id,
       partidoId: p.id,

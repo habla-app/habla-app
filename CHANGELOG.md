@@ -3,6 +3,23 @@
 Historial detallado de sub-sprints, hotfixes y features relevantes. El
 contexto estratégico del producto vive en `CLAUDE.md` y `README.md`.
 
+## 2026-04-23 — Fix: minuto en vivo persistido en BD
+
+- **Bug:** `/live-match` mostraba siempre `⏱ —` en producción aunque el
+  partido estuviera en vivo y los eventos importaran correctamente.
+  Diagnóstico: el cache del minuto vivía solo en un `Map` in-memory por
+  proceso. Tras un restart (redeploy / health check) o en escenarios de
+  multi-réplica de Railway, el Map que leía el endpoint estaba vacío
+  aunque el poller hubiera escrito en OTRO proceso.
+- **Fix:** el snapshot ahora se persiste en `Partido` (columnas
+  `liveStatusShort`, `liveElapsed`, `liveExtra`, `liveUpdatedAt`). Map
+  in-memory queda como L1 (lecturas O(1) entre ticks); BD como L2
+  (persistente, cross-proceso). `setLiveStatus` / `getLiveStatus` son
+  ahora async.
+- Migración `20260423010000_live_status_partido` agrega las columnas
+  nullable. Se aplica automáticamente en el próximo redeploy via
+  `prisma migrate deploy` del Dockerfile.
+
 ## 2026-04-23 — Leaderboards semanales + minuto en vivo simplificado
 
 - **Sidebar de /matches:** widget "Ya ganaron en la semana" →

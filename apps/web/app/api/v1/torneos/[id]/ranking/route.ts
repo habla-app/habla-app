@@ -48,7 +48,7 @@ export async function GET(req: NextRequest, { params }: Context) {
       where: { id: params.id },
       select: { partidoId: true },
     });
-    const liveSnap = torneo ? getLiveStatus(torneo.partidoId) : null;
+    const liveSnap = torneo ? await getLiveStatus(torneo.partidoId) : null;
 
     const now = Date.now();
     return Response.json({

@@ -1,31 +1,27 @@
-// Cache in-memory del estado en vivo de cada partido. Guarda el
-// `status.short` + `status.elapsed` + `status.extra` más reciente que el
-// poller vio en api-football, junto con el label renderizable.
+// Cache del estado en vivo de cada partido con dos niveles:
+//   L1 — Map in-memory (process-local). Lecturas O(1) entre ticks del
+//        poller, sin round-trip a BD.
+//   L2 — Columnas `liveStatusShort/liveElapsed/liveExtra/liveUpdatedAt`
+//        en la tabla `Partido`. Persiste el snapshot cross-proceso —
+//        sobrevive restarts de Railway y cubre el caso de múltiples
+//        réplicas leyendo desde instancias L1 distintas.
 //
-// Se usa para:
-//   - Enriquecer `/api/v1/live/matches` con el minuto label sin un
-//     request extra al upstream.
-//   - Server-side render de `/live-match`: el tab activo muestra el
-//     label inmediatamente (no espera al primer WS).
-//   - `emitirRankingUpdate` lee el label del cache antes de publicar.
+// Antes de Abr 2026 vivía solo como Map in-memory. Síntoma del bug: en
+// prod `GET /api/v1/live/matches` devolvía todos los campos del minuto
+// null incluso con partidos EN_VIVO activos — la réplica que servía la
+// request tenía su Map vacío (restart reciente o no era la que corría el
+// poller). Los eventos sí persistían porque viven en BD; el minuto no,
+// porque vivía solo en memoria.
 //
-// No persistimos en BD (MVP): el cache se reconstruye en cada tick del
-// poller (30s). Si el proceso reinicia, el primer render entre el
-// boot y el primer tick muestra "—" — aceptable.
-//
-// Estructura: Map<partidoId, LiveStatusSnapshot>. Sin eviction activa:
-// el set de partidos en vivo es chico (<50 simultáneos en MVP) y el
-// overhead es trivial. Se limpia solo cuando el poller marca el partido
-// como FINALIZADO más allá del TTL (o al restart).
-//
-// Hotfix #6 Ítem 3: TTL extendido de 10 a 30 minutos. Motivación: en
-// halftime largos (entretiempos de clásicos con ceremonias) el poller
-// sigue recibiendo `status.short=HT` pero si el último tick con
-// `elapsed` numérico pasó hace >10 min, el snapshot caducaba y el
-// LiveHero mostraba "—" en lugar de "ENT". Con 30 min cubrimos HT
-// + prórrogas sin comprometer memory (el cache se limpia al FT).
+// Consumidores (siempre async):
+//   - `/api/v1/live/matches` enriquece cada partido con el minuto.
+//   - `/api/v1/torneos/:id/ranking` idem para el hero de /live-match.
+//   - SSR de `/live-match` (`buildLiveTabs` en `page.tsx`).
+//   - `emitirRankingUpdate` arma el payload del WS.
 
+import { prisma } from "@habla/db";
 import { getMinutoLabel } from "../utils/minuto-label";
+import { logger } from "./logger";
 
 export interface LiveStatusSnapshot {
   partidoId: string;
@@ -42,22 +38,24 @@ export interface LiveStatusSnapshot {
 }
 
 /** TTL: si pasan más de 30 min sin update, consideramos el snapshot stale.
- *  Hotfix #6 Ítem 3: extendido desde 10 min para cubrir HT largos +
- *  prórrogas. */
+ *  Cubre HT largos (clásicos con ceremonias) + prórrogas sin vaciar el
+ *  cache antes de tiempo. */
 export const SNAPSHOT_TTL_MS = 30 * 60 * 1000;
 
 const cache = new Map<string, LiveStatusSnapshot>();
 
 /**
- * Escribe/actualiza el snapshot del partido. Calcula el label con el
- * mapper puro. Called desde el poller en cada tick.
+ * Escribe/actualiza el snapshot del partido. Llamada desde el poller en
+ * cada tick. Escribe L1 sincrónicamente y L2 de forma best-effort — si
+ * la BD falla, el L1 ya quedó escrito y los consumidores del MISMO
+ * proceso siguen viendo el minuto hasta el próximo tick.
  */
-export function setLiveStatus(
+export async function setLiveStatus(
   partidoId: string,
   statusShort: string | null,
   minuto: number | null,
   extra: number | null = null,
-): LiveStatusSnapshot {
+): Promise<LiveStatusSnapshot> {
   const snap: LiveStatusSnapshot = {
     partidoId,
     statusShort,
@@ -67,33 +65,87 @@ export function setLiveStatus(
     updatedAt: Date.now(),
   };
   cache.set(partidoId, snap);
-  return snap;
-}
-
-/**
- * Lee el snapshot del partido. Si no existe o está stale, retorna null.
- * Los callers que necesitan un label SIEMPRE deben tener un fallback
- * ("—" por ejemplo) — este getter no lo garantiza.
- */
-export function getLiveStatus(partidoId: string): LiveStatusSnapshot | null {
-  const snap = cache.get(partidoId);
-  if (!snap) return null;
-  if (Date.now() - snap.updatedAt > SNAPSHOT_TTL_MS) {
-    cache.delete(partidoId);
-    return null;
+  try {
+    await prisma.partido.update({
+      where: { id: partidoId },
+      data: {
+        liveStatusShort: statusShort,
+        liveElapsed: minuto,
+        liveExtra: extra,
+        liveUpdatedAt: new Date(snap.updatedAt),
+      },
+    });
+  } catch (err) {
+    logger.error(
+      { err, partidoId },
+      "setLiveStatus L2 write falló — L1 ya actualizado, próximo tick reintenta",
+    );
   }
   return snap;
 }
 
 /**
- * Elimina el snapshot. Lo usa el poller cuando un partido transiciona
- * a FINALIZADO y pasa TTL — evita que crezca el Map para siempre.
+ * Lee el snapshot del partido. L1 primero; si no está o expiró, cae a L2
+ * (BD) y rehidrata L1. Si ninguno tiene data o todos expiraron, retorna
+ * null — los callers siempre deben tener fallback ("—" en la UI).
+ */
+export async function getLiveStatus(
+  partidoId: string,
+): Promise<LiveStatusSnapshot | null> {
+  const mem = cache.get(partidoId);
+  if (mem) {
+    if (Date.now() - mem.updatedAt <= SNAPSHOT_TTL_MS) return mem;
+    cache.delete(partidoId);
+  }
+
+  let row: {
+    liveStatusShort: string | null;
+    liveElapsed: number | null;
+    liveExtra: number | null;
+    liveUpdatedAt: Date | null;
+  } | null;
+  try {
+    row = await prisma.partido.findUnique({
+      where: { id: partidoId },
+      select: {
+        liveStatusShort: true,
+        liveElapsed: true,
+        liveExtra: true,
+        liveUpdatedAt: true,
+      },
+    });
+  } catch (err) {
+    logger.error({ err, partidoId }, "getLiveStatus L2 read falló");
+    return null;
+  }
+  if (!row || !row.liveUpdatedAt) return null;
+  const updatedAt = row.liveUpdatedAt.getTime();
+  if (Date.now() - updatedAt > SNAPSHOT_TTL_MS) return null;
+  const snap: LiveStatusSnapshot = {
+    partidoId,
+    statusShort: row.liveStatusShort,
+    minuto: row.liveElapsed,
+    extra: row.liveExtra,
+    label: getMinutoLabel({
+      statusShort: row.liveStatusShort,
+      minuto: row.liveElapsed,
+      extra: row.liveExtra,
+    }),
+    updatedAt,
+  };
+  cache.set(partidoId, snap);
+  return snap;
+}
+
+/**
+ * Elimina el snapshot de L1 in-memory. NO toca L2 — las columnas en BD
+ * quedan y expiran por TTL a los 30 min. Usado principalmente para tests.
  */
 export function clearLiveStatus(partidoId: string): void {
   cache.delete(partidoId);
 }
 
-/** Test helper — NO usar en prod. */
+/** Test helper — resetea el L1. NO usar en prod. */
 export function __resetLiveStatusCacheForTests(): void {
   cache.clear();
 }
