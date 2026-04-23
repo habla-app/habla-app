@@ -10,7 +10,10 @@
 // /api/v1/auth/signup) el usuario ya llega creado con username real +
 // `usernameLocked=true`, así que aquí solo cae el OAuth.
 
-import crypto from "node:crypto";
+// Usamos Web Crypto (globalThis.crypto) en vez de `node:crypto` para que
+// el módulo también pueda bundlearse en edge runtime (middleware.ts lo
+// arrastra indirectamente via auth.ts). `node:crypto` revienta el build
+// de Next en edge — Web Crypto está disponible en ambos runtimes.
 import type { Adapter, AdapterUser } from "next-auth/adapters";
 import { prisma, type Usuario } from "@habla/db";
 
@@ -26,13 +29,22 @@ function toAdapterUser(u: Usuario): AdapterUser {
   };
 }
 
+/** Genera N bytes random como hex usando Web Crypto. */
+function randomHex(bytes: number): string {
+  const buf = new Uint8Array(bytes);
+  globalThis.crypto.getRandomValues(buf);
+  return Array.from(buf)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 /**
  * Genera un username temporal único con formato `new_<hex6>`. Reintenta
  * hasta 5 veces en caso de colisión (altamente improbable).
  */
 async function generarUsernameTemporal(): Promise<string> {
   for (let i = 0; i < 5; i++) {
-    const candidato = `new_${crypto.randomBytes(3).toString("hex")}`;
+    const candidato = `new_${randomHex(3)}`;
     const existe = await prisma.usuario.findUnique({
       where: { username: candidato },
       select: { id: true },
@@ -40,7 +52,7 @@ async function generarUsernameTemporal(): Promise<string> {
     if (!existe) return candidato;
   }
   // Fallback con más entropía
-  return `new_${crypto.randomBytes(6).toString("hex")}`;
+  return `new_${randomHex(6)}`;
 }
 
 export function HablaPrismaAdapter(): Adapter {
