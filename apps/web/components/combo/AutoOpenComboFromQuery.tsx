@@ -4,7 +4,7 @@
 //
 //   1. Usuario sin sesión clickea "Crear combinada" en un MatchCard.
 //   2. MatchCardCTA lo manda a
-//      /auth/login?callbackUrl=/matches?openCombo=<torneoId>
+//      /auth/signin?callbackUrl=/matches?openCombo=<torneoId>
 //   3. Al volver post-login, Next.js renderiza /matches con el query
 //      param intacto.
 //   4. Este componente (montado en MatchesPageContent) lo detecta y

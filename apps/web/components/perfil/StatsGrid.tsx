@@ -1,7 +1,7 @@
 "use client";
-// StatsGrid — 6 pstat cards (mockup `.profile-stats-grid`). Balance se
-// hidrata via useLukasStore + mounted-guard para reflejar cambios sin
-// refresh (post-inscripción, post-canje).
+// StatsGrid — 6 pstat cards del mockup `.profile-stats-grid` (línea 3897).
+// Balance hidratado desde useLukasStore con mounted-guard para reflejar
+// cambios sin refresh (post-inscripción, post-canje).
 
 import { useEffect, useState } from "react";
 import type { PerfilCompleto } from "@/lib/services/usuarios.service";

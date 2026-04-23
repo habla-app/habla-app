@@ -229,20 +229,23 @@ export interface ListarInscritosResult {
 }
 
 /**
- * Handle derivado del usuario. Prioridad:
- *   1. `nombre` si no parece un email
- *   2. prefijo del email (antes del @)
- *   3. primeros 8 chars del id
- *
- * Coincide con `nombreDisplay` de ranking.service para que el handle
- * que aparece en /torneo/:id sea el mismo que en /live-match.
+ * Handle derivado del usuario. Registro formal (Abr 2026): preferimos
+ * `username` (NOT NULL en BD). Si el username es temporal `new_<hex>`
+ * (OAuth que no completó) caemos al prefijo del email para no ensuciar
+ * rankings con placeholders. Coincide con `handleDisplay` de
+ * ranking.service para que el handle que aparece en /torneo/:id sea el
+ * mismo que en /live-match.
  */
 function handleFromUsuario(u: {
   id: string;
   nombre: string;
+  username: string;
   email: string;
 }): string {
-  if (u.nombre && !u.nombre.includes("@")) return u.nombre;
+  if (u.username && !u.username.startsWith("new_")) return u.username;
+  if (u.nombre && !u.nombre.includes("@") && !u.nombre.startsWith("new_")) {
+    return u.nombre;
+  }
   return u.email.split("@")[0] ?? u.id.slice(0, 8);
 }
 
@@ -266,7 +269,9 @@ export async function listarInscritos(
   const tickets = await prisma.ticket.findMany({
     where: { torneoId },
     include: {
-      usuario: { select: { id: true, nombre: true, email: true } },
+      usuario: {
+        select: { id: true, nombre: true, username: true, email: true },
+      },
     },
     orderBy: { creadoEn: "asc" },
   });

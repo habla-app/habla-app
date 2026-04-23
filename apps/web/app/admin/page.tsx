@@ -9,7 +9,7 @@ import { AdminSeedPremiosPanel } from "@/components/admin/AdminSeedPremiosPanel"
 
 export default async function AdminPage() {
   const session = await auth();
-  if (!session?.user) redirect("/auth/login?callbackUrl=/admin");
+  if (!session?.user) redirect("/auth/signin?callbackUrl=/admin");
   if (session.user.rol !== "ADMIN") redirect("/");
 
   return (

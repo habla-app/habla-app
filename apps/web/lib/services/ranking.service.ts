@@ -32,7 +32,15 @@ export interface RankingRow {
   rank: number;
   ticketId: string;
   usuarioId: string;
+  /** Display del jugador. Registro formal (Abr 2026): es `@username` (sin
+   *  el prefijo @ — la UI lo añade al renderizar). Mantenemos el nombre
+   *  `nombre` por compat con el contrato de emisión WS, pero el contenido
+   *  es ahora el handle público. */
   nombre: string;
+  /** @handle del usuario. Mismo valor que `nombre` pero explícito. Nuevo
+   *  en el registro formal — los consumidores deben preferirlo sobre
+   *  `nombre` a futuro. */
+  username: string;
   puntosTotal: number;
   puntosDetalle: {
     resultado: number;
@@ -76,7 +84,16 @@ export interface ListarRankingInput {
 // ---------------------------------------------------------------------------
 
 type TicketConUsuario = Prisma.TicketGetPayload<{
-  include: { usuario: { select: { id: true; nombre: true; email: true } } };
+  include: {
+    usuario: {
+      select: {
+        id: true;
+        nombre: true;
+        username: true;
+        email: true;
+      };
+    };
+  };
 }>;
 
 export async function listarRanking(
@@ -108,7 +125,11 @@ export async function listarRanking(
 
   const tickets = await prisma.ticket.findMany({
     where: { torneoId },
-    include: { usuario: { select: { id: true, nombre: true, email: true } } },
+    include: {
+      usuario: {
+        select: { id: true, nombre: true, username: true, email: true },
+      },
+    },
   });
 
   // Ordenamiento: puntosTotal DESC, creadoEn ASC. El segundo criterio
@@ -141,11 +162,13 @@ export async function listarRanking(
   const rows: RankingRow[] = ordenados.map((t, idx) => {
     const rank = idx + 1;
     const asig = premioPorTicketId.get(t.id);
+    const handle = handleDisplay(t.usuario);
     return {
       rank,
       ticketId: t.id,
       usuarioId: t.usuarioId,
-      nombre: nombreDisplay(t.usuario),
+      nombre: handle,
+      username: handle,
       puntosTotal: t.puntosTotal,
       puntosDetalle: {
         resultado: t.puntosResultado,
@@ -203,12 +226,23 @@ function comparadorCosmetico(a: TicketConUsuario, b: TicketConUsuario): number {
   return a.creadoEn.getTime() - b.creadoEn.getTime();
 }
 
-function nombreDisplay(u: {
+/**
+ * Registro formal (Abr 2026): el display del jugador en rankings/inscritos
+ * es `@username`. El caller recibe el handle desnudo (sin `@`) y lo
+ * prefija en el render. Si por alguna razón el username está vacío o es
+ * un temporal `new_<hex>` (usuario OAuth que no completó), caemos al
+ * prefijo del email para evitar mostrar `@new_abcd12` o cadenas vacías.
+ */
+function handleDisplay(u: {
+  username: string;
   nombre: string;
   email: string;
   id: string;
 }): string {
-  if (u.nombre && !u.nombre.includes("@")) return u.nombre;
+  if (u.username && !u.username.startsWith("new_")) return u.username;
+  if (u.nombre && !u.nombre.includes("@") && !u.nombre.startsWith("new_")) {
+    return u.nombre;
+  }
   const prefix = u.email.split("@")[0] ?? u.id.slice(0, 8);
   return prefix;
 }
@@ -250,6 +284,7 @@ export interface FinalizarTorneoResult {
     ticketId: string;
     usuarioId: string;
     nombre: string;
+    username: string;
     puntosTotal: number;
     premioLukas: number;
   }>;
@@ -338,7 +373,11 @@ export async function finalizarTorneo(
   // Traer todos los tickets con el usuario (para el display name).
   const tickets = await prisma.ticket.findMany({
     where: { torneoId },
-    include: { usuario: { select: { id: true, nombre: true, email: true } } },
+    include: {
+      usuario: {
+        select: { id: true, nombre: true, username: true, email: true },
+      },
+    },
   });
 
   // Distribuir premios con la nueva regla (split por empate).
@@ -388,11 +427,13 @@ export async function finalizarTorneo(
             refId: torneoId,
           },
         });
+        const handle = handleDisplay(t.usuario);
         ganadores.push({
           rank: asig.posicionFinal,
           ticketId: t.id,
           usuarioId: t.usuarioId,
-          nombre: nombreDisplay(t.usuario),
+          nombre: handle,
+          username: handle,
           puntosTotal: t.puntosTotal,
           premioLukas: asig.premioLukas,
         });
@@ -515,7 +556,11 @@ export async function reconciliarTorneoFinalizado(
 
   const tickets = await prisma.ticket.findMany({
     where: { torneoId },
-    include: { usuario: { select: { id: true, nombre: true, email: true } } },
+    include: {
+      usuario: {
+        select: { id: true, nombre: true, username: true, email: true },
+      },
+    },
   });
 
   // 2. Recomputa distribución con la regla vigente (Hotfix #6).
@@ -596,7 +641,7 @@ export async function reconciliarTorneoFinalizado(
       ajustes.push({
         ticketId: t.id,
         usuarioId: t.usuarioId,
-        nombre: nombreDisplay(t.usuario),
+        nombre: handleDisplay(t.usuario),
         posicionFinalAnterior: t.posicionFinal,
         posicionFinalNueva: asig.posicionFinal,
         premioLukasAnterior: t.premioLukas,

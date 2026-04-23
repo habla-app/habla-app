@@ -1,22 +1,13 @@
 "use client";
-// ProfileHero — mockup `.profile-hero-v2`: gradient azul + shimmer dorado
-// superior + avatar circular 100px con dorado gradient (iniciales) +
-// badge verificado + meta row + level-card embebida con barra de
-// progreso al siguiente nivel.
+// ProfileHero — mockup `.profile-hero-v2` (línea 3860 del mockup). Gradient
+// azul con shimmer dorado superior, avatar circular 100px (iniciales del
+// @handle), badge verificado, meta row y level-card embebida con progreso.
 //
-// Balance ya NO se muestra en el hero (movido a StatsGrid, según mockup);
-// el layout del perfil sigue pasando el balance al store vía Hydrator.
+// Registro formal (Abr 2026): `username` es NOT NULL. El handle se muestra
+// siempre con prefijo @. Si aún es temporal (new_xxx — caso raro porque
+// el middleware lo bloquea), degradamos el display.
 
 import type { PerfilCompleto } from "@/lib/services/usuarios.service";
-
-function iniciales(nombre: string | null | undefined, email: string): string {
-  const base = nombre && nombre.trim().length > 0 ? nombre : email;
-  const partes = base.trim().split(/\s+/).filter(Boolean);
-  if (partes.length >= 2) {
-    return ((partes[0]?.[0] ?? "") + (partes[1]?.[0] ?? "")).toUpperCase();
-  }
-  return base.slice(0, 2).toUpperCase();
-}
 
 interface ProfileHeroProps {
   perfil: PerfilCompleto;
@@ -27,6 +18,11 @@ const MEMBER_SINCE_FMT = new Intl.DateTimeFormat("es-PE", {
   year: "numeric",
   timeZone: "America/Lima",
 });
+
+function iniciales(username: string, email: string): string {
+  const base = username && !username.startsWith("new_") ? username : email;
+  return base.trim().slice(0, 2).toUpperCase();
+}
 
 export function ProfileHero({ perfil }: ProfileHeroProps) {
   const { nivel } = perfil;
@@ -70,7 +66,7 @@ export function ProfileHero({ perfil }: ProfileHeroProps) {
             aria-hidden
             className="flex h-[100px] w-[100px] items-center justify-center rounded-full bg-gold-diagonal font-display text-[40px] font-extrabold text-black shadow-gold"
           >
-            {iniciales(perfil.nombre, perfil.email)}
+            {iniciales(perfil.username, perfil.email)}
           </div>
           <button
             type="button"
@@ -84,7 +80,7 @@ export function ProfileHero({ perfil }: ProfileHeroProps) {
         <div className="min-w-[220px] flex-1">
           <div className="mb-1 flex flex-wrap items-center gap-2.5">
             <div className="font-display text-[34px] font-black leading-none">
-              {perfil.nombre || perfil.email}
+              {perfil.nombre || perfil.username}
             </div>
             {estaVerificado ? (
               <span className="inline-flex items-center gap-1 rounded-full border border-pred-correct/40 bg-pred-correct/20 px-2.5 py-1 text-[11px] font-bold text-[#6EE7B7]">
@@ -92,11 +88,9 @@ export function ProfileHero({ perfil }: ProfileHeroProps) {
               </span>
             ) : null}
           </div>
-          {perfil.username ? (
-            <div className="mb-2.5 text-sm text-white/70">
-              @{perfil.username}
-            </div>
-          ) : null}
+          <div className="mb-2.5 text-sm text-white/70">
+            @{perfil.username}
+          </div>
           <div className="flex flex-wrap gap-3.5 text-xs text-white/70">
             <span className="inline-flex items-center gap-1.5">
               <span aria-hidden>📅</span> Miembro desde{" "}

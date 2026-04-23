@@ -1,8 +1,11 @@
 "use client";
-// VerificacionPanel — email + edad + teléfono + DNI (mockup `.verif-row`).
-// Modals (teléfono, DNI) usan createPortal via <Modal> y mantienen el
-// flujo existente. El badge "N pendientes" aparece si hay teléfono o
-// DNI no verificados.
+// VerificacionSection — mockup `.profile-section.urgent` (línea 3951). 4
+// filas: email, edad (+18), teléfono, DNI. Los dos últimos tienen botón
+// "Agregar"/"Verificar" que abre modal.
+//
+// La verificación sigue siendo OPCIONAL en el MVP — teléfono da recuperación
+// de cuenta, DNI habilita canjes > S/500. El usuario puede usar la app sin
+// completarlas.
 
 import { useState } from "react";
 import { authedFetch } from "@/lib/api-client";
@@ -15,20 +18,15 @@ import {
 } from "@/components/ui/Modal";
 import { SectionShell } from "./SectionShell";
 
-interface VerificacionPanelProps {
+interface Props {
   perfil: PerfilCompleto;
-  onActualizar: () => void;
 }
 
-export function VerificacionPanel({
-  perfil,
-  onActualizar,
-}: VerificacionPanelProps) {
+export function VerificacionSection({ perfil }: Props) {
   const [openTel, setOpenTel] = useState(false);
   const [openDni, setOpenDni] = useState(false);
 
   function triggerRefresh() {
-    onActualizar();
     if (typeof window !== "undefined") {
       window.dispatchEvent(new Event("perfil:refresh"));
     }
@@ -48,46 +46,48 @@ export function VerificacionPanel({
       badge={urgent ? `${pendientes} pendiente${pendientes > 1 ? "s" : ""}` : undefined}
     >
       <VerifRow
-        estado={perfil.emailVerified ? "done" : "pending"}
+        done={!!perfil.emailVerified}
         title="Correo electrónico"
         desc={
           perfil.emailVerified
             ? `${perfil.email} · Verificado al registrarte`
             : perfil.email
         }
-        chip={perfil.emailVerified ? "done" : "pending"}
       />
       <VerifRow
-        estado={perfil.fechaNac ? "done" : "pending"}
+        done={!!perfil.fechaNac}
         title="Edad (+18)"
         desc={
           perfil.fechaNac
             ? "Edad confirmada por fecha de nacimiento"
             : "Falta confirmar fecha de nacimiento"
         }
-        chip={perfil.fechaNac ? "done" : "pending"}
       />
       <VerifRow
-        estado={perfil.telefonoVerif ? "done" : "pending"}
+        done={perfil.telefonoVerif}
         title="Teléfono"
         desc={
           perfil.telefonoVerif
-            ? perfil.telefono ?? "Teléfono verificado"
+            ? (perfil.telefono ?? "Teléfono verificado")
             : "Recomendado para recuperación de cuenta y seguridad"
         }
-        chip={perfil.telefonoVerif ? "done" : undefined}
-        ctaLabel={perfil.telefonoVerif ? undefined : perfil.telefono ? "Verificar" : "Agregar"}
+        ctaLabel={
+          perfil.telefonoVerif
+            ? undefined
+            : perfil.telefono
+              ? "Verificar"
+              : "Agregar"
+        }
         onCta={() => setOpenTel(true)}
       />
       <VerifRow
-        estado={perfil.dniVerif ? "done" : "pending"}
+        done={perfil.dniVerif}
         title="DNI"
         desc={
           perfil.dniVerif
             ? "DNI verificado"
             : "Requerido solo para canjes de premios mayores a S/ 500"
         }
-        chip={perfil.dniVerif ? "done" : undefined}
         ctaLabel={perfil.dniVerif ? undefined : "Verificar"}
         onCta={() => setOpenDni(true)}
       />
@@ -115,42 +115,38 @@ export function VerificacionPanel({
 }
 
 function VerifRow({
-  estado,
+  done,
   title,
   desc,
-  chip,
   ctaLabel,
   onCta,
 }: {
-  estado: "done" | "pending";
+  done: boolean;
   title: string;
   desc: string;
-  chip?: "done" | "pending";
   ctaLabel?: string;
   onCta?: () => void;
 }) {
-  const iconCls =
-    estado === "done"
-      ? "bg-alert-success-bg text-alert-success-text"
-      : "bg-urgent-med-bg text-urgent-high-dark";
+  const iconCls = done
+    ? "bg-alert-success-bg text-alert-success-text"
+    : "bg-urgent-med-bg text-urgent-high-dark";
   return (
     <div className="flex items-center gap-3.5 border-b border-light px-5 py-3.5 last:border-b-0">
       <div
         aria-hidden
         className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-base font-bold ${iconCls}`}
       >
-        {estado === "done" ? "✓" : "!"}
+        {done ? "✓" : "!"}
       </div>
       <div className="min-w-0 flex-1">
         <div className="text-sm font-bold text-dark">{title}</div>
         <div className="text-xs leading-[1.4] text-muted-d">{desc}</div>
       </div>
-      {chip === "done" ? (
+      {done ? (
         <span className="flex-shrink-0 rounded-full bg-alert-success-bg px-3 py-1 text-[11px] font-bold uppercase tracking-[0.04em] text-alert-success-text">
           ✓ Verificado
         </span>
-      ) : null}
-      {ctaLabel ? (
+      ) : ctaLabel ? (
         <button
           type="button"
           onClick={onCta}
@@ -162,8 +158,6 @@ function VerifRow({
     </div>
   );
 }
-
-// ---- Modals (funcionalidad preservada del diseño anterior) ----
 
 function TelefonoModal({
   onClose,
@@ -179,7 +173,7 @@ function TelefonoModal({
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState("");
 
-  async function solicitarCodigo() {
+  async function solicitar() {
     setCargando(true);
     setError("");
     try {
@@ -244,8 +238,8 @@ function TelefonoModal({
               className="mt-1 w-full rounded-md border border-light px-3 py-2 text-[14px]"
             />
             <p className="mt-2 text-[12px] text-muted-d">
-              Te enviaremos un código de 6 dígitos por SMS (si no está configurado,
-              llegará por email).
+              Te enviaremos un código de 6 dígitos por SMS (si no está
+              configurado, llegará por email).
             </p>
           </div>
         ) : (
@@ -282,7 +276,7 @@ function TelefonoModal({
         {paso === "telefono" ? (
           <button
             type="button"
-            onClick={solicitarCodigo}
+            onClick={solicitar}
             disabled={cargando || telefono.length < 7}
             className="w-full rounded-md bg-brand-blue-main px-4 py-3 font-bold text-white disabled:opacity-50"
           >
@@ -382,8 +376,8 @@ function DniModal({
           </div>
         ) : null}
         <p className="mt-3 text-[12px] text-muted-d">
-          Tu DNI será revisado por nuestro equipo en 24-48 horas. Te avisamos por
-          email.
+          Tu DNI será revisado por nuestro equipo en 24-48 horas. Te avisamos
+          por email.
         </p>
         {error ? (
           <div className="mt-3 rounded-md bg-pred-wrong-bg px-3 py-2 text-[13px] text-pred-wrong">

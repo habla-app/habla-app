@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 
 export default async function WalletPage() {
   const session = await auth();
-  if (!session?.user?.id) redirect("/auth/login?callbackUrl=/wallet");
+  if (!session?.user?.id) redirect("/auth/signin?callbackUrl=/wallet");
 
   const balance = session.user.balanceLukas ?? 0;
   const vista = await obtenerWalletView(session.user.id, balance);

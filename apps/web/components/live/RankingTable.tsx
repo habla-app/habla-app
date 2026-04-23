@@ -148,14 +148,14 @@ export function RankingTable({
                     fontWeight: 700,
                   }}
                 >
-                  {initialsFrom(row.nombre)}
+                  {initialsFrom(row.username ?? row.nombre)}
                 </div>
                 <div
                   className={`min-w-0 truncate text-sm font-bold ${
                     isMe ? "text-dark" : "text-dark"
                   }`}
                 >
-                  {row.nombre}
+                  @{row.username ?? row.nombre}
                   {isMe ? (
                     <span className="ml-2 rounded-full bg-brand-blue-main px-2 py-0.5 align-middle text-[10px] font-bold text-white">
                       Tú
@@ -263,13 +263,13 @@ function PosNumber({ rank }: { rank: number }) {
   );
 }
 
-function initialsFrom(nombre: string): string {
-  const parts = nombre.trim().split(/\s+/);
-  if (parts.length === 0 || !parts[0]) return "?";
-  if (parts.length === 1) {
-    return (parts[0].slice(0, 2) || "?").toUpperCase();
-  }
-  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
+function initialsFrom(handle: string): string {
+  // Registro formal (Abr 2026): el display ahora es el @handle — un solo
+  // token sin espacios. Tomamos las primeras 2 letras. Fallback "?" si
+  // llega vacío (no debería ocurrir con username NOT NULL).
+  const base = (handle ?? "").trim();
+  if (!base) return "?";
+  return base.slice(0, 2).toUpperCase();
 }
 
 // Hash determinista → color HSL. Evita trademarks y mantiene variedad.

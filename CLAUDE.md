@@ -65,7 +65,7 @@ Máx **10 tickets** por usuario por torneo; constraint en BD impide tickets idé
 | Backend (MVP) | Next.js Route Handlers en `apps/web/app/api/v1/*` (el scaffold `apps/api/` Fastify está congelado como backlog post-MVP) |
 | BD | PostgreSQL 16 + Prisma |
 | Cache / Realtime | Redis 7 + Socket.io (sobre custom Next server en `apps/web/server.ts`) |
-| Auth | NextAuth v5 (beta.30) — magic link via Resend |
+| Auth | NextAuth v5 (beta.30) — Google OAuth + magic link via Resend |
 | Pagos | Culqi + Yape API |
 | API deportiva | api-football.com (header `x-apisports-key`, NO RapidAPI) |
 | Email | Resend (dominio `hablaplay.com`) |
@@ -116,7 +116,7 @@ Para explorar a profundidad, usar `ls` sobre el repo.
 
 Schema completo en `packages/db/prisma/schema.prisma`. Modelos principales:
 
-- **Usuario** — email, username (@handle), balanceLukas, rol (JUGADOR|ADMIN), telefonoVerif, dniVerif, deletedAt (soft delete), relaciones a tickets/transacciones/canjes/preferenciasNotif/limites.
+- **Usuario** — email, `username` (@handle, **NOT NULL + unique**, 3-20 chars, `^[a-z0-9_]+$`), `usernameLocked` (true tras completar-perfil, inmutable), `tycAceptadosAt`, balanceLukas, rol (JUGADOR|ADMIN), telefonoVerif, dniVerif, deletedAt (soft delete), relaciones a tickets/transacciones/canjes/preferenciasNotif/limites.
 - **Partido** — externalId (api-football), liga, equipoLocal/Visita, fechaInicio, estado (PROGRAMADO|EN_VIVO|FINALIZADO|CANCELADO), golesLocal/Visita, flags btts/mas25Goles/huboTarjetaRoja, round, venue.
 - **EventoPartido** — tipo (GOL|TARJETA_AMARILLA|TARJETA_ROJA|FIN_PARTIDO|SUSTITUCION), minuto, equipo, jugador. Unique natural key `(partidoId, tipo, minuto, equipo, COALESCE(jugador,''))` para upsert idempotente del poller.
 - **Torneo** — tipo (EXPRESS|ESTANDAR|PREMIUM|GRAN_TORNEO), entradaLukas, partidoId, estado (ABIERTO|CERRADO|EN_JUEGO|FINALIZADO|CANCELADO), totalInscritos, pozoBruto, pozoNeto, rake, cierreAt, distribPremios (Json).
@@ -168,6 +168,7 @@ Schema completo en `packages/db/prisma/schema.prisma`. Modelos principales:
 - Navegación libre sin login (torneos, ranking, tienda).
 - Login solo al intentar: inscribirse, canjear, ver wallet/perfil.
 - Tras login continúa al destino (`pendingTorneoId`, `callbackUrl`).
+- Middleware bloquea el grupo `(main)` si `session.user.usernameLocked === false` → redirect a `/auth/completar-perfil?callbackUrl=<ruta>` (OAuth primera vez sin @handle definitivo).
 
 ### Seguridad
 - Rate limiting 60 req/min por IP.
@@ -186,6 +187,8 @@ REDIS_URL=redis://localhost:6379   # opcional: si falta, ranking degrada a lectu
 # Auth
 AUTH_SECRET=            # usado también para firmar JWT de WS (5 min)
 NEXTAUTH_URL=http://localhost:3000
+GOOGLE_CLIENT_ID=       # Google Cloud Console → OAuth client ID (web)
+GOOGLE_CLIENT_SECRET=
 
 # API Deportiva (NO RapidAPI)
 API_FOOTBALL_KEY=
@@ -233,7 +236,7 @@ pnpm exec tsc --noEmit
 
 ### ✅ Implementado y en producción
 - **Sprint 0 — Fundamentos:** monorepo, Docker Compose, Prisma, CI/CD, Railway deploy, landing, NavBar/BottomNav, paleta Tailwind, fuentes Barlow Condensed + DM Sans.
-- **Sprint 1 — Auth:** NextAuth v5 magic link (Resend `hablaplay.com`), custom Prisma adapter, middleware protegido (`/wallet`, `/perfil`, `/admin`), bonus 500 Lukas al registro.
+- **Sprint 1 — Auth:** NextAuth v5 magic link (Resend `hablaplay.com`), custom Prisma adapter, middleware protegido (`/wallet`, `/perfil`, `/admin`), bonus 500 Lukas al registro. Ver registro formal (Abr 2026) para el flujo actual con Google OAuth + username obligatorio.
 - **Fase 2 — UI desde mockup:** primitivos (`Button`, `Chip`, `Alert`, `Toast`, `Modal`), NavBar/BottomNav/UserMenu, MatchCard con 4 tiers de urgencia. Cero hex hardcodeados fuera de `tailwind.config.ts` + `globals.css`.
 - **Sub-Sprint 3 + 3.5 — Torneos + Auto-import:** CRUD de torneos, inscripción atómica, cancelación por <2 inscritos. Cron in-process en `instrumentation.ts`. Auto-import de temporadas (`seasons.cache.ts`) y partidos cada 6h para ligas whitelisteadas en `lib/config/ligas.ts` (Liga 1 Perú EXPRESS, Champions ESTANDAR, Libertadores ESTANDAR, Premier EXPRESS, La Liga EXPRESS, Mundial 2026 PREMIUM). Cada partido nuevo crea su torneo automáticamente.
 - **Fase 3 — UX de /matches:** filtros en URL (`?liga=&dia=`), scroll horizontal de días con `useScrollIndicators`, MatchCard compacta 150px, colores hash por equipo (`team-colors.ts`), zona horaria `America/Lima`.
@@ -242,6 +245,7 @@ pnpm exec tsc --noEmit
 - **Sub-Sprint 6 — Tienda + Canjes + Emails:** catálogo de 25 premios en `packages/db/src/catalog.ts` (5 categorías, 3 badges, 1 featured). Endpoint admin idempotente `POST /api/v1/admin/seed/premios`. Máquina de estados de canjes (`TRANSICIONES: Record<EstadoCanje, EstadoCanje[]>`). 8 templates de email transaccional en `lib/emails/templates.ts`, wrappers `notifyXxx` en `notificaciones.service.ts`. **Crédito automático de Lukas** al `finalizarTorneo` + auto-reconciliación de torneos FINALIZADOS con crédito incompleto + endpoint admin `POST /api/v1/admin/torneos/:id/reconciliar`.
 - **Sub-Sprint 7 — Perfil + Juego responsable:** `/perfil` completo (verificación teléfono/DNI, 7 toggles de notif, límites de compra/tickets, auto-exclusión, eliminar cuenta soft-delete, exportar datos). Niveles 🥉/🥈/🥇/👑 por torneos jugados (`lib/utils/nivel.ts`). Rediseño motivacional de `/torneo/:id` con lista de inscritos, pozo sin tecnicismos, CTA estelar adaptativo.
 - **Rediseño mockup v1 (Abr 2026):** re-alineamiento visual 1:1 de `/wallet`, `/tienda`, `/mis-combinadas`, tabs de `/live-match` y `/perfil` al mockup. Tokens `medal.silver/bronze` actualizados al mockup (`#C0C0C0`, `#CD7F32`). Nuevo service `wallet-view.service.ts` (SSR: totales por tipo + próximo vencimiento + historial). Componentes nuevos: `WalletView`/`TxList`/`MovesFilter`/`BuyPacksPlaceholder` en wallet, `HistoryList` (tab historial expandible) en tickets, `SectionShell` + `ProfileFooterSections` en perfil (absorbe `DatosYPrivacidadPanel`). Delta de posición ↑↓= en `RankingTable` vía `useRef` local. Backend, stores, WS y endpoints intactos.
+- **Registro formal + rediseño `/perfil` (Abr 2026):** dos rutas separadas `/auth/signin` y `/auth/signup` + `/auth/completar-perfil` para OAuth nuevo. Google provider sumado a NextAuth v5. `username` pasa a NOT NULL + unique, con flag `usernameLocked` (true tras elegir @handle) y `tycAceptadosAt` para audit de T&C. Middleware bloquea `(main)` si `usernameLocked=false` → forza a `/auth/completar-perfil`. Endpoints nuevos: `GET /auth/username-disponible`, `POST /auth/signup`, `POST /auth/completar-perfil`. `/perfil` fue reescrito desde cero (nuevos componentes `VerificacionSection`/`DatosSection`/`NotificacionesSection`/`JuegoResponsableSection`/`FooterSections`); servicios, endpoints y modelos preservados. `@username` reemplaza a `nombre` en NavBar/UserMenu/RankingTable/InscritosList. `PATCH /usuarios/me` ya NO acepta username (inmutable post-registro). Migración destructiva — reset de BD acordado.
 
 ### ⏳ Pendiente
 - **Sub-Sprint 2 — Pagos Culqi:** `/wallet` ya tiene UI completa (balance hero, 4 packs, historial), falta integración Culqi.js + webhook `/webhooks/culqi` + acreditación real de Lukas. Endpoints diseñados: `POST /lukas/comprar`, `POST /webhooks/culqi`. Enforcement de límite mensual ya listo (`verificarLimiteCompra` en `limites.service.ts`).
@@ -267,6 +271,9 @@ pnpm exec tsc --noEmit
 ### Páginas
 | Ruta | Contenido |
 |------|-----------|
+| `/auth/signin` | Login de cuenta existente. Google OAuth (botón) + form email (magic link). Si el email no está registrado → redirect a `/auth/signup` con `hint=no-account`. |
+| `/auth/signup` | Crear cuenta nueva. Google OAuth (botón) + form email + username (`@handle` único, 3-20 chars) + checkbox T&C / mayor de 18. Cierra creando usuario + bonus 500 Lukas y dispara magic link via `signIn("resend")`. |
+| `/auth/completar-perfil` | Post-OAuth Google primera vez. Usuario elige su @handle definitivo (inmutable después) + acepta T&C. Middleware redirige aquí hasta `usernameLocked=true`. |
 | `/` y `/matches` | Filter chips (liga + día scroll horizontal) + match cards por urgencia + section "Ya ganaron hoy" + sidebar sticky (live, top día, balance). Título derivado de filtros via `buildMatchesPageTitle`. |
 | `/live-match` | Filter chips por liga + LiveSwitcher (solo EN_VIVO) + LiveHero (dark, score dorado, 4 stats, timeline) + mi ticket destacado + tabs Ranking/Stats/Events + LiveFinalizedSection abajo (últimas 24h). |
 | `/torneo/:id` | Hero motivacional: "Pozo" único (sin "bruto/neto/rake" en copy visible), stats pills, lista de inscritos con nivel + @handle (predicciones ocultas hasta el cierre), CTA estelar adaptativo por estado + back button. |
@@ -447,7 +454,7 @@ Socket.io montado sobre custom Next server (`apps/web/server.ts`). Path `/socket
 - DNI: upload local `apps/web/public/uploads/dni/<hex32>.{jpg|png}`. DNI peruano 8 dígitos, MIME `image/jpeg|jpg|png`, máx 1.5MB.
 
 ### Eliminar cuenta
-- Soft delete + anonimización en `$transaction`: `nombre="Usuario eliminado"`, `email=deleted-<id8>-<ts>@deleted.habla.local`, `username/telefono/ubicacion/image=null`, `deletedAt=new Date()`, `session.deleteMany`.
+- Soft delete + anonimización en `$transaction`: `nombre="Usuario eliminado"`, `email=deleted-<id8>-<ts>@deleted.habla.local`, `username=deleted_<id10>` (NOT NULL → handle anonimizado único en vez de null), `usernameLocked=true`, `telefono/ubicacion/image=null`, `deletedAt=new Date()`, `session.deleteMany`.
 - **PRESERVA** tickets, transacciones, canjes (integridad financiera y de ranking).
 - Token TTL 48h. Segunda llamada al mismo token → `YA_CONFIRMADO 409`.
 
@@ -455,6 +462,7 @@ Socket.io montado sobre custom Next server (`apps/web/server.ts`). Path `/socket
 - Ruta protegida. **Acceso ≤2 taps/clicks** desde cualquier página del grupo `(main)`: desktop via UserMenu dropdown (2 clicks), mobile via BottomNav item "Perfil" (1 tap).
 - Wallet mantiene la misma regla via `BalanceBadge` del header.
 - Tras mutaciones (verificar teléfono, subir DNI, editar datos), Client Components dispatchean `new Event("perfil:refresh")` → `PerfilRefreshOnUpdate.tsx` llama `router.refresh()`.
+- **`@username` es permanente** post-registro. El row en `DatosSection` es read-only con tooltip "Tu @handle es permanente". `PATCH /usuarios/me` no acepta `username`. Si se necesita cambiar (error manifiesto, soporte), hacerlo en Prisma Studio como operación admin.
 
 ### Operaciones admin one-shot
 - Seeds, reconciliaciones, imports se exponen como endpoints `POST /api/v1/admin/*` con auth ADMIN, `force-dynamic`, idempotentes, contadores en response, logs Pino. 
@@ -490,6 +498,7 @@ Socket.io montado sobre custom Next server (`apps/web/server.ts`). Path `/socket
 - **Resend sin SDK:** wrapper minimal en `email.service.ts` hace POST directo a `api.resend.com/emails`. Sin `RESEND_API_KEY` → loggea y devuelve `{skipped:true}`; `NODE_ENV=test` → sink in-memory `__peekTestEmails()`.
 - **Twilio sin SDK:** mismo patrón, fetch directo a REST API.
 - **NextAuth v5 beta.30 con custom Prisma adapter:** mapea `Usuario.nombre` al contrato. Decisión de no migrar a stable hasta post-Mundial.
+- **Registro formal con username obligatorio (Abr 2026):** OAuth Google crea usuarios con `username` temporal `new_<hex>` + `usernameLocked=false`; el middleware fuerza a `/auth/completar-perfil` antes de dejar entrar al grupo `(main)`. Email sign-up (POST `/api/v1/auth/signup`) crea con username real desde el vamos. Alternativa descartada: `username` nullable + chequeo null en middleware — elegimos NOT NULL + flag para que los payloads de ranking/inscritos siempre tengan handle garantizado sin special-casing.
 
 ---
 
@@ -499,7 +508,7 @@ Al 5 de junio, un usuario peruano cualquiera debe poder en una sola sesión:
 
 1. Entrar a `habla-app-production.up.railway.app`
 2. Ver torneos disponibles sin cuenta
-3. Crear cuenta por magic link → recibir 500 Lukas de bienvenida
+3. Crear cuenta por Google o magic link + elegir @handle → recibir 500 Lukas de bienvenida
 4. Comprar 100 Lukas con tarjeta sandbox (→ 615 con bonus) ⏳ pendiente SS2
 5. Inscribirse en torneo de Liga 1 (10 Lukas)
 6. Armar combinada de 5 predicciones

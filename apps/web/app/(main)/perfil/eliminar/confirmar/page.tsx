@@ -1,20 +1,19 @@
-// /perfil/eliminar/confirmar — consume el token de email + ejecuta soft delete.
-// Sub-Sprint 7. Esta ruta es pública (el token ya autentica la acción) porque
-// el usuario puede estar sin sesión al clickear el link.
+// /perfil/eliminar/confirmar?token=XXX — página pública que recibe el
+// click del email de solicitud de eliminación. El cliente despacha el
+// POST a /api/v1/usuarios/me/eliminar/confirmar con el token recibido
+// y muestra un feedback visual.
+//
+// No requiere sesión — el token mismo es el bearer de autorización.
+// force-dynamic porque depende de searchParams.
 
 import { ConfirmarEliminarContent } from "@/components/perfil/ConfirmarEliminarContent";
 
 export const dynamic = "force-dynamic";
 
-interface PageProps {
+interface Props {
   searchParams: { token?: string };
 }
 
-export default function ConfirmarEliminarPage({ searchParams }: PageProps) {
-  const token = searchParams.token ?? "";
-  return (
-    <div className="mx-auto max-w-xl px-4 py-10">
-      <ConfirmarEliminarContent token={token} />
-    </div>
-  );
+export default function ConfirmarEliminarPage({ searchParams }: Props) {
+  return <ConfirmarEliminarContent token={searchParams.token ?? null} />;
 }

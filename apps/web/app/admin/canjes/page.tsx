@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminCanjesPage() {
   const session = await auth();
-  if (!session?.user) redirect("/auth/login?callbackUrl=/admin/canjes");
+  if (!session?.user) redirect("/auth/signin?callbackUrl=/admin/canjes");
   if (session.user.rol !== "ADMIN") redirect("/");
 
   return (

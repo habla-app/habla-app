@@ -4,6 +4,7 @@
 import type { Metadata, Viewport } from "next";
 import { Barlow_Condensed, DM_Sans } from "next/font/google";
 import { ToastProvider } from "@/components/ui";
+import { SessionProviderClient } from "@/components/auth/SessionProviderClient";
 import "./globals.css";
 
 const barlow = Barlow_Condensed({
@@ -42,7 +43,9 @@ export default function RootLayout({
   return (
     <html lang="es" className={`${barlow.variable} ${dmSans.variable}`}>
       <body className="font-body antialiased">
-        <ToastProvider>{children}</ToastProvider>
+        <SessionProviderClient>
+          <ToastProvider>{children}</ToastProvider>
+        </SessionProviderClient>
       </body>
     </html>
   );

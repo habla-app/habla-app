@@ -195,6 +195,7 @@ export default async function LiveMatchPage({ searchParams }: Props) {
       puntosDetalle: r.puntosDetalle,
       predicciones: r.predicciones,
       premioEstimado: r.premioEstimado,
+      username: r.username,
     })),
     miPosicion: rankingInicial.miPosicion
       ? {

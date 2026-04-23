@@ -96,6 +96,7 @@ export async function emitirRankingUpdate(
         ticketId: row.ticketId,
         usuarioId: row.usuarioId,
         nombre: row.nombre,
+        username: row.username,
         puntosTotal: row.puntosTotal,
         puntosDetalle: row.puntosDetalle,
         predicciones: row.predicciones,

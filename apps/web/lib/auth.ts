@@ -1,23 +1,39 @@
-// Configuracion NextAuth v5 (5.0.0-beta.30)
-// Provider unico: magic link por email via Resend.
-// Google OAuth se agrega post-lanzamiento.
+// Configuración NextAuth v5 (5.0.0-beta.30).
 //
-// Usa PrismaAdapter para persistir tokens de verificacion del magic link
-// (tablas Account, Session, VerificationToken en el schema).
+// Providers (registro formal Abr 2026):
+//  - Google OAuth (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET). Primera vez
+//    crea usuario con username temporal + usernameLocked=false — middleware
+//    fuerza a /auth/completar-perfil.
+//  - Resend magic link (RESEND_API_KEY). Usado por email sign-in; el email
+//    sign-up pasa primero por POST /api/v1/auth/signup que crea el usuario
+//    con username definitivo antes de disparar el magic link.
+//
+// Session strategy: JWT. Exponemos en session.user: id, rol, balanceLukas
+// (fresh en cada session callback), username, usernameLocked.
 
 import NextAuth from "next-auth";
+import Google from "next-auth/providers/google";
 import Resend from "next-auth/providers/resend";
 import { HablaPrismaAdapter } from "@/lib/auth-adapter";
-import { crearOEncontrarUsuario, obtenerBalance } from "@/lib/usuarios";
+import { obtenerBalance } from "@/lib/usuarios";
+import { prisma } from "@habla/db";
 import { logger } from "@/lib/services/logger";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  // Railway corre la app detras de un proxy; NextAuth v5 por defecto no
-  // confia en el host. Con trustHost aceptamos el host reenviado por el
-  // proxy de Railway (habla-app-production.up.railway.app).
+  // Railway corre la app detrás de un proxy; sin esto NextAuth rechaza
+  // el host reenviado (habla-app-production.up.railway.app).
   trustHost: true,
   adapter: HablaPrismaAdapter(),
   providers: [
+    Google({
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      // `allowDangerousEmailAccountLinking`: si un usuario creó cuenta con
+      // magic link y luego intenta entrar con Google usando el mismo email,
+      // NextAuth linkea las cuentas en vez de rechazar. El caso contrario
+      // (OAuth primero, magic link después) también queda soportado.
+      allowDangerousEmailAccountLinking: true,
+    }),
     Resend({
       apiKey: process.env.RESEND_API_KEY,
       from: "Habla! <equipo@hablaplay.com>",
@@ -27,45 +43,58 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     strategy: "jwt",
   },
   callbacks: {
-    async signIn({ user }) {
-      // En el primer login (magic link confirmado), crear el usuario en BD
-      // con 500 Lukas de bienvenida. Si ya existe, retornar el existente.
-      if (!user.email) return false;
-
-      await crearOEncontrarUsuario({
-        email: user.email,
-        nombre: user.name ?? user.email.split("@")[0],
-      });
-
+    async signIn() {
+      // El adapter ya creó (o encontró) al usuario. Aceptamos siempre —
+      // si el usuario no tiene username definitivo, el middleware lo
+      // manda a /auth/completar-perfil.
       return true;
     },
     async jwt({ token, user, trigger }) {
-      // En el primer login, cargar datos del usuario desde la BD al token.
+      // En el primer login, cargar datos desde BD al token JWT. En updates
+      // explícitos (session.update() tras completar-perfil), refrescar
+      // username y usernameLocked.
       if (user?.email) {
-        const usuario = await crearOEncontrarUsuario({
-          email: user.email,
-          nombre: user.name ?? user.email.split("@")[0],
+        const u = await prisma.usuario.findUnique({
+          where: { email: user.email.toLowerCase() },
+          select: {
+            id: true,
+            rol: true,
+            username: true,
+            usernameLocked: true,
+          },
         });
-        token.usuarioId = usuario.id;
-        token.rol = usuario.rol;
+        if (u) {
+          token.usuarioId = u.id;
+          token.rol = u.rol;
+          token.username = u.username;
+          token.usernameLocked = u.usernameLocked;
+        }
       }
 
-      // En updates explicitos de sesion, refrescar rol desde BD.
       if (trigger === "update" && token.usuarioId) {
-        // Placeholder para refresh futuro — por ahora no hacemos nada extra.
+        const u = await prisma.usuario.findUnique({
+          where: { id: token.usuarioId as string },
+          select: { username: true, usernameLocked: true, rol: true },
+        });
+        if (u) {
+          token.username = u.username;
+          token.usernameLocked = u.usernameLocked;
+          token.rol = u.rol;
+        }
       }
 
       return token;
     },
     async session({ session, token }) {
-      // Inyectar usuarioId, balanceLukas y rol en la sesion que ve el frontend.
-      // Hotfix Bug #3: si `obtenerBalance` falla (Prisma down, latencia, etc.)
-      // no debemos romper la sesión devolviendo null — eso causaría que el
-      // usuario "pierda" la sesión en navegaciones client-side aunque el
-      // cookie esté válido. Defaulteamos a balance=0 y loggeamos el error.
+      // Inyectar id, rol, balance fresh, username y usernameLocked en la
+      // sesión visible al frontend. Bug #3: si `obtenerBalance` falla, no
+      // rompemos la sesión — defaulteamos a 0 + log.
       if (token.usuarioId && session.user) {
         session.user.id = token.usuarioId as string;
         session.user.rol = (token.rol as "JUGADOR" | "ADMIN") ?? "JUGADOR";
+        session.user.username = (token.username as string) ?? "";
+        session.user.usernameLocked =
+          (token.usernameLocked as boolean) ?? false;
         try {
           session.user.balanceLukas = await obtenerBalance(
             token.usuarioId as string
@@ -82,8 +111,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
   pages: {
-    signIn: "/auth/login",
+    signIn: "/auth/signin",
     verifyRequest: "/auth/verificar",
     error: "/auth/error",
+    newUser: "/auth/completar-perfil",
   },
 });

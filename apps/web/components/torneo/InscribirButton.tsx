@@ -6,7 +6,7 @@
 //   - Redirige con router.push tras éxito.
 //
 // Flujo por estado:
-//   - Sin sesión        → Link a /auth/login?callbackUrl=/torneo/{id}
+//   - Sin sesión        → Link a /auth/signin?callbackUrl=/torneo/{id}
 //   - Con sesión + OK   → POST /api/v1/torneos/:id/inscribir → toast +
 //                         router.refresh (para re-fetch del page server)
 //   - Balance insuficiente → toast con CTA a /wallet (no dispara POST)
@@ -48,7 +48,7 @@ export function InscribirButton({
   if (!hasSession) {
     return (
       <Link
-        href={`/auth/login?callbackUrl=${encodeURIComponent(`/torneo/${torneoId}`)}`}
+        href={`/auth/signin?callbackUrl=${encodeURIComponent(`/torneo/${torneoId}`)}`}
         className={`inline-flex w-full items-center justify-center gap-2 rounded-md px-6 py-4 font-display text-[16px] font-extrabold uppercase tracking-[0.04em] transition-all duration-150 ${
           urgent
             ? "bg-urgent-critical text-white shadow-urgent-btn hover:-translate-y-px hover:bg-urgent-critical-hover"

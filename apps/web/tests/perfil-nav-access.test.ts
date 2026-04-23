@@ -1,19 +1,13 @@
-// Tests del Hotfix #9 — acceso a /perfil desde la navegación principal.
+// Tests del Hotfix #9 + registro formal (Abr 2026) — acceso a /perfil
+// desde la navegación principal.
 //
-// Problema reportado en prod (21 Abr): el usuario logueado no tenía una
-// entrada visible en el nav para llegar a /perfil. Desktop: el UserMenu
-// ya tenía "Mi perfil" en el dropdown del avatar (2 clicks). Mobile: el
-// BottomNav NO exponía ningún link a /perfil — el Sub-Sprint 7 completo
-// quedaba invisible en la UI mobile.
+// Reglas fijadas:
+//   1. BottomNav (mobile) 5° item es "Perfil" (Wallet accesible via BalanceBadge).
+//   2. UserMenu (desktop, dropdown del avatar) tiene "Mi perfil".
+//   3. /perfil protegido por middleware.
+//   4. /perfil/page.tsx exporta force-dynamic + redirige a /auth/signin.
 //
-// Fix:
-//   1. BottomNav (mobile) reemplaza "Wallet" por "Perfil" como 5° item.
-//      Wallet sigue accesible en 1 tap via BalanceBadge del header.
-//   2. UserMenu ya tenía "Mi perfil" — este test lo fija como regla.
-//   3. /perfil protegido en middleware (ya estaba desde Sub-Sprint 7).
-//
-// Objetivo de regresión: si alguien en un PR futuro quita la entrada de
-// /perfil de cualquiera de esos 3 lugares, el suite reventa antes del merge.
+// Si un futuro PR quita cualquier entrada, el suite reventa antes del merge.
 
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
@@ -43,7 +37,7 @@ const BALANCE_BADGE_SRC = readFileSync(
 );
 
 // ---------------------------------------------------------------------------
-// BottomNav mobile — entrada visible a /perfil (Hotfix #9)
+// BottomNav mobile — entrada visible a /perfil
 // ---------------------------------------------------------------------------
 
 describe("BottomNav (mobile) — /perfil accesible en ≤1 tap", () => {
@@ -62,18 +56,10 @@ describe("BottomNav (mobile) — /perfil accesible en ≤1 tap", () => {
   });
 
   it("BUG REPRO: /perfil NO puede estar ausente del array ITEMS", () => {
-    // Antes del Hotfix #9 el BottomNav tenía: Partidos, En vivo, Tickets,
-    // Tienda, Wallet — ningún link a /perfil. El usuario mobile tenía que
-    // adivinar que el avatar del header (UserMenu) tenía el acceso. Este
-    // test fija la regla de que /perfil SIEMPRE debe estar en el
-    // BottomNav mobile.
     expect(BOTTOMNAV_SRC).toContain('href: "/perfil"');
   });
 
   it("Hotfix #9: Wallet NO está en BottomNav (accesible via BalanceBadge del header)", () => {
-    // El BalanceBadge es un <Link href="/wallet"> siempre visible en el
-    // NavBar (tanto desktop como mobile). Mantener Wallet en el BottomNav
-    // era redundante y consumía un slot mejor aprovechable por Perfil.
     expect(BOTTOMNAV_SRC).not.toMatch(/href:\s*["']\/wallet["']/);
     expect(BOTTOMNAV_SRC).not.toMatch(/label:\s*["']Wallet["']/);
   });
@@ -84,16 +70,12 @@ describe("BottomNav (mobile) — /perfil accesible en ≤1 tap", () => {
   });
 
   it("preserva el BalanceBadge como alternativa a Wallet", () => {
-    // Este test no valida el BottomNav directamente — fija la regla de
-    // que el BalanceBadge SIGUE siendo un link a /wallet. Si alguien
-    // futuro cambia el link, tiene que también revisar la decisión del
-    // Hotfix #9 de mover Wallet fuera del BottomNav.
     expect(BALANCE_BADGE_SRC).toMatch(/href=["']\/wallet["']/);
   });
 });
 
 // ---------------------------------------------------------------------------
-// UserMenu — /perfil en el dropdown del avatar (ya existía, fijar invariante)
+// UserMenu — /perfil en el dropdown del avatar
 // ---------------------------------------------------------------------------
 
 describe("UserMenu (header avatar) — /perfil en el dropdown", () => {
@@ -107,17 +89,22 @@ describe("UserMenu (header avatar) — /perfil en el dropdown", () => {
   });
 
   it("cierra el dropdown tras click (UX correcto)", () => {
-    // onClick={() => setAbierto(false)} asegura que al navegar a /perfil
-    // el dropdown no queda abierto sobre la nueva página.
     const blockMatch = USERMENU_SRC.match(
       /<Link\s+href=["']\/perfil["'][^>]*onClick=\{[^}]*setAbierto\(false\)/,
     );
     expect(blockMatch).not.toBeNull();
   });
+
+  it("muestra @username (registro formal Abr 2026) en vez de nombre", () => {
+    // Si usernameLocked=true renderiza @username; si =false renderiza CTA
+    // "Elegí tu @handle →" linkeando a /auth/completar-perfil.
+    expect(USERMENU_SRC).toMatch(/@\{username\}/);
+    expect(USERMENU_SRC).toMatch(/\/auth\/completar-perfil/);
+  });
 });
 
 // ---------------------------------------------------------------------------
-// Middleware — /perfil protegido (ya estaba, fijar invariante)
+// Middleware — /perfil protegido
 // ---------------------------------------------------------------------------
 
 describe("middleware — /perfil exige sesión", () => {
@@ -132,6 +119,12 @@ describe("middleware — /perfil exige sesión", () => {
     expect(configMatch).not.toBeNull();
     expect(configMatch![1]!).toContain('"/perfil/:path*"');
   });
+
+  it("redirige a /auth/completar-perfil si usernameLocked=false", () => {
+    // Registro formal: el middleware añadió el chequeo de usernameLocked.
+    expect(MIDDLEWARE_SRC).toMatch(/usernameLocked/);
+    expect(MIDDLEWARE_SRC).toMatch(/\/auth\/completar-perfil/);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -145,8 +138,8 @@ describe("/perfil/page.tsx — contrato RSC", () => {
     );
   });
 
-  it("llama auth() y redirige a /auth/login si no hay sesión", () => {
+  it("llama auth() y redirige a /auth/signin si no hay sesión", () => {
     expect(PERFIL_PAGE_SRC).toMatch(/auth\s*\(\s*\)/);
-    expect(PERFIL_PAGE_SRC).toMatch(/redirect\s*\(\s*["']\/auth\/login/);
+    expect(PERFIL_PAGE_SRC).toMatch(/redirect\s*\(\s*["']\/auth\/signin/);
   });
 });

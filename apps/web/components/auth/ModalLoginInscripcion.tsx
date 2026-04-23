@@ -2,7 +2,7 @@
 
 // Modal contextual que se dispara cuando un usuario sin sesión intenta
 // inscribirse a un torneo. Muestra info del torneo (motivacional) y
-// redirige a /auth/login con callbackUrl al torneo.
+// redirige a /auth/signin con callbackUrl al torneo.
 //
 // Se conecta con el flujo de inscripción en el Sub-Sprint 3 (match cards
 // + `/torneo/:id`). Usa el Modal primitive con header dorado + body light.
@@ -32,7 +32,7 @@ export function ModalLoginInscripcion({
 
   const irALogin = () => {
     const callbackUrl = torneo?.id ? `/torneo/${torneo.id}` : "/";
-    router.push(`/auth/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+    router.push(`/auth/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`);
   };
 
   return (

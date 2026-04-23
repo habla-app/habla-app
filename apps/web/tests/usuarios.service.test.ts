@@ -1,4 +1,4 @@
-// Tests del service de usuarios. Sub-Sprint 7.
+// Tests del service de usuarios. Sub-Sprint 7 + registro formal (Abr 2026).
 
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
@@ -29,15 +29,21 @@ describe("usuarios.service — obtenerMiPerfil", () => {
   it("expone stats del usuario (calcularStats)", () => {
     expect(SERVICE_SRC).toMatch(/calcularStats/);
   });
+
+  it("proyecta username y usernameLocked en el perfil (registro formal)", () => {
+    expect(SERVICE_SRC).toMatch(/username:\s*true/);
+    expect(SERVICE_SRC).toMatch(/usernameLocked:\s*true/);
+  });
 });
 
-describe("usuarios.service — actualizarPerfil", () => {
-  it("valida username formato [a-z0-9_]{3,20}", () => {
-    expect(SERVICE_SRC).toMatch(/\/\^\[a-z0-9_\]\{3,20\}\$\/i/);
-  });
-
-  it("lanza USERNAME_EN_USO si username ya existe", () => {
-    expect(SERVICE_SRC).toMatch(/"USERNAME_EN_USO"/);
+describe("usuarios.service — actualizarPerfil (registro formal Abr 2026)", () => {
+  it("NO acepta username en el patch (inmutable post-registro)", () => {
+    // El ActualizarPerfilInput dropeó el campo username.
+    const match = SERVICE_SRC.match(
+      /interface\s+ActualizarPerfilInput\s*\{([^}]+)\}/,
+    );
+    expect(match).not.toBeNull();
+    expect(match![1]).not.toContain("username");
   });
 
   it("al actualizar teléfono resetea telefonoVerif a false", () => {
@@ -54,7 +60,9 @@ describe("usuarios.service — eliminar cuenta (soft delete)", () => {
   it("confirmarEliminarCuenta anonimiza PII: nombre, email, username, telefono, ubicacion, image", () => {
     expect(SERVICE_SRC).toMatch(/nombre:\s*["']Usuario eliminado["']/);
     expect(SERVICE_SRC).toMatch(/deleted-/);
-    expect(SERVICE_SRC).toMatch(/username:\s*null/);
+    // Registro formal: username es NOT NULL → asignamos handle anonimizado único.
+    expect(SERVICE_SRC).toMatch(/username:\s*anonUsername/);
+    expect(SERVICE_SRC).toMatch(/deleted_/);
     expect(SERVICE_SRC).toMatch(/telefono:\s*null/);
     expect(SERVICE_SRC).toMatch(/ubicacion:\s*null/);
     expect(SERVICE_SRC).toMatch(/image:\s*null/);

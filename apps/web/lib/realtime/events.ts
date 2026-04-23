@@ -26,7 +26,13 @@ export interface RankingRowPayload {
   rank: number;
   ticketId: string;
   usuarioId: string;
+  /** Display del jugador. Registro formal (Abr 2026): contiene el
+   *  `username` (sin @). La UI prefija `@` al renderizar. Se mantiene el
+   *  nombre del campo como `nombre` por compat con clientes antiguos. */
   nombre: string;
+  /** @handle del usuario. Nuevo campo explícito — los consumidores nuevos
+   *  deben preferirlo sobre `nombre`. */
+  username: string;
   puntosTotal: number;
   puntosDetalle: {
     resultado: number;
@@ -106,7 +112,9 @@ export interface TorneoFinalizadoPayload {
     rank: number;
     ticketId: string;
     usuarioId: string;
+    /** @handle (sin @) — compat con clientes antiguos que leían `nombre`. */
     nombre: string;
+    username: string;
     puntosTotal: number;
     premioLukas: number;
   }>;

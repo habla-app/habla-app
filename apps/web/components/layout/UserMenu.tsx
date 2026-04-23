@@ -3,17 +3,27 @@
 // UserMenu — avatar circular dorado (36x36 según `.avatar` del mockup) con
 // dropdown light flotante. Client Component porque maneja estado de apertura
 // y cierre por click fuera.
+//
+// Registro formal (Abr 2026): header del dropdown muestra `@username` en
+// vez de `nombre`. Si `usernameLocked=false` (OAuth sin completar),
+// muestra CTA "Elegí tu @handle →" linkeando a /auth/completar-perfil.
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
 
 interface UserMenuProps {
   iniciales: string;
-  nombre: string;
+  username: string;
+  usernameLocked: boolean;
   email: string;
 }
 
-export function UserMenu({ iniciales, nombre, email }: UserMenuProps) {
+export function UserMenu({
+  iniciales,
+  username,
+  usernameLocked,
+  email,
+}: UserMenuProps) {
   const [abierto, setAbierto] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -54,7 +64,19 @@ export function UserMenu({ iniciales, nombre, email }: UserMenuProps) {
           className="absolute right-0 top-11 z-50 w-60 overflow-hidden rounded-md border border-light bg-card shadow-lg"
         >
           <div className="border-b border-light px-4 py-3">
-            <p className="truncate text-sm font-semibold text-dark">{nombre}</p>
+            {usernameLocked && username ? (
+              <p className="truncate text-sm font-semibold text-dark">
+                @{username}
+              </p>
+            ) : (
+              <Link
+                href="/auth/completar-perfil"
+                onClick={() => setAbierto(false)}
+                className="block truncate text-sm font-semibold text-brand-blue-main hover:underline"
+              >
+                Elegí tu @handle →
+              </Link>
+            )}
             <p className="truncate text-[11px] text-muted-d">{email}</p>
           </div>
           <Link
