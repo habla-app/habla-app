@@ -251,26 +251,28 @@ export default async function TorneoDetallePage({ params, searchParams }: Props)
             showingAll={showingAll}
           />
 
-          {/* CTA DESKTOP (inline — el sticky va fijo al bottom en mobile) */}
-          <div className="hidden lg:block">
-            <TorneoStickyCTA
-              torneoId={torneo.id}
-              hasSession={!!session?.user}
-              cta={vm.cta}
-              callbackUrl={`/torneo/${torneo.id}`}
-            />
+          {/* RULES CARD MOBILE — en desktop vive en la sidebar. */}
+          <div className="lg:hidden">
+            <RulesCard />
           </div>
         </div>
 
-        {/* SIDEBAR STICKY — Reglas de puntaje (solo desktop; en mobile
-            va como accordion arriba de inscritos) */}
-        <div className="lg:sticky lg:top-[88px] lg:self-start">
+        {/* SIDEBAR STICKY DESKTOP — CTA estelar arriba + Reglas de
+            puntaje abajo. En mobile, el CTA aparece sticky al bottom y
+            las reglas bajan inline dentro de la columna principal. */}
+        <div className="hidden flex-col gap-4 lg:sticky lg:top-[88px] lg:flex lg:self-start">
+          <TorneoStickyCTA
+            torneoId={torneo.id}
+            hasSession={!!session?.user}
+            cta={vm.cta}
+            callbackUrl={`/torneo/${torneo.id}`}
+          />
           <RulesCard />
         </div>
       </div>
 
-      {/* CTA MOBILE (sticky al bottom; hidden en desktop porque el inline
-          se muestra inline arriba) */}
+      {/* CTA MOBILE (sticky al bottom; hidden en desktop porque vive en
+          la sidebar derecha). */}
       <div className="lg:hidden">
         <TorneoStickyCTA
           torneoId={torneo.id}
