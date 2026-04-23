@@ -117,6 +117,15 @@ model Partido {
   venue           String? // "Goodison Park, Liverpool"
   creadoEn        DateTime      @default(now())
 
+  // Snapshot persistente del estado en vivo del partido. Lo escribe el
+  // poller cada 30s; lo lee el endpoint/SSR del minuto. Persistir en BD
+  // (en vez de sólo Map in-memory) sobrevive restarts y cubre el caso de
+  // múltiples réplicas de Railway leyendo desde cachés distintos.
+  liveStatusShort String? // "1H" | "HT" | "2H" | "ET" | "BT" | "P" | "FT" | "AET" | "PEN" | ...
+  liveElapsed     Int? // fixture.status.elapsed
+  liveExtra       Int? // injury time (1H/2H)
+  liveUpdatedAt   DateTime? // timestamp del último setLiveStatus — TTL 30 min
+
   torneos Torneo[]
   eventos EventoPartido[]
 

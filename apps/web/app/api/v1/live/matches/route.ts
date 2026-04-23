@@ -52,7 +52,7 @@ export async function GET() {
         // Hotfix #8 Bug #22 + Ítem 4: incluimos statusShort + elapsedAgeMs
         // para que el cliente ancle el reloj local al momento REAL en que
         // el server capturó el elapsed (y no al momento del mount).
-        const liveSnap = getLiveStatus(p.id);
+        const liveSnap = await getLiveStatus(p.id);
         const nowMs = Date.now();
         return {
           id: p.id,

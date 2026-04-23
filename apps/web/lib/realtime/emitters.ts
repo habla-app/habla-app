@@ -75,7 +75,7 @@ export async function emitirRankingUpdate(
     // Hotfix #8 Bug #22: también extraemos statusShort para que el
     // cliente sepa qué fase del partido y corra reloj local anclado
     // a `Partido.fechaInicio` (ya persistido en BD, no depende del cache).
-    const snapshot = opts.partidoId ? getLiveStatus(opts.partidoId) : null;
+    const snapshot = opts.partidoId ? await getLiveStatus(opts.partidoId) : null;
     const emitAt = Date.now();
     const minutoPartido =
       opts.minutoPartido !== undefined

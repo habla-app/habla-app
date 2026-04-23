@@ -221,7 +221,7 @@ async function pollearPartido(partido: {
   // /live-match pueda mostrar el label inmediatamente (sin esperar al
   // primer WS). `emitirRankingUpdate` lee de este cache al construir
   // el payload.
-  setLiveStatus(
+  await setLiveStatus(
     partido.id,
     fixture.fixture.status.short,
     fixture.fixture.status.elapsed,
@@ -358,7 +358,7 @@ async function pollearPartido(partido: {
       // Tras FT definitivo, limpiamos el snapshot: el label "FIN" ya
       // quedó capturado pero no necesitamos seguir leyéndolo en vivo.
       if (partidoInput.estado === "FINALIZADO") {
-        setLiveStatus(
+        await setLiveStatus(
           partido.id,
           fixture.fixture.status.short,
           fixture.fixture.status.elapsed,
