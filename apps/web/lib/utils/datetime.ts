@@ -124,6 +124,36 @@ export function getDayBounds(
 }
 
 /**
+ * Rango UTC de la semana local en curso — lunes 00:00 a domingo 23:59:59.999
+ * en la tz dada. Útil para agregados semanales de UI (widgets del sidebar
+ * de /matches).
+ *
+ * Semana que contiene la fecha `reference` (default: ahora). El inicio de
+ * semana es el lunes (estándar europeo/latinoamericano, no domingo estilo US).
+ */
+export function getWeekBounds(
+  reference: Date = new Date(),
+  tz: string = DEFAULT_TZ,
+): { desde: Date; hasta: Date } {
+  const refKey = getDayKey(reference, tz);
+  const [y, m, d] = refKey.split("-").map(Number);
+  // Mediodía UTC del día local — evita flips por DST/offset al calcular
+  // el día de la semana.
+  const asDate = new Date(Date.UTC(y, m - 1, d, 12));
+  const dayOfWeek = asDate.getUTCDay(); // 0 dom, 1 lun, ..., 6 sáb
+  const offsetToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const mondayNoonUtc = new Date(Date.UTC(y, m - 1, d - offsetToMonday, 12));
+  const sundayNoonUtc = new Date(
+    Date.UTC(y, m - 1, d - offsetToMonday + 6, 12),
+  );
+  const mondayKey = getDayKey(mondayNoonUtc, tz);
+  const sundayKey = getDayKey(sundayNoonUtc, tz);
+  const { desde } = getDayBounds(mondayKey, tz);
+  const { hasta } = getDayBounds(sundayKey, tz);
+  return { desde, hasta };
+}
+
+/**
  * Devuelve el offset (en ms) de la tz dada en un instante. Positivo si
  * la tz está al este de UTC, negativo si está al oeste. Para
  * `America/Lima` devuelve -5 * 3_600_000.

@@ -1,11 +1,25 @@
-// Stats agregados de la semana: ganadores recientes + top del período.
-// Alimenta el sidebar de /matches (widgets "Ya ganaron en la semana" y
-// "Top de la Semana", Abr 2026).
+// Stats agregados de la semana.
+// Alimenta el sidebar de /matches (widgets "Los Pozos más grandes de la
+// semana" y "Los más pagados de la semana", Abr 2026).
 //
-// Ventana por defecto: últimos 7 días. Solo considera tickets con
-// `premioLukas > 0` (ganadores reales) sobre torneos FINALIZADOS.
+// Ventana por default: semana calendario actual (lunes 00:00 → domingo
+// 23:59 en America/Lima). Ver `lib/utils/datetime.ts:getWeekBounds`.
 
 import { prisma } from "@habla/db";
+import { getWeekBounds } from "../utils/datetime";
+
+export interface PozoSemanaRow {
+  /** ID del torneo. */
+  torneoId: string;
+  /** Lukas en el pozo bruto (ordenación). */
+  pozoBruto: number;
+  /** Liga del partido. */
+  liga: string;
+  /** "Alianza 2-1 Cristal" — línea corta lista para pintar. */
+  resumenPartido: string;
+  /** Fecha del partido. */
+  fechaPartido: Date;
+}
 
 export interface TopSemanaRow {
   /** ID del ticket — clave para React. */
@@ -24,17 +38,9 @@ export interface TopSemanaRow {
   fechaPartido: Date;
 }
 
-export interface YaGanaronSemanaRow {
-  /** ID del torneo. */
-  torneoId: string;
-  /** Lukas repartidos al pozo neto. */
-  pozoNeto: number;
-  /** Liga del partido. */
-  liga: string;
-  /** "Alianza 2-1 Cristal" — línea corta lista para pintar. */
-  resumenPartido: string;
-  /** Fecha del partido. */
-  fechaPartido: Date;
+export interface PozosSemanaInput {
+  /** Límite de filas. Default 5, máx 20. */
+  limit?: number;
 }
 
 export interface StatsSemanaInput {
@@ -56,10 +62,46 @@ function resumenPartido(p: {
   golesVisita: number | null;
   estado: string;
 }): string {
-  if (p.estado === "FINALIZADO" && p.golesLocal !== null && p.golesVisita !== null) {
+  if (
+    p.estado === "FINALIZADO" &&
+    p.golesLocal !== null &&
+    p.golesVisita !== null
+  ) {
     return `${p.equipoLocal} ${p.golesLocal}-${p.golesVisita} ${p.equipoVisita}`;
   }
   return `${p.equipoLocal} vs ${p.equipoVisita}`;
+}
+
+/**
+ * Pozos más grandes de la semana: torneos cuyo partido cae en la semana
+ * calendario actual (lunes 00:00 → domingo 23:59 en America/Lima)
+ * ordenados por `pozoBruto` DESC. Incluye torneos ABIERTO / EN_JUEGO /
+ * FINALIZADO — cualquier estado excepto CANCELADO.
+ */
+export async function listarPozosMasGrandesSemana(
+  input: PozosSemanaInput = {},
+): Promise<PozoSemanaRow[]> {
+  const limit = Math.min(20, Math.max(1, input.limit ?? 5));
+  const { desde, hasta } = getWeekBounds();
+
+  const torneos = await prisma.torneo.findMany({
+    where: {
+      pozoBruto: { gt: 0 },
+      estado: { not: "CANCELADO" },
+      partido: { fechaInicio: { gte: desde, lte: hasta } },
+    },
+    include: { partido: true },
+    orderBy: { pozoBruto: "desc" },
+    take: limit,
+  });
+
+  return torneos.map((t) => ({
+    torneoId: t.id,
+    pozoBruto: t.pozoBruto,
+    liga: t.partido.liga,
+    resumenPartido: resumenPartido(t.partido),
+    fechaPartido: t.partido.fechaInicio,
+  }));
 }
 
 /**
@@ -96,35 +138,5 @@ export async function listarTopSemana(
     liga: t.torneo.partido.liga,
     resumenPartido: resumenPartido(t.torneo.partido),
     fechaPartido: t.torneo.partido.fechaInicio,
-  }));
-}
-
-/**
- * Torneos FINALIZADOS recientes con su pozo repartido. Alimenta el
- * widget "Ya ganaron en la semana" del sidebar de /matches.
- */
-export async function listarYaGanaronSemana(
-  input: StatsSemanaInput = {},
-): Promise<YaGanaronSemanaRow[]> {
-  const limit = Math.min(20, Math.max(1, input.limit ?? 5));
-  const since = windowSince(input.sinceDays);
-
-  const torneos = await prisma.torneo.findMany({
-    where: {
-      estado: "FINALIZADO",
-      partido: { fechaInicio: { gte: since } },
-      pozoNeto: { gt: 0 },
-    },
-    include: { partido: true },
-    orderBy: { partido: { fechaInicio: "desc" } },
-    take: limit,
-  });
-
-  return torneos.map((t) => ({
-    torneoId: t.id,
-    pozoNeto: t.pozoNeto,
-    liga: t.partido.liga,
-    resumenPartido: resumenPartido(t.partido),
-    fechaPartido: t.partido.fechaInicio,
   }));
 }
