@@ -82,6 +82,7 @@ export async function emitirRankingUpdate(
         ? opts.minutoPartido
         : (snapshot?.minuto ?? null);
     const minutoLabel = snapshot?.label ?? null;
+    const minutoExtra = snapshot?.extra ?? null;
     const statusShort = snapshot?.statusShort ?? null;
     // Hotfix #8 Ítem 4: edad del snapshot relativa al reloj del server.
     // Calculada con el mismo `Date.now()` que escribió `updatedAt` →
@@ -106,6 +107,7 @@ export async function emitirRankingUpdate(
       pozoNeto: r.pozoNeto,
       minutoPartido,
       minutoLabel,
+      minutoExtra,
       statusShort,
       elapsedAgeMs,
       pagados: r.pagados,

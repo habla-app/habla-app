@@ -1,6 +1,6 @@
 // Cache in-memory del estado en vivo de cada partido. Guarda el
-// `status.short` + `status.elapsed` más reciente que el poller vio en
-// api-football, junto con el label renderizable.
+// `status.short` + `status.elapsed` + `status.extra` más reciente que el
+// poller vio en api-football, junto con el label renderizable.
 //
 // Se usa para:
 //   - Enriquecer `/api/v1/live/matches` con el minuto label sin un
@@ -25,7 +25,7 @@
 // LiveHero mostraba "—" en lugar de "ENT". Con 30 min cubrimos HT
 // + prórrogas sin comprometer memory (el cache se limpia al FT).
 
-import { formatMinutoLabel } from "../utils/minuto-label";
+import { getMinutoLabel } from "../utils/minuto-label";
 
 export interface LiveStatusSnapshot {
   partidoId: string;
@@ -33,6 +33,8 @@ export interface LiveStatusSnapshot {
   statusShort: string | null;
   /** Minuto cursando (o minuto final si FINALIZADO). Null si no aplica. */
   minuto: number | null;
+  /** Minutos de descuento/añadido (1H/2H). Null/0 fuera de injury time. */
+  extra: number | null;
   /** Label ya renderizado. La UI lo pinta directo. */
   label: string;
   /** Timestamp epoch ms de la última actualización. */
@@ -54,12 +56,14 @@ export function setLiveStatus(
   partidoId: string,
   statusShort: string | null,
   minuto: number | null,
+  extra: number | null = null,
 ): LiveStatusSnapshot {
   const snap: LiveStatusSnapshot = {
     partidoId,
     statusShort,
     minuto,
-    label: formatMinutoLabel({ statusShort, elapsed: minuto }),
+    extra,
+    label: getMinutoLabel({ statusShort, minuto, extra }),
     updatedAt: Date.now(),
   };
   cache.set(partidoId, snap);

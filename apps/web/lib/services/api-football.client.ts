@@ -108,6 +108,10 @@ export interface ApiFootballFixture {
       long: string;
       short: string; /* e.g. "NS" (Not Started), "1H", "FT", "AET", "PEN" */
       elapsed: number | null;
+      /** Minutos de descuento/añadido sobre el cap de la fase (45/90).
+       *  api-football lo envía en 1H/2H durante el injury time; 0 o null
+       *  el resto del tiempo. */
+      extra?: number | null;
     };
     venue?: {
       name: string | null;

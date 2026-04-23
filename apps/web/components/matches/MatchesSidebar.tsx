@@ -2,15 +2,17 @@
 //
 // Orden (top→bottom):
 //   1. 🔴 En vivo ahora
-//   2. 🏅 Ya ganaron en la semana (ex "Ya ganaron hoy" del flow principal)
+//   2. 🏆 Los Pozos más grandes de la semana (torneos de la semana calendario
+//      ordenados por pozoBruto DESC, top 5)
 //   3. 🪙 Tu balance (rediseñado, tipografía grande + CTA /wallet)
 //   4. 📐 Cómo se pagan los premios (PrizeRulesCard)
-//   5. 🏆 Top de la Semana (ex "Top del día", ahora con data real 7d)
+//   5. 🏅 Los más pagados de la semana (suma de premios de torneo por
+//      usuario en la semana calendario, top 10)
 //
 // Se comparte entre `/` (landing) y `/matches`. Los widgets de en vivo,
-// ganadores de la semana y top semana son iguales con o sin sesión; el
-// de balance muta: con sesión muestra hero + CTAs, sin sesión muestra un
-// mensaje con CTA a /auth/signin.
+// pozos y más pagados son iguales con o sin sesión; el de balance muta:
+// con sesión muestra hero + CTAs, sin sesión muestra un mensaje con CTA
+// a /auth/signin.
 //
 // Server Component — llama a auth() y a los services de ranking +
 // live-matches + stats-semana. El widget de balance delega a
@@ -24,10 +26,10 @@ import {
   obtenerLiveMatches,
 } from "@/lib/services/live-matches.service";
 import {
-  listarTopSemana,
-  listarYaGanaronSemana,
-  type TopSemanaRow,
-  type YaGanaronSemanaRow,
+  listarMasPagadosSemana,
+  listarPozosMasGrandesSemana,
+  type MasPagadoSemanaRow,
+  type PozoSemanaRow,
 } from "@/lib/services/stats-semana.service";
 import { getTeamColor } from "@/lib/utils/team-colors";
 import { SidebarBalanceWidget } from "@/components/matches/SidebarBalanceWidget";
@@ -115,19 +117,19 @@ export async function MatchesSidebar() {
   const session = await auth();
   const balance = session?.user?.balanceLukas ?? null;
 
-  const [liveMatches, yaGanaron, topSemana] = await Promise.all([
+  const [liveMatches, pozosSemana, masPagadosSemana] = await Promise.all([
     fetchLiveMatches(),
-    listarYaGanaronSemana({ sinceDays: 7, limit: 5 }),
-    listarTopSemana({ sinceDays: 7, limit: 5 }),
+    listarPozosMasGrandesSemana({ limit: 5 }),
+    listarMasPagadosSemana({ limit: 10 }),
   ]);
 
   return (
     <aside className="flex flex-col gap-3.5">
       <LiveAhoraWidget matches={liveMatches} />
-      <YaGanaronSemanaWidget rows={yaGanaron} />
+      <PozosSemanaWidget rows={pozosSemana} />
       <SidebarBalanceWidget initialBalance={balance} />
       <PrizeRulesCard />
-      <TopSemanaWidget rows={topSemana} />
+      <MasPagadosSemanaWidget rows={masPagadosSemana} />
     </aside>
   );
 }
@@ -285,10 +287,10 @@ function TeamMini({
 }
 
 // ---------------------------------------------------------------------------
-// Widget 2: 🏆 Ya ganaron en la semana
+// Widget 2: 🏆 Los Pozos más grandes de la semana
 // ---------------------------------------------------------------------------
 
-function YaGanaronSemanaWidget({ rows }: { rows: YaGanaronSemanaRow[] }) {
+function PozosSemanaWidget({ rows }: { rows: PozoSemanaRow[] }) {
   return (
     <section className="overflow-hidden rounded-md border border-light bg-card shadow-sm">
       <div className="flex items-center gap-2 border-b border-light bg-section-finalized px-3.5 py-3">
@@ -296,16 +298,13 @@ function YaGanaronSemanaWidget({ rows }: { rows: YaGanaronSemanaRow[] }) {
           🏆
         </span>
         <span className="font-display text-[13px] font-extrabold uppercase tracking-[0.06em] text-dark">
-          Ya ganaron en la semana
-        </span>
-        <span className="ml-auto text-[10px] font-bold uppercase tracking-[0.04em] text-muted-d">
-          7 días
+          Los Pozos más grandes de la semana
         </span>
       </div>
 
       {rows.length === 0 ? (
         <div className="px-4 py-6 text-center text-[12px] text-muted-d">
-          Aún no hay torneos pagados esta semana.
+          Aún no hay torneos grandes esta semana.
         </div>
       ) : (
         <ul>
@@ -323,7 +322,7 @@ function YaGanaronSemanaWidget({ rows }: { rows: YaGanaronSemanaRow[] }) {
                 </div>
               </div>
               <div className="flex-shrink-0 rounded-sm bg-brand-gold-dim px-2.5 py-1 font-display text-[12px] font-black text-brand-gold-dark">
-                {row.pozoNeto.toLocaleString("es-PE")} 🪙
+                {row.pozoBruto.toLocaleString("es-PE")} 🪙
               </div>
             </li>
           ))}
@@ -334,10 +333,10 @@ function YaGanaronSemanaWidget({ rows }: { rows: YaGanaronSemanaRow[] }) {
 }
 
 // ---------------------------------------------------------------------------
-// Widget 5: 🏅 Top de la Semana
+// Widget 5: 🏅 Los más pagados de la semana
 // ---------------------------------------------------------------------------
 
-function TopSemanaWidget({ rows }: { rows: TopSemanaRow[] }) {
+function MasPagadosSemanaWidget({ rows }: { rows: MasPagadoSemanaRow[] }) {
   const posColor = (pos: number) => {
     if (pos === 1) return "text-medal-gold";
     if (pos === 2) return "text-medal-silver";
@@ -352,10 +351,7 @@ function TopSemanaWidget({ rows }: { rows: TopSemanaRow[] }) {
           🏅
         </span>
         <span className="font-display text-[13px] font-extrabold uppercase tracking-[0.06em] text-dark">
-          Top de la Semana
-        </span>
-        <span className="ml-auto text-[10px] font-bold uppercase tracking-[0.04em] text-muted-d">
-          7 días
+          Los más pagados de la semana
         </span>
       </div>
 
@@ -366,7 +362,7 @@ function TopSemanaWidget({ rows }: { rows: TopSemanaRow[] }) {
       ) : (
         rows.map((row, idx) => (
           <div
-            key={row.ticketId}
+            key={row.usuarioId}
             className={`flex items-center gap-2.5 px-3.5 py-2.5 ${idx < rows.length - 1 ? "border-b border-light" : ""}`}
           >
             <span
@@ -378,12 +374,9 @@ function TopSemanaWidget({ rows }: { rows: TopSemanaRow[] }) {
               <div className="truncate text-[13px] font-extrabold text-dark">
                 @{row.username}
               </div>
-              <div className="truncate text-[10px] text-muted-d">
-                {row.resumenPartido}
-              </div>
             </div>
             <span className="flex-shrink-0 font-display text-[14px] font-black text-brand-gold-dark">
-              {row.premioLukas.toLocaleString("es-PE")} 🪙
+              {row.totalGanado.toLocaleString("es-PE")} 🪙
             </span>
           </div>
         ))

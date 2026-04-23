@@ -260,6 +260,7 @@ function buildLiveTabs(partidos: PartidoLive[]): LiveMatchTab[] {
       // causando el desfase que el PO reportó cada vez que abría la pestaña.
       statusShort: snap?.statusShort ?? null,
       elapsed: snap?.minuto ?? null,
+      extra: snap?.extra ?? null,
       elapsedAgeMs: snap ? nowMs - snap.updatedAt : null,
     });
   }
@@ -296,12 +297,13 @@ async function tryBuildFinalizedTab(
       pozoBruto: match.pozoBruto,
       pozoNeto: match.pozoNeto,
       totalInscritos: match.totalInscritos,
-      minutoLabel: snap?.label ?? "FIN",
+      minutoLabel: snap?.label ?? "Final",
       // Hotfix #8 Bug #22: partido FINALIZADO — el hook `useMinutoEnVivo`
       // verá statusShort no-avanzable (FT/AET/PEN) y no correrá reloj.
       fechaInicio: p.fechaInicio.toISOString(),
       statusShort: snap?.statusShort ?? null,
       elapsed: snap?.minuto ?? null,
+      extra: snap?.extra ?? null,
       elapsedAgeMs: snap ? nowMs - snap.updatedAt : null,
     };
   }

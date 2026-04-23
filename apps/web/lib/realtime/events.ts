@@ -58,9 +58,13 @@ export interface RankingUpdatePayload {
   totalInscritos: number;
   pozoNeto: number;
   minutoPartido: number | null;
-  /** Label renderizable del minuto (p.ej. "23'", "ENT", "FIN"). Bug #9.
-   *  Si es null, la UI debe mostrar "—". Nunca "?". */
+  /** Label renderizable del minuto (p.ej. "23'", "45+3'", "Medio tiempo",
+   *  "Final"). Si es null, la UI debe mostrar "—". */
   minutoLabel: string | null;
+  /** Minutos de descuento/añadido (1H/2H). El cliente los usa para
+   *  renderizar "45+3'" — si el server no los reporta (null/0), solo
+   *  se muestra el minuto. */
+  minutoExtra: number | null;
   /** Hotfix #8 Bug #22: `fixture.status.short` del poller. El cliente lo
    *  usa junto con `elapsed` + `elapsedAgeMs` para correr un reloj local
    *  entre ticks del poller (30s). */

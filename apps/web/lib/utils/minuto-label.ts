@@ -1,111 +1,74 @@
-// Mapper puro: status.short + elapsed de api-football → label legible
-// para el hero del /live-match.
+// Mapper puro: status + minuto + extra de api-football → label legible.
+// Reimplementación simplificada (Abr 2026) — referencia Google Live Match
+// card. Función única `getMinutoLabel({ statusShort, minuto, extra })` que
+// devuelve un string listo para renderizar.
 //
-// Hotfix #4 Bug #9: antes el LiveHero renderizaba `{minuto ?? "?"}` y
-// mostraba "?" literalmente cuando el poller no había enviado el
-// número (primer render pre-WS, halftime sin elapsed, etc.). Ahora el
-// backend entrega un string ya formateado (ej. "23'", "ENT", "FIN",
-// "Prór. 95'", "Penales") y la UI solo lo renderiza. El fallback para
-// null/undefined es "—", nunca "?".
+// Tabla de retornos por status:
+//   NS              → "Por iniciar"
+//   1H / 2H         → "{minuto}'" (si extra > 0 → "{minuto}+{extra}'")
+//   HT              → "Medio tiempo"
+//   ET              → "TE {minuto}'"
+//   BT              → "Descanso TE"
+//   P               → "Penales"
+//   FT / AET / PEN  → "Final"
+//   otro            → statusShort tal cual
 //
-// Status codes de api-football documentados en:
+// Si `statusShort` es null/undefined, devuelve "—".
+//
+// Status codes de api-football:
 // https://www.api-football.com/documentation-v3#tag/Fixtures
 
-/** Snapshot del estado en vivo de un partido, tal como viene del poller. */
 export interface MinutoLabelInput {
-  /** `fixture.status.short` de api-football — ver tabla abajo. */
-  statusShort: string | null;
+  /** `fixture.status.short` de api-football. */
+  statusShort: string | null | undefined;
   /** `fixture.status.elapsed` — minuto cursando en el partido. */
-  elapsed: number | null;
+  minuto: number | null | undefined;
+  /** `fixture.status.extra` — minutos de descuento/añadido sobre el cap
+   *  de la fase. Solo aplica a 1H/2H (p.ej. 45+3'). */
+  extra?: number | null | undefined;
 }
 
 /**
- * Deriva un string renderizable para el hero del partido en vivo.
- *
- * Códigos comunes de api-football:
- *  - `NS`   → Not Started (aún no empezó; improbable en /live-match)
- *  - `1H`   → Primer tiempo en curso
- *  - `HT`   → Halftime (entretiempo)
- *  - `2H`   → Segundo tiempo en curso
- *  - `ET`   → Extra time (prórroga)
- *  - `BT`   → Break Time (entretiempo de prórroga)
- *  - `P`    → In Penalty Time (tanda de penales)
- *  - `SUSP` → Suspended
- *  - `INT`  → Interrupted
- *  - `FT`   → Full Time (90 min, sin prórroga)
- *  - `AET`  → After Extra Time (120 min)
- *  - `PEN`  → Penalties Ended (tanda de penales terminada)
- *  - `PST`  → Postponed
- *  - `CANC` → Cancelled
- *  - `ABD`  → Abandoned
- *  - `AWD`  → Technical Loss
- *  - `WO`   → Walkover
- *
- * Si recibimos un status desconocido y hay `elapsed`, mostramos
- * `{elapsed}'` como fallback razonable. Si no hay datos devolvemos
- * `"—"` — nunca `"?"`.
+ * Deriva un label renderizable a partir del snapshot de estado. Pura —
+ * no lee `Date.now()` ni dispara side-effects.
  */
-export function formatMinutoLabel(input: MinutoLabelInput): string {
-  const { statusShort, elapsed } = input;
+export function getMinutoLabel(input: MinutoLabelInput): string {
+  const { statusShort, minuto, extra } = input;
 
-  if (statusShort === null || statusShort === undefined) {
-    if (typeof elapsed === "number") return `${elapsed}'`;
-    return "—";
-  }
+  if (statusShort === null || statusShort === undefined) return "—";
 
   switch (statusShort) {
-    // Pre-partido
     case "NS":
-    case "TBD":
-      return "Por empezar";
-    case "PST":
-      return "Aplazado";
+      return "Por iniciar";
 
-    // En curso
     case "1H":
-      return typeof elapsed === "number" ? `${elapsed}'` : "1T";
+    case "2H": {
+      if (minuto === null || minuto === undefined) return statusShort;
+      if (typeof extra === "number" && extra > 0) {
+        return `${minuto}+${extra}'`;
+      }
+      return `${minuto}'`;
+    }
+
     case "HT":
-      return "ENT"; /* entretiempo */
-    case "2H":
-      return typeof elapsed === "number" ? `${elapsed}'` : "2T";
+      return "Medio tiempo";
+
     case "ET":
-      return typeof elapsed === "number" ? `Prór. ${elapsed}'` : "Prórroga";
+      if (minuto === null || minuto === undefined) return "TE";
+      return `TE ${minuto}'`;
+
     case "BT":
-      return "ENT prór."; /* break time de la prórroga */
+      return "Descanso TE";
+
     case "P":
       return "Penales";
-    case "SUSP":
-      return "Suspendido";
-    case "INT":
-      return "Interrumpido";
 
-    // Fin del partido
     case "FT":
-      return "FIN";
     case "AET":
-      return "FIN (prór.)";
     case "PEN":
-      return "FIN (pen.)";
-    case "CANC":
-      return "Cancelado";
-    case "ABD":
-      return "Abandonado";
-    case "AWD":
-    case "WO":
-      return "Por retiro";
+      return "Final";
 
     default:
-      if (typeof elapsed === "number") return `${elapsed}'`;
-      return "—";
+      return statusShort;
   }
-}
-
-/**
- * Convenience: recibe el label ya calculado y lo devuelve si es string;
- * si es null/undefined, devuelve "—". Útil en renders directos donde
- * el label viene de un payload externo (WS, endpoint, props).
- */
-export function renderMinutoLabel(label: string | null | undefined): string {
-  if (label === null || label === undefined || label === "") return "—";
-  return label;
 }

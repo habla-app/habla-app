@@ -22,17 +22,24 @@ describe("live-partido-status cache", () => {
     expect(snap.partidoId).toBe("partido_1");
     expect(snap.statusShort).toBe("2H");
     expect(snap.minuto).toBe(67);
-    expect(snap.label).toBe("67'"); // formatMinutoLabel('2H', 67)
+    expect(snap.extra).toBe(null);
+    expect(snap.label).toBe("67'"); // getMinutoLabel('2H', 67)
   });
 
-  it("setLiveStatus con HT → label 'ENT'", () => {
+  it("setLiveStatus con HT → label 'Medio tiempo'", () => {
     const snap = setLiveStatus("partido_2", "HT", null);
-    expect(snap.label).toBe("ENT");
+    expect(snap.label).toBe("Medio tiempo");
   });
 
-  it("setLiveStatus con FT → label 'FIN'", () => {
+  it("setLiveStatus con FT → label 'Final'", () => {
     const snap = setLiveStatus("partido_3", "FT", 90);
-    expect(snap.label).toBe("FIN");
+    expect(snap.label).toBe("Final");
+  });
+
+  it("setLiveStatus con 1H + extra > 0 → label '{minuto}+{extra}''", () => {
+    const snap = setLiveStatus("partido_extra", "1H", 45, 3);
+    expect(snap.extra).toBe(3);
+    expect(snap.label).toBe("45+3'");
   });
 
   it("getLiveStatus devuelve el último snapshot escrito", () => {
@@ -70,7 +77,7 @@ describe("live-partido-status cache", () => {
   it("BUG #9 REPRO: snapshot null → caller sabe que debe mostrar '—', NO '?'", () => {
     // El cache retorna null si no hay datos. Los callers (endpoint,
     // page, emitter) usan `snap?.label ?? null` y pasan null a la UI.
-    // La UI (LiveHero vía renderMinutoLabel) lo renderiza como "—".
+    // La UI (LiveHero vía useMinutoEnVivo) lo renderiza como "—".
     expect(getLiveStatus("nunca_escrito")).toBeNull();
   });
 });
