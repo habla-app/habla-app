@@ -34,8 +34,11 @@ export interface RankingSnapshot {
   totalInscritos: number;
   pozoNeto: number;
   minutoPartido: number | null;
-  /** Label renderizable del minuto (ej. "23'", "ENT", "FIN"). Null
-   *  hasta que el primer WS llegue — la UI debe mostrar "—" mientras. */
+  /** Minutos de descuento/añadido (1H/2H). Null/0 fuera de injury time. */
+  minutoExtra: number | null;
+  /** Label renderizable del minuto (ej. "23'", "45+3'", "Medio tiempo",
+   *  "Final"). Null hasta que el primer WS llegue — la UI muestra "—"
+   *  mientras. */
   minutoLabel: string | null;
   /** Hotfix #8 Bug #22: `fixture.status.short` del snapshot del server.
    *  Consumido por `useMinutoEnVivo` para decidir qué fase del partido
@@ -65,6 +68,7 @@ export function useRankingEnVivo(
     totalInscritos: 0,
     pozoNeto: 0,
     minutoPartido: null,
+    minutoExtra: null,
     minutoLabel: null,
     statusShort: null,
     elapsedAgeMs: null,
@@ -91,6 +95,7 @@ export function useRankingEnVivo(
       pagados?: number;
       minutoLabel?: string | null;
       minutoPartido?: number | null;
+      minutoExtra?: number | null;
       statusShort?: string | null;
       elapsedAgeMs?: number | null;
       miPosicion?: {
@@ -115,6 +120,7 @@ export function useRankingEnVivo(
         // borre el label que ya tenemos.
         minutoLabel: d.minutoLabel ?? s.minutoLabel,
         minutoPartido: d.minutoPartido ?? s.minutoPartido,
+        minutoExtra: d.minutoExtra ?? s.minutoExtra,
         // Hotfix #8 Bug #22: preservar statusShort si llega null del REST
         // (cache stale) — un WS previo o SSR nos dio el valor real, no
         // queremos borrarlo por una respuesta tardía.
@@ -181,6 +187,7 @@ export function useRankingEnVivo(
           totalInscritos: payload.totalInscritos,
           pozoNeto: payload.pozoNeto,
           minutoPartido: payload.minutoPartido,
+          minutoExtra: payload.minutoExtra,
           minutoLabel: payload.minutoLabel,
           // Hotfix #8 Bug #22: statusShort del WS pisa el valor previo
           // (no-preserve) — el WS siempre trae un snapshot fresco del

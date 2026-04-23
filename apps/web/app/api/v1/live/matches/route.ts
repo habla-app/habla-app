@@ -67,6 +67,7 @@ export async function GET() {
             fechaInicio: p.fechaInicio.toISOString(),
             minutoLabel: liveSnap?.label ?? null,
             minutoPartido: liveSnap?.minuto ?? null,
+            minutoExtra: liveSnap?.extra ?? null,
             statusShort: liveSnap?.statusShort ?? null,
             elapsedAgeMs: liveSnap ? nowMs - liveSnap.updatedAt : null,
           },

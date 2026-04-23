@@ -46,22 +46,25 @@ export interface LiveMatchTab {
   pozoBruto: number;
   pozoNeto: number;
   totalInscritos: number;
-  /** Label del minuto listo para renderizar ("23'", "ENT", "FIN",
-   *  "—"). Bug #9: SSR lo setea desde el cache del poller; WS lo
+  /** Label del minuto listo para renderizar ("23'", "Medio tiempo",
+   *  "Final", "—"). SSR lo setea desde el cache del poller; WS lo
    *  sobrescribe en vivo (`live.minutoLabel` tiene preferencia). */
   minutoLabel: string | null;
-  /** Hotfix #8 Bug #22: `fixture.status.short` del poller. Null hasta
-   *  que el poller tenga datos del partido. El cliente lo combina con
-   *  `elapsed` y `elapsedAgeMs` para correr el reloj local. */
+  /** `fixture.status.short` del poller. Null hasta que el poller tenga
+   *  datos del partido. El cliente lo combina con `elapsed` + `extra`
+   *  + `elapsedAgeMs` para correr el reloj local. */
   statusShort: string | null;
-  /** Hotfix #8 Bug #22: `fixture.status.elapsed` del poller. Ancla del
-   *  reloj local para 1H/2H/ET. El cliente proyecta desde este valor
-   *  sumando el tiempo transcurrido (ver `elapsedAgeMs`). */
+  /** `fixture.status.elapsed` del poller — ancla del reloj local para
+   *  1H/2H/ET. El cliente proyecta desde este valor sumando el tiempo
+   *  transcurrido (ver `elapsedAgeMs`). */
   elapsed: number | null;
-  /** Hotfix #8 Ítem 4: edad del snapshot al momento del SSR/emit del WS.
-   *  Permite anclar `elapsedAnchorAt = Date.now() - elapsedAgeMs` para
-   *  que el reloj local proyecte correctamente aunque el cache tenga
-   *  un snap de hace varios minutos. Null si el cache no tiene datos. */
+  /** `fixture.status.extra` — minutos de descuento/añadido en injury
+   *  time. Solo se muestra cuando `extra > 0`. */
+  extra: number | null;
+  /** Edad del snapshot al momento del SSR/emit del WS. Permite anclar
+   *  `anchoredAt = Date.now() - elapsedAgeMs` para que el reloj local
+   *  proyecte correctamente aunque el cache tenga un snap de hace
+   *  varios minutos. Null si el cache no tiene datos. */
   elapsedAgeMs: number | null;
   /** Hotfix #8 Bug #22: kickoff programado del partido (ISO string).
    *  Persistido en BD. Solo usado para metadata del partido (labels,
@@ -241,6 +244,7 @@ export function LiveMatchView({
             golesVisita={scoreVisita}
             statusShort={live.statusShort ?? active.statusShort}
             elapsed={live.minutoPartido ?? active.elapsed}
+            extra={live.minutoExtra ?? active.extra}
             elapsedAgeMs={live.elapsedAgeMs ?? active.elapsedAgeMs}
             totalInscritos={totalInscritos}
             pozoNeto={pozoNeto}

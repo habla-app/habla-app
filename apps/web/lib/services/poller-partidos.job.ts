@@ -225,6 +225,7 @@ async function pollearPartido(partido: {
     partido.id,
     fixture.fixture.status.short,
     fixture.fixture.status.elapsed,
+    fixture.fixture.status.extra ?? null,
   );
 
   // 1. Upsertear datos básicos del partido
@@ -361,6 +362,7 @@ async function pollearPartido(partido: {
           partido.id,
           fixture.fixture.status.short,
           fixture.fixture.status.elapsed,
+          fixture.fixture.status.extra ?? null,
         );
       }
     }

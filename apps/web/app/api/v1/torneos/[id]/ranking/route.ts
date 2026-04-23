@@ -56,6 +56,7 @@ export async function GET(req: NextRequest, { params }: Context) {
         ...data,
         minutoLabel: liveSnap?.label ?? null,
         minutoPartido: liveSnap?.minuto ?? null,
+        minutoExtra: liveSnap?.extra ?? null,
         // Hotfix #8 Bug #22 + Ítem 4: statusShort + elapsedAgeMs para
         // que el cliente ancle el reloj local al tiempo REAL en que el
         // server capturó el `elapsed` (no al momento del mount). Evita

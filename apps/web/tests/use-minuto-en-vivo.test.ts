@@ -1,20 +1,16 @@
-// Tests del Hotfix #8 Ítem 4 — reloj local del minuto con elapsedAgeMs.
-//
-// La evolución del fix:
-//   1. Primera versión: snapshotUpdatedAt timestamp absoluto (clock skew).
-//   2. Segunda: fechaInicio + heurística de HT fijo (desfase reportado PO).
-//   3. Tercera (esta): elapsedAgeMs calculado server-side (inmune a skew
-//      y refleja edad real del snapshot en el cache).
+// Tests del reloj local del minuto en vivo — reimplementación simplificada
+// (Abr 2026, referencia Google Live Match).
 //
 // Cobertura:
 //   1. `computeMinutoLabel` puro: matriz por fase (1H/2H/ET avanzan desde
-//      elapsed, HT/FT/PEN/... fijos, elapsed>=cap respeta server, sin
-//      statusShort → "—" honesto sin heurística).
-//   2. AST sobre `useMinutoEnVivo.ts`: contrato del hook (use client,
-//      interval 1s, cleanup, useRef para elapsedAnchorAt, reset al
-//      cambiar elapsed/statusShort/elapsedAgeMs, NO usa fechaInicio).
-//   3. AST sobre wiring: RankingUpdatePayload + endpoints REST + SSR +
-//      LiveHero + useRankingEnVivo propagan elapsedAgeMs.
+//      minuto anclado; HT/FT/PEN/... fijos; minuto>=cap respeta server;
+//      sin statusShort → "—" honesto).
+//   2. `extra` se propaga al mapper y produce "{minuto}+{extra}'" en 1H/2H.
+//   3. AST sobre `useMinutoEnVivo.ts`: contrato del hook (use client,
+//      interval 1s, cleanup, useRef para anchoredAt, reset al cambiar
+//      statusShort/minuto/extra/elapsedAgeMs).
+//   4. AST sobre wiring: RankingUpdatePayload + endpoints REST + SSR +
+//      LiveHero + useRankingEnVivo propagan extra / elapsedAgeMs.
 
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
@@ -38,99 +34,95 @@ function readSrcNoComments(rel: string): string {
 // computeMinutoLabel — función pura
 // ---------------------------------------------------------------------------
 
-describe("computeMinutoLabel — BUG REPRO del PO", () => {
-  it("elapsed=54 con age=5000ms (snap fresco) + 60s local → 55", () => {
-    // Caso canónico: el snap es fresco (5s de edad cuando llegó al cliente),
-    // y pasaron 60s locales desde el mount. Minuto real: 55.
-    const snapshotCapturedAt = Date.now() - 5_000 - 60_000; // hace 65s total
-    const elapsedAnchorAt = snapshotCapturedAt; // cliente usó elapsedAgeMs
+describe("computeMinutoLabel — ancla server + proyección local", () => {
+  it("minuto=54 con age=5s (snap fresco) + 60s locales → 55", () => {
+    const snapshotCapturedAt = Date.now() - 5_000 - 60_000;
     expect(
       computeMinutoLabel({
         statusShort: "2H",
-        elapsed: 54,
-        elapsedAnchorAt,
+        minuto: 54,
+        extra: null,
+        anchoredAt: snapshotCapturedAt,
         now: Date.now(),
       }),
     ).toBe("55'");
   });
 
-  it("elapsed=54 con age=5min (snap stale cache) → 59 (no 54)", () => {
-    // Escenario exacto del PO: abre la pestaña, el cache tiene snap de
-    // hace 5 min con elapsed=54. El server manda elapsedAgeMs=300000.
-    // El cliente anchora correctamente → muestra 59 (que es el minuto
-    // real del partido, no 54 que es el valor del cache).
-    const snapshotCapturedAt = Date.now() - 5 * 60_000; // hace 5 min
-    const elapsedAnchorAt = snapshotCapturedAt;
+  it("minuto=54 con age=5min (snap stale cache) → proyecta +5 minutos", () => {
+    const snapshotCapturedAt = Date.now() - 5 * 60_000;
     expect(
       computeMinutoLabel({
         statusShort: "2H",
-        elapsed: 54,
-        elapsedAnchorAt,
+        minuto: 54,
+        extra: null,
+        anchoredAt: snapshotCapturedAt,
         now: Date.now(),
       }),
     ).toBe("59'");
   });
 
-  it("sin elapsedAgeMs (anchor=now) produce resultado sin proyección", () => {
-    // Si el cliente NO usa elapsedAgeMs (el bug antes del Ítem 4),
-    // elapsedAnchorAt=now → delta=0 → muestra elapsed crudo.
-    // Documenta el comportamiento ANTES del fix.
+  it("sin age (anchor=now) no proyecta — muestra el minuto crudo", () => {
     const now = Date.now();
     expect(
       computeMinutoLabel({
         statusShort: "2H",
-        elapsed: 54,
-        elapsedAnchorAt: now,
+        minuto: 54,
+        extra: null,
+        anchoredAt: now,
         now,
       }),
     ).toBe("54'");
   });
 });
 
-describe("computeMinutoLabel — 1H avanza desde elapsed del server", () => {
-  it("1H elapsed=10 + 60s → 11", () => {
+describe("computeMinutoLabel — 1H proyecta con cap 45", () => {
+  it("1H minuto=10 + 60s → 11", () => {
     const now = Date.now();
     expect(
       computeMinutoLabel({
         statusShort: "1H",
-        elapsed: 10,
-        elapsedAnchorAt: now - 60_000,
+        minuto: 10,
+        extra: null,
+        anchoredAt: now - 60_000,
         now,
       }),
     ).toBe("11'");
   });
 
-  it("1H elapsed=10 + 30s (delta<60s) → 10", () => {
+  it("1H minuto=10 + 30s (delta<60s) → 10", () => {
     const now = Date.now();
     expect(
       computeMinutoLabel({
         statusShort: "1H",
-        elapsed: 10,
-        elapsedAnchorAt: now - 30_000,
+        minuto: 10,
+        extra: null,
+        anchoredAt: now - 30_000,
         now,
       }),
     ).toBe("10'");
   });
 
-  it("1H elapsed=44 + 5 min → clamp en 45", () => {
+  it("1H minuto=44 + 5 min → clamp en 45", () => {
     const now = Date.now();
     expect(
       computeMinutoLabel({
         statusShort: "1H",
-        elapsed: 44,
-        elapsedAnchorAt: now - 5 * 60_000,
+        minuto: 44,
+        extra: null,
+        anchoredAt: now - 5 * 60_000,
         now,
       }),
     ).toBe("45'");
   });
 
-  it("1H elapsed=48 (descuento largo del PT) → respeta server sin proyectar", () => {
+  it("1H minuto=48 (injury time) → respeta server sin proyectar", () => {
     const now = Date.now();
     expect(
       computeMinutoLabel({
         statusShort: "1H",
-        elapsed: 48,
-        elapsedAnchorAt: now - 60_000,
+        minuto: 48,
+        extra: null,
+        anchoredAt: now - 60_000,
         now,
       }),
     ).toBe("48'");
@@ -138,177 +130,245 @@ describe("computeMinutoLabel — 1H avanza desde elapsed del server", () => {
 });
 
 describe("computeMinutoLabel — 2H y ET", () => {
-  it("2H elapsed=55 + 60s → 56", () => {
+  it("2H minuto=55 + 60s → 56", () => {
     const now = Date.now();
     expect(
       computeMinutoLabel({
         statusShort: "2H",
-        elapsed: 55,
-        elapsedAnchorAt: now - 60_000,
+        minuto: 55,
+        extra: null,
+        anchoredAt: now - 60_000,
         now,
       }),
     ).toBe("56'");
   });
 
-  it("2H elapsed=89 + 5 min → clamp en 90", () => {
+  it("2H minuto=89 + 5 min → clamp en 90", () => {
     const now = Date.now();
     expect(
       computeMinutoLabel({
         statusShort: "2H",
-        elapsed: 89,
-        elapsedAnchorAt: now - 5 * 60_000,
+        minuto: 89,
+        extra: null,
+        anchoredAt: now - 5 * 60_000,
         now,
       }),
     ).toBe("90'");
   });
 
-  it("2H elapsed=94 (descuento largo) → respeta server", () => {
+  it("2H minuto=94 (injury time) → respeta server", () => {
     const now = Date.now();
     expect(
       computeMinutoLabel({
         statusShort: "2H",
-        elapsed: 94,
-        elapsedAnchorAt: now - 60_000,
+        minuto: 94,
+        extra: null,
+        anchoredAt: now - 60_000,
         now,
       }),
     ).toBe("94'");
   });
 
-  it("ET elapsed=95 + 60s → 'Prór. 96'", () => {
+  it("ET minuto=95 + 60s → 'TE 96''", () => {
     const now = Date.now();
     expect(
       computeMinutoLabel({
         statusShort: "ET",
-        elapsed: 95,
-        elapsedAnchorAt: now - 60_000,
+        minuto: 95,
+        extra: null,
+        anchoredAt: now - 60_000,
         now,
       }),
-    ).toBe("Prór. 96'");
+    ).toBe("TE 96'");
+  });
+});
+
+describe("computeMinutoLabel — extra (injury time label)", () => {
+  it("1H minuto=45 con extra=3 → '45+3'' (server reporta cap + descuento)", () => {
+    const now = Date.now();
+    expect(
+      computeMinutoLabel({
+        statusShort: "1H",
+        minuto: 45,
+        extra: 3,
+        anchoredAt: now,
+        now,
+      }),
+    ).toBe("45+3'");
+  });
+
+  it("2H minuto=90 con extra=5 → '90+5''", () => {
+    const now = Date.now();
+    expect(
+      computeMinutoLabel({
+        statusShort: "2H",
+        minuto: 90,
+        extra: 5,
+        anchoredAt: now,
+        now,
+      }),
+    ).toBe("90+5'");
+  });
+
+  it("proyección local sin extra no inventa minutos añadidos", () => {
+    const now = Date.now();
+    expect(
+      computeMinutoLabel({
+        statusShort: "2H",
+        minuto: 70,
+        extra: null,
+        anchoredAt: now - 2 * 60_000,
+        now,
+      }),
+    ).toBe("72'");
   });
 });
 
 describe("computeMinutoLabel — estados fijos (sin proyección)", () => {
-  it("HT → 'ENT'", () => {
+  it("HT → 'Medio tiempo'", () => {
     expect(
       computeMinutoLabel({
         statusShort: "HT",
-        elapsed: 45,
-        elapsedAnchorAt: 0,
+        minuto: 45,
+        extra: null,
+        anchoredAt: 0,
         now: Date.now(),
       }),
-    ).toBe("ENT");
+    ).toBe("Medio tiempo");
   });
 
-  it("FT → 'FIN'", () => {
+  it("FT → 'Final'", () => {
     expect(
       computeMinutoLabel({
         statusShort: "FT",
-        elapsed: 90,
-        elapsedAnchorAt: 0,
+        minuto: 90,
+        extra: null,
+        anchoredAt: 0,
         now: Date.now(),
       }),
-    ).toBe("FIN");
+    ).toBe("Final");
   });
 
-  it("AET → 'FIN (prór.)'", () => {
+  it("AET → 'Final'", () => {
     expect(
       computeMinutoLabel({
         statusShort: "AET",
-        elapsed: 120,
-        elapsedAnchorAt: 0,
+        minuto: 120,
+        extra: null,
+        anchoredAt: 0,
         now: Date.now(),
       }),
-    ).toBe("FIN (prór.)");
+    ).toBe("Final");
   });
 
-  it("PEN → 'FIN (pen.)'", () => {
+  it("PEN → 'Final'", () => {
     expect(
       computeMinutoLabel({
         statusShort: "PEN",
-        elapsed: 120,
-        elapsedAnchorAt: 0,
+        minuto: 120,
+        extra: null,
+        anchoredAt: 0,
         now: Date.now(),
       }),
-    ).toBe("FIN (pen.)");
+    ).toBe("Final");
   });
 
-  it("NS → 'Por empezar'", () => {
+  it("NS → 'Por iniciar'", () => {
     expect(
       computeMinutoLabel({
         statusShort: "NS",
-        elapsed: null,
-        elapsedAnchorAt: 0,
+        minuto: null,
+        extra: null,
+        anchoredAt: 0,
         now: Date.now(),
       }),
-    ).toBe("Por empezar");
+    ).toBe("Por iniciar");
   });
 
-  it("SUSP → 'Suspendido'", () => {
+  it("BT → 'Descanso TE'", () => {
+    expect(
+      computeMinutoLabel({
+        statusShort: "BT",
+        minuto: null,
+        extra: null,
+        anchoredAt: 0,
+        now: Date.now(),
+      }),
+    ).toBe("Descanso TE");
+  });
+
+  it("P → 'Penales'", () => {
+    expect(
+      computeMinutoLabel({
+        statusShort: "P",
+        minuto: null,
+        extra: null,
+        anchoredAt: 0,
+        now: Date.now(),
+      }),
+    ).toBe("Penales");
+  });
+
+  it("SUSP (status desconocido para avance) → se pasa tal cual", () => {
     expect(
       computeMinutoLabel({
         statusShort: "SUSP",
-        elapsed: 30,
-        elapsedAnchorAt: 0,
+        minuto: 30,
+        extra: null,
+        anchoredAt: 0,
         now: Date.now(),
       }),
-    ).toBe("Suspendido");
+    ).toBe("SUSP");
   });
 });
 
 describe("computeMinutoLabel — sin datos del server", () => {
-  it("statusShort null → '—' (NO heurística, ser honesto)", () => {
+  it("statusShort null → '—'", () => {
     expect(
       computeMinutoLabel({
         statusShort: null,
-        elapsed: null,
-        elapsedAnchorAt: 0,
+        minuto: null,
+        extra: null,
+        anchoredAt: 0,
         now: Date.now(),
       }),
     ).toBe("—");
   });
 
-  it("statusShort null con elapsed — igual '—' (sin fase no adivinamos)", () => {
+  it("statusShort null con minuto — igual '—' (sin fase no adivinamos)", () => {
     expect(
       computeMinutoLabel({
         statusShort: null,
-        elapsed: 30,
-        elapsedAnchorAt: 0,
+        minuto: 30,
+        extra: null,
+        anchoredAt: 0,
         now: Date.now(),
       }),
     ).toBe("—");
   });
 
-  it("1H con elapsed null → '1T' (mapper fallback, no heurística)", () => {
+  it("1H con minuto null → statusShort crudo ('1H')", () => {
     expect(
       computeMinutoLabel({
         statusShort: "1H",
-        elapsed: null,
-        elapsedAnchorAt: 0,
+        minuto: null,
+        extra: null,
+        anchoredAt: 0,
         now: Date.now(),
       }),
-    ).toBe("1T");
+    ).toBe("1H");
   });
 
-  it("2H con elapsed null → '2T' (mapper fallback)", () => {
-    expect(
-      computeMinutoLabel({
-        statusShort: "2H",
-        elapsed: null,
-        elapsedAnchorAt: 0,
-        now: Date.now(),
-      }),
-    ).toBe("2T");
-  });
-
-  it("ET con elapsed null → 'Prórroga'", () => {
+  it("ET con minuto null → 'TE' (sin número)", () => {
     expect(
       computeMinutoLabel({
         statusShort: "ET",
-        elapsed: null,
-        elapsedAnchorAt: 0,
+        minuto: null,
+        extra: null,
+        anchoredAt: 0,
         now: Date.now(),
       }),
-    ).toBe("Prórroga");
+    ).toBe("TE");
   });
 });
 
@@ -316,7 +376,7 @@ describe("computeMinutoLabel — sin datos del server", () => {
 // useMinutoEnVivo — AST del hook
 // ---------------------------------------------------------------------------
 
-describe("useMinutoEnVivo — contrato del hook (Ítem 4)", () => {
+describe("useMinutoEnVivo — contrato del hook", () => {
   const SRC = readSrc("hooks/useMinutoEnVivo.ts");
   const SRC_NO_COMMENTS = readSrcNoComments("hooks/useMinutoEnVivo.ts");
 
@@ -336,23 +396,36 @@ describe("useMinutoEnVivo — contrato del hook (Ítem 4)", () => {
     expect(SRC).toMatch(/elapsedAgeMs\s*:\s*number\s*\|\s*null/);
   });
 
-  it("NO acepta `fechaInicio` (removida en Ítem 4)", () => {
+  it("acepta input `extra: number | null`", () => {
+    expect(SRC).toMatch(/extra\s*:\s*number\s*\|\s*null/);
+  });
+
+  it("NO usa `fechaInicio` en el código activo (solo snapshots server)", () => {
     expect(SRC_NO_COMMENTS).not.toMatch(/fechaInicio/);
   });
 
-  it("anchora elapsedAnchorAt con Date.now() - elapsedAgeMs", () => {
-    // Fórmula clave del fix: el cliente deriva el momento REAL del
-    // snapshot restando la edad reportada por el server.
+  it("anchora al reloj del server con Date.now() - elapsedAgeMs", () => {
     expect(SRC).toMatch(/Date\.now\(\)\s*-\s*elapsedAgeMs/);
   });
 
   it("usa useRef para trackear el ancla", () => {
-    expect(SRC).toMatch(/elapsedAnchorAt\s*=\s*useRef/);
-    expect(SRC).toMatch(/prevAgeRef/);
+    expect(SRC).toMatch(/anchoredAt\s*=\s*useRef/);
   });
 
-  it("reset del ancla cuando cambia elapsedAgeMs", () => {
+  it("re-ancla cuando cambia elapsedAgeMs", () => {
     expect(SRC).toMatch(/elapsedAgeMs\s*!==\s*prevAgeRef\.current/);
+  });
+
+  it("re-ancla cuando cambia statusShort", () => {
+    expect(SRC).toMatch(/statusShort\s*!==\s*prevStatusRef\.current/);
+  });
+
+  it("re-ancla cuando cambia extra", () => {
+    expect(SRC).toMatch(/extra\s*!==\s*prevExtraRef\.current/);
+  });
+
+  it("solo avanza reloj en 1H/2H/ET", () => {
+    expect(SRC).toMatch(/STATUSES_AVANZANDO\s*=\s*new\s+Set\(\s*\[\s*["']1H["']\s*,\s*["']2H["']\s*,\s*["']ET["']\s*\]/);
   });
 
   it("usa setInterval de 1000ms (reloj segundo a segundo)", () => {
@@ -368,15 +441,19 @@ describe("useMinutoEnVivo — contrato del hook (Ítem 4)", () => {
 // Wiring — payload + endpoints + LiveHero
 // ---------------------------------------------------------------------------
 
-describe("RankingUpdatePayload — incluye elapsedAgeMs (Ítem 4)", () => {
+describe("RankingUpdatePayload — incluye elapsedAgeMs + minutoExtra", () => {
   const SRC = readSrc("lib/realtime/events.ts");
 
   it("tipo tiene `elapsedAgeMs: number | null`", () => {
     expect(SRC).toMatch(/elapsedAgeMs\s*:\s*number\s*\|\s*null/);
   });
+
+  it("tipo tiene `minutoExtra: number | null`", () => {
+    expect(SRC).toMatch(/minutoExtra\s*:\s*number\s*\|\s*null/);
+  });
 });
 
-describe("emitirRankingUpdate — calcula elapsedAgeMs al emit", () => {
+describe("emitirRankingUpdate — propaga extra + elapsedAgeMs", () => {
   const SRC = readSrc("lib/realtime/emitters.ts");
 
   it("captura emitAt = Date.now() y lo usa para la age", () => {
@@ -389,12 +466,16 @@ describe("emitirRankingUpdate — calcula elapsedAgeMs al emit", () => {
     );
   });
 
-  it("incluye elapsedAgeMs en el payload emitido", () => {
-    expect(SRC).toMatch(/\belapsedAgeMs\s*,/);
+  it("lee minutoExtra del snapshot", () => {
+    expect(SRC).toMatch(/minutoExtra\s*=\s*snapshot\?\.extra/);
+  });
+
+  it("incluye minutoExtra en el payload emitido", () => {
+    expect(SRC).toMatch(/\bminutoExtra\s*,/);
   });
 });
 
-describe("GET /api/v1/torneos/:id/ranking — expone elapsedAgeMs", () => {
+describe("GET /api/v1/torneos/:id/ranking — expone minutoExtra + elapsedAgeMs", () => {
   const SRC = readSrc("app/api/v1/torneos/[id]/ranking/route.ts");
 
   it("calcula elapsedAgeMs desde el snap", () => {
@@ -402,9 +483,13 @@ describe("GET /api/v1/torneos/:id/ranking — expone elapsedAgeMs", () => {
       /elapsedAgeMs\s*:\s*liveSnap\s*\?\s*now\s*-\s*liveSnap\.updatedAt\s*:\s*null/,
     );
   });
+
+  it("incluye minutoExtra leído del cache", () => {
+    expect(SRC).toMatch(/minutoExtra\s*:\s*liveSnap\?\.extra\s*\?\?\s*null/);
+  });
 });
 
-describe("GET /api/v1/live/matches — expone elapsedAgeMs", () => {
+describe("GET /api/v1/live/matches — expone minutoExtra + elapsedAgeMs", () => {
   const SRC = readSrc("app/api/v1/live/matches/route.ts");
 
   it("calcula elapsedAgeMs por partido", () => {
@@ -412,9 +497,13 @@ describe("GET /api/v1/live/matches — expone elapsedAgeMs", () => {
       /elapsedAgeMs\s*:\s*liveSnap\s*\?\s*nowMs\s*-\s*liveSnap\.updatedAt\s*:\s*null/,
     );
   });
+
+  it("incluye minutoExtra del cache", () => {
+    expect(SRC).toMatch(/minutoExtra\s*:\s*liveSnap\?\.extra\s*\?\?\s*null/);
+  });
 });
 
-describe("LiveHero — consume elapsedAgeMs (no fechaInicio)", () => {
+describe("LiveHero — consume extra + elapsedAgeMs", () => {
   const SRC = readSrc("components/live/LiveHero.tsx");
   const SRC_NO_COMMENTS = readSrcNoComments("components/live/LiveHero.tsx");
 
@@ -426,27 +515,34 @@ describe("LiveHero — consume elapsedAgeMs (no fechaInicio)", () => {
     expect(SRC).toMatch(/elapsedAgeMs\s*:\s*number\s*\|\s*null/);
   });
 
-  it("NO acepta `fechaInicio` (removida en Ítem 4)", () => {
-    // En código activo — los comentarios pueden mencionar la historia.
+  it("acepta prop `extra: number | null`", () => {
+    expect(SRC).toMatch(/extra\s*:\s*number\s*\|\s*null/);
+  });
+
+  it("NO usa `fechaInicio` en código activo", () => {
     expect(SRC_NO_COMMENTS).not.toMatch(/fechaInicio/);
   });
 
-  it("invoca useMinutoEnVivo con los 3 campos {statusShort, elapsed, elapsedAgeMs}", () => {
+  it("invoca useMinutoEnVivo con statusShort + minuto + extra + elapsedAgeMs", () => {
     expect(SRC).toMatch(
-      /useMinutoEnVivo\(\s*\{[\s\S]*?statusShort[\s\S]*?elapsed[\s\S]*?elapsedAgeMs[\s\S]*?\}\s*\)/,
+      /useMinutoEnVivo\(\s*\{[\s\S]*?statusShort[\s\S]*?minuto[\s\S]*?extra[\s\S]*?elapsedAgeMs[\s\S]*?\}\s*\)/,
     );
   });
 
-  it("preserva data-testid='live-minute-label' (no regresión del Bug #9)", () => {
+  it("preserva data-testid='live-minute-label'", () => {
     expect(SRC).toMatch(/data-testid=["']live-minute-label["']/);
   });
 });
 
-describe("LiveMatchView — propaga elapsedAgeMs al LiveHero", () => {
+describe("LiveMatchView — propaga extra + elapsedAgeMs al LiveHero", () => {
   const SRC = readSrc("components/live/LiveMatchView.tsx");
 
   it("LiveMatchTab declara elapsedAgeMs: number | null", () => {
     expect(SRC).toMatch(/elapsedAgeMs\s*:\s*number\s*\|\s*null/);
+  });
+
+  it("LiveMatchTab declara extra: number | null", () => {
+    expect(SRC).toMatch(/extra\s*:\s*number\s*\|\s*null/);
   });
 
   it("pasa elapsedAgeMs={live ?? active} al LiveHero", () => {
@@ -455,38 +551,43 @@ describe("LiveMatchView — propaga elapsedAgeMs al LiveHero", () => {
     );
   });
 
-  it("NO pasa fechaInicio al LiveHero (removida del hero)", () => {
-    // El LiveMatchTab aún tiene fechaInicio para metadata general (puede
-    // ser útil para banners pre-live en el futuro), pero LiveHero ya
-    // no la recibe.
-    expect(SRC).not.toMatch(/fechaInicio=\{active\.fechaInicio\}/);
+  it("pasa extra={live ?? active} al LiveHero", () => {
+    expect(SRC).toMatch(
+      /extra=\{live\.minutoExtra\s*\?\?\s*active\.extra\}/,
+    );
   });
 });
 
-describe("useRankingEnVivo — expone elapsedAgeMs en el snapshot", () => {
+describe("useRankingEnVivo — expone minutoExtra + elapsedAgeMs en el snapshot", () => {
   const SRC = readSrc("hooks/useRankingEnVivo.ts");
 
   it("RankingSnapshot declara elapsedAgeMs: number | null", () => {
     expect(SRC).toMatch(/elapsedAgeMs\s*:\s*number\s*\|\s*null/);
   });
 
-  it("onUpdate del WS pisa elapsedAgeMs crudo del payload", () => {
+  it("RankingSnapshot declara minutoExtra: number | null", () => {
+    expect(SRC).toMatch(/minutoExtra\s*:\s*number\s*\|\s*null/);
+  });
+
+  it("onUpdate del WS pisa elapsedAgeMs del payload", () => {
     expect(SRC).toMatch(/elapsedAgeMs\s*:\s*payload\.elapsedAgeMs/);
   });
 
-  it("applySnapshot preserva elapsedAgeMs undefined → valor anterior", () => {
-    expect(SRC).toMatch(
-      /elapsedAgeMs\s*:[\s\S]*?d\.elapsedAgeMs\s*!==\s*undefined[\s\S]*?s\.elapsedAgeMs/,
-    );
+  it("onUpdate del WS pisa minutoExtra del payload", () => {
+    expect(SRC).toMatch(/minutoExtra\s*:\s*payload\.minutoExtra/);
   });
 });
 
-describe("/live-match page.tsx — SSR calcula elapsedAgeMs", () => {
+describe("/live-match page.tsx — SSR calcula extra + elapsedAgeMs", () => {
   const SRC = readSrc("app/(main)/live-match/page.tsx");
 
   it("buildLiveTabs asigna elapsedAgeMs = nowMs - snap.updatedAt", () => {
     expect(SRC).toMatch(
       /elapsedAgeMs\s*:\s*snap\s*\?\s*nowMs\s*-\s*snap\.updatedAt\s*:\s*null/,
     );
+  });
+
+  it("buildLiveTabs asigna extra = snap?.extra ?? null", () => {
+    expect(SRC).toMatch(/extra\s*:\s*snap\?\.extra\s*\?\?\s*null/);
   });
 });
