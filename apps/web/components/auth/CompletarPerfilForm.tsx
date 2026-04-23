@@ -39,7 +39,8 @@ export function CompletarPerfilForm({ callbackUrl = "/" }: Props) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          username: username.trim().toLowerCase(),
+          // Preservamos el case del @handle (Abr 2026).
+          username: username.trim(),
           aceptaTyc,
         }),
       });

@@ -86,7 +86,7 @@ export function VerificacionSection({ perfil }: Props) {
         desc={
           perfil.dniVerif
             ? "DNI verificado"
-            : "Requerido solo para canjes de premios mayores a S/ 500"
+            : "Requerido para canjear cualquier premio."
         }
         ctaLabel={perfil.dniVerif ? undefined : "Verificar"}
         onCta={() => setOpenDni(true)}

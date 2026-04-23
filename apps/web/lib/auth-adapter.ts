@@ -62,7 +62,10 @@ export function HablaPrismaAdapter(): Adapter {
       // @handle aún — asignamos temporal + bonus de bienvenida en una
       // transacción atómica. El middleware lo ruteará a `/auth/completar-perfil`.
       const email = data.email.toLowerCase();
-      const nombre = data.name ?? email.split("@")[0];
+      // Abr 2026: si el proveedor no da nombre real, dejamos `nombre`
+      // vacío — la UI de /perfil muestra "Por completar" hasta que el
+      // usuario lo llene. Antes copiábamos email.split("@")[0] y confundía.
+      const nombre = data.name ?? "";
 
       const existente = await prisma.usuario.findUnique({ where: { email } });
       if (existente) return toAdapterUser(existente);

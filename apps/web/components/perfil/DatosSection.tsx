@@ -6,6 +6,10 @@
 // Registro formal (Abr 2026): el @handle es INMUTABLE post-registro
 // (tooltip "Tu @handle es permanente"). Email y fecha nac ya eran locked.
 // PATCH /api/v1/usuarios/me ya no acepta username.
+//
+// Ajustes Abr 2026: nombre se muestra como "Por completar" cuando está
+// vacío o coincide con el username (signups viejos o pre-OAuth). Se
+// actualizó también el tooltip del @handle al nuevo copy case-sensitive.
 
 import { useState } from "react";
 import { authedFetch } from "@/lib/api-client";
@@ -26,9 +30,17 @@ const FECHA_NAC_FMT = new Intl.DateTimeFormat("es-PE", {
 });
 
 export function DatosSection({ perfil }: Props) {
+  // Abr 2026: si el nombre está vacío o arrastra el handle (signups
+  // viejos que lo copiaban), lo consideramos "por completar" y el row
+  // arranca en modo vacío con el placeholder correspondiente.
+  const nombreCompletado =
+    !!perfil.nombre &&
+    perfil.nombre.trim() !== "" &&
+    perfil.nombre.trim().toLowerCase() !== perfil.username.toLowerCase();
+
   const [editing, setEditing] = useState<CampoEditable | null>(null);
   const [valores, setValores] = useState({
-    nombre: perfil.nombre ?? "",
+    nombre: nombreCompletado ? perfil.nombre : "",
     ubicacion: perfil.ubicacion ?? "",
   });
   const [cargando, setCargando] = useState(false);
@@ -68,7 +80,8 @@ export function DatosSection({ perfil }: Props) {
     >
       <DataRow
         label="Nombre completo"
-        value={perfil.nombre || "—"}
+        value={nombreCompletado ? perfil.nombre : "Por completar"}
+        emptyValue={!nombreCompletado}
         editing={editing === "nombre"}
         onEdit={() => setEditing("nombre")}
         onCancel={() => setEditing(null)}
@@ -76,6 +89,7 @@ export function DatosSection({ perfil }: Props) {
         input={
           <input
             type="text"
+            placeholder="Tu nombre completo"
             value={valores.nombre}
             onChange={(e) =>
               setValores((v) => ({ ...v, nombre: e.target.value }))

@@ -16,9 +16,11 @@ model Usuario {
   email        String    @unique
   nombre       String
   // @handle público para ranking/inscritos. Registro formal (Abr 2026):
-  // ahora es NOT NULL, único, lowercase, 3-20 chars, regex ^[a-z0-9_]+$.
-  // Al crear vía OAuth sin elegir handle se asigna un temporal "new_<hex>"
-  // y usernameLocked=false — middleware fuerza a /auth/completar-perfil.
+  // NOT NULL, único, 3-20 chars, regex ^[a-zA-Z0-9_]+$. Case-sensitive
+  // para display (Gustavo ≠ gustavo en UI) pero unicidad case-insensitive
+  // en app (chequeado con mode: 'insensitive' en cada query). Al crear
+  // vía OAuth sin elegir handle se asigna un temporal "new_<hex>" y
+  // usernameLocked=false — middleware fuerza a /auth/completar-perfil.
   username       String   @unique
   usernameLocked Boolean  @default(false) // true tras completar-perfil: @handle inmutable
   tycAceptadosAt DateTime? // timestamp de aceptación de T&C + mayoría de edad

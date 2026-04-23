@@ -19,16 +19,18 @@ import {
   ValidacionFallida,
 } from "@/lib/services/errors";
 import { esReservado } from "@/lib/config/usernames-reservados";
+import { esUsernameOfensivo } from "@/lib/utils/username-filter";
 import { logger } from "@/lib/services/logger";
 
 export const dynamic = "force-dynamic";
 
-const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
+// Abr 2026: case-sensitive display + unicidad case-insensitive.
+const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/;
 
 const CompletarSchema = z.object({
-  username: z
-    .string()
-    .transform((s) => s.trim().toLowerCase()),
+  // Preservamos el case original; la comparación de unicidad se hace con
+  // mode: 'insensitive' en la query.
+  username: z.string().transform((s) => s.trim()),
   aceptaTyc: z.boolean(),
 });
 
@@ -56,12 +58,12 @@ export async function POST(req: NextRequest) {
 
     if (!USERNAME_REGEX.test(username)) {
       throw new ValidacionFallida(
-        "El usuario debe tener 3-20 caracteres (letras minúsculas, números o guión bajo).",
+        "El usuario debe tener 3-20 caracteres (letras, números o guión bajo).",
         { field: "username" },
       );
     }
 
-    if (esReservado(username)) {
+    if (esReservado(username.toLowerCase())) {
       throw new DomainError(
         "USERNAME_RESERVADO",
         "Ese nombre de usuario no está disponible.",
@@ -70,9 +72,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (esUsernameOfensivo(username)) {
+      throw new DomainError(
+        "USERNAME_OFENSIVO",
+        "Ese nombre de usuario no está permitido.",
+        409,
+        { field: "username" },
+      );
+    }
+
     const usuario = await prisma.usuario.findUnique({
       where: { id: session.user.id },
-      select: { usernameLocked: true, username: true },
+      select: { usernameLocked: true, username: true, nombre: true },
     });
     if (!usuario) throw new NoAutenticado();
 
@@ -84,10 +95,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Verificar unicidad (excluyendo al propio usuario por si alguien
-    // reintenta con su mismo username temporal — improbable pero seguro).
+    // Verificar unicidad case-insensitive (excluyendo al propio usuario
+    // por si alguien reintenta con su mismo username temporal).
     const existente = await prisma.usuario.findFirst({
-      where: { username, id: { not: session.user.id } },
+      where: {
+        username: { equals: username, mode: "insensitive" },
+        id: { not: session.user.id },
+      },
       select: { id: true },
     });
     if (existente) {
@@ -105,9 +119,10 @@ export async function POST(req: NextRequest) {
         username,
         usernameLocked: true,
         tycAceptadosAt: new Date(),
-        // Si el nombre era el username temporal (new_xxx), blanqueamos al
-        // elegido. Si Google ya dio un nombre natural, lo respetamos.
-        ...(usuario.username.startsWith("new_") ? { nombre: username } : {}),
+        // Si el nombre era el username temporal (new_xxx) lo blanqueamos
+        // — el usuario lo completará desde /perfil. Si Google ya dio un
+        // nombre natural, lo respetamos.
+        ...(usuario.username.startsWith("new_") ? { nombre: "" } : {}),
       },
       select: { username: true, usernameLocked: true },
     });
