@@ -1,4 +1,11 @@
-// Tests AST de la UI de /perfil. Sub-Sprint 7.
+// Tests AST de la UI de /perfil. Sub-Sprint 7 + rediseño mockup v1 +
+// registro formal (Abr 2026).
+//
+// La página fue reconstruida desde cero; los componentes ahora viven bajo
+// `components/perfil/*` con nombres explícitos (VerificacionSection,
+// DatosSection, NotificacionesSection, JuegoResponsableSection,
+// FooterSections). Los tests valídan el mismo CONTRATO de features; los
+// nombres de archivo se actualizaron con el rediseño.
 
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
@@ -17,20 +24,18 @@ describe("/perfil — page.tsx (RSC)", () => {
     expect(SRC).toMatch(/export\s+const\s+dynamic\s*=\s*["']force-dynamic["']/);
   });
 
-  it("redirige a /auth/login si no hay sesión", () => {
-    expect(SRC).toMatch(/redirect\(["']\/auth\/login/);
+  it("redirige a /auth/signin si no hay sesión", () => {
+    expect(SRC).toMatch(/redirect\(["']\/auth\/signin/);
   });
 
-  it("integra los 6 paneles principales del §10.8", () => {
+  it("integra los paneles principales del §10.8 + rediseño", () => {
     expect(SRC).toMatch(/ProfileHero/);
     expect(SRC).toMatch(/StatsGrid/);
-    expect(SRC).toMatch(/VerificacionPanel/);
-    expect(SRC).toMatch(/DatosPersonalesPanel/);
-    expect(SRC).toMatch(/PreferenciasPanel/);
-    expect(SRC).toMatch(/LimitesPanel/);
-    // Rediseño mockup v1: DatosYPrivacidadPanel se absorbió en
-    // ProfileFooterSections, que también trae Seguridad, Ayuda y Legal.
-    expect(SRC).toMatch(/ProfileFooterSections/);
+    expect(SRC).toMatch(/VerificacionSection/);
+    expect(SRC).toMatch(/DatosSection/);
+    expect(SRC).toMatch(/NotificacionesSection/);
+    expect(SRC).toMatch(/JuegoResponsableSection/);
+    expect(SRC).toMatch(/FooterSections/);
   });
 
   it("obtiene perfil, preferencias y límites en paralelo", () => {
@@ -50,11 +55,13 @@ describe("/perfil — ProfileHero", () => {
   });
 
   it("copy 'en N torneos' cuando hay siguiente nivel", () => {
-    // Rediseño mockup v1: el balance ya no está en el hero (pasó a
-    // StatsGrid con mounted-guard). El level-card mantiene "Próximo: X
-    // en N torneos" usando faltanParaSiguiente.
     expect(SRC).toMatch(/faltanParaSiguiente/);
     expect(SRC).toMatch(/nivel\.siguiente/);
+  });
+
+  it("muestra @username siempre (registro formal Abr 2026)", () => {
+    // username es NOT NULL, así que el hero debe renderizarlo con prefijo @
+    expect(SRC).toMatch(/@\{perfil\.username\}/);
   });
 });
 
@@ -70,11 +77,10 @@ describe("/perfil — StatsGrid (consumidor del balance via store)", () => {
   });
 });
 
-describe("/perfil — VerificacionPanel", () => {
-  const SRC = read("components/perfil/VerificacionPanel.tsx");
+describe("/perfil — VerificacionSection", () => {
+  const SRC = read("components/perfil/VerificacionSection.tsx");
 
   it("4 rows: email, edad, teléfono, DNI", () => {
-    // Rediseño mockup v1: usa prop `title=` en VerifRow en vez de `label=`.
     expect(SRC).toMatch(/title="Correo electrónico"/);
     expect(SRC).toMatch(/title="Edad \(\+18\)"/);
     expect(SRC).toMatch(/title="Teléfono"/);
@@ -83,12 +89,10 @@ describe("/perfil — VerificacionPanel", () => {
 
   it("usa authedFetch (§14)", () => {
     expect(SRC).toMatch(/authedFetch/);
-    expect(SRC).not.toMatch(/fetch\(["']\/api\/v1\//);
+    expect(SRC).not.toMatch(/(?<![a-zA-Z])fetch\(["']\/api\/v1\//);
   });
 
   it("flujo teléfono: 2 pasos (teléfono → código)", () => {
-    // El state machine vive en el componente TelefonoModal: `paso === 'telefono'`
-    // en la rama del formulario inicial; setPaso("codigo") en la confirmación.
     expect(SRC).toMatch(/paso === ["']telefono["']/);
     expect(SRC).toMatch(/setPaso\(["']codigo["']\)/);
   });
@@ -103,8 +107,27 @@ describe("/perfil — VerificacionPanel", () => {
   });
 });
 
-describe("/perfil — PreferenciasPanel", () => {
-  const SRC = read("components/perfil/PreferenciasPanel.tsx");
+describe("/perfil — DatosSection (username inmutable, Abr 2026)", () => {
+  const SRC = read("components/perfil/DatosSection.tsx");
+
+  it("muestra @handle como row read-only (sin botón Editar)", () => {
+    expect(SRC).toMatch(/label="Usuario \(@handle\)"/);
+    expect(SRC).toMatch(/value=\{`@\$\{perfil\.username\}`\}/);
+    expect(SRC).toMatch(/locked/);
+    expect(SRC).toMatch(/Tu @handle es permanente/);
+  });
+
+  it("PATCH /usuarios/me no intenta enviar username", () => {
+    // El username ya no es editable; el type `CampoEditable` debe
+    // excluirlo. Asertamos que el union no contiene "username".
+    const match = SRC.match(/type\s+CampoEditable\s*=\s*([^;]+);/);
+    expect(match).not.toBeNull();
+    expect(match![1]).not.toContain('"username"');
+  });
+});
+
+describe("/perfil — NotificacionesSection", () => {
+  const SRC = read("components/perfil/NotificacionesSection.tsx");
 
   it("7 toggles completos del §10.8", () => {
     expect(SRC).toMatch(/notifInicioTorneo/);
@@ -131,8 +154,8 @@ describe("/perfil — PreferenciasPanel", () => {
   });
 });
 
-describe("/perfil — LimitesPanel", () => {
-  const SRC = read("components/perfil/LimitesPanel.tsx");
+describe("/perfil — JuegoResponsableSection", () => {
+  const SRC = read("components/perfil/JuegoResponsableSection.tsx");
 
   it("muestra barras de uso con colores según %", () => {
     expect(SRC).toMatch(/porcMensual/);
@@ -152,8 +175,8 @@ describe("/perfil — LimitesPanel", () => {
   });
 });
 
-describe("/perfil — ProfileFooterSections (absorbió DatosYPrivacidadPanel)", () => {
-  const SRC = read("components/perfil/ProfileFooterSections.tsx");
+describe("/perfil — FooterSections (Seguridad / Ayuda / Legal / Danger)", () => {
+  const SRC = read("components/perfil/FooterSections.tsx");
 
   it("flujos: descargar datos + eliminar cuenta con advertencia de saldo", () => {
     expect(SRC).toMatch(/Descargar mis datos/);
@@ -171,7 +194,6 @@ describe("/perfil — ProfileFooterSections (absorbió DatosYPrivacidadPanel)", 
     expect(SRC).toMatch(/title="Seguridad"/);
     expect(SRC).toMatch(/title="Ayuda y soporte"/);
     expect(SRC).toMatch(/title="Información legal"/);
-    // Danger zone es una sección propia inline (no SectionShell).
     expect(SRC).toMatch(/Acciones de cuenta/);
     expect(SRC).toMatch(/Cerrar sesión/);
   });

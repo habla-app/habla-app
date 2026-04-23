@@ -19,7 +19,7 @@ export default function VerificarPage() {
           ¿No llegó? Revisa la carpeta de spam.
         </p>
         <Link
-          href="/auth/login"
+          href="/auth/signin"
           className="mt-6 inline-block rounded-sm border-[1.5px] border-strong px-5 py-2.5 text-sm font-semibold text-body transition-colors hover:border-brand-blue-main hover:text-brand-blue-main"
         >
           Volver

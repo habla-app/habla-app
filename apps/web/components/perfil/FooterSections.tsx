@@ -1,13 +1,12 @@
 "use client";
-// Las 4 secciones finales del perfil:
-//   - Seguridad (método login, dispositivos, cuentas vinculadas, descargar datos)
-//   - Ayuda (cómo jugar, FAQ, contáctanos, reportar problema)
-//   - Legal (términos, privacidad, juego responsable, sobre lukas, acerca)
-//   - Danger zone (cerrar sesión + eliminar cuenta)
+// FooterSections — 4 secciones de cola del mockup (líneas 4160-4298):
+//   - Seguridad: método login, dispositivos, cuentas vinculadas, descargar datos
+//   - Ayuda: cómo jugar, FAQ, contáctanos, reportar problema
+//   - Legal: términos, privacidad, juego responsable, sobre lukas, acerca
+//   - Danger zone: cerrar sesión + eliminar cuenta
 //
-// Reemplaza al viejo DatosYPrivacidadPanel + los bloques inline de
-// page.tsx. La funcionalidad (endpoint datos-download, eliminar cuenta
-// via modal con portal) se preserva 1:1.
+// Endpoints preservados del SS7 (nada nuevo): POST /me/datos-download,
+// POST /me/eliminar. Modal de eliminar usa createPortal.
 
 import { useState } from "react";
 import { signOut } from "next-auth/react";
@@ -18,15 +17,14 @@ import {
   ModalBody,
   ModalFooter,
 } from "@/components/ui/Modal";
-import { SectionShell } from "./SectionShell";
-import { PmenuItem } from "./LimitesPanel";
+import { SectionShell, MenuItem } from "./SectionShell";
 
 interface Props {
   balanceLukas: number;
   email: string;
 }
 
-export function ProfileFooterSections({ balanceLukas, email }: Props) {
+export function FooterSections({ balanceLukas, email }: Props) {
   const [openEliminar, setOpenEliminar] = useState(false);
   const [descargaMsg, setDescargaMsg] = useState<
     { tipo: "ok" | "error"; texto: string } | null
@@ -67,17 +65,17 @@ export function ProfileFooterSections({ balanceLukas, email }: Props) {
         icon="🔐"
         iconTone="secur"
       >
-        <PmenuItem
+        <MenuItem
           icon="✉️"
           label="Método de inicio de sesión"
-          sub={`Magic link a ${email} · Sin contraseña`}
+          sub={`Magic link o Google · ${email}`}
         />
-        <PmenuItem
+        <MenuItem
           icon="📱"
           label="Dispositivos activos"
           sub="Ver sesiones y cerrar las que no reconoces"
         />
-        <PmenuItem
+        <MenuItem
           icon="📥"
           label="Descargar mis datos"
           sub={
@@ -98,25 +96,25 @@ export function ProfileFooterSections({ balanceLukas, email }: Props) {
         icon="💬"
         iconTone="help"
       >
-        <PmenuItem
+        <MenuItem
           icon="📖"
           label="Cómo jugar"
           sub="Guía paso a paso"
           href="/como-jugar"
         />
-        <PmenuItem
+        <MenuItem
           icon="❓"
           label="Preguntas frecuentes"
           sub="Respuestas a dudas comunes"
           href="/faq"
         />
-        <PmenuItem
+        <MenuItem
           icon="✉️"
           label="Contáctanos"
           sub="equipo@hablaplay.com · Respondemos en menos de 24h"
           href="mailto:equipo@hablaplay.com"
         />
-        <PmenuItem
+        <MenuItem
           icon="🐛"
           label="Reportar un problema"
           sub="¿Algo no funciona como debería?"
@@ -130,23 +128,23 @@ export function ProfileFooterSections({ balanceLukas, email }: Props) {
         icon="📄"
         iconTone="legal"
       >
-        <PmenuItem icon="📋" label="Términos de servicio" href="/legal/terminos" />
-        <PmenuItem
+        <MenuItem icon="📋" label="Términos de servicio" href="/legal/terminos" />
+        <MenuItem
           icon="🔒"
           label="Política de privacidad"
           href="/legal/privacidad"
         />
-        <PmenuItem
+        <MenuItem
           icon="⚖️"
           label="Información sobre juego responsable"
           href="/legal/juego-responsable"
         />
-        <PmenuItem
+        <MenuItem
           icon="🪙"
           label="Sobre los Lukas (moneda virtual)"
           href="/legal/lukas"
         />
-        <PmenuItem icon="🏠" label="Acerca de Habla!" href="/legal/acerca" />
+        <MenuItem icon="🏠" label="Acerca de Habla!" href="/legal/acerca" />
       </SectionShell>
 
       <section className="mb-6 rounded-md border border-urgent-critical/20 bg-pred-wrong-bg/60 px-5 py-5 shadow-sm">
@@ -239,13 +237,16 @@ function EliminarCuentaModal({
             {balanceLukas > 0 ? (
               <div className="rounded-md border border-urgent-high bg-urgent-high-bg px-3 py-2 text-[13px] text-urgent-high-dark">
                 ⚠️ Perderás{" "}
-                <strong>{balanceLukas.toLocaleString("es-PE")} Lukas canjeables</strong>
-                . Si querés canjearlos antes, ignorá este flujo y visitá la tienda.
+                <strong>
+                  {balanceLukas.toLocaleString("es-PE")} Lukas canjeables
+                </strong>
+                . Si querés canjearlos antes, ignorá este flujo y visitá la
+                tienda.
               </div>
             ) : null}
             <p className="mt-3 text-sm text-body">
-              Al confirmar, tu cuenta se anonimiza: tu nombre, email, teléfono e
-              imagen se borran. Los tickets y transacciones se preservan para
+              Al confirmar, tu cuenta se anonimiza: tu nombre, email, teléfono
+              e imagen se borran. Los tickets y transacciones se preservan para
               auditoría pero sin asociación a tu identidad.
             </p>
             <p className="mt-2 text-[13px] text-muted-d">

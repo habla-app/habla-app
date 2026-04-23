@@ -46,7 +46,7 @@ export function ComboLauncher({
   if (!hasSession) {
     return (
       <Link
-        href={`/auth/login?callbackUrl=${encodeURIComponent(callbackUrl)}`}
+        href={`/auth/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`}
         className={buttonCls(variant, className)}
       >
         {label}

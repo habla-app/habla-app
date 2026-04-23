@@ -115,7 +115,7 @@ function UnloggedBalance() {
         combinada.
       </p>
       <Link
-        href="/auth/login?callbackUrl=/"
+        href="/auth/signin?callbackUrl=/"
         className="block w-full rounded-sm bg-brand-gold px-2.5 py-2.5 text-[12px] font-bold text-black transition-colors hover:bg-brand-gold-light"
       >
         Entrar

@@ -12,6 +12,10 @@
 // sola llamada a `contarLiveMatches()` y nos pasa `initialLiveCount`
 // como prop — lo propagamos al NavLinks que a su vez lo pasa al
 // LiveCountBadge (client, con polling cada 30s).
+//
+// Registro formal (Abr 2026): pasa `@username` + `usernameLocked` al
+// UserMenu. Iniciales se derivan del username (primeras 2 letras) o del
+// email si el username aún es temporal `new_<hex>`.
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { NavLinks } from "@/components/layout/NavLinks";
@@ -23,14 +27,10 @@ interface Props {
   initialLiveCount?: number;
 }
 
-function iniciales(
-  nombre: string | undefined | null,
-  email: string,
-): string {
-  const base = (nombre && nombre.trim().length > 0 ? nombre : email).trim();
-  const partes = base.split(/\s+/).filter(Boolean);
-  if (partes.length >= 2) return (partes[0][0] + partes[1][0]).toUpperCase();
-  return base.slice(0, 2).toUpperCase();
+function iniciales(username: string, email: string): string {
+  const base =
+    username && !username.startsWith("new_") ? username : email;
+  return base.trim().slice(0, 2).toUpperCase();
 }
 
 export async function NavBar({ initialLiveCount = 0 }: Props = {}) {
@@ -64,14 +64,18 @@ export async function NavBar({ initialLiveCount = 0 }: Props = {}) {
             <>
               <BalanceBadge initialBalance={usuario.balanceLukas ?? 0} />
               <UserMenu
-                iniciales={iniciales(usuario.name, usuario.email ?? "")}
-                nombre={usuario.name ?? usuario.email ?? "Usuario"}
+                iniciales={iniciales(
+                  usuario.username ?? "",
+                  usuario.email ?? "",
+                )}
+                username={usuario.username ?? ""}
+                usernameLocked={usuario.usernameLocked ?? false}
                 email={usuario.email ?? ""}
               />
             </>
           ) : (
             <Link
-              href="/auth/login"
+              href="/auth/signin"
               className="rounded-sm bg-brand-gold px-4 py-2 text-[13px] font-bold text-black shadow-gold-btn transition-all duration-150 hover:-translate-y-px hover:bg-brand-gold-light hover:shadow-gold"
             >
               Entrar

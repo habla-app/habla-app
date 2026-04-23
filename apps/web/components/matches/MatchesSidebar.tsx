@@ -5,7 +5,7 @@
 // Se comparte entre `/` (landing) y `/matches` (Sub-Sprint 3). Los dos
 // primeros widgets son iguales con o sin sesión; el widget de balance
 // cambia: con sesión muestra el monto + CTAs; sin sesión muestra un
-// mensaje con CTA a /auth/login.
+// mensaje con CTA a /auth/signin.
 //
 // Server Component — llama a auth() para saber si hay sesión. La data
 // de en-vivo y top-del-día es mock hasta los Sub-Sprints 5 y 3

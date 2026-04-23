@@ -1,14 +1,13 @@
 "use client";
-// PreferenciasPanel — 7 toggles con debounce 500ms (mockup `.toggle-row`).
-// Debounce debounce y estado idénticos a la versión anterior; lo que
-// cambia es la envoltura visual (SectionShell + switch styling del mockup).
+// NotificacionesSection — 7 toggles con debounce 500ms. Mockup `.toggle-row`
+// (línea 4040). PATCH /api/v1/usuarios/notificaciones.
 
 import { useEffect, useRef, useState } from "react";
 import { authedFetch } from "@/lib/api-client";
 import type { PreferenciasNotificaciones } from "@/lib/services/notificaciones.service";
 import { SectionShell } from "./SectionShell";
 
-interface PreferenciasPanelProps {
+interface Props {
   inicial: PreferenciasNotificaciones;
 }
 
@@ -54,7 +53,7 @@ const LABELS: Array<{
   },
 ];
 
-export function PreferenciasPanel({ inicial }: PreferenciasPanelProps) {
+export function NotificacionesSection({ inicial }: Props) {
   const [prefs, setPrefs] = useState(inicial);
   const [guardando, setGuardando] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);

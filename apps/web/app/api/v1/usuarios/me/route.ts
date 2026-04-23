@@ -16,9 +16,11 @@ import { logger } from "@/lib/services/logger";
 
 export const dynamic = "force-dynamic";
 
+// Registro formal (Abr 2026): `username` ya NO es editable vía PATCH
+// /usuarios/me. El @handle se establece una sola vez en /auth/signup o
+// /auth/completar-perfil y queda inmutable.
 const PatchSchema = z.object({
   nombre: z.string().min(2).max(100).optional(),
-  username: z.string().min(3).max(20).optional(),
   ubicacion: z.string().max(80).optional(),
   telefono: z.string().max(20).optional(),
   image: z.string().url().optional(),

@@ -32,6 +32,10 @@ describe.runIf(hasDb)("tickets.service — integration", () => {
       data: {
         email: `test-${suffix}@habla.local`,
         nombre: "Test User",
+        // Registro formal (Abr 2026): username es NOT NULL + unique.
+        // Usamos el suffix random del timestamp para garantizar unicidad.
+        username: `test_${suffix}`,
+        usernameLocked: true,
         balanceLukas: 100,
       },
     });

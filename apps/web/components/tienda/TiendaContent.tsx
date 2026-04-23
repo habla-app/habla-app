@@ -216,7 +216,7 @@ function ShopEarnCta({ isLoggedIn }: { isLoggedIn: boolean }) {
       </p>
       <div className="relative z-10 mt-4 flex flex-wrap items-center justify-center gap-2.5">
         <Link
-          href={isLoggedIn ? "/matches" : "/auth/login?callbackUrl=/tienda"}
+          href={isLoggedIn ? "/matches" : "/auth/signin?callbackUrl=/tienda"}
           className="inline-flex items-center gap-2 rounded-sm bg-brand-gold px-6 py-3 text-sm font-bold text-black shadow-gold-btn transition hover:bg-brand-gold-light hover:-translate-y-0.5"
         >
           {isLoggedIn ? "⚽ Ver partidos" : "Iniciar sesión"}

@@ -14,7 +14,7 @@
 //   7. CTA estelar — delega a ComboLauncher (hook useComboOpener) para
 //      abrir el modal. Sticky al bottom en mobile, inline en desktop.
 //
-// Público: cualquiera puede ver el detalle. El CTA cambia a /auth/login
+// Público: cualquiera puede ver el detalle. El CTA cambia a /auth/signin
 // con callbackUrl si no hay sesión (lo maneja ComboLauncher).
 
 import { notFound } from "next/navigation";

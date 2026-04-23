@@ -1,9 +1,7 @@
 "use client";
-// LimitesPanel — juego responsable: límite mensual compra + diario tickets
-// + auto-exclusión (7/30/90 días). Mockup `.limit-row` + `.limit-progress`.
-//
-// Funcionalidad preservada: mismo endpoint PATCH /api/v1/usuarios/limites,
-// mismos valores de auto-exclusión (7/30/90), mismo modal con portal.
+// JuegoResponsableSection — límite mensual compra + diario tickets +
+// auto-exclusión (7/30/90 días). Mockup `.limit-row` + `.limit-progress`
+// (línea 4107).
 
 import { useState } from "react";
 import { authedFetch } from "@/lib/api-client";
@@ -14,7 +12,11 @@ import {
   ModalBody,
   ModalFooter,
 } from "@/components/ui/Modal";
-import { SectionShell } from "./SectionShell";
+import { SectionShell, MenuItem } from "./SectionShell";
+
+interface Props {
+  inicial: LimitesUsuario;
+}
 
 const EXCLUSION_FECHA_FMT = new Intl.DateTimeFormat("es-PE", {
   day: "numeric",
@@ -23,11 +25,7 @@ const EXCLUSION_FECHA_FMT = new Intl.DateTimeFormat("es-PE", {
   timeZone: "America/Lima",
 });
 
-interface LimitesPanelProps {
-  inicial: LimitesUsuario;
-}
-
-export function LimitesPanel({ inicial }: LimitesPanelProps) {
+export function JuegoResponsableSection({ inicial }: Props) {
   const [limites, setLimites] = useState(inicial);
   const [mensual, setMensual] = useState(inicial.limiteMensualCompra);
   const [diario, setDiario] = useState(inicial.limiteDiarioTickets);
@@ -137,14 +135,14 @@ export function LimitesPanel({ inicial }: LimitesPanelProps) {
         {msg ? <span className="text-xs text-muted-d">{msg}</span> : null}
       </div>
 
-      <PmenuItem
+      <MenuItem
         icon="🛑"
         label="Auto-exclusión temporal"
         sub="Bloquea tu cuenta por 7, 30 o 90 días"
         onClick={() => setOpenExc(true)}
         disabled={Boolean(excluido)}
       />
-      <PmenuItem
+      <MenuItem
         icon="📞"
         label="Recursos y ayuda"
         sub="Si sientes que el juego te afecta, podemos ayudarte"
@@ -201,66 +199,6 @@ function LimitRow({
       </div>
       <div className="mt-1.5 text-[11px] text-muted-d">{usageText}</div>
     </div>
-  );
-}
-
-export function PmenuItem({
-  icon,
-  label,
-  sub,
-  onClick,
-  href,
-  disabled,
-}: {
-  icon: string;
-  label: string;
-  sub?: string;
-  onClick?: () => void;
-  href?: string;
-  disabled?: boolean;
-}) {
-  const inner = (
-    <>
-      <div
-        aria-hidden
-        className="flex h-[38px] w-[38px] flex-shrink-0 items-center justify-center rounded-sm bg-subtle text-base"
-      >
-        {icon}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-semibold text-dark">{label}</div>
-        {sub ? (
-          <div className="text-xs leading-[1.4] text-muted-d">{sub}</div>
-        ) : null}
-      </div>
-      <span aria-hidden className="flex-shrink-0 text-lg text-soft">
-        ›
-      </span>
-    </>
-  );
-  const cls =
-    "flex w-full items-center gap-3.5 border-b border-light px-5 py-3.5 text-left transition last:border-b-0 hover:bg-subtle disabled:opacity-50";
-  if (href) {
-    return (
-      <a
-        href={href}
-        target={href.startsWith("http") ? "_blank" : undefined}
-        rel={href.startsWith("http") ? "noopener noreferrer" : undefined}
-        className={cls}
-      >
-        {inner}
-      </a>
-    );
-  }
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={cls}
-    >
-      {inner}
-    </button>
   );
 }
 

@@ -11,15 +11,17 @@ function read(p: string): string {
 }
 
 describe("§14 — authedFetch en nuevos hooks/components", () => {
+  // Registro formal + rediseño `/perfil` (Abr 2026): los componentes fueron
+  // renombrados con nombres explícitos; la lista refleja los archivos
+  // vigentes tras la reescritura.
   const files = [
     "components/tienda/CanjearModal.tsx",
-    "components/perfil/VerificacionPanel.tsx",
-    "components/perfil/DatosPersonalesPanel.tsx",
-    "components/perfil/PreferenciasPanel.tsx",
-    "components/perfil/LimitesPanel.tsx",
-    // Rediseño mockup v1: DatosYPrivacidadPanel se absorbió en
-    // ProfileFooterSections (Seguridad / Ayuda / Legal / Danger zone).
-    "components/perfil/ProfileFooterSections.tsx",
+    "components/perfil/VerificacionSection.tsx",
+    "components/perfil/DatosSection.tsx",
+    "components/perfil/NotificacionesSection.tsx",
+    "components/perfil/JuegoResponsableSection.tsx",
+    "components/perfil/FooterSections.tsx",
+    "components/perfil/ConfirmarEliminarContent.tsx",
     "components/admin/AdminCanjesPanel.tsx",
   ];
 
@@ -27,17 +29,10 @@ describe("§14 — authedFetch en nuevos hooks/components", () => {
     it(`${f}: usa authedFetch para /api/v1/*`, () => {
       const src = read(f);
       expect(src).toMatch(/authedFetch/);
-      // No debe tener fetch directo al backend (excepto confirmar-eliminar
-      // que es pre-sesión)
-      expect(src).not.toMatch(/await\s+fetch\(["']\/api\/v1\//);
+      // Lookbehind excluye `authedFetch` (la `d` final precede a `fetch`).
+      expect(src).not.toMatch(/(?<![a-zA-Z])fetch\(["']\/api\/v1\//);
     });
   }
-
-  it("ConfirmarEliminarContent usa fetch directo porque actúa sin sesión (token en body)", () => {
-    const src = read("components/perfil/ConfirmarEliminarContent.tsx");
-    // Es legítimo aquí: el token en el body autentica por sí mismo.
-    expect(src).toMatch(/fetch\(["']\/api\/v1\//);
-  });
 });
 
 describe("§14 — nuevos RSC exportan force-dynamic cuando dependen de sesión", () => {
@@ -137,9 +132,9 @@ describe("Sub-Sprint 7 — PerfilRefreshOnUpdate pattern", () => {
     expect(src).toMatch(/router\.refresh/);
   });
 
-  it("VerificacionPanel y DatosPersonalesPanel disparan el evento", () => {
-    const verif = read("components/perfil/VerificacionPanel.tsx");
-    const datos = read("components/perfil/DatosPersonalesPanel.tsx");
+  it("VerificacionSection y DatosSection disparan el evento", () => {
+    const verif = read("components/perfil/VerificacionSection.tsx");
+    const datos = read("components/perfil/DatosSection.tsx");
     expect(verif).toMatch(/new Event\(["']perfil:refresh["']\)/);
     expect(datos).toMatch(/new Event\(["']perfil:refresh["']\)/);
   });

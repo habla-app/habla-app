@@ -1,6 +1,6 @@
 // Landing pública — comparte contenido con `/matches`. Data real desde el
 // servicio de torneos. Click en body del MatchCard → /torneo/{id}; click
-// en CTA "Crear combinada" → ComboModal inline (o /auth/login si no hay
+// en CTA "Crear combinada" → ComboModal inline (o /auth/signin si no hay
 // sesión, con callback a / preservando filtros + ?openCombo=<id>).
 //
 // Hotfix #7 Bug #17: `force-dynamic` por la misma razón que /matches —

@@ -1,20 +1,22 @@
 "use client";
-// DatosPersonalesPanel — filas editables al estilo mockup `.data-row`.
-// Click en "Editar" abre un input inline; el resto son display.
-// Email y fecha de nacimiento son inmutables (🔒).
-// PATCH /api/v1/usuarios/me via authedFetch al guardar cualquier campo.
+// DatosSection — mockup `.profile-section` "Datos personales" (línea
+// 3999). Filas: nombre, usuario (@handle, read-only), correo (locked),
+// teléfono (hint), fecha nac (locked), ubicación.
+//
+// Registro formal (Abr 2026): el @handle es INMUTABLE post-registro
+// (tooltip "Tu @handle es permanente"). Email y fecha nac ya eran locked.
+// PATCH /api/v1/usuarios/me ya no acepta username.
 
 import { useState } from "react";
 import { authedFetch } from "@/lib/api-client";
 import type { PerfilCompleto } from "@/lib/services/usuarios.service";
 import { SectionShell } from "./SectionShell";
 
-interface DatosPersonalesPanelProps {
+interface Props {
   perfil: PerfilCompleto;
-  onActualizar: () => void;
 }
 
-type CampoEditable = "nombre" | "username" | "ubicacion";
+type CampoEditable = "nombre" | "ubicacion";
 
 const FECHA_NAC_FMT = new Intl.DateTimeFormat("es-PE", {
   day: "numeric",
@@ -23,14 +25,10 @@ const FECHA_NAC_FMT = new Intl.DateTimeFormat("es-PE", {
   timeZone: "America/Lima",
 });
 
-export function DatosPersonalesPanel({
-  perfil,
-  onActualizar,
-}: DatosPersonalesPanelProps) {
+export function DatosSection({ perfil }: Props) {
   const [editing, setEditing] = useState<CampoEditable | null>(null);
   const [valores, setValores] = useState({
     nombre: perfil.nombre ?? "",
-    username: perfil.username ?? "",
     ubicacion: perfil.ubicacion ?? "",
   });
   const [cargando, setCargando] = useState(false);
@@ -53,7 +51,6 @@ export function DatosPersonalesPanel({
         return;
       }
       setEditing(null);
-      onActualizar();
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("perfil:refresh"));
       }
@@ -89,24 +86,10 @@ export function DatosPersonalesPanel({
         }
       />
       <DataRow
-        label="Usuario (ranking)"
-        value={perfil.username ? `@${perfil.username}` : "—"}
-        editing={editing === "username"}
-        onEdit={() => setEditing("username")}
-        onCancel={() => setEditing(null)}
-        onSave={() => guardar("username")}
-        input={
-          <input
-            type="text"
-            placeholder="tu_handle"
-            value={valores.username}
-            onChange={(e) =>
-              setValores((v) => ({ ...v, username: e.target.value.toLowerCase() }))
-            }
-            className="w-full rounded-sm border border-light px-3 py-1.5 text-sm"
-            autoFocus
-          />
-        }
+        label="Usuario (@handle)"
+        value={`@${perfil.username}`}
+        locked
+        hint="Tu @handle es permanente"
       />
       <DataRow label="Correo" value={perfil.email} locked />
       <DataRow
@@ -214,7 +197,10 @@ function DataRow({
             ) : null}
           </div>
           {locked ? (
-            <span className="flex-shrink-0 cursor-default rounded-sm bg-transparent px-2.5 py-1.5 text-[11px] text-muted-d">
+            <span
+              title={hint}
+              className="flex-shrink-0 cursor-default rounded-sm bg-transparent px-2.5 py-1.5 text-[11px] text-muted-d"
+            >
               🔒 Bloqueado
             </span>
           ) : onEdit ? (

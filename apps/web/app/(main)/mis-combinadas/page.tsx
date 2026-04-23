@@ -45,7 +45,7 @@ function estadoToQuery(
 export default async function MisCombinadasPage({ searchParams }: Props) {
   const session = await auth();
   if (!session?.user?.id) {
-    redirect("/auth/login?callbackUrl=/mis-combinadas");
+    redirect("/auth/signin?callbackUrl=/mis-combinadas");
   }
   const tab = resolveTab(searchParams?.tab);
   const [activasRes, ganadasRes, historialRes, stats] = await Promise.all([

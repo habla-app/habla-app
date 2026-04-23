@@ -1,8 +1,19 @@
-// Custom NextAuth adapter que se mapea al modelo `Usuario` con campo `nombre`.
-// El PrismaAdapter oficial asume model `User` con campo `name`; aqui adaptamos
-// sin renombrar la tabla ni los campos existentes del dominio.
+// Custom NextAuth adapter — mapea el modelo `Usuario` (campo `nombre`) al
+// contrato adapter de NextAuth (`name`). Soporta magic link (Resend) y
+// OAuth (Google).
 //
-// Solo implementa lo necesario para Resend (magic link) + session JWT.
+// Registro formal (Abr 2026): ahora `username` es NOT NULL. Cuando NextAuth
+// pide createUser (OAuth primera vez, o magic-link sin flujo previo),
+// asignamos un handle temporal `new_<hex>` con `usernameLocked=false`. El
+// middleware fuerza al usuario a `/auth/completar-perfil` antes de dejarlo
+// entrar al grupo `(main)`. En el flujo de email signup (POST
+// /api/v1/auth/signup) el usuario ya llega creado con username real +
+// `usernameLocked=true`, así que aquí solo cae el OAuth.
+
+// Usamos Web Crypto (globalThis.crypto) en vez de `node:crypto` para que
+// el módulo también pueda bundlearse en edge runtime (middleware.ts lo
+// arrastra indirectamente via auth.ts). `node:crypto` revienta el build
+// de Next en edge — Web Crypto está disponible en ambos runtimes.
 import type { Adapter, AdapterUser } from "next-auth/adapters";
 import { prisma, type Usuario } from "@habla/db";
 
@@ -18,21 +29,53 @@ function toAdapterUser(u: Usuario): AdapterUser {
   };
 }
 
+/** Genera N bytes random como hex usando Web Crypto. */
+function randomHex(bytes: number): string {
+  const buf = new Uint8Array(bytes);
+  globalThis.crypto.getRandomValues(buf);
+  return Array.from(buf)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/**
+ * Genera un username temporal único con formato `new_<hex6>`. Reintenta
+ * hasta 5 veces en caso de colisión (altamente improbable).
+ */
+async function generarUsernameTemporal(): Promise<string> {
+  for (let i = 0; i < 5; i++) {
+    const candidato = `new_${randomHex(3)}`;
+    const existe = await prisma.usuario.findUnique({
+      where: { username: candidato },
+      select: { id: true },
+    });
+    if (!existe) return candidato;
+  }
+  // Fallback con más entropía
+  return `new_${randomHex(6)}`;
+}
+
 export function HablaPrismaAdapter(): Adapter {
   return {
     async createUser(data) {
-      // Crear usuario + 500 Lukas de bienvenida en transaccion atomica.
+      // Flujo OAuth (o magic-link sin signup previo): el usuario no tiene
+      // @handle aún — asignamos temporal + bonus de bienvenida en una
+      // transacción atómica. El middleware lo ruteará a `/auth/completar-perfil`.
       const email = data.email.toLowerCase();
       const nombre = data.name ?? email.split("@")[0];
 
       const existente = await prisma.usuario.findUnique({ where: { email } });
       if (existente) return toAdapterUser(existente);
 
+      const usernameTemporal = await generarUsernameTemporal();
+
       const usuario = await prisma.$transaction(async (tx) => {
         const creado = await tx.usuario.create({
           data: {
             email,
             nombre,
+            username: usernameTemporal,
+            usernameLocked: false,
             balanceLukas: BONUS_BIENVENIDA_LUKAS,
             emailVerified: data.emailVerified,
             image: data.image,

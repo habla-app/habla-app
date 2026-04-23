@@ -8,7 +8,7 @@
 //  - `confirmarEliminarCuenta(token)` → anonimiza PII, marca deletedAt
 //  - `generarExportDatos(usuarioId)` → ZIP con datos del usuario (JSON)
 
-import { prisma, Prisma } from "@habla/db";
+import { prisma } from "@habla/db";
 import crypto from "node:crypto";
 import { DomainError, NoAutenticado, ValidacionFallida } from "./errors";
 import { logger } from "./logger";
@@ -23,6 +23,7 @@ import {
   notifyDatosDescargados,
   notifySolicitudEliminar,
 } from "./notificaciones.service";
+import { esReservado } from "../config/usernames-reservados";
 
 // ---------------------------------------------------------------------------
 // Perfil
@@ -32,7 +33,14 @@ export interface PerfilCompleto {
   id: string;
   email: string;
   nombre: string;
-  username: string | null;
+  /** @handle público único. NOT NULL en BD desde el registro formal
+   *  (Abr 2026) — siempre es string. */
+  username: string;
+  /** true si el @handle ya fue elegido por el usuario (post-signup o
+   *  post-completar-perfil). false mientras es temporal `new_<hex>`. */
+  usernameLocked: boolean;
+  /** Timestamp de aceptación de T&C + mayoría de edad. */
+  tycAceptadosAt: Date | null;
   telefono: string | null;
   telefonoVerif: boolean;
   dniVerif: boolean;
@@ -60,6 +68,8 @@ export async function obtenerMiPerfil(usuarioId: string): Promise<PerfilCompleto
       email: true,
       nombre: true,
       username: true,
+      usernameLocked: true,
+      tycAceptadosAt: true,
       telefono: true,
       telefonoVerif: true,
       dniVerif: true,
@@ -91,6 +101,8 @@ export async function obtenerMiPerfil(usuarioId: string): Promise<PerfilCompleto
     email: usuario.email,
     nombre: usuario.nombre,
     username: usuario.username,
+    usernameLocked: usuario.usernameLocked,
+    tycAceptadosAt: usuario.tycAceptadosAt,
     telefono: usuario.telefono,
     telefonoVerif: usuario.telefonoVerif,
     dniVerif: usuario.dniVerif,
@@ -113,79 +125,44 @@ export async function obtenerMiPerfil(usuarioId: string): Promise<PerfilCompleto
 
 export interface ActualizarPerfilInput {
   nombre?: string;
-  username?: string;
   ubicacion?: string;
   telefono?: string;
   image?: string;
 }
 
-const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/i;
-
 export async function actualizarPerfil(
   usuarioId: string,
   patch: ActualizarPerfilInput,
 ): Promise<PerfilCompleto> {
-  // Validaciones
+  // Registro formal (Abr 2026): `username` ya NO es editable post-registro.
+  // El @handle se elige una sola vez (en /auth/signup o /auth/completar-perfil)
+  // y queda inmutable. El service solo permite nombre, ubicación, teléfono
+  // e imagen — intentar pasar username desde un caller legacy sería un bug.
   if (patch.nombre !== undefined && patch.nombre.trim().length < 2) {
     throw new ValidacionFallida("El nombre debe tener al menos 2 caracteres.", {
       field: "nombre",
     });
   }
-  if (patch.username !== undefined) {
-    const u = patch.username.trim().toLowerCase();
-    if (!USERNAME_REGEX.test(u)) {
-      throw new ValidacionFallida(
-        "El usuario debe tener 3-20 caracteres (letras, números, guión bajo).",
-        { field: "username" },
-      );
-    }
-    // Verificar que no esté tomado por otro usuario
-    const existente = await prisma.usuario.findFirst({
-      where: { username: u, id: { not: usuarioId } },
-      select: { id: true },
-    });
-    if (existente) {
-      throw new DomainError(
-        "USERNAME_EN_USO",
-        "Ese nombre de usuario ya está tomado.",
-        409,
-        { field: "username" },
-      );
-    }
-    patch = { ...patch, username: u };
-  }
 
-  try {
-    await prisma.usuario.update({
-      where: { id: usuarioId },
-      data: {
-        ...(patch.nombre !== undefined ? { nombre: patch.nombre.trim() } : {}),
-        ...(patch.username !== undefined ? { username: patch.username } : {}),
-        ...(patch.ubicacion !== undefined
-          ? { ubicacion: patch.ubicacion.trim() || null }
-          : {}),
-        ...(patch.telefono !== undefined
-          ? { telefono: patch.telefono.trim() || null, telefonoVerif: false }
-          : {}),
-        ...(patch.image !== undefined ? { image: patch.image } : {}),
-      },
-    });
-  } catch (err) {
-    if (
-      err instanceof Prisma.PrismaClientKnownRequestError &&
-      err.code === "P2002"
-    ) {
-      throw new DomainError(
-        "USERNAME_EN_USO",
-        "Ese nombre de usuario ya está tomado.",
-        409,
-      );
-    }
-    throw err;
-  }
+  await prisma.usuario.update({
+    where: { id: usuarioId },
+    data: {
+      ...(patch.nombre !== undefined ? { nombre: patch.nombre.trim() } : {}),
+      ...(patch.ubicacion !== undefined
+        ? { ubicacion: patch.ubicacion.trim() || null }
+        : {}),
+      ...(patch.telefono !== undefined
+        ? { telefono: patch.telefono.trim() || null, telefonoVerif: false }
+        : {}),
+      ...(patch.image !== undefined ? { image: patch.image } : {}),
+    },
+  });
 
   return obtenerMiPerfil(usuarioId);
 }
+
+// Re-export para consumo desde tests sin drift contra la misma constante.
+export { esReservado };
 
 // ---------------------------------------------------------------------------
 // Eliminar cuenta (soft delete)
@@ -265,12 +242,18 @@ export async function confirmarEliminarCuenta(
     });
 
     const anonEmail = `deleted-${solicitud.usuarioId.slice(0, 8)}-${Date.now()}@deleted.habla.local`;
+    // Registro formal (Abr 2026): `username` es NOT NULL. Para soft-delete
+    // asignamos un handle anonimizado único `deleted_<hex10>` que no
+    // coincide con la regex de usernames válidos (underscore + lowercase
+    // hex, pero el prefijo `deleted_` lo hace no reclamable).
+    const anonUsername = `deleted_${solicitud.usuarioId.slice(0, 10)}`;
     await tx.usuario.update({
       where: { id: solicitud.usuarioId },
       data: {
         nombre: "Usuario eliminado",
         email: anonEmail,
-        username: null,
+        username: anonUsername,
+        usernameLocked: true,
         telefono: null,
         ubicacion: null,
         image: null,

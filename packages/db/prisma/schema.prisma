@@ -15,7 +15,13 @@ model Usuario {
   id           String    @id @default(cuid())
   email        String    @unique
   nombre       String
-  username     String?   @unique // @handle público para ranking/inscritos (Sub-Sprint 7)
+  // @handle público para ranking/inscritos. Registro formal (Abr 2026):
+  // ahora es NOT NULL, único, lowercase, 3-20 chars, regex ^[a-z0-9_]+$.
+  // Al crear vía OAuth sin elegir handle se asigna un temporal "new_<hex>"
+  // y usernameLocked=false — middleware fuerza a /auth/completar-perfil.
+  username       String   @unique
+  usernameLocked Boolean  @default(false) // true tras completar-perfil: @handle inmutable
+  tycAceptadosAt DateTime? // timestamp de aceptación de T&C + mayoría de edad
   telefono     String?
   telefonoVerif Boolean  @default(false) // Sub-Sprint 7
   dniVerif     Boolean   @default(false) // Sub-Sprint 7 — requerido para canjes > S/500

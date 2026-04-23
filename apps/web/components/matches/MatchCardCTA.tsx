@@ -6,7 +6,7 @@
 // del MatchCard server component, lo que forzaba al usuario a navegar
 // para armar su combinada. Ahora:
 //   - Con sesión  → botón que abre ComboModal en el mismo /matches.
-//   - Sin sesión  → link a /auth/login?callbackUrl=/matches?openCombo=<id>.
+//   - Sin sesión  → link a /auth/signin?callbackUrl=/matches?openCombo=<id>.
 //                   Post-login el AutoOpenComboFromQuery lee ese query
 //                   param y re-abre el modal automáticamente.
 //
@@ -44,7 +44,7 @@ export function MatchCardCTA({
   if (!hasSession) {
     return (
       <Link
-        href={`/auth/login?callbackUrl=${encodeURIComponent(callbackUrl)}`}
+        href={`/auth/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`}
         aria-label="Crear combinada"
         data-testid="match-card-cta"
         className={MATCH_CARD_CTA_CLASSES}

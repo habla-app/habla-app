@@ -31,7 +31,7 @@ export default function AuthErrorPage({ searchParams }: ErrorPageProps) {
           Algo salió mal
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-body">{mensaje}</p>
-        <Link href="/auth/login" className="mt-6 inline-block">
+        <Link href="/auth/signin" className="mt-6 inline-block">
           <Button variant="primary" size="lg">
             Intentar de nuevo
           </Button>

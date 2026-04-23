@@ -29,7 +29,9 @@ async function main() {
     create: {
       email: "admin@habla.pe",
       nombre: "Admin Habla",
-      username: "admin",
+      username: "admin_habla",
+      usernameLocked: true,
+      tycAceptadosAt: new Date(),
       rol: "ADMIN",
       verificado: true,
       balanceLukas: 0,
