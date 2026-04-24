@@ -1,7 +1,7 @@
 # CLAUDE.md — Habla! App
 
 > Contexto operativo del proyecto. El historial detallado de bugs vive en `CHANGELOG.md` y en `git log`.
-> Última actualización: 21 Abr 2026.
+> Última actualización: 24 Abr 2026.
 
 ---
 
@@ -13,7 +13,7 @@ WebApp de torneos de predicciones sobre partidos de fútbol, mercado peruano. Lo
 
 **Fecha límite inamovible:** 11 de junio de 2026 — Día 1 del Mundial FIFA 2026.
 
-**URL producción:** `https://habla-app-production.up.railway.app`
+**URL producción:** `https://hablaplay.com` (Cloudflare DNS + proxy → Railway). Host alterno activo: `https://www.hablaplay.com`.
 
 ---
 
@@ -171,7 +171,8 @@ Schema completo en `packages/db/prisma/schema.prisma`. Modelos principales:
 - Middleware bloquea el grupo `(main)` si `session.user.usernameLocked === false` → redirect a `/auth/completar-perfil?callbackUrl=<ruta>` (OAuth primera vez sin @handle definitivo).
 
 ### Seguridad
-- Rate limiting 60 req/min por IP.
+- Rate limiting en middleware edge (Lote 1) con tiers: `/api/auth/*` 10/min·IP, tickets + inscribir 30/min·usuario, resto `/api/*` 60/min·IP. Excluidos: `/api/health`, `/api/debug/*`, webhooks. Detalle en §16.
+- Headers de seguridad globales (HSTS, XFO, XCTO, Referrer-Policy, Permissions-Policy, CSP en Report-Only). Detalle en §16.
 - Verificación email obligatoria para comprar Lukas.
 
 ---
@@ -246,6 +247,7 @@ pnpm exec tsc --noEmit
 - **Sub-Sprint 7 — Perfil + Juego responsable:** `/perfil` completo (verificación teléfono/DNI, 7 toggles de notif, límites de compra/tickets, auto-exclusión, eliminar cuenta soft-delete, exportar datos). Niveles 🥉/🥈/🥇/👑 por torneos jugados (`lib/utils/nivel.ts`). Rediseño motivacional de `/torneo/:id` con lista de inscritos, pozo sin tecnicismos, CTA estelar adaptativo.
 - **Rediseño mockup v1 (Abr 2026):** re-alineamiento visual 1:1 de `/wallet`, `/tienda`, `/mis-combinadas`, tabs de `/live-match` y `/perfil` al mockup. Tokens `medal.silver/bronze` actualizados al mockup (`#C0C0C0`, `#CD7F32`). Nuevo service `wallet-view.service.ts` (SSR: totales por tipo + próximo vencimiento + historial). Componentes nuevos: `WalletView`/`TxList`/`MovesFilter`/`BuyPacksPlaceholder` en wallet, `HistoryList` (tab historial expandible) en tickets, `SectionShell` + `ProfileFooterSections` en perfil (absorbe `DatosYPrivacidadPanel`). Delta de posición ↑↓= en `RankingTable` vía `useRef` local. Backend, stores, WS y endpoints intactos.
 - **Registro formal + rediseño `/perfil` (Abr 2026):** dos rutas separadas `/auth/signin` y `/auth/signup` + `/auth/completar-perfil` para OAuth nuevo. Google provider sumado a NextAuth v5. `username` pasa a NOT NULL + unique, con flag `usernameLocked` (true tras elegir @handle) y `tycAceptadosAt` para audit de T&C. Middleware bloquea `(main)` si `usernameLocked=false` → forza a `/auth/completar-perfil`. Endpoints nuevos: `GET /auth/username-disponible`, `POST /auth/signup`, `POST /auth/completar-perfil`. `/perfil` fue reescrito desde cero (nuevos componentes `VerificacionSection`/`DatosSection`/`NotificacionesSection`/`JuegoResponsableSection`/`FooterSections`); servicios, endpoints y modelos preservados. `@username` reemplaza a `nombre` en NavBar/UserMenu/RankingTable/InscritosList. `PATCH /usuarios/me` ya NO acepta username (inmutable post-registro). Migración destructiva — reset de BD acordado.
+- **Lote 1 — Observabilidad y seguridad base (Abr 2026):** dominio propio `hablaplay.com` + `www.hablaplay.com` vía Cloudflare (SSL Full Strict, proxied, WebSockets OK). `/api/health` con checks paralelos de Postgres + Redis (timeout 3s) para Uptime Robot. `@sentry/nextjs` integrado en browser/server/edge leyendo `SENTRY_DSN`; endpoint `/api/debug/sentry-test` con guard por header secret. Headers de seguridad globales en `next.config.js` (HSTS preload, XFO DENY, nosniff, Referrer-Policy, Permissions-Policy, CSP en Report-Only con whitelist de PostHog/Sentry/Google/Culqi/api-football/Resend). Rate limiting in-memory en middleware edge con 3 tiers (auth 10/min·IP, críticos 30/min·usuario, resto 60/min·IP). `public/.well-known/security.txt` para disclosure. Detalles operacionales en §16, env vars en §17.
 - **Ajustes UX sidebar + wallet + perfil (Abr 2026):** Sidebar de `/matches` y `/` reordenado — widget #2 es **"Los Pozos más grandes de la semana"** (torneos de la semana calendario ordenados por `pozoBruto` DESC, TOP 5) y widget #5 es **"Los más pagados de la semana"** (suma de `TransaccionLukas.monto` con tipo `PREMIO_TORNEO` por usuario en la semana, TOP 10); ventana lunes→domingo via `datetime.ts:getWeekBounds`. Balance widget rediseñado (tipografía 52px + border gold + CTA único a `/wallet`). En `/torneo/:id` el CTA desktop vive en la sidebar derecha sobre `RulesCard`. Modal post-envío de combinada invierte énfasis: primario = "Crear otra combinada" (reset), secundario = "Ver mis combinadas" (link). `/wallet` — filtro "Inscripciones" ahora enriquece cada transacción con `partido` (vía `refId → Torneo → Partido`) y muestra el resumen `Local 2-1 Visita` en la lista. Usernames case-sensitive para display, unicidad case-insensitive en BD (regex `^[a-zA-Z0-9_]+$`); filtro `lib/utils/username-filter.ts:esUsernameOfensivo` bloquea slurs + leet-speak básico en los 3 endpoints de auth. `VerificacionSection` actualiza copy DNI a "Requerido para canjear cualquier premio.". `DatosSection` muestra "Por completar" cuando `nombre` está vacío o coincide con el `username`; adapter OAuth ya no copia email/username al nombre. Minuto en vivo simplificado: `getMinutoLabel({ statusShort, minuto, extra })` + propagación de `status.extra` (injury time "45+3'") desde api-football al cache, WS y endpoints REST.
 
 ### ⏳ Pendiente
@@ -507,7 +509,7 @@ Socket.io montado sobre custom Next server (`apps/web/server.ts`). Path `/socket
 
 Al 5 de junio, un usuario peruano cualquiera debe poder en una sola sesión:
 
-1. Entrar a `habla-app-production.up.railway.app`
+1. Entrar a `hablaplay.com`
 2. Ver torneos disponibles sin cuenta
 3. Crear cuenta por Google o magic link + elegir @handle → recibir 500 Lukas de bienvenida
 4. Comprar 100 Lukas con tarjeta sandbox (→ 615 con bonus) ⏳ pendiente SS2
@@ -521,3 +523,63 @@ Al 5 de junio, un usuario peruano cualquiera debe poder en una sola sesión:
 12. Cerrar sesión y volver al día siguiente
 
 Si estas 12 acciones funcionan end-to-end, **el MVP está listo para el Mundial**.
+
+---
+
+## 16. INFRAESTRUCTURA DE PRODUCCIÓN
+
+Baseline operacional activo tras Lote 1 (Abr 2026).
+
+| Servicio | Propósito | Config |
+|---|---|---|
+| Cloudflare (DNS + proxy) | SSL Full Strict, WAF, WebSockets sobre `hablaplay.com` y `www.hablaplay.com` | Proxied, DNS auto vía integración Railway |
+| Sentry | Error tracking browser / server / edge | `SENTRY_DSN` en env, proyecto `habla-web-prod`, 3 alertas base |
+| Uptime Robot | Uptime monitoring cada 5 min | 3 monitores: `/`, `/api/health`, `/auth/signin` |
+| PostHog | Analytics (integración pendiente Lote 2) | Keys en env, no cableado aún |
+| Cloudflare Email Routing | Email entrante `@hablaplay.com` | `soporte@`, `hola@`, `legal@`, catch-all → `hablaplay@gmail.com` |
+| Railway Backups nativos | DB recovery | 3 schedules: Daily / Weekly / Monthly |
+| R2 `habla-db-backups` | Backup externo (pendiente Lote 4) | Bucket creado, credenciales en 1Password |
+| Google Search Console | SEO + ownership | `hablaplay.com` verificado via Cloudflare |
+
+### Endpoints de infra
+- `GET /api/health` — para Uptime Robot. Chequea Postgres (`SELECT 1`) y Redis (`PING`) en paralelo con timeout 3s. Respuesta `200 {"status":"ok"}` o `503 {"status":"error",...}` identificando el check caído. `Cache-Control: no-store`. Excluido del rate limit.
+- `GET /api/debug/sentry-test` — dispara error controlado para verificar captura de Sentry. Guard doble: `SENTRY_DEBUG_TOKEN` presente en env + header `X-Debug-Token` matcheando. Sin match → 404. Borrable cuando ya no se use.
+
+### Headers de seguridad
+Aplicados globalmente vía `next.config.js` → `headers()`:
+- `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload`
+- `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Permissions-Policy`: niega `camera`, `microphone`, `geolocation`, `interest-cohort`
+- `Content-Security-Policy-Report-Only` con whitelist: PostHog, Sentry, Google OAuth, Culqi, api-football, Resend, WSS propios. Migrar a enforcing en lote futuro tras validar reportes.
+- `public/.well-known/security.txt` → `legal@hablaplay.com` para vulnerabilidades.
+
+Objetivo: A+ en securityheaders.com.
+
+### Rate limiting
+Middleware edge (`apps/web/middleware.ts` + `lib/rate-limit.ts`) con sliding-window in-memory. Ventana 1 min:
+- `/api/auth/*`: 10 req/min por IP
+- `/api/v1/tickets/*` y `/api/v1/torneos/*/inscribir`: 30 req/min por usuario
+- Resto `/api/*`: 60 req/min por IP
+- Excluidos: `/api/health`, `/api/debug/*`, `/api/v1/webhooks/*` (HMAC en su handler)
+
+Respuesta 429 con `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`. Violaciones se reportan a Sentry como `warning`. CAVEAT: store in-memory → correcto solo con 1 réplica (realidad hoy). Al escalar, migrar a Redis (ioredis con INCR+EXPIRE o Upstash via HTTP).
+
+---
+
+## 17. ENV VARS DE PRODUCCIÓN
+
+Ya pobladas en Railway (valores en el service vault — no acá):
+
+```
+NEXTAUTH_URL=https://hablaplay.com
+NEXT_PUBLIC_APP_URL=https://hablaplay.com
+SENTRY_DSN=<configured>
+NEXT_PUBLIC_POSTHOG_KEY=<configured>
+NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
+```
+
+Nueva en Lote 1:
+- `SENTRY_DEBUG_TOKEN` — opcional; header secret para `/api/debug/sentry-test`. Sin este valor el endpoint responde 404.
+
+El listado completo de vars (incluidas las de dev) vive en `.env.example`.
