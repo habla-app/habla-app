@@ -27,6 +27,55 @@ const nextConfig = {
     }
     return config;
   },
+
+  // -------------------------------------------------------------------
+  // Headers de seguridad globales (Lote 1 — Observabilidad y seguridad).
+  //
+  // CSP va en modo Report-Only primero — cualquier violación solo se
+  // reporta, no bloquea recursos. Una vez verificado en prod que nada
+  // se rompe (revisar consola unos días), migrar a enforcing en un
+  // lote futuro.
+  //
+  // `'unsafe-inline'` en script-src y style-src es necesario porque
+  // Next.js inyecta scripts/estilos inline para hidratación. Migrar a
+  // nonces es un lift no trivial y queda para después.
+  // -------------------------------------------------------------------
+  async headers() {
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.posthog.com https://*.sentry.io https://*.sentry-cdn.com https://accounts.google.com https://apis.google.com https://*.culqi.com",
+      "connect-src 'self' https://*.posthog.com https://*.sentry.io https://*.ingest.sentry.io https://*.api-sports.io https://api.resend.com https://*.culqi.com wss://hablaplay.com wss://www.hablaplay.com",
+      "img-src 'self' data: https:",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' data: https://fonts.gstatic.com",
+      "frame-src 'self' https://*.culqi.com https://accounts.google.com",
+      "frame-ancestors 'none'",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self' https://accounts.google.com",
+    ].join("; ");
+
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          {
+            key: "Strict-Transport-Security",
+            value: "max-age=63072000; includeSubDomains; preload",
+          },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          {
+            key: "Permissions-Policy",
+            value:
+              "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+          },
+          { key: "Content-Security-Policy-Report-Only", value: csp },
+        ],
+      },
+    ];
+  },
 };
 
 // Envoltura Sentry (Lote 1 — observabilidad). Se aplica solo en
