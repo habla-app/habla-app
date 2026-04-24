@@ -5,10 +5,11 @@
 // (NextAuth update) para propagar usernameLocked=true y redirige al
 // callbackUrl.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { authedFetch } from "@/lib/api-client";
+import { track } from "@/lib/analytics";
 import { Button } from "@/components/ui";
 import { UsernameInput } from "./UsernameInput";
 import { TycCheckbox } from "./TycCheckbox";
@@ -25,6 +26,16 @@ export function CompletarPerfilForm({ callbackUrl = "/" }: Props) {
   const [aceptaTyc, setAceptaTyc] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Llegar a este formulario == OAuth Google nuevo (middleware garantiza que
+// solo usernameLocked=false entra). Disparamos signup_completed una única
+// vez en el mount — Google emails vienen ya verificados, así que también
+// disparamos email_verified acá.
+  useEffect(() => {
+    track("signup_completed", { method: "google" });
+    track("email_verified", {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const canSubmit =
     username.length >= 3 && usernameValido && aceptaTyc && !cargando;
@@ -52,6 +63,7 @@ export function CompletarPerfilForm({ callbackUrl = "/" }: Props) {
         setCargando(false);
         return;
       }
+      track("profile_completed", {});
       // Refrescar session para que usernameLocked=true llegue al cliente
       // (esto dispara el jwt callback con trigger='update').
       await update();

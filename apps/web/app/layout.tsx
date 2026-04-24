@@ -3,8 +3,10 @@
 // BottomNav) vive en los layouts hijos ((main), auth, admin).
 import type { Metadata, Viewport } from "next";
 import { Barlow_Condensed, DM_Sans } from "next/font/google";
+import { Suspense } from "react";
 import { ToastProvider } from "@/components/ui";
 import { SessionProviderClient } from "@/components/auth/SessionProviderClient";
+import { PostHogProvider } from "@/components/analytics/PostHogProvider";
 import "./globals.css";
 
 const barlow = Barlow_Condensed({
@@ -44,7 +46,11 @@ export default function RootLayout({
     <html lang="es" className={`${barlow.variable} ${dmSans.variable}`}>
       <body className="font-body antialiased">
         <SessionProviderClient>
-          <ToastProvider>{children}</ToastProvider>
+          <Suspense fallback={null}>
+            <PostHogProvider>
+              <ToastProvider>{children}</ToastProvider>
+            </PostHogProvider>
+          </Suspense>
         </SessionProviderClient>
       </body>
     </html>

@@ -4,6 +4,7 @@
 // Deja la UI lista, basta con cablear el handler en SS2.
 
 import { useState } from "react";
+import { track } from "@/lib/analytics";
 
 interface Pack {
   id: "pack20" | "pack50" | "pack100" | "pack250";
@@ -63,7 +64,16 @@ export function BuyPacksPlaceholder() {
             key={pack.id}
             pack={pack}
             selected={selected === pack.id}
-            onSelect={() => setSelected(pack.id)}
+            onSelect={() => {
+              setSelected(pack.id);
+              // Analytics: abrir flujo de compra para este pack. `amount` es
+              // en soles (1 Luka = S/1). Culqi real llega con SS2 — entonces
+              // cableamos `lukas_purchase_completed` / `_failed`.
+              track("lukas_purchase_started", {
+                pack_id: pack.id,
+                amount: pack.price,
+              });
+            }}
           />
         ))}
       </div>

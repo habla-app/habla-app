@@ -11,6 +11,7 @@ import { useState } from "react";
 import { Modal, ModalHeader, ModalBody, ModalFooter } from "@/components/ui/Modal";
 import type { PremioDTO } from "@/lib/services/premios.service";
 import { authedFetch } from "@/lib/api-client";
+import { track } from "@/lib/analytics";
 import { useLukasStore } from "@/stores/lukas.store";
 
 interface CanjearModalProps {
@@ -68,6 +69,10 @@ export function CanjearModal({
         return;
       }
       setBalance(json.data.nuevoBalance);
+      track("canje_solicitado", {
+        premio_id: premio.id,
+        costo_lukas: premio.costeLukas,
+      });
       setStatus("success");
     } catch (e) {
       setError("Error de red. Intenta de nuevo.");

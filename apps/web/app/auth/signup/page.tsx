@@ -9,6 +9,7 @@
 import Link from "next/link";
 import { SignupForm } from "@/components/auth/SignupForm";
 import { GoogleButton } from "@/components/auth/GoogleButton";
+import { TrackOnMount } from "@/components/analytics/TrackOnMount";
 
 interface PageProps {
   searchParams: { callbackUrl?: string; email?: string };
@@ -22,6 +23,10 @@ export default function SignUpPage({ searchParams }: PageProps) {
 
   return (
     <div className="w-full max-w-[460px]">
+      <TrackOnMount
+        event="signup_started"
+        props={{ source: searchParams.callbackUrl ?? "direct" }}
+      />
       <div className="rounded-lg border border-light bg-card p-10 shadow-lg">
         <div aria-hidden className="text-center text-[56px] leading-none">
           ⊕

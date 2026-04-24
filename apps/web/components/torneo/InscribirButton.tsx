@@ -16,6 +16,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui";
 import { authedFetch } from "@/lib/api-client";
+import { track } from "@/lib/analytics";
 
 interface InscribirButtonProps {
   torneoId: string;
@@ -86,6 +87,24 @@ export function InscribirButton({
         setLoading(false);
         return;
       }
+      // Analytics: primer ticket del usuario en general? Heurística via
+      // localStorage — el flag se setea tras la primera inscripción exitosa.
+      let esPrimerTicketUsuario = false;
+      try {
+        const flag = window.localStorage.getItem("habla:first_inscripcion_done");
+        if (!flag) {
+          esPrimerTicketUsuario = true;
+          window.localStorage.setItem("habla:first_inscripcion_done", "1");
+        }
+      } catch {
+        /* storage bloqueado */
+      }
+      track("torneo_inscripto", {
+        torneo_id: torneoId,
+        ticket_id: payload?.data?.ticket?.id ?? null,
+        costo_lukas: entradaLukas,
+        es_primer_ticket_usuario: esPrimerTicketUsuario,
+      });
       toast.show("✅ Inscripción exitosa. Armá tu combinada en breve.");
       // router.refresh re-ejecuta el server component del detalle (actualiza
       // balance mostrado, totalInscritos, etc.).
