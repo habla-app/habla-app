@@ -1,7 +1,7 @@
 # CLAUDE.md — Habla! App
 
 > Contexto operativo del proyecto. El historial detallado de bugs vive en `CHANGELOG.md` y en `git log`.
-> Última actualización: 24 Abr 2026.
+> Última actualización: 24 Abr 2026 (Lote 2 — Analytics y SEO).
 
 ---
 
@@ -248,6 +248,7 @@ pnpm exec tsc --noEmit
 - **Rediseño mockup v1 (Abr 2026):** re-alineamiento visual 1:1 de `/wallet`, `/tienda`, `/mis-combinadas`, tabs de `/live-match` y `/perfil` al mockup. Tokens `medal.silver/bronze` actualizados al mockup (`#C0C0C0`, `#CD7F32`). Nuevo service `wallet-view.service.ts` (SSR: totales por tipo + próximo vencimiento + historial). Componentes nuevos: `WalletView`/`TxList`/`MovesFilter`/`BuyPacksPlaceholder` en wallet, `HistoryList` (tab historial expandible) en tickets, `SectionShell` + `ProfileFooterSections` en perfil (absorbe `DatosYPrivacidadPanel`). Delta de posición ↑↓= en `RankingTable` vía `useRef` local. Backend, stores, WS y endpoints intactos.
 - **Registro formal + rediseño `/perfil` (Abr 2026):** dos rutas separadas `/auth/signin` y `/auth/signup` + `/auth/completar-perfil` para OAuth nuevo. Google provider sumado a NextAuth v5. `username` pasa a NOT NULL + unique, con flag `usernameLocked` (true tras elegir @handle) y `tycAceptadosAt` para audit de T&C. Middleware bloquea `(main)` si `usernameLocked=false` → forza a `/auth/completar-perfil`. Endpoints nuevos: `GET /auth/username-disponible`, `POST /auth/signup`, `POST /auth/completar-perfil`. `/perfil` fue reescrito desde cero (nuevos componentes `VerificacionSection`/`DatosSection`/`NotificacionesSection`/`JuegoResponsableSection`/`FooterSections`); servicios, endpoints y modelos preservados. `@username` reemplaza a `nombre` en NavBar/UserMenu/RankingTable/InscritosList. `PATCH /usuarios/me` ya NO acepta username (inmutable post-registro). Migración destructiva — reset de BD acordado.
 - **Lote 1 — Observabilidad y seguridad base (Abr 2026):** dominio propio `hablaplay.com` + `www.hablaplay.com` vía Cloudflare (SSL Full Strict, proxied, WebSockets OK). `/api/health` con checks paralelos de Postgres + Redis (timeout 3s) para Uptime Robot. `@sentry/nextjs` integrado en browser/server/edge leyendo `SENTRY_DSN`; endpoint `/api/debug/sentry-test` con guard por header secret. Headers de seguridad globales en `next.config.js` (HSTS preload, XFO DENY, nosniff, Referrer-Policy, Permissions-Policy, CSP en Report-Only con whitelist de PostHog/Sentry/Google/Culqi/api-football/Resend). Rate limiting in-memory en middleware edge con 3 tiers (auth 10/min·IP, críticos 30/min·usuario, resto 60/min·IP). `public/.well-known/security.txt` para disclosure. Detalles operacionales en §16, env vars en §17.
+- **Lote 2 — Analytics y SEO (Abr 2026):** PostHog integrado vía `lib/analytics.ts` (helper único) + `PostHogProvider` client con pageview manual, `identify()` en login, `reset()` en logout, opt-out en `/legal/*`. 13 eventos canónicos cableados (detalle en §18). SEO completo: `sitemap.ts` dinámico, `robots.ts`, metadata con OG + Twitter + `metadataBase`, `opengraph-image.tsx` edge-generado, `icon.tsx` + `apple-icon.tsx` placeholders, `manifest.ts` PWA con colores brand correctos (reemplaza `public/manifest.json` legacy). JSON-LD `SportsEvent` en `/torneo/[id]`. Detalle en §18 + §19, funnels en `docs/analytics-funnels.md`.
 - **Ajustes UX sidebar + wallet + perfil (Abr 2026):** Sidebar de `/matches` y `/` reordenado — widget #2 es **"Los Pozos más grandes de la semana"** (torneos de la semana calendario ordenados por `pozoBruto` DESC, TOP 5) y widget #5 es **"Los más pagados de la semana"** (suma de `TransaccionLukas.monto` con tipo `PREMIO_TORNEO` por usuario en la semana, TOP 10); ventana lunes→domingo via `datetime.ts:getWeekBounds`. Balance widget rediseñado (tipografía 52px + border gold + CTA único a `/wallet`). En `/torneo/:id` el CTA desktop vive en la sidebar derecha sobre `RulesCard`. Modal post-envío de combinada invierte énfasis: primario = "Crear otra combinada" (reset), secundario = "Ver mis combinadas" (link). `/wallet` — filtro "Inscripciones" ahora enriquece cada transacción con `partido` (vía `refId → Torneo → Partido`) y muestra el resumen `Local 2-1 Visita` en la lista. Usernames case-sensitive para display, unicidad case-insensitive en BD (regex `^[a-zA-Z0-9_]+$`); filtro `lib/utils/username-filter.ts:esUsernameOfensivo` bloquea slurs + leet-speak básico en los 3 endpoints de auth. `VerificacionSection` actualiza copy DNI a "Requerido para canjear cualquier premio.". `DatosSection` muestra "Por completar" cuando `nombre` está vacío o coincide con el `username`; adapter OAuth ya no copia email/username al nombre. Minuto en vivo simplificado: `getMinutoLabel({ statusShort, minuto, extra })` + propagación de `status.extra` (injury time "45+3'") desde api-football al cache, WS y endpoints REST.
 
 ### ⏳ Pendiente
@@ -583,3 +584,68 @@ Nueva en Lote 1:
 - `SENTRY_DEBUG_TOKEN` — opcional; header secret para `/api/debug/sentry-test`. Sin este valor el endpoint responde 404.
 
 El listado completo de vars (incluidas las de dev) vive en `.env.example`.
+
+---
+
+## 18. ANALYTICS
+
+PostHog Cloud (proyecto `habla-production`). Init solo en producción con `NEXT_PUBLIC_POSTHOG_KEY` presente — dev/preview no disparan eventos.
+
+### Regla de integración
+**Todo pasa por `apps/web/lib/analytics.ts`.** Ningún componente importa `posthog-js` directo. Helper expone `track(event, props)`, `identify(userId, traits)`, `reset()`, `capturePageview(path)`. Así cambiar de sink (Mixpanel, GA4, Meta Pixel) es un solo archivo.
+
+### Eventos canónicos
+
+| Evento | Dónde | Props |
+|---|---|---|
+| `signup_started` | Mount `/auth/signup` | `source` |
+| `signup_completed` | POST signup ok (email) o mount completar-perfil (google) | `method` (email\|google) |
+| `email_verified` | Magic link vuelta (email) o mount completar-perfil (google) | — |
+| `profile_completed` | POST completar-perfil ok (google) o junto a signup (email) | — |
+| `lukas_purchase_started` | Click pack en `/wallet` | `pack_id`, `amount` |
+| `lukas_purchase_completed` | ⏳ SS2 Culqi | `pack_id`, `amount_lukas`, `amount_soles` |
+| `lukas_purchase_failed` | ⏳ SS2 Culqi | `pack_id`, `reason` |
+| `torneo_viewed` | Mount `/torneo/:id` | `torneo_id`, `partido`, `pozo_actual`, `inscritos` |
+| `torneo_inscripto` | POST inscribir ok / ComboModal sin placeholder | `torneo_id`, `ticket_id`, `costo_lukas`, `es_primer_ticket_usuario` |
+| `ticket_submitted` | POST `/tickets` ok | `torneo_id`, `ticket_id`, `predicciones_completadas` |
+| `premio_ganado` | Mount `/mis-combinadas` tab ganadas (dedup localStorage) | `torneo_id`, `posicion`, `lukas_ganados` |
+| `canje_solicitado` | POST canjear ok | `premio_id`, `costo_lukas` |
+| `tienda_viewed` | Mount `/tienda` | — |
+
+### Política
+- `person_profiles: "identified_only"` — no perfilamos anónimos.
+- Rutas `/legal/*` — no capturamos nada (opt-out en el helper).
+- `identify()` en callback de session authenticated; `reset()` en logout.
+- Pageview manual vía `PostHogProvider` (App Router no dispara `$pageview` automático).
+
+### Funnels + cohortes
+Referencia en `docs/analytics-funnels.md`. Configuración práctica (armar funnels, cohortes) se hace en el dashboard PostHog aparte.
+
+---
+
+## 19. SEO
+
+### Artefactos
+- `apps/web/app/sitemap.ts` → `/sitemap.xml` dinámico: home, matches, tienda, legales (placeholder Lote 3), torneos ABIERTO\|EN_JUEGO.
+- `apps/web/app/robots.ts` → `/robots.txt` con allow/disallow + Sitemap declarado.
+- `apps/web/app/layout.tsx` — `metadataBase`, title template `%s | Habla!`, Open Graph completo (`es_PE`), Twitter `summary_large_image`.
+- `apps/web/app/opengraph-image.tsx` → imagen OG 1200×630 edge-generada (placeholder brand).
+- `apps/web/app/icon.tsx` (192×192) + `app/apple-icon.tsx` (180×180) — favicons placeholder.
+- `apps/web/app/manifest.ts` → PWA manifest con colores brand correctos.
+- JSON-LD `SportsEvent` embed en `/torneo/[id]` para rich snippets en Google.
+
+### Rutas indexables
+Allow: `/`, `/matches`, `/tienda`, `/torneo/*`, `/live-match`, `/legal/*`.
+Disallow: `/admin`, `/wallet`, `/perfil`, `/mis-combinadas`, `/api/*`, `/auth/*`, `/uploads/*`.
+
+### Regla operacional
+Al sumar una ruta pública nueva, actualizar `app/sitemap.ts` y (si corresponde) `app/robots.ts`. El sitemap revalida cada 1h; torneos se pullean en vivo desde BD.
+
+### TODO brand assets
+Los favicons + OG image actuales son placeholders generados dinámicamente (ImageResponse edge). Reemplazar con PNGs finales dropeados en `apps/web/public/`:
+- `favicon.ico` (multi-res 16/32/48)
+- `icon-192.png`, `icon-512.png`
+- `apple-touch-icon.png` (180×180)
+- `opengraph-image.png` (1200×630)
+
+Cuando los assets entren, eliminar `app/icon.tsx`, `app/apple-icon.tsx`, `app/opengraph-image.tsx` y actualizar `app/manifest.ts` + `app/layout.tsx` para referenciar los PNGs estáticos.
