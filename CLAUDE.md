@@ -659,3 +659,6 @@ Cada vez que se integre un nuevo servicio externo (PostHog, Sentry, Culqi, Cloud
 
 ### Cómo validar que un servicio third-party realmente funciona
 No confiar en "el script se cargó" sin validar el request de datos real. Proceso: DevTools → Network con filtro del servicio → ver al menos 1 request POST/GET con status 200 al endpoint de ingesta (ej: `us.i.posthog.com/e/` para PostHog, `*.ingest.sentry.io` para Sentry). Si solo hay requests al CDN de assets pero ninguno al endpoint de ingesta, el servicio NO está capturando.
+
+### NEXT_PUBLIC_* + Railway + Dockerfile
+Next.js inlinea las vars `NEXT_PUBLIC_*` en el bundle cliente DURANTE `next build`, no en runtime. Railway con builder=DOCKERFILE solo las pasa al `docker build` si el Dockerfile las declara explícitamente como `ARG` + `ENV` antes del `RUN ... build`. Sin eso, Next inlinea `undefined` y cualquier `if (!process.env.NEXT_PUBLIC_X) return` en un provider del cliente dispara silenciosamente — sin errores, sin warnings, sin requests. Regla: al sumar una `NEXT_PUBLIC_*` nueva, tocar SIEMPRE el `Dockerfile` (ARG+ENV) junto con el código que la lee, y los guards condicionales de providers del cliente deben loggear su config ANTES de cualquier early-return para ser debuggeables.

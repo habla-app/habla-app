@@ -1,9 +1,13 @@
 "use client";
 // PostHogProvider — monta PostHog client-side con la config para App Router.
 //
-// Decisiones (Lote 2):
-//  - Init solo si NODE_ENV === "production" y NEXT_PUBLIC_POSTHOG_KEY está.
-//    En dev/preview sin key, no-op total (no crea cookie, no hace fetch).
+// Decisiones (Lote 2 + hotfix Abr 2026):
+//  - Init condicional SOLO en presencia de `NEXT_PUBLIC_POSTHOG_KEY`.
+//    El guard por `NODE_ENV` que había antes era redundante y ocultaba
+//    bugs: con key no presente igual no-opeamos (dev local sin .env no
+//    rompe), y si la key llega en prod confiamos en que es intencional.
+//    El guard NODE_ENV también se combinaba mal con el bug de Railway
+//    (NEXT_PUBLIC_* no inyectadas en build) — doble filtro silencioso.
 //  - `person_profiles: "identified_only"` — no creamos perfil de anónimos.
 //  - `capture_pageview: false` + pageview manual en cambios de ruta (Next
 //    App Router no dispara navegación completa, usePathname + useSearchParams).
@@ -14,6 +18,8 @@
 //    "authenticated"). Idempotente — múltiples renders no duplican.
 //  - Ruta /legal/* — check adicional en `analytics.ts` (no capturamos ni
 //    pageviews ahí).
+//  - Log de debug en mount: deja rastro visible de si el provider arrancó
+//    y con qué config, sin filtrar el valor de la key (solo booleano).
 
 import { useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -29,8 +35,19 @@ async function initPostHog(): Promise<void> {
   const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
   const host =
     process.env.NEXT_PUBLIC_POSTHOG_HOST ?? "https://us.i.posthog.com";
+
+  // Debug log antes de cualquier return — deja rastro de config visible
+  // en consola sin filtrar el valor de la key (solo booleano). Seguro
+  // dejar permanente; cuando PostHog está silencioso, este log dice si
+  // la provider corrió y si vio las env vars.
+  // eslint-disable-next-line no-console
+  console.log("[Habla Debug] PostHog provider mounted", {
+    hasKey: Boolean(key),
+    host,
+    nodeEnv: process.env.NODE_ENV,
+  });
+
   if (!key) return;
-  if (process.env.NODE_ENV !== "production") return;
 
   const { default: posthog } = await import("posthog-js");
   posthog.init(key, {
