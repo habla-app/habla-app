@@ -649,3 +649,13 @@ Los favicons + OG image actuales son placeholders generados dinámicamente (Imag
 - `opengraph-image.png` (1200×630)
 
 Cuando los assets entren, eliminar `app/icon.tsx`, `app/apple-icon.tsx`, `app/opengraph-image.tsx` y actualizar `app/manifest.ts` + `app/layout.tsx` para referenciar los PNGs estáticos.
+
+---
+
+## 20. GOTCHAS Y DECISIONES TÉCNICAS
+
+### CSP y servicios third-party
+Cada vez que se integre un nuevo servicio externo (PostHog, Sentry, Culqi, Cloudflare, etc.), verificar los dominios REALES que usa antes de agregarlos al CSP. Los dominios "marketing" (ej: `posthog.com`) a veces difieren de los dominios técnicos (`*.i.posthog.com` para US, `*.eu.i.posthog.com` para EU). Confirmar con DevTools → Network en el primer deploy de staging/prod antes de asumir que funciona.
+
+### Cómo validar que un servicio third-party realmente funciona
+No confiar en "el script se cargó" sin validar el request de datos real. Proceso: DevTools → Network con filtro del servicio → ver al menos 1 request POST/GET con status 200 al endpoint de ingesta (ej: `us.i.posthog.com/e/` para PostHog, `*.ingest.sentry.io` para Sentry). Si solo hay requests al CDN de assets pero ninguno al endpoint de ingesta, el servicio NO está capturando.
