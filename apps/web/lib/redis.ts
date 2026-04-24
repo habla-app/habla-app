@@ -26,6 +26,7 @@ interface RedisLike {
     stop: number,
     withScores?: "WITHSCORES",
   ): Promise<string[]>;
+  ping(): Promise<string>;
   on(event: string, listener: (...args: unknown[]) => void): unknown;
 }
 
