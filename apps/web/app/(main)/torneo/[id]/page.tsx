@@ -115,6 +115,15 @@ export default async function TorneoDetallePage({ params, searchParams }: Props)
           inscritos: torneo.totalInscritos,
         }}
       />
+      <TorneoJsonLd
+        torneoId={torneo.id}
+        equipoLocal={partido.equipoLocal}
+        equipoVisita={partido.equipoVisita}
+        liga={partido.liga}
+        fechaInicio={partido.fechaInicio}
+        venue={partido.venue ?? null}
+        entradaLukas={torneo.entradaLukas}
+      />
       <div className="mb-4">
         <BackButton fallbackHref="/matches" />
       </div>
@@ -495,6 +504,80 @@ function RuleRowCompact({
         {pts} pts
       </span>
     </li>
+  );
+}
+
+function TorneoJsonLd({
+  torneoId,
+  equipoLocal,
+  equipoVisita,
+  liga,
+  fechaInicio,
+  venue,
+  entradaLukas,
+}: {
+  torneoId: string;
+  equipoLocal: string;
+  equipoVisita: string;
+  liga: string;
+  fechaInicio: Date;
+  venue: string | null;
+  entradaLukas: number;
+}) {
+  // SportsEvent (schema.org) — ayuda a rich snippets en Google. El
+  // "Offer" representa la entrada al torneo; precio en PEN sobre la
+  // convención 1 Luka = S/ 1.
+  const baseUrl =
+    process.env.NEXT_PUBLIC_APP_URL ?? "https://hablaplay.com";
+  const data = {
+    "@context": "https://schema.org",
+    "@type": "SportsEvent",
+    name: `${equipoLocal} vs ${equipoVisita} — ${liga}`,
+    description: `Torneo de predicciones de Habla! para ${equipoLocal} vs ${equipoVisita}.`,
+    startDate: fechaInicio.toISOString(),
+    eventStatus: "https://schema.org/EventScheduled",
+    eventAttendanceMode: "https://schema.org/OnlineEventAttendanceMode",
+    sport: "Football",
+    url: `${baseUrl}/torneo/${torneoId}`,
+    homeTeam: {
+      "@type": "SportsTeam",
+      name: equipoLocal,
+    },
+    awayTeam: {
+      "@type": "SportsTeam",
+      name: equipoVisita,
+    },
+    location: venue
+      ? {
+          "@type": "Place",
+          name: venue,
+        }
+      : {
+          "@type": "VirtualLocation",
+          url: `${baseUrl}/torneo/${torneoId}`,
+        },
+    offers: {
+      "@type": "Offer",
+      name: "Entrada al torneo",
+      price: entradaLukas,
+      priceCurrency: "PEN",
+      availability: "https://schema.org/InStock",
+      url: `${baseUrl}/torneo/${torneoId}`,
+    },
+    organizer: {
+      "@type": "Organization",
+      name: "Habla!",
+      url: baseUrl,
+    },
+  };
+  return (
+    <script
+      type="application/ld+json"
+      // JSON.stringify + anti-XSS para el carácter `<`.
+      dangerouslySetInnerHTML={{
+        __html: JSON.stringify(data).replace(/</g, "\\u003c"),
+      }}
+    />
   );
 }
 
