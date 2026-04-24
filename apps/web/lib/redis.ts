@@ -67,6 +67,13 @@ export function getRedis(): RedisLike | null {
       maxRetriesPerRequest: 3,
       enableReadyCheck: true,
       lazyConnect: false,
+      // Railway: la red privada entre servicios es IPv6-only
+      // (`redis.railway.internal` resuelve a AAAA). ioredis por defecto
+      // usa `family: 4` (IPv4) → getaddrinfo no encuentra record y
+      // falla silencioso. `family: 0` deja a Node hacer dual-stack
+      // lookup y toma el primero que resuelva. Seguro para localhost
+      // en dev (resuelve IPv4 igual) y obligatorio en Railway prod.
+      family: 0,
     });
 
     client.on("error", (err: unknown) => {
