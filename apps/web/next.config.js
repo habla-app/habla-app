@@ -29,4 +29,18 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+// Envoltura Sentry (Lote 1 — observabilidad). Se aplica solo en
+// producción para no ralentizar el build local. El SDK en tiempo de
+// ejecución es un no-op si `SENTRY_DSN` no está presente (ver
+// `sentry.*.config.ts`).
+const { withSentryConfig } = require("@sentry/nextjs");
+
+module.exports = withSentryConfig(nextConfig, {
+  // Silencia logs del plugin en build.
+  silent: true,
+  // No subimos source maps todavía (requiere SENTRY_AUTH_TOKEN). Se
+  // habilita en un lote futuro cuando tengamos el token provisionado.
+  sourcemaps: { disable: true },
+  // No generamos el bundle-analyzer de Sentry ni tunneling por defecto.
+  tunnelRoute: undefined,
+});
