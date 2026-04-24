@@ -41,10 +41,25 @@ const nextConfig = {
   // nonces es un lift no trivial y queda para después.
   // -------------------------------------------------------------------
   async headers() {
+    // Nota sobre dominios PostHog (hotfix post-Lote 2): el SDK sirve los
+    // assets desde `us-assets.i.posthog.com` y hace ingesta contra
+    // `us.i.posthog.com` — NO contra subdominios de `posthog.com`. El
+    // wildcard `*.i.posthog.com` cubre tanto región US como EU
+    // (`eu.i.posthog.com`). Se deja también `*.posthog.com` por si el
+    // SDK referencia algún recurso ahí en el futuro.
+    //
+    // Cloudflare Insights (beacon de Web Analytics que inyecta Cloudflare
+    // automáticamente con el proxy activo) carga desde
+    // `static.cloudflareinsights.com` y postea a `cloudflareinsights.com`.
+    //
+    // `worker-src 'self' blob:` — PostHog usa web workers servidos via
+    // blob URLs; sin esta directiva el browser cae a `child-src` y luego
+    // a `default-src 'self'`, bloqueando el worker.
     const csp = [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.posthog.com https://*.sentry.io https://*.sentry-cdn.com https://accounts.google.com https://apis.google.com https://*.culqi.com",
-      "connect-src 'self' https://*.posthog.com https://*.sentry.io https://*.ingest.sentry.io https://*.api-sports.io https://api.resend.com https://*.culqi.com wss://hablaplay.com wss://www.hablaplay.com",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.posthog.com https://*.i.posthog.com https://us-assets.i.posthog.com https://*.sentry.io https://*.sentry-cdn.com https://accounts.google.com https://apis.google.com https://*.culqi.com https://static.cloudflareinsights.com",
+      "connect-src 'self' https://*.posthog.com https://*.i.posthog.com https://us.i.posthog.com https://*.sentry.io https://*.ingest.sentry.io https://*.api-sports.io https://api.resend.com https://*.culqi.com https://static.cloudflareinsights.com https://cloudflareinsights.com wss://hablaplay.com wss://www.hablaplay.com",
+      "worker-src 'self' blob:",
       "img-src 'self' data: https:",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' data: https://fonts.gstatic.com",
