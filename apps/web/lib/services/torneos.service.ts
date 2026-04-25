@@ -1,7 +1,7 @@
 // Servicio de torneos — operaciones principales del Sub-Sprint 3 + Hotfix #6.
 //
 // Reglas de negocio (CLAUDE.md §6):
-// - Cierre = partido.fechaInicio - 5 minutos (irreversible).
+// - Cierre = partido.fechaInicio (al kickoff, irreversible). Plan v6.
 // - Rake = 12% del pozo bruto (al entero de Luka, floor).
 // - Distribución (Hotfix #6): 10% de inscritos, curva top-heavy.
 //   Ver `lib/utils/premios-distribucion.ts` para la fórmula exacta.
@@ -40,7 +40,13 @@ import { verificarLimiteInscripcion } from "./limites.service";
 // ---------------------------------------------------------------------------
 
 export const RAKE_PCT = 0.12;
-export const CIERRE_MIN_BEFORE = 5; /* minutos antes del partido */
+/**
+ * Minutos antes del kickoff en los que se cierran las inscripciones.
+ * Plan v6 lo bajó de 5 a 0 (cierre exacto al kickoff). Se mantiene la
+ * constante porque varios callers (admin, partidos-import, schema) la
+ * usan para calcular `cierreAt`; cambiarla a 0 acá propaga a todos.
+ */
+export const CIERRE_MIN_BEFORE = 0;
 export const MIN_INSCRITOS_PARA_ACTIVAR = 2;
 
 /**
@@ -385,7 +391,7 @@ export async function crear(input: CrearInput): Promise<TorneoConPartido> {
   );
   if (cierreAt.getTime() <= Date.now()) {
     throw new ValidacionFallida(
-      `El partido está a menos de ${CIERRE_MIN_BEFORE} minutos; no se puede crear torneo.`,
+      "El partido ya empezó; no se puede crear torneo.",
     );
   }
 
@@ -598,11 +604,17 @@ export async function cancelar(
 // con cierreAt <= NOW y aplica:
 //   - <2 inscritos  → cancelar (que reembolsa).
 //   - ≥2 inscritos  → CERRADO, calcular rake 12% floor y pozoNeto.
+//
+// Plan v6: cierreAt ahora coincide con kickoff. El guard `estado:
+// "ABIERTO"` del where es la condición explícita — un torneo ya en
+// EN_VIVO/CERRADO/FINALIZADO/CANCELADO no se vuelve a tocar acá.
 // ---------------------------------------------------------------------------
 
 export async function procesarCierreAutomatico(): Promise<CierreAutomaticoResult> {
   const vencidos = await prisma.torneo.findMany({
     where: {
+      // Guard duro: solo cerramos los que siguen ABIERTOS. Si el poller
+      // ya los pasó a EN_VIVO o el admin los canceló, los ignoramos.
       estado: "ABIERTO",
       cierreAt: { lte: new Date() },
     },

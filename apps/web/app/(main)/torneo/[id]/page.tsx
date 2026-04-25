@@ -474,7 +474,7 @@ function RulesCard() {
         <RuleRowCompact n={5} title="Marcador exacto" pts={8} />
       </ul>
       <p className="mt-3 text-[11px] text-muted-d">
-        Se cierran las inscripciones 5 min antes del partido.
+        Las inscripciones se cierran al inicio del partido.
       </p>
     </aside>
   );

@@ -1,7 +1,7 @@
 // POST /api/v1/admin/torneos
 //
 // Requiere rol ADMIN. Crea un torneo sobre un partido PROGRAMADO. cierreAt
-// se calcula automáticamente = partido.fechaInicio - 5 min.
+// se calcula automáticamente = partido.fechaInicio (al kickoff, Plan v6).
 
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";

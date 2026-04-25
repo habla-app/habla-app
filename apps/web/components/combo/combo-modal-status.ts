@@ -141,7 +141,7 @@ export function computeComboModalUIState(
       return {
         bodyTitle: "El torneo ya cerró",
         bodyCopy:
-          "Las inscripciones se cerraron 5 minutos antes del partido. Elegí otro torneo para armar tu combinada.",
+          "Las inscripciones se cerraron al inicio del partido. Elegí otro torneo para armar tu combinada.",
         icon: "🔒",
         tone: "warning",
         primaryCta: {
@@ -178,7 +178,7 @@ export function computeComboModalUIState(
       return {
         bodyTitle: "Armá tus 5 predicciones",
         bodyCopy:
-          "Elegí el resultado, el marcador exacto y las tres jugadas complementarias. Tenés hasta 5 minutos antes del partido.",
+          "Elegí el resultado, el marcador exacto y las tres jugadas complementarias. Tenés hasta el inicio del partido.",
         icon: "🎯",
         tone: "neutral",
         primaryCta: {
