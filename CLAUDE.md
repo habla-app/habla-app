@@ -1,7 +1,7 @@
 # CLAUDE.md — Habla! App
 
 > Contexto operativo del proyecto. El historial detallado de bugs vive en `CHANGELOG.md` y en `git log`.
-> Última actualización: 25 Abr 2026 (Lote 4 — Hotfixes económicos del Plan v6).
+> Última actualización: 25 Abr 2026 (Lote 5 — Catálogo de 19 ligas + refresh de sesión post-username).
 
 ---
 
@@ -59,6 +59,40 @@ Las etiquetas `EXPRESS / ESTANDAR / PREMIUM / GRAN_TORNEO` se mantienen como **b
 | ESTANDAR | Champions, Libertadores |
 | PREMIUM | Clásicos, Mundial (fase de grupos) |
 | GRAN_TORNEO | Final del Mundial |
+
+### Catálogo de ligas (Lote 5 — Plan v6 §4.4)
+
+19 ligas/competiciones soportadas. Fuente única de verdad: [`lib/config/ligas.ts`](apps/web/lib/config/ligas.ts) → `LIGAS`. El job de auto-import recorre `LIGAS_ACTIVAS = LIGAS.filter(l => l.activa)`. `liga-slugs.ts` deriva de `LIGAS` (no duplicar).
+
+| # | Liga (slug) | api-football | Estado Abr 2026 |
+|---|---|---|---|
+| 1  | Liga 1 Perú (`liga-1-peru`) | 281 | en temporada |
+| 2  | Mundial 2026 (`mundial`) | 1 | en temporada |
+| 3  | Premier League (`premier`) | 39 | en temporada |
+| 4  | La Liga (`la-liga`) | 140 | en temporada |
+| 5  | Serie A Italia (`serie-a`) | 135 | en temporada |
+| 6  | Bundesliga (`bundesliga`) | 78 | en temporada |
+| 7  | Ligue 1 (`ligue-1`) | 61 | en temporada |
+| 8  | Brasileirão (`brasileirao`) | 71 | en temporada |
+| 9  | Argentina Primera (`argentina-primera`) | 128 | en temporada |
+| 10 | Champions League (`champions`) | 2 | en temporada |
+| 11 | Europa League (`europa-league`) | 3 | en temporada |
+| 12 | Conference League (`conference-league`) | 848 | en temporada |
+| 13 | Copa Libertadores (`libertadores`) | 13 | en temporada |
+| 14 | Copa Sudamericana (`sudamericana`) | 11 | en temporada |
+| 15 | Mundial de Clubes (`mundial-clubes`) | 15 | off-season → 2029 |
+| 16 | Eliminatorias CONMEBOL (`eliminatorias-conmebol`) | 34 | off-season → ciclo 2030 |
+| 17 | Copa América (`copa-america`) | 9 | off-season → 2027 |
+| 18 | Eurocopa (`eurocopa`) | 4 | off-season → 2028 |
+| 19 | UEFA Nations League (`nations-league`) | 5 | en temporada |
+
+Las 4 ligas en off-season permanecen `activa: true`; el poller las consulta cada 6h y devuelve 0 fixtures hasta que api-football active la nueva temporada (entonces `seasons.cache` la recoge automáticamente sin intervención).
+
+**Categorías** (campo `categoria` por liga, para targeting de bots de marketing en Lote 10):
+- `liga-1-peru` (1) — Liga 1 Perú.
+- `liga-extranjera-top` (7) — Premier, La Liga, Serie A IT, Bundesliga, Ligue 1, Brasileirão, Argentina Primera.
+- `champions-clasicos-mundial-grupos` (6) — UCL, UEL, UECL, Libertadores, Sudamericana, Mundial Clubes.
+- `etapas-finales` (5) — Eliminatorias, Copa América, Eurocopa, Nations League, Mundial 2026.
 
 ---
 
@@ -685,6 +719,9 @@ Next.js inlinea las vars `NEXT_PUBLIC_*` en el bundle cliente DURANTE `next buil
 
 ### Placeholders {{LEGAL_*}} visibles en producción
 Los documentos legales contienen placeholders `{{RAZON_SOCIAL}}`, `{{RUC}}`, `{{PARTIDA_REGISTRAL}}` (y similares) que se resuelven en runtime leyendo `process.env.LEGAL_*`. Mientras esas env vars no estén configuradas en Railway, los placeholders aparecen literales en el render público (ej: en `/legal/terminos`). Esto es **intencional**: visibiliza datos faltantes en lugar de ocultarlos con valores inventados. Cuando llegue el RUC y la partida SUNARP, setear las vars en Railway y el render se actualiza al siguiente request (lectura de fs en cada SSR). El reemplazo vive en `lib/legal-content.ts:resolvePlaceholders()`.
+
+### Refresh de sesión cliente con NextAuth
+NextAuth v5 con strategy JWT cachea los datos del usuario (id, rol, username, usernameLocked) dentro del token firmado en la cookie. Cuando un endpoint mutiliza esos datos en BD (ej. `POST /api/v1/auth/completar-perfil` setea `username` + `usernameLocked=true`), el cliente debe forzar el re-emit del JWT con `await update()` de `useSession()`. Esto golpea `/api/auth/session` y dispara el callback `jwt({ trigger: 'update' })`, donde re-leemos los campos relevantes de BD y los pegamos al token. Sin eso, el usuario sigue viendo los datos viejos en sesión hasta que cierra y vuelve a entrar. Patrón completo en [`auth.ts`](apps/web/lib/auth.ts) + [`CompletarPerfilForm.tsx`](apps/web/components/auth/CompletarPerfilForm.tsx). Caveat extra: si el siguiente paso lo procesa un Server Component (NavBar, layout RSC), `await update()` no garantiza que el SSR vea la cookie nueva — usar `window.location.href = callbackUrl` (hard reload) en vez de `router.push + router.refresh` para forzar una request HTTP fresca con la cookie ya rotada.
 
 ---
 
