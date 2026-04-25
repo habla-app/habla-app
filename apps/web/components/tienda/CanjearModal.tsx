@@ -19,6 +19,7 @@ interface CanjearModalProps {
   balanceActual: number;
   onClose: () => void;
   onSuccess: () => void;
+  onBalanceInsuficiente?: () => void;
 }
 
 type Status = "idle" | "submitting" | "success" | "error";
@@ -27,6 +28,7 @@ export function CanjearModal({
   premio,
   onClose,
   onSuccess,
+  onBalanceInsuficiente,
 }: CanjearModalProps) {
   const balance = useLukasStore((s) => s.balance);
   const setBalance = useLukasStore((s) => s.setBalance);
@@ -64,6 +66,11 @@ export function CanjearModal({
       });
       const json = await resp.json();
       if (!resp.ok) {
+        if (json?.error?.code === "BALANCE_INSUFICIENTE") {
+          setStatus("idle");
+          onBalanceInsuficiente?.();
+          return;
+        }
         setError(json?.error?.message ?? "No se pudo completar el canje.");
         setStatus("error");
         return;

@@ -4,13 +4,14 @@
 // hero se hidrata via store.
 
 import { useMemo, useState } from "react";
-import { WalletBalanceHero } from "./WalletBalanceHero";
+import { WalletBalanceDesglose } from "./WalletBalanceDesglose";
 import { WalletStats } from "./WalletStats";
 import { BuyPacksPlaceholder } from "./BuyPacksPlaceholder";
 import { MovesFilter, type MoveFiltro } from "./MovesFilter";
 import { TxList } from "./TxList";
 import { MESES_VENCIMIENTO_COMPRA } from "@/lib/config/economia";
 import type {
+  WalletDesglose,
   WalletTotales,
   WalletTransaccion,
   WalletProxVencimiento,
@@ -18,6 +19,7 @@ import type {
 
 interface Props {
   initialBalance: number;
+  desglose: WalletDesglose;
   totales: WalletTotales;
   proxVencimiento: WalletProxVencimiento | null;
   transacciones: WalletTransaccion[];
@@ -25,7 +27,8 @@ interface Props {
 }
 
 export function WalletView({
-  initialBalance,
+  initialBalance: _initialBalance,
+  desglose,
   totales,
   proxVencimiento,
   transacciones,
@@ -36,6 +39,17 @@ export function WalletView({
     () => filtrarTx(transacciones, filtro),
     [transacciones, filtro],
   );
+
+  const proximoVencimiento = proxVencimiento
+    ? {
+        monto: proxVencimiento.lukas,
+        venceEn: new Date(proxVencimiento.fecha),
+        diasRestantes: Math.ceil(
+          (new Date(proxVencimiento.fecha).getTime() - Date.now()) /
+            (1000 * 60 * 60 * 24),
+        ),
+      }
+    : null;
 
   return (
     <div className="mx-auto w-full max-w-2xl px-4 pt-6 md:px-6 md:pt-8">
@@ -48,9 +62,9 @@ export function WalletView({
         </p>
       </header>
 
-      <WalletBalanceHero
-        initialBalance={initialBalance}
-        proxVencimiento={proxVencimiento}
+      <WalletBalanceDesglose
+        totales={desglose}
+        proximoVencimiento={proximoVencimiento}
       />
 
       <WalletStats

@@ -23,6 +23,7 @@ export default async function WalletPage() {
   return (
     <WalletView
       initialBalance={vista.balance}
+      desglose={vista.desglose}
       totales={vista.totales}
       proxVencimiento={vista.proxVencimiento}
       transacciones={vista.transacciones}

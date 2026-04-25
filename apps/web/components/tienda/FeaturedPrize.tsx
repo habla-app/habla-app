@@ -10,17 +10,21 @@
 import { useState } from "react";
 import type { PremioDTO } from "@/lib/services/premios.service";
 import { CanjearModal } from "./CanjearModal";
+import { ModalSinGanadas } from "./ModalSinGanadas";
 
 interface FeaturedPrizeProps {
   premio: PremioDTO;
   balanceActual: number;
+  balanceGanadas: number;
+  onCanjeado?: (costeLukas: number) => void;
 }
 
-export function FeaturedPrize({ premio, balanceActual }: FeaturedPrizeProps) {
+export function FeaturedPrize({ premio, balanceActual, balanceGanadas, onCanjeado }: FeaturedPrizeProps) {
   const [open, setOpen] = useState(false);
-  const afordable = balanceActual >= premio.costeLukas;
+  const [sinGanadasOpen, setSinGanadasOpen] = useState(false);
+  const afordable = balanceGanadas >= premio.costeLukas;
   const agotado = premio.stock <= 0;
-  const faltan = Math.max(0, premio.costeLukas - balanceActual);
+  const faltan = Math.max(0, premio.costeLukas - balanceGanadas);
 
   return (
     <>
@@ -89,7 +93,23 @@ export function FeaturedPrize({ premio, balanceActual }: FeaturedPrizeProps) {
           premio={premio}
           balanceActual={balanceActual}
           onClose={() => setOpen(false)}
-          onSuccess={() => setOpen(false)}
+          onSuccess={() => {
+            setOpen(false);
+            onCanjeado?.(premio.costeLukas);
+          }}
+          onBalanceInsuficiente={() => {
+            setOpen(false);
+            setSinGanadasOpen(true);
+          }}
+        />
+      ) : null}
+
+      {sinGanadasOpen ? (
+        <ModalSinGanadas
+          open={sinGanadasOpen}
+          onClose={() => setSinGanadasOpen(false)}
+          ganadas={balanceGanadas}
+          coste={premio.costeLukas}
         />
       ) : null}
     </>

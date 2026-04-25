@@ -1,20 +1,10 @@
 "use client";
 // TiendaContent — orquesta /tienda (Sub-Sprint 6).
-//
-// Estructura mockup `.page-tienda`:
-//   - header + subcopy
-//   - shop-stats (3 mini stats: balance, canjeables ahora, ya canjeados)
-//   - shop-note (crema dorada claro con 💡)
-//   - featured-prize (dark surface, 2 cols: imagen dorada + body)
-//   - section-title "🛍️ Todos los premios"
-//   - cat-filters (6 chips por categoría, URL-state)
-//   - prize-grid-v2 (progress bar si no afordable)
-//   - shop-earn-cta (hero azul final) — variante "comprar" si logged-in,
-//     variante "iniciar sesión" si anónimo.
-//
-// Balance: logged-in usa store (hydrated vía layout), anon usa 0.
+// Lote 6B: stats muestra balance Ganados (canjeables) en lugar del total.
+// Progress bars y affordability ahora usan balanceGanadas.
+// ModalSinGanadas se abre cuando la API rechaza por BALANCE_INSUFICIENTE.
 
-import { useMemo } from "react";
+import { useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import type { PremioDTO } from "@/lib/services/premios.service";
 import { useLukasStore } from "@/stores/lukas.store";
@@ -33,6 +23,7 @@ interface TiendaContentProps {
     | "EXPERIENCIA"
     | null;
   initialBalance: number | null;
+  initialBalanceGanadas: number;
   totalCanjeados: number;
   isLoggedIn: boolean;
 }
@@ -42,15 +33,24 @@ export function TiendaContent({
   featured,
   categoriaActiva,
   initialBalance,
+  initialBalanceGanadas,
   totalCanjeados,
   isLoggedIn,
 }: TiendaContentProps) {
   const balanceStore = useLukasStore((s) => s.balance);
   const balance = balanceStore || initialBalance || 0;
 
+  // ganadas: solo los Lukas que pueden canjearse en /tienda.
+  // Se actualiza optimistamente tras cada canje exitoso.
+  const [ganadas, setGanadas] = useState(initialBalanceGanadas);
+
+  const handleCanjeado = useCallback((costeLukas: number) => {
+    setGanadas((prev) => Math.max(0, prev - costeLukas));
+  }, []);
+
   const canjeablesAhora = useMemo(
-    () => premios.filter((p) => p.stock > 0 && balance >= p.costeLukas).length,
-    [premios, balance],
+    () => premios.filter((p) => p.stock > 0 && ganadas >= p.costeLukas).length,
+    [premios, ganadas],
   );
 
   const grid = useMemo(
@@ -71,19 +71,32 @@ export function TiendaContent({
 
       {isLoggedIn ? (
         <section className="mb-4 grid grid-cols-3 gap-3">
-          <ShopStat
-            icon="🪙"
-            iconBg="bal"
-            color="gold"
-            value={balance.toLocaleString("es-PE")}
-            label="Tus Lukas"
-          />
+          {/* Canjeables (Ganados) — solo los ganados en torneos sirven para canjear */}
+          <div
+            className="flex items-center gap-3 rounded-md border border-brand-green/40 bg-brand-green/5 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+            title="Solo los Lukas que ganaste en torneos se pueden canjear"
+          >
+            <div
+              aria-hidden
+              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-sm border border-brand-green/30 bg-brand-green/10 text-[22px]"
+            >
+              🏆
+            </div>
+            <div className="min-w-0">
+              <div className="font-display text-[22px] font-black leading-none text-brand-green">
+                {ganadas.toLocaleString("es-PE")}
+              </div>
+              <div className="mt-1 text-[11px] font-bold uppercase tracking-[0.06em] text-muted-d">
+                Canjeables
+              </div>
+            </div>
+          </div>
           <ShopStat
             icon="✓"
             iconBg="avail"
             color="green"
             value={canjeablesAhora.toString()}
-            label="Canjeables ahora"
+            label="Disp. ahora"
           />
           <ShopStat
             icon="🎁"
@@ -111,7 +124,12 @@ export function TiendaContent({
       </div>
 
       {featured ? (
-        <FeaturedPrize premio={featured} balanceActual={balance} />
+        <FeaturedPrize
+          premio={featured}
+          balanceActual={balance}
+          balanceGanadas={ganadas}
+          onCanjeado={handleCanjeado}
+        />
       ) : null}
 
       <h2 className="mb-3.5 flex items-center gap-2.5 font-display text-[22px] font-black uppercase tracking-[0.02em] text-dark">
@@ -140,6 +158,8 @@ export function TiendaContent({
               key={premio.id}
               premio={premio}
               balanceActual={balance}
+              balanceGanadas={ganadas}
+              onCanjeado={handleCanjeado}
             />
           ))}
         </div>

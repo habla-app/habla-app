@@ -31,13 +31,22 @@ export default async function TiendaPage({ searchParams }: PageProps) {
   ]);
 
   let totalCanjeados = 0;
+  let balanceGanadas = 0;
   if (session?.user?.id) {
-    totalCanjeados = await prisma.canje.count({
-      where: {
-        usuarioId: session.user.id,
-        estado: { in: ["ENTREGADO", "ENVIADO", "PROCESANDO"] },
-      },
-    });
+    const [canjesCount, usuarioData] = await Promise.all([
+      prisma.canje.count({
+        where: {
+          usuarioId: session.user.id,
+          estado: { in: ["ENTREGADO", "ENVIADO", "PROCESANDO"] },
+        },
+      }),
+      prisma.usuario.findUnique({
+        where: { id: session.user.id },
+        select: { balanceGanadas: true },
+      }),
+    ]);
+    totalCanjeados = canjesCount;
+    balanceGanadas = usuarioData?.balanceGanadas ?? 0;
   }
 
   return (
@@ -48,6 +57,7 @@ export default async function TiendaPage({ searchParams }: PageProps) {
         featured={premiosResult.featured}
         categoriaActiva={categoria}
         initialBalance={session?.user?.balanceLukas ?? null}
+        initialBalanceGanadas={balanceGanadas}
         totalCanjeados={totalCanjeados}
         isLoggedIn={Boolean(session?.user?.id)}
       />

@@ -37,7 +37,10 @@ export type EventName =
   | "ticket_submitted"
   | "premio_ganado"
   | "canje_solicitado"
-  | "tienda_viewed";
+  | "tienda_viewed"
+  | "wallet_desglose_viewed"
+  | "tienda_canje_bloqueado_sin_ganadas"
+  | "tienda_sin_ganadas_cta_partidos_clicked";
 
 type EventProps = Record<string, string | number | boolean | null | undefined>;
 

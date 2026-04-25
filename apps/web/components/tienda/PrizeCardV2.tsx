@@ -13,11 +13,14 @@
 import { useState } from "react";
 import type { PremioDTO } from "@/lib/services/premios.service";
 import { CanjearModal } from "./CanjearModal";
+import { ModalSinGanadas } from "./ModalSinGanadas";
 
 interface PrizeCardV2Props {
   premio: PremioDTO;
   balanceActual: number;
+  balanceGanadas: number;
   onCanjeSuccess?: () => void;
+  onCanjeado?: (costeLukas: number) => void;
 }
 
 const BADGE_STYLES: Record<
@@ -51,16 +54,20 @@ function imagenBg(categoria: PremioDTO["categoria"]): string {
 export function PrizeCardV2({
   premio,
   balanceActual,
+  balanceGanadas,
   onCanjeSuccess,
+  onCanjeado,
 }: PrizeCardV2Props) {
   const [open, setOpen] = useState(false);
+  const [sinGanadasOpen, setSinGanadasOpen] = useState(false);
 
-  const afordable = balanceActual >= premio.costeLukas;
+  // Affordability usa balanceGanadas: solo los Lukas ganados son canjeables.
+  const afordable = balanceGanadas >= premio.costeLukas;
   const agotado = premio.stock <= 0;
-  const faltan = Math.max(0, premio.costeLukas - balanceActual);
+  const faltan = Math.max(0, premio.costeLukas - balanceGanadas);
   const progreso = Math.min(
     100,
-    Math.round((balanceActual / premio.costeLukas) * 100),
+    Math.round((balanceGanadas / premio.costeLukas) * 100),
   );
 
   const cardCls = afordable
@@ -171,7 +178,21 @@ export function PrizeCardV2({
           onSuccess={() => {
             setOpen(false);
             onCanjeSuccess?.();
+            onCanjeado?.(premio.costeLukas);
           }}
+          onBalanceInsuficiente={() => {
+            setOpen(false);
+            setSinGanadasOpen(true);
+          }}
+        />
+      ) : null}
+
+      {sinGanadasOpen ? (
+        <ModalSinGanadas
+          open={sinGanadasOpen}
+          onClose={() => setSinGanadasOpen(false)}
+          ganadas={balanceGanadas}
+          coste={premio.costeLukas}
         />
       ) : null}
     </>
