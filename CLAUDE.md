@@ -1,7 +1,7 @@
 # CLAUDE.md — Habla! App
 
 > Contexto operativo del proyecto. El historial detallado de bugs vive en `CHANGELOG.md` y en `git log`.
-> Última actualización: 24 Abr 2026 (Lote 3 — Contenido legal, footer y FAQ).
+> Última actualización: 25 Abr 2026 (Lote 4 — Hotfixes económicos del Plan v6).
 
 ---
 
@@ -22,7 +22,7 @@ WebApp de torneos de predicciones sobre partidos de fútbol, mercado peruano. Lo
 ### Flujo del usuario
 1. Compra Lukas con Culqi/Yape
 2. Elige torneo, paga entrada, arma combinada de 5 predicciones
-3. Torneo cierra 5 min antes del partido (predicciones selladas)
+3. Torneo cierra al kickoff (predicciones selladas)
 4. Puntos y ranking se actualizan en vivo durante el partido
 5. Al FT, Lukas del pozo neto se distribuyen automáticamente
 6. Canjea Lukas por premios reales en `/tienda`
@@ -39,21 +39,26 @@ WebApp de torneos de predicciones sobre partidos de fútbol, mercado peruano. Lo
 Máx **10 tickets** por usuario por torneo; constraint en BD impide tickets idénticos.
 
 ### Modelo económico
+- **Entrada uniforme: 3 Lukas** para todos los torneos (Plan v6 / Lote 4). Constante `ENTRADA_LUKAS` en [lib/config/economia.ts](apps/web/lib/config/economia.ts). Torneos preexistentes con entrada distinta (5/10/30/100) conservan su valor — el cambio solo aplica a torneos creados desde Lote 4.
 - **Rake 12%** del pozo bruto → ingreso de la plataforma.
 - **Distribución del pozo neto:** paga al **10% de inscritos** (cortes: 2-9→1, 10-19→2, 20-29→3, 30-49→5, 50-99→10, 100+→`round(N×0.10)`). Curva top-heavy: 1° recibe **45%**, el 55% restante decae geométricamente entre el resto.
 - **Tablas fijas para M≤5:** M=1 [1.00], M=2 [0.65, 0.35], M=3 [0.50, 0.30, 0.20], M=5 [0.40, 0.25, 0.18, 0.10, 0.07].
-- **Empates:** tickets con mismo puntaje reparten equitativamente los premios de sus posiciones como grupo. Sin desempate.
+- **Redondeo (Plan v6):** cada premio = `floor(porcentaje × pozoNeto)`. El residual por redondeo se suma al **1°** para que `sum(premios) === pozoNeto`.
+- **Empates:** tickets con mismo puntaje reparten equitativamente los premios de las posiciones que ocupan como grupo. **Split acotado al último puesto pagado M:** si el grupo se extiende más allá de M, la suma de shares se acota a `posStart..M` (no se incluyen shares con índice ≥ M); el monto resultante se divide entre todos los miembros del grupo. Sin desempate adicional.
 - **Implementación:** `lib/utils/premios-distribucion.ts:distribuirPremios()` (función pura).
 - **Margen en premios físicos:** ~30%.
-- Lukas **comprados** vencen a los 12 meses; **ganados** no vencen.
+- Bonus de bienvenida: **15 Lukas** (BONUS, sin vencimiento). Constante `BONUS_BIENVENIDA_LUKAS`.
+- Lukas **comprados** vencen a los **36 meses**; **ganados** no vencen. Constante `MESES_VENCIMIENTO_COMPRA`.
 
-### Tipos de torneo
-| Tipo | Entrada | Partido típico |
-|------|---------|----------------|
-| EXPRESS | S/ 3–5 | Liga 1, Premier, La Liga |
-| ESTANDAR | S/ 10–20 | Champions, Libertadores |
-| PREMIUM | S/ 30–50 | Clásicos, Mundial |
-| GRAN_TORNEO | S/ 100 | Final del Mundial |
+### Tipos de torneo (Plan v6: solo informativos)
+Las etiquetas `EXPRESS / ESTANDAR / PREMIUM / GRAN_TORNEO` se mantienen como **badge visual** para que el usuario distinga torneos casuales vs grandes finales. **No afectan reglas económicas** (entrada, rake, distribución, cierre — todos uniformes).
+
+| Tipo | Partido típico |
+|------|----------------|
+| EXPRESS | Liga 1, Premier, La Liga |
+| ESTANDAR | Champions, Libertadores |
+| PREMIUM | Clásicos, Mundial (fase de grupos) |
+| GRAN_TORNEO | Final del Mundial |
 
 ---
 
@@ -88,7 +93,7 @@ habla-app/
 │   │   │   ├── services/   ← torneos, tickets, ranking, puntuacion, premios, canjes, limites, notificaciones, verificacion, email, live-matches, partidos-import, seasons.cache, wallet-view
 │   │   │   ├── realtime/   ← socket-client, socket-auth, events
 │   │   │   ├── utils/      ← datetime, premios-distribucion, nivel, team-colors, round-mapper, minuto-label, matches-page-title, torneo-detail-view
-│   │   │   ├── config/     ← ligas, liga-slugs
+│   │   │   ├── config/     ← ligas, liga-slugs, economia (constantes Plan v6), usernames-reservados
 │   │   │   └── api-client.ts  ← authedFetch
 │   │   ├── hooks/          ← useRankingEnVivo, useEventosPartido, useLigaFilter, useMatchesFilters, useMinutoEnVivo, useLiveMatchesCount, useScrollIndicators
 │   │   ├── stores/         ← zustand: lukas, notifications
@@ -140,11 +145,13 @@ Schema completo en `packages/db/prisma/schema.prisma`. Modelos principales:
 - Todo movimiento es atómico (`prisma.$transaction`). Si falla un paso, rollback total.
 - Balance nunca negativo. Verificar ANTES de descontar.
 - Lukas **NO retirables** en efectivo.
-- Bonus de bienvenida: **500 Lukas** (BONUS, sin vencimiento).
+- Bonus de bienvenida: **15 Lukas** (BONUS, sin vencimiento). Plan v6 — antes 500.
+- Vencimiento Lukas comprados: **36 meses** desde la compra. Plan v6 — antes 12.
 - Packs de compra: 20 (+0), 50 (+5), 100 (+15), 250 (+50).
 
 ### Torneos y Tickets
-- Cierre inscripciones: **exactamente 5 min antes** del partido. Automático e irreversible.
+- **Entrada uniforme: 3 Lukas** para todos los torneos (Plan v6). El tipo es solo metadato visual.
+- Cierre inscripciones: **al kickoff** del partido (Plan v6 — antes T-5min). Automático e irreversible. El cron solo cierra torneos con `estado === 'ABIERTO'`; si ya están EN_VIVO/CERRADO/FINALIZADO/CANCELADO, no se tocan.
 - Máx **10 tickets** por usuario por torneo. Predicciones enviadas son inmutables.
 - Dos tickets del mismo usuario NO pueden tener las 5 preds idénticas (constraint BD).
 - Torneo con **<2 inscritos** al cierre → CANCELADO + reembolso `REEMBOLSO`.
@@ -156,10 +163,12 @@ Schema completo en `packages/db/prisma/schema.prisma`. Modelos principales:
 - **Tarjeta roja:** se confirma `true` al instante; `false` solo al `FINALIZADO`.
 - BTTS y +2.5 se adjudican parcialmente (ej. 1-1 ya confirma BTTS=true).
 - Rake 12% exacto al entero. Puestos `M+1` en adelante NO reciben premio.
+- **Distribución (Plan v6):** cada premio = `floor(porcentaje × pozoNeto)`. Residual al **1°** para preservar `sum(premios) === pozoNeto`.
+- **Empates (Plan v6):** split equitativo **acotado al último puesto pagado M**. Si el grupo se extiende más allá de M, la suma se acota a `posStart..M` antes de dividirla entre todos los miembros.
 
 ### Juego responsable
 - Edad mínima 18. Verificación al registro.
-- Límite mensual de compra: default S/ 300/mes. Bloqueante.
+- Límite mensual de compra: **default S/ 300/mes, configurable hasta S/ 1.000** (Plan v6). Bloqueante. Constantes `LIMITE_MENSUAL_DEFAULT` y `LIMITE_MENSUAL_MAX` en `lib/config/economia.ts`.
 - Límite diario de tickets: default 10/día. Bloqueante.
 - Auto-exclusión: solo **7, 30 o 90 días** (constante `AUTOEXCLUSION_DIAS_VALIDOS`).
 - Mostrar siempre rake y distribución del pozo antes de inscribir.
@@ -237,7 +246,7 @@ pnpm exec tsc --noEmit
 
 ### ✅ Implementado y en producción
 - **Sprint 0 — Fundamentos:** monorepo, Docker Compose, Prisma, CI/CD, Railway deploy, landing, NavBar/BottomNav, paleta Tailwind, fuentes Barlow Condensed + DM Sans.
-- **Sprint 1 — Auth:** NextAuth v5 magic link (Resend `hablaplay.com`), custom Prisma adapter, middleware protegido (`/wallet`, `/perfil`, `/admin`), bonus 500 Lukas al registro. Ver registro formal (Abr 2026) para el flujo actual con Google OAuth + username obligatorio.
+- **Sprint 1 — Auth:** NextAuth v5 magic link (Resend `hablaplay.com`), custom Prisma adapter, middleware protegido (`/wallet`, `/perfil`, `/admin`), bonus de bienvenida al registro (monto vigente en `lib/config/economia.ts`). Ver registro formal (Abr 2026) para el flujo actual con Google OAuth + username obligatorio.
 - **Fase 2 — UI desde mockup:** primitivos (`Button`, `Chip`, `Alert`, `Toast`, `Modal`), NavBar/BottomNav/UserMenu, MatchCard con 4 tiers de urgencia. Cero hex hardcodeados fuera de `tailwind.config.ts` + `globals.css`.
 - **Sub-Sprint 3 + 3.5 — Torneos + Auto-import:** CRUD de torneos, inscripción atómica, cancelación por <2 inscritos. Cron in-process en `instrumentation.ts`. Auto-import de temporadas (`seasons.cache.ts`) y partidos cada 6h para ligas whitelisteadas en `lib/config/ligas.ts` (Liga 1 Perú EXPRESS, Champions ESTANDAR, Libertadores ESTANDAR, Premier EXPRESS, La Liga EXPRESS, Mundial 2026 PREMIUM). Cada partido nuevo crea su torneo automáticamente.
 - **Fase 3 — UX de /matches:** filtros en URL (`?liga=&dia=`), scroll horizontal de días con `useScrollIndicators`, MatchCard compacta 150px, colores hash por equipo (`team-colors.ts`), zona horaria `America/Lima`.
@@ -250,6 +259,7 @@ pnpm exec tsc --noEmit
 - **Lote 1 — Observabilidad y seguridad base (Abr 2026):** dominio propio `hablaplay.com` + `www.hablaplay.com` vía Cloudflare (SSL Full Strict, proxied, WebSockets OK). `/api/health` con checks paralelos de Postgres + Redis (timeout 3s) para Uptime Robot. `@sentry/nextjs` integrado en browser/server/edge leyendo `SENTRY_DSN`; endpoint `/api/debug/sentry-test` con guard por header secret. Headers de seguridad globales en `next.config.js` (HSTS preload, XFO DENY, nosniff, Referrer-Policy, Permissions-Policy, CSP en Report-Only con whitelist de PostHog/Sentry/Google/Culqi/api-football/Resend). Rate limiting in-memory en middleware edge con 3 tiers (auth 10/min·IP, críticos 30/min·usuario, resto 60/min·IP). `public/.well-known/security.txt` para disclosure. Detalles operacionales en §16, env vars en §17.
 - **Lote 2 — Analytics y SEO (Abr 2026):** PostHog integrado vía `lib/analytics.ts` (helper único) + `PostHogProvider` client con pageview manual, `identify()` en login, `reset()` en logout, opt-out en `/legal/*`. 13 eventos canónicos cableados (detalle en §18). SEO completo: `sitemap.ts` dinámico, `robots.ts`, metadata con OG + Twitter + `metadataBase`, `opengraph-image.tsx` edge-generado, `icon.tsx` + `apple-icon.tsx` placeholders, `manifest.ts` PWA con colores brand correctos (reemplaza `public/manifest.json` legacy). JSON-LD `SportsEvent` en `/torneo/[id]`. Detalle en §18 + §19, funnels en `docs/analytics-funnels.md`.
 - **Ajustes UX sidebar + wallet + perfil (Abr 2026):** Sidebar de `/matches` y `/` reordenado — widget #2 es **"Los Pozos más grandes de la semana"** (torneos de la semana calendario ordenados por `pozoBruto` DESC, TOP 5) y widget #5 es **"Los más pagados de la semana"** (suma de `TransaccionLukas.monto` con tipo `PREMIO_TORNEO` por usuario en la semana, TOP 10); ventana lunes→domingo via `datetime.ts:getWeekBounds`. Balance widget rediseñado (tipografía 52px + border gold + CTA único a `/wallet`). En `/torneo/:id` el CTA desktop vive en la sidebar derecha sobre `RulesCard`. Modal post-envío de combinada invierte énfasis: primario = "Crear otra combinada" (reset), secundario = "Ver mis combinadas" (link). `/wallet` — filtro "Inscripciones" ahora enriquece cada transacción con `partido` (vía `refId → Torneo → Partido`) y muestra el resumen `Local 2-1 Visita` en la lista. Usernames case-sensitive para display, unicidad case-insensitive en BD (regex `^[a-zA-Z0-9_]+$`); filtro `lib/utils/username-filter.ts:esUsernameOfensivo` bloquea slurs + leet-speak básico en los 3 endpoints de auth. `VerificacionSection` actualiza copy DNI a "Requerido para canjear cualquier premio.". `DatosSection` muestra "Por completar" cuando `nombre` está vacío o coincide con el `username`; adapter OAuth ya no copia email/username al nombre. Minuto en vivo simplificado: `getMinutoLabel({ statusShort, minuto, extra })` + propagación de `status.extra` (injury time "45+3'") desde api-football al cache, WS y endpoints REST.
+- **Lote 4 — Hotfixes económicos del Plan v6 (Abr 2026):** centralización de constantes económicas en [`lib/config/economia.ts`](apps/web/lib/config/economia.ts) (`BONUS_BIENVENIDA_LUKAS=15`, `MESES_VENCIMIENTO_COMPRA=36`, `ENTRADA_LUKAS=3`, `LIMITE_MENSUAL_DEFAULT=300`, `LIMITE_MENSUAL_MAX=1000`, `LIMITE_DIARIO_TICKETS_DEFAULT=10`). Cambios: bonus bienvenida 500→15, vencimiento Lukas comprados 12→36 meses, cierre de torneos T-5min→al kickoff (`CIERRE_MIN_BEFORE=0` en `torneos.service.ts`), entrada uniforme **3 Lukas** para todos los torneos (el panel admin perdió el input numérico, se muestra como badge readonly). Tipos `EXPRESS/ESTANDAR/PREMIUM/GRAN_TORNEO` quedan como **etiqueta visual** (no afectan reglas). `LigaConfig` perdió el campo `entradaLukas`. La distribución FLOOR + residual al 1° y los empates con split equitativo acotado a M ya estaban implementados en `lib/utils/premios-distribucion.ts`; sólo se ampliaron los comentarios para que coincidan con el wording del Plan v6. Límite mensual cap subido de 10000 a 1000 (en realidad reducido — antes el Zod aceptaba hasta 10000, ahora 1000). Endpoint temporal `/api/debug/sentry-test` (Lote 1) eliminado. Migración de datos: NINGUNA — los torneos existentes con entrada 5/10/30/100 conservan su valor; las TransaccionLukas con `venceEn` calculado a 12m se mantienen. Solo aplica a creaciones futuras.
 
 ### ⏳ Pendiente
 - **Sub-Sprint 2 — Pagos Culqi:** `/wallet` ya tiene UI completa (balance hero, 4 packs, historial), falta integración Culqi.js + webhook `/webhooks/culqi` + acreditación real de Lukas. Endpoints diseñados: `POST /lukas/comprar`, `POST /webhooks/culqi`. Enforcement de límite mensual ya listo (`verificarLimiteCompra` en `limites.service.ts`).
@@ -276,7 +286,7 @@ pnpm exec tsc --noEmit
 | Ruta | Contenido |
 |------|-----------|
 | `/auth/signin` | Login de cuenta existente. Google OAuth (botón) + form email (magic link). Si el email no está registrado → redirect a `/auth/signup` con `hint=no-account`. |
-| `/auth/signup` | Crear cuenta nueva. Google OAuth (botón) + form email + username (`@handle` único, 3-20 chars) + checkbox T&C / mayor de 18. Cierra creando usuario + bonus 500 Lukas y dispara magic link via `signIn("resend")`. |
+| `/auth/signup` | Crear cuenta nueva. Google OAuth (botón) + form email + username (`@handle` único, 3-20 chars) + checkbox T&C / mayor de 18. Cierra creando usuario + bonus de bienvenida (`BONUS_BIENVENIDA_LUKAS`) y dispara magic link via `signIn("resend")`. |
 | `/auth/completar-perfil` | Post-OAuth Google primera vez. Usuario elige su @handle definitivo (inmutable después) + acepta T&C. Middleware redirige aquí hasta `usernameLocked=true`. |
 | `/` y `/matches` | Filter chips (liga + día scroll horizontal) + match cards por urgencia + sidebar sticky. Sidebar (top→bottom): **1)** En vivo ahora · **2)** Los Pozos más grandes de la semana · **3)** Tu balance · **4)** Cómo se pagan los premios · **5)** Los más pagados de la semana. Título derivado de filtros via `buildMatchesPageTitle`. |
 | `/live-match` | Filter chips por liga + LiveSwitcher (solo EN_VIVO) + LiveHero (dark, score dorado, 4 stats, timeline) + mi ticket destacado + tabs Ranking/Stats/Events + LiveFinalizedSection abajo (últimas 24h). |
@@ -512,9 +522,9 @@ Al 5 de junio, un usuario peruano cualquiera debe poder en una sola sesión:
 
 1. Entrar a `hablaplay.com`
 2. Ver torneos disponibles sin cuenta
-3. Crear cuenta por Google o magic link + elegir @handle → recibir 500 Lukas de bienvenida
-4. Comprar 100 Lukas con tarjeta sandbox (→ 615 con bonus) ⏳ pendiente SS2
-5. Inscribirse en torneo de Liga 1 (10 Lukas)
+3. Crear cuenta por Google o magic link + elegir @handle → recibir 15 Lukas de bienvenida
+4. Comprar 100 Lukas con tarjeta sandbox (→ 115 con bonus) ⏳ pendiente SS2
+5. Inscribirse en torneo de Liga 1 (3 Lukas)
 6. Armar combinada de 5 predicciones
 7. Ver puntos actualizándose en vivo durante el partido
 8. Recibir Lukas de premio automáticamente si quedó en top
@@ -544,7 +554,6 @@ Baseline operacional activo tras Lote 1 (Abr 2026).
 
 ### Endpoints de infra
 - `GET /api/health` — para Uptime Robot. Chequea Postgres (`SELECT 1`) y Redis (`PING`) en paralelo con timeout 3s. Respuesta `200 {"status":"ok"}` o `503 {"status":"error",...}` identificando el check caído. `Cache-Control: no-store`. Excluido del rate limit.
-- `GET /api/debug/sentry-test` — dispara error controlado para verificar captura de Sentry. Guard doble: `SENTRY_DEBUG_TOKEN` presente en env + header `X-Debug-Token` matcheando. Sin match → 404. Borrable cuando ya no se use.
 
 ### Headers de seguridad
 Aplicados globalmente vía `next.config.js` → `headers()`:
@@ -562,7 +571,7 @@ Middleware edge (`apps/web/middleware.ts` + `lib/rate-limit.ts`) con sliding-win
 - `/api/auth/*`: 10 req/min por IP
 - `/api/v1/tickets/*` y `/api/v1/torneos/*/inscribir`: 30 req/min por usuario
 - Resto `/api/*`: 60 req/min por IP
-- Excluidos: `/api/health`, `/api/debug/*`, `/api/v1/webhooks/*` (HMAC en su handler)
+- Excluidos: `/api/health`, `/api/v1/webhooks/*` (HMAC en su handler)
 
 Respuesta 429 con `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`. Violaciones se reportan a Sentry como `warning`. CAVEAT: store in-memory → correcto solo con 1 réplica (realidad hoy). Al escalar, migrar a Redis (ioredis con INCR+EXPIRE o Upstash via HTTP).
 
@@ -580,8 +589,7 @@ NEXT_PUBLIC_POSTHOG_KEY=<configured>
 NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
 ```
 
-Nueva en Lote 1:
-- `SENTRY_DEBUG_TOKEN` — opcional; header secret para `/api/debug/sentry-test`. Sin este valor el endpoint responde 404.
+Lote 4 (Abr 2026): el endpoint temporal `/api/debug/sentry-test` (Lote 1) y su env var `SENTRY_DEBUG_TOKEN` se eliminaron. La var puede borrarse de Railway sin impacto.
 
 Nuevas en Lote 3 — datos legales (se completarán cuando llegue el RUC y la partida SUNARP). Mientras estén ausentes, los placeholders `{{LEGAL_*}}` aparecen literales en los documentos públicos:
 ```
