@@ -14,13 +14,24 @@
 
 import { prisma, type Prisma } from "@habla/db";
 import { LimiteExcedido } from "./errors";
+import {
+  LIMITE_MENSUAL_DEFAULT,
+  LIMITE_MENSUAL_MAX,
+  LIMITE_DIARIO_TICKETS_DEFAULT,
+} from "../config/economia";
 
 // ---------------------------------------------------------------------------
 // Constantes
 // ---------------------------------------------------------------------------
 
-export const DEFAULT_LIMITE_MENSUAL_COMPRA = 300;
-export const DEFAULT_LIMITE_DIARIO_TICKETS = 10;
+/**
+ * Default y tope superior del límite mensual de compra. Plan v6: el
+ * usuario puede subirlo hasta `LIMITE_MENSUAL_MAX` desde /perfil; bajarlo
+ * a 0 = sin límite.
+ */
+export const DEFAULT_LIMITE_MENSUAL_COMPRA = LIMITE_MENSUAL_DEFAULT;
+export const MAX_LIMITE_MENSUAL_COMPRA = LIMITE_MENSUAL_MAX;
+export const DEFAULT_LIMITE_DIARIO_TICKETS = LIMITE_DIARIO_TICKETS_DEFAULT;
 
 export const AUTOEXCLUSION_DIAS_VALIDOS = [7, 30, 90] as const;
 export type DiasAutoExclusion = (typeof AUTOEXCLUSION_DIAS_VALIDOS)[number];

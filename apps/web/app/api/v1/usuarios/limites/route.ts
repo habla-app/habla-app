@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import {
   actualizarLimites,
   obtenerLimites,
+  MAX_LIMITE_MENSUAL_COMPRA,
 } from "@/lib/services/limites.service";
 import {
   NoAutenticado,
@@ -16,8 +17,16 @@ import { logger } from "@/lib/services/logger";
 
 export const dynamic = "force-dynamic";
 
+// Plan v6: tope mensual configurable hasta MAX_LIMITE_MENSUAL_COMPRA
+// (S/ 1.000). Usuarios viejos pueden tener valores mayores en BD; el
+// PATCH solo aplica al payload entrante.
 const PatchSchema = z.object({
-  limiteMensualCompra: z.number().int().min(0).max(10000).optional(),
+  limiteMensualCompra: z
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_LIMITE_MENSUAL_COMPRA)
+    .optional(),
   limiteDiarioTickets: z.number().int().min(0).max(100).optional(),
 });
 

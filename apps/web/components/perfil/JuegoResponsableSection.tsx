@@ -7,6 +7,10 @@ import { useState } from "react";
 import { authedFetch } from "@/lib/api-client";
 import type { LimitesUsuario } from "@/lib/services/limites.service";
 import {
+  LIMITE_MENSUAL_DEFAULT,
+  LIMITE_MENSUAL_MAX,
+} from "@/lib/config/economia";
+import {
   Modal,
   ModalHeader,
   ModalBody,
@@ -90,19 +94,21 @@ export function JuegoResponsableSection({ inicial }: Props) {
       <LimitRow
         title="💳 Límite mensual de compra"
         valueLabel={mensual > 0 ? `S/ ${mensual} / mes` : "Sin límite"}
-        desc="Cantidad máxima que puedes gastar en Lukas por mes"
+        desc={`Cantidad máxima que puedes gastar en Lukas por mes. Default S/ ${LIMITE_MENSUAL_DEFAULT}, máximo S/ ${LIMITE_MENSUAL_MAX}.`}
         usageText={`S/ ${limites.uso.comprasMesActual} usados este mes`}
         pct={porcMensual}
       >
         <input
           type="number"
           min={0}
-          max={10000}
+          max={LIMITE_MENSUAL_MAX}
           value={mensual}
           onChange={(e) => setMensual(Number(e.target.value) || 0)}
           className="w-24 rounded-sm border border-light px-2.5 py-1 text-sm"
         />
-        <span className="text-xs text-muted-d">S/ (0 = sin límite)</span>
+        <span className="text-xs text-muted-d">
+          S/ (0 = sin límite, máx {LIMITE_MENSUAL_MAX})
+        </span>
       </LimitRow>
 
       <LimitRow
