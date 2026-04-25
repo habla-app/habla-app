@@ -3,13 +3,14 @@
 // Flujo Google: click GoogleButton → NextAuth crea user con username
 // temporal → middleware lo manda a /auth/completar-perfil.
 // Flujo email: form (email + username + T&C) → POST /api/v1/auth/signup
-// (crea user con username definitivo + bonus 500) → signIn("resend", {email})
-// client-side dispara magic link → /auth/verificar.
+// (crea user con username definitivo + bonus de bienvenida) →
+// signIn("resend", {email}) client-side dispara magic link → /auth/verificar.
 
 import Link from "next/link";
 import { SignupForm } from "@/components/auth/SignupForm";
 import { GoogleButton } from "@/components/auth/GoogleButton";
 import { TrackOnMount } from "@/components/analytics/TrackOnMount";
+import { BONUS_BIENVENIDA_LUKAS } from "@/lib/config/economia";
 
 interface PageProps {
   searchParams: { callbackUrl?: string; email?: string };
@@ -36,8 +37,10 @@ export default function SignUpPage({ searchParams }: PageProps) {
         </h1>
         <p className="mt-2 text-center text-sm leading-relaxed text-muted-d">
           Registrate y recibí{" "}
-          <strong className="text-brand-gold-dark">500 Lukas</strong> de
-          bienvenida.
+          <strong className="text-brand-gold-dark">
+            {BONUS_BIENVENIDA_LUKAS} Lukas
+          </strong>{" "}
+          de bienvenida.
         </p>
 
         <div className="mt-6 flex flex-col gap-3">

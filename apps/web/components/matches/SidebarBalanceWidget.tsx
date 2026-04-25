@@ -18,6 +18,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { BONUS_BIENVENIDA_LUKAS } from "@/lib/config/economia";
 import { useLukasStore } from "@/stores/lukas.store";
 
 interface Props {
@@ -92,8 +93,8 @@ function UnloggedBalance() {
         Inicia sesión para ver tu balance
       </p>
       <p className="mb-3.5 text-[11px] leading-snug text-muted-d">
-        Regístrate y recibe 500 Lukas de bienvenida para tu primera
-        combinada.
+        Regístrate y recibe {BONUS_BIENVENIDA_LUKAS} Lukas de bienvenida para tu
+        primera combinada.
       </p>
       <Link
         href="/auth/signin?callbackUrl=/"

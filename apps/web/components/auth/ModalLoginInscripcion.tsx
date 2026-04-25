@@ -8,6 +8,7 @@
 // + `/torneo/:id`). Usa el Modal primitive con header dorado + body light.
 import { useRouter } from "next/navigation";
 import { Modal, ModalHeader, ModalBody, Button } from "@/components/ui";
+import { BONUS_BIENVENIDA_LUKAS } from "@/lib/config/economia";
 
 interface Torneo {
   id?: string;
@@ -48,8 +49,10 @@ export function ModalLoginInscripcion({
       <ModalBody className="text-center">
         <p className="mb-5 text-sm leading-relaxed text-body">
           Regístrate y recibe{" "}
-          <span className="font-bold text-brand-gold-dark">500 Lukas</span> de
-          regalo para tu primera combinada.
+          <span className="font-bold text-brand-gold-dark">
+            {BONUS_BIENVENIDA_LUKAS} Lukas
+          </span>{" "}
+          de regalo para tu primera combinada.
         </p>
 
         {torneo && (

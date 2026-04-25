@@ -65,7 +65,8 @@ describe("auth.ts — Google OAuth + pages", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Adapter — crea usuarios OAuth con username temporal `new_*` + bonus 500
+// Adapter — crea usuarios OAuth con username temporal `new_*` + bonus de
+// bienvenida (monto en lib/config/economia.ts)
 // ---------------------------------------------------------------------------
 
 describe("auth-adapter.ts — createUser con username temporal", () => {
@@ -80,8 +81,12 @@ describe("auth-adapter.ts — createUser con username temporal", () => {
     expect(SRC).toMatch(/usernameLocked:\s*false/);
   });
 
-  it("preserva el bonus 500 Lukas en la transacción atómica", () => {
-    expect(SRC).toMatch(/BONUS_BIENVENIDA_LUKAS\s*=\s*500/);
+  it("acredita BONUS_BIENVENIDA_LUKAS desde economia.ts en la transacción atómica", () => {
+    expect(SRC).toMatch(
+      /import\s*\{\s*BONUS_BIENVENIDA_LUKAS\s*\}\s*from\s*["'][^"']*config\/economia["']/,
+    );
+    expect(SRC).toMatch(/balanceLukas:\s*BONUS_BIENVENIDA_LUKAS/);
+    expect(SRC).toMatch(/monto:\s*BONUS_BIENVENIDA_LUKAS/);
     expect(SRC).toMatch(/tipo:\s*["']BONUS["']/);
     expect(SRC).toMatch(/\$transaction/);
   });
@@ -191,8 +196,9 @@ describe("/auth/signup — página", () => {
     expect(SRC).toMatch(/SignupForm/);
   });
 
-  it("menciona el bonus de 500 Lukas", () => {
-    expect(SRC).toMatch(/500 Lukas/);
+  it("menciona el bonus de bienvenida usando la constante de economia.ts", () => {
+    expect(SRC).toMatch(/BONUS_BIENVENIDA_LUKAS/);
+    expect(SRC).toMatch(/from\s*["'][^"']*config\/economia["']/);
   });
 });
 

@@ -1,10 +1,10 @@
 // POST /api/v1/auth/signup
 //
 // Registro formal email (Abr 2026). Crea usuario en BD con username
-// definitivo + `usernameLocked=true` + `tycAceptadosAt=now` + bonus 500
-// Lukas (BONUS, sin vencimiento) en una transacción atómica. No dispara
-// el magic link — eso lo hace el cliente con `signIn("resend")` tras
-// recibir `ok: true`.
+// definitivo + `usernameLocked=true` + `tycAceptadosAt=now` + bonus de
+// bienvenida (BONUS_BIENVENIDA_LUKAS, sin vencimiento) en una transacción
+// atómica. No dispara el magic link — eso lo hace el cliente con
+// `signIn("resend")` tras recibir `ok: true`.
 //
 // Body: { email, username, aceptaTyc }
 // Respuesta OK: { ok: true, data: { email } }
@@ -20,12 +20,11 @@ import {
   ValidacionFallida,
 } from "@/lib/services/errors";
 import { esReservado } from "@/lib/config/usernames-reservados";
+import { BONUS_BIENVENIDA_LUKAS } from "@/lib/config/economia";
 import { esUsernameOfensivo } from "@/lib/utils/username-filter";
 import { logger } from "@/lib/services/logger";
 
 export const dynamic = "force-dynamic";
-
-const BONUS_BIENVENIDA_LUKAS = 500;
 // Abr 2026: case-sensitive para display (Gustavo ≠ gustavo en UI), pero
 // unicidad case-insensitive en BD para evitar colisiones homográficas.
 const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/;

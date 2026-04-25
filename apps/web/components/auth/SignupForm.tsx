@@ -1,7 +1,7 @@
 "use client";
 // SignupForm — formulario email del /auth/signup. Secuencia:
 //  1. Usuario llena email + username + T&C.
-//  2. POST /api/v1/auth/signup crea user + bonus 500 Lukas (atómico).
+//  2. POST /api/v1/auth/signup crea user + bonus de bienvenida (atómico).
 //  3. Si OK, llama signIn("resend", { email, redirectTo: callbackUrl })
 //     que despacha el magic link y navega a /auth/verificar.
 //  4. Al confirmar el link, NextAuth setea la session → middleware

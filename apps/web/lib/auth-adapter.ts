@@ -16,8 +16,7 @@
 // de Next en edge — Web Crypto está disponible en ambos runtimes.
 import type { Adapter, AdapterUser } from "next-auth/adapters";
 import { prisma, type Usuario } from "@habla/db";
-
-const BONUS_BIENVENIDA_LUKAS = 500;
+import { BONUS_BIENVENIDA_LUKAS } from "./config/economia";
 
 function toAdapterUser(u: Usuario): AdapterUser {
   return {
