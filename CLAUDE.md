@@ -1,7 +1,36 @@
 # CLAUDE.md — Habla! App
 
 > Contexto operativo del proyecto. El historial detallado de bugs vive en `CHANGELOG.md` y en `git log`.
-> Última actualización: 25 Abr 2026 (Lote 5 — Catálogo de 19 ligas + refresh de sesión post-username).
+> Última actualización: 25 Abr 2026 (Adenda — Política de validación producción-primero).
+
+---
+
+## Política de validación: producción primero, no local
+
+**No correr la app, ni hacer migraciones, ni levantar la base de datos en local.** El entorno de desarrollo único es producción en Railway + base de datos en Railway. Hacer cualquier validación en local consume tokens y tiempo sin valor agregado, porque no replica el entorno real.
+
+**Reglas concretas:**
+
+- **NO correr** `pnpm dev`, `pnpm start`, `next dev`, `next build` (salvo cuando el typecheck/lint lo requiera implícitamente).
+- **NO correr** `prisma migrate dev` ni `prisma db push` localmente.
+- **NO levantar** Postgres ni Redis en local con Docker, docker-compose, ni equivalente.
+- **NO ejecutar scripts** que requieran conexión a BD ni a Redis.
+- **NO simular** webhooks ni endpoints contra una BD ficticia local.
+
+**Lo que SÍ se hace antes de cada push:**
+
+- `pnpm tsc --noEmit` (typecheck en memoria, sin levantar nada).
+- `pnpm lint` (estático, sin levantar nada).
+- Inspección estática del código (leer archivos, validar imports, verificar tipos).
+- Preparar migraciones de Prisma con `prisma migrate dev --create-only` si aplica (genera el SQL pero NO lo aplica).
+
+**Validación funcional:**
+
+- Ocurre POST-DEPLOY en Railway producción.
+- Es responsabilidad del usuario (Gustavo) ejecutar los checks manuales reportados al final de cada lote.
+- Si Claude Code necesita "verificar" algo de comportamiento dinámico, lo describe textualmente en el reporte para que el usuario lo pruebe en producción.
+
+**Excepción única:** si el usuario solicita explícitamente probar algo en local, Claude Code puede hacerlo. Sin solicitud explícita, asumir prod-first.
 
 ---
 
