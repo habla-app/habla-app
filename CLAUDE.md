@@ -1,7 +1,7 @@
 # CLAUDE.md — Habla! App
 
 > Contexto operativo del proyecto. El historial detallado de bugs vive en `CHANGELOG.md` y en `git log`.
-> Última actualización: 24 Abr 2026 (Lote 2 — Analytics y SEO).
+> Última actualización: 24 Abr 2026 (Lote 3 — Contenido legal, footer y FAQ).
 
 ---
 
@@ -583,6 +583,17 @@ NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
 Nueva en Lote 1:
 - `SENTRY_DEBUG_TOKEN` — opcional; header secret para `/api/debug/sentry-test`. Sin este valor el endpoint responde 404.
 
+Nuevas en Lote 3 — datos legales (se completarán cuando llegue el RUC y la partida SUNARP). Mientras estén ausentes, los placeholders `{{LEGAL_*}}` aparecen literales en los documentos públicos:
+```
+LEGAL_RAZON_SOCIAL=<not configured yet>
+LEGAL_RUC=<not configured yet>
+LEGAL_PARTIDA_REGISTRAL=<not configured yet>
+LEGAL_DOMICILIO_FISCAL=<not configured yet>
+LEGAL_DISTRITO=<not configured yet>
+LEGAL_TITULAR_NOMBRE=<not configured yet>
+LEGAL_TITULAR_DNI=<not configured yet>
+```
+
 El listado completo de vars (incluidas las de dev) vive en `.env.example`.
 
 ---
@@ -617,6 +628,7 @@ PostHog Cloud (proyecto `habla-production`). Init solo en producción con `NEXT_
 - Rutas `/legal/*` — no capturamos nada (opt-out en el helper).
 - `identify()` en callback de session authenticated; `reset()` en logout.
 - Pageview manual vía `PostHogProvider` (App Router no dispara `$pageview` automático).
+- **Consent (Lote 3):** PostHog respeta el consentimiento de cookies. Init solo si el usuario aceptó analytics en el banner; si revoca, llamamos `opt_out_capturing()`. Lógica en `components/CookieBanner.tsx` + `lib/cookie-consent.ts`. Storage key: `habla_cookie_consent_v1`. El banner se muestra una sola vez por dispositivo hasta que el usuario decide.
 
 ### Funnels + cohortes
 Referencia en `docs/analytics-funnels.md`. Configuración práctica (armar funnels, cohortes) se hace en el dashboard PostHog aparte.
@@ -662,3 +674,43 @@ No confiar en "el script se cargó" sin validar el request de datos real. Proces
 
 ### NEXT_PUBLIC_* + Railway + Dockerfile
 Next.js inlinea las vars `NEXT_PUBLIC_*` en el bundle cliente DURANTE `next build`, no en runtime. Railway con builder=DOCKERFILE solo las pasa al `docker build` si el Dockerfile las declara explícitamente como `ARG` + `ENV` antes del `RUN ... build`. Sin eso, Next inlinea `undefined` y cualquier `if (!process.env.NEXT_PUBLIC_X) return` en un provider del cliente dispara silenciosamente — sin errores, sin warnings, sin requests. Regla: al sumar una `NEXT_PUBLIC_*` nueva, tocar SIEMPRE el `Dockerfile` (ARG+ENV) junto con el código que la lee, y los guards condicionales de providers del cliente deben loggear su config ANTES de cualquier early-return para ser debuggeables.
+
+### Placeholders {{LEGAL_*}} visibles en producción
+Los documentos legales contienen placeholders `{{RAZON_SOCIAL}}`, `{{RUC}}`, `{{PARTIDA_REGISTRAL}}` (y similares) que se resuelven en runtime leyendo `process.env.LEGAL_*`. Mientras esas env vars no estén configuradas en Railway, los placeholders aparecen literales en el render público (ej: en `/legal/terminos`). Esto es **intencional**: visibiliza datos faltantes en lugar de ocultarlos con valores inventados. Cuando llegue el RUC y la partida SUNARP, setear las vars en Railway y el render se actualiza al siguiente request (lectura de fs en cada SSR). El reemplazo vive en `lib/legal-content.ts:resolvePlaceholders()`.
+
+---
+
+## 21. CONTENIDO LEGAL E INSTITUCIONAL
+
+Lote 3 (Abr 2026). 6 documentos legales + Centro de Ayuda público + Footer global + banner de consentimiento de cookies.
+
+### Rutas y archivos fuente
+
+| Ruta | Archivo fuente | Propósito |
+|---|---|---|
+| `/legal/terminos` | `apps/web/content/legal/terminos-y-condiciones.md` | Términos y Condiciones del servicio |
+| `/legal/privacidad` | `apps/web/content/legal/politica-de-privacidad.md` | Política de Privacidad — Ley 29733 (Perú) |
+| `/legal/cookies` | `apps/web/content/legal/politica-de-cookies.md` | Política de Cookies (categorías, tabla, gestión) |
+| `/legal/juego-responsable` | `apps/web/content/legal/juego-responsable.md` | Compromiso, herramientas de control, recursos |
+| `/legal/canjes` | `apps/web/content/legal/canjes-y-devoluciones.md` | Procedimiento de canjes, reembolsos, vencimientos |
+| `/legal/aviso` | `apps/web/content/legal/aviso-legal.md` | Aviso legal del sitio (titularidad, IP, jurisdicción) |
+| `/ayuda/faq` | `apps/web/content/legal/faq.md` | Centro de Ayuda público — 5 categorías, 20 preguntas |
+
+Las 6 rutas legales son `generateStaticParams` con `LEGAL_SLUGS` en `lib/legal-content.ts`. El parser de FAQ (`lib/faq-content.ts`) lee el .md y arma una estructura tipada `FaqCategory[]` que el `<FaqClient>` consume con buscador + acordeón.
+
+### Renderizado
+- Markdown vía `react-markdown` + `remark-gfm` (única dep nueva del lote). Componente único `<MarkdownContent>` con clases Tailwind por elemento. Sanitización por default del lib (sin `dangerouslySetInnerHTML`).
+- Layout legal (`app/legal/layout.tsx`) y Ayuda (`app/ayuda/layout.tsx`) heredan NavBar + Footer pero NO BottomNav (mobile bottom nav rompería la legibilidad de documentos largos).
+- Cada página legal tiene TOC sticky desktop, collapsable mobile, y botón "Volver arriba" flotante.
+
+### Cómo actualizar contenido
+1. Editar el .md correspondiente en `apps/web/content/legal/`.
+2. Si el cambio es sustancial, actualizar la línea `*Versión X.Y — Vigente desde: ...*` al final del documento y `legalLastMod` en `app/sitemap.ts`.
+3. Commit + deploy automático.
+4. Para cambios de razón social, RUC, partida registral, etc., actualizar las env vars `LEGAL_*` en Railway (no se tocan los .md — los placeholders se resuelven en runtime).
+
+### Footer global
+`components/layout/Footer.tsx` integrado en `app/(main)/layout.tsx`, `app/legal/layout.tsx` y `app/ayuda/layout.tsx`. Excluido del flow de auth (`app/auth/layout.tsx` mantiene su pantalla minimalista) y del panel admin. 4 columnas en desktop (Marca · Producto · Legal · Contacto), apilado en mobile.
+
+### Cookie consent
+`components/CookieBanner.tsx` montado en root layout — aparece en TODA ruta hasta que el usuario decide. Persistencia en localStorage `habla_cookie_consent_v1` con shape `{ status, preferences, analytics, decidedAt }`. Lógica del estado en `lib/cookie-consent.ts`. PostHog respeta el consent: init solo si `analytics === true`, y `opt_out_capturing()` si revoca. Ver §18.
