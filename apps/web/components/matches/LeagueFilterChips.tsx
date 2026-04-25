@@ -2,8 +2,14 @@
 // Chips de filtro por liga para /matches. Lee y escribe el filtro
 // `?liga=<slug>` vía useMatchesFilters. El chip "Todas las ligas"
 // corresponde a liga=null (sin query param).
+//
+// Lote 7: con 19 ligas la fila se cortaba en pantalla. Envolvemos en
+// HorizontalScrollChips para tener scroll horizontal con flechas en
+// desktop, swipe en mobile, edge fades, y auto-scroll al chip activo
+// (útil cuando el usuario llega vía deep link como ?liga=nations-league
+// que está al final de la lista).
 
-import { Chip } from "@/components/ui";
+import { Chip, HorizontalScrollChips } from "@/components/ui";
 import { useMatchesFilters } from "@/hooks/useMatchesFilters";
 import {
   LIGA_SLUGS_ORDER,
@@ -15,10 +21,11 @@ export function LeagueFilterChips() {
   const activeSlug = filters.liga;
 
   return (
-    <div className="scrollbar-none flex gap-2 overflow-x-auto pb-1">
+    <HorizontalScrollChips ariaLabel="Filtrar por liga">
       <Chip
         key="todas"
         active={activeSlug === null}
+        data-active={activeSlug === null ? "true" : "false"}
         onClick={() => setFilter("liga", null)}
       >
         Todas las ligas
@@ -27,11 +34,12 @@ export function LeagueFilterChips() {
         <Chip
           key={slug}
           active={activeSlug === slug}
+          data-active={activeSlug === slug ? "true" : "false"}
           onClick={() => setFilter("liga", slug)}
         >
           {LIGA_CHIP_LABELS[slug]}
         </Chip>
       ))}
-    </div>
+    </HorizontalScrollChips>
   );
 }
