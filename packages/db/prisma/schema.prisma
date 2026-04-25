@@ -234,7 +234,7 @@ model TransaccionLukas {
   monto       Int // Positivo = ingreso, Negativo = egreso
   descripcion String
   refId       String? // ID de torneo, pago, canje, etc.
-  venceEn     DateTime? // Para Lukas comprados (12 meses)
+  venceEn     DateTime? // Para Lukas comprados (36 meses, MESES_VENCIMIENTO_COMPRA en lib/config/economia.ts)
   creadoEn    DateTime        @default(now())
 
   @@map("transacciones_lukas")

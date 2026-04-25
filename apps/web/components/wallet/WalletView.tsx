@@ -9,6 +9,7 @@ import { WalletStats } from "./WalletStats";
 import { BuyPacksPlaceholder } from "./BuyPacksPlaceholder";
 import { MovesFilter, type MoveFiltro } from "./MovesFilter";
 import { TxList } from "./TxList";
+import { MESES_VENCIMIENTO_COMPRA } from "@/lib/config/economia";
 import type {
   WalletTotales,
   WalletTransaccion,
@@ -70,8 +71,8 @@ export function WalletView({
           <strong className="text-dark">
             No son convertibles a dinero en efectivo
           </strong>
-          . Los Lukas comprados vencen 12 meses después de la compra. Los
-          ganados en torneos no vencen.
+          . Los Lukas comprados vencen {MESES_VENCIMIENTO_COMPRA} meses después
+          de la compra. Los ganados en torneos no vencen.
         </p>
       </div>
 
