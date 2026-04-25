@@ -583,11 +583,12 @@ Baseline operacional activo tras Lote 1 (Abr 2026).
 | PostHog | Analytics (integración pendiente Lote 2) | Keys en env, no cableado aún |
 | Cloudflare Email Routing | Email entrante `@hablaplay.com` | `soporte@`, `hola@`, `legal@`, catch-all → `hablaplay@gmail.com` |
 | Railway Backups nativos | DB recovery | 3 schedules: Daily / Weekly / Monthly |
-| R2 `habla-db-backups` | Backup externo (pendiente Lote 4) | Bucket creado, credenciales en 1Password |
+| R2 `habla-db-backups` (Lote 7) | Backup externo automatizado | `pg_dump` + gzip 1x/día desde el cron in-process; ventana objetivo 03:00 UTC. Retención: 30 daily + 1/mes indefinido. Restauración en [docs/runbook-restore.md](docs/runbook-restore.md). |
 | Google Search Console | SEO + ownership | `hablaplay.com` verificado via Cloudflare |
 
 ### Endpoints de infra
-- `GET /api/health` — para Uptime Robot. Chequea Postgres (`SELECT 1`) y Redis (`PING`) en paralelo con timeout 3s. Respuesta `200 {"status":"ok"}` o `503 {"status":"error",...}` identificando el check caído. `Cache-Control: no-store`. Excluido del rate limit.
+- `GET /api/health` — para Uptime Robot. Chequea Postgres (`SELECT 1`) y Redis (`PING`) en paralelo con timeout 3s. Adicionalmente reporta el check `backup` (ok/stale/missing/unconfigured) leyendo state in-memory del job (no llama a R2). Respuesta `200 {"status":"ok"}` o `503 {"status":"error",...}` identificando el check caído. **Backup stale (>26h) NO degrada el status** — se loggea warning y Sentry alerta aparte. `Cache-Control: no-store`. Excluido del rate limit.
+- `POST /api/cron/backup-db` — dispara backup ad-hoc. Auth `Authorization: Bearer <CRON_SECRET>`. `GET` con misma auth devuelve estado + listado de últimos 10 backups en R2.
 
 ### Headers de seguridad
 Aplicados globalmente vía `next.config.js` → `headers()`:
@@ -624,6 +625,15 @@ NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
 ```
 
 Lote 4 (Abr 2026): el endpoint temporal `/api/debug/sentry-test` (Lote 1) y su env var `SENTRY_DEBUG_TOKEN` se eliminaron. La var puede borrarse de Railway sin impacto.
+
+Lote 7 (Abr 2026) — credenciales R2 para backups automatizados (vault 1Password "Habla! Infra"):
+```
+R2_ACCESS_KEY_ID=<configured>
+R2_SECRET_ACCESS_KEY=<configured>
+R2_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+R2_BUCKET=habla-db-backups
+```
+Si falta cualquiera de las 4, el job se autodeshabilita (`/api/health` reporta `checks.backup: "unconfigured"`). `CRON_SECRET` ya existía para `/api/cron/cerrar-torneos`; se reutiliza para `/api/cron/backup-db`.
 
 Nuevas en Lote 3 — datos legales (se completarán cuando llegue el RUC y la partida SUNARP). Mientras estén ausentes, los placeholders `{{LEGAL_*}}` aparecen literales en los documentos públicos:
 ```
@@ -719,6 +729,12 @@ Next.js inlinea las vars `NEXT_PUBLIC_*` en el bundle cliente DURANTE `next buil
 
 ### Placeholders {{LEGAL_*}} visibles en producción
 Los documentos legales contienen placeholders `{{RAZON_SOCIAL}}`, `{{RUC}}`, `{{PARTIDA_REGISTRAL}}` (y similares) que se resuelven en runtime leyendo `process.env.LEGAL_*`. Mientras esas env vars no estén configuradas en Railway, los placeholders aparecen literales en el render público (ej: en `/legal/terminos`). Esto es **intencional**: visibiliza datos faltantes en lugar de ocultarlos con valores inventados. Cuando llegue el RUC y la partida SUNARP, setear las vars en Railway y el render se actualiza al siguiente request (lectura de fs en cada SSR). El reemplazo vive en `lib/legal-content.ts:resolvePlaceholders()`.
+
+### Webpack 5 no maneja imports `node:` en server bundle de Next.js
+Webpack 5 lanza `UnhandledSchemeError: Reading from "node:child_process" is not handled by plugins (Unhandled scheme)` cuando algún módulo importado desde un Route Handler / RSC usa el prefix `node:` para módulos sin polyfill de browser (típicamente `child_process`). Para `node:fs` y `node:path` Webpack tiene polyfills nativos y no rompe — para todo lo demás hay que **quitar el prefix** (`import { spawn } from "child_process"`). Misma funcionalidad, builtin de Node, queda externo en el server bundle. Aplicar la regla a cualquier módulo nuevo que use APIs de Node solo-server (Lote 7: backup.service.ts).
+
+### `pg_dump` + Postgres major version mismatch
+El binario `pg_dump` debe ser **versión >= servidor**. Postgres 16 server con un cliente 15 falla con "server version mismatch". El Dockerfile instala `postgresql16-client` (no `postgresql-client` a secas, que en algunas Alpine pinea a 15). Si se actualiza el Postgres de Railway a v17, también hay que bumpear el paquete del Dockerfile.
 
 ### Refresh de sesión cliente con NextAuth
 NextAuth v5 con strategy JWT cachea los datos del usuario (id, rol, username, usernameLocked) dentro del token firmado en la cookie. Cuando un endpoint mutiliza esos datos en BD (ej. `POST /api/v1/auth/completar-perfil` setea `username` + `usernameLocked=true`), el cliente debe forzar el re-emit del JWT con `await update()` de `useSession()`. Esto golpea `/api/auth/session` y dispara el callback `jwt({ trigger: 'update' })`, donde re-leemos los campos relevantes de BD y los pegamos al token. Sin eso, el usuario sigue viendo los datos viejos en sesión hasta que cierra y vuelve a entrar. Patrón completo en [`auth.ts`](apps/web/lib/auth.ts) + [`CompletarPerfilForm.tsx`](apps/web/components/auth/CompletarPerfilForm.tsx). Caveat extra: si el siguiente paso lo procesa un Server Component (NavBar, layout RSC), `await update()` no garantiza que el SSR vea la cookie nueva — usar `window.location.href = callbackUrl` (hard reload) en vez de `router.push + router.refresh` para forzar una request HTTP fresca con la cookie ya rotada.
