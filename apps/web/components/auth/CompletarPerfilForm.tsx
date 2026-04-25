@@ -62,16 +62,17 @@ export function CompletarPerfilForm({ callbackUrl = "/" }: Props) {
         return;
       }
       track("profile_completed", {});
-      // Refrescar session para que usernameLocked=true llegue al cliente
-      // (esto dispara el jwt callback con trigger='update' y NextAuth
-      // re-emite la cookie del JWT con los datos frescos de BD).
-      await update();
+      // Refrescar la cookie del JWT para que usernameLocked=true llegue
+      // al SSR. CRÍTICO: pasar un objeto (aunque sea vacío) — `update()`
+      // sin args hace GET y NO dispara el jwt callback con
+      // trigger='update'; el token nunca se relee de BD ni se reemite
+      // la cookie. `update({})` hace POST con body, dispara el callback,
+      // que relee de BD y reemite la cookie firmada con los datos nuevos.
+      await update({});
       // Hard reload en vez de router.push + router.refresh: el NavBar es
       // un Server Component que lee el JWT desde la cookie en el render
-      // SSR. router.refresh() tiene una race contra ese render — a veces
-      // el RSC ve el JWT viejo aunque la cookie ya esté actualizada.
-      // window.location.href fuerza una request HTTP completa con la
-      // cookie nueva, así el SSR siempre ve usernameLocked=true.
+      // SSR. window.location.href fuerza una request HTTP completa con
+      // la cookie nueva, así el SSR siempre ve usernameLocked=true.
       window.location.href = callbackUrl;
     } catch {
       setError("Error de red. Intentá de nuevo.");
