@@ -16,3 +16,5 @@ export { Alert } from "./Alert";
 export { ToastProvider, useToast } from "./Toast";
 
 export { Modal, ModalHeader, ModalBody, ModalFooter } from "./Modal";
+
+export { HorizontalScrollChips } from "./HorizontalScrollChips";
