@@ -6,7 +6,6 @@
 // callbackUrl.
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { authedFetch } from "@/lib/api-client";
 import { track } from "@/lib/analytics";
@@ -19,7 +18,6 @@ interface Props {
 }
 
 export function CompletarPerfilForm({ callbackUrl = "/" }: Props) {
-  const router = useRouter();
   const { update } = useSession();
   const [username, setUsername] = useState("");
   const [usernameValido, setUsernameValido] = useState(false);
@@ -65,10 +63,16 @@ export function CompletarPerfilForm({ callbackUrl = "/" }: Props) {
       }
       track("profile_completed", {});
       // Refrescar session para que usernameLocked=true llegue al cliente
-      // (esto dispara el jwt callback con trigger='update').
+      // (esto dispara el jwt callback con trigger='update' y NextAuth
+      // re-emite la cookie del JWT con los datos frescos de BD).
       await update();
-      router.push(callbackUrl);
-      router.refresh();
+      // Hard reload en vez de router.push + router.refresh: el NavBar es
+      // un Server Component que lee el JWT desde la cookie en el render
+      // SSR. router.refresh() tiene una race contra ese render — a veces
+      // el RSC ve el JWT viejo aunque la cookie ya esté actualizada.
+      // window.location.href fuerza una request HTTP completa con la
+      // cookie nueva, así el SSR siempre ve usernameLocked=true.
+      window.location.href = callbackUrl;
     } catch {
       setError("Error de red. Intentá de nuevo.");
       setCargando(false);
