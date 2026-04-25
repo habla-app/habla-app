@@ -18,6 +18,7 @@ import { contarLiveMatches } from "@/lib/services/live-matches.service";
 import { logger } from "@/lib/services/logger";
 import { NavBar } from "@/components/layout/NavBar";
 import { BottomNav } from "@/components/layout/BottomNav";
+import { Footer } from "@/components/layout/Footer";
 import { LukasBalanceHydrator } from "@/components/auth/LukasBalanceHydrator";
 
 async function obtenerLiveCount(): Promise<number> {
@@ -41,6 +42,7 @@ export default async function MainLayout({ children }: { children: ReactNode }) 
       <NavBar initialLiveCount={liveCount} />
       <LukasBalanceHydrator initialBalance={initialBalance} />
       <main className="flex-1 pb-24 lg:pb-10">{children}</main>
+      <Footer />
       <BottomNav initialLiveCount={liveCount} />
     </div>
   );
