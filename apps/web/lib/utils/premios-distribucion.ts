@@ -7,17 +7,23 @@
 //     geométrico.
 //   - Empates: los tickets con puntaje idéntico reparten equitativamente
 //     la suma de los premios de las posiciones que ocupan como grupo.
-//     Si el grupo empatado se extiende más allá de M, todos cobran
-//     igualmente su parte del pool acotado a M (decisión PO).
+//     Si el grupo empatado se extiende más allá de M (último puesto
+//     pagado), la suma se ACOTA a las posiciones dentro del rango
+//     pagado (no se suman shares[i] con i ≥ M) y el split se reparte
+//     entre todos los miembros del grupo igualmente. Plan v6: regla
+//     explícita — "split equitativo acotado al último puesto pagado".
+//     Ejemplo: 1 puntero solo + 15 empatados en 2° con M=10 → los 15
+//     reparten sum(shares[1..9]) / 15. Sin la cota, los empatados
+//     fuera de M ganarían "premios fantasma".
 //   - Desempates adicionales: NO existen. Mismos puntos = mismo premio.
 //     El orden de inscripción queda como tiebreaker cosmético estable
 //     para la UI, pero no afecta premios.
 //
-// Redondeo: Math.floor sobre cada share individual. El residual por
-// redondeo se suma al 1° lugar para que `sum(premios) === pozoNeto`.
-// Decisión: floor (no banker's rounding) — es conservador, determinístico,
-// y el residual va al ganador que ya es el más favorecido. Documentado
-// en el PR del Hotfix #6.
+// Redondeo (Plan v6): Math.floor sobre cada share individual; el
+// residual por redondeo se suma al 1° lugar para que `sum(premios)
+// === pozoNeto`. Decisión: floor (no banker's rounding) — es
+// conservador, determinístico, y el residual va al ganador que ya
+// es el más favorecido.
 
 /**
  * Cortes de posiciones pagadas según total de inscritos.
