@@ -1,7 +1,11 @@
 FROM node:20-alpine AS base
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
-# OpenSSL es requerido por el engine de Prisma en Alpine
-RUN apk add --no-cache openssl
+# OpenSSL es requerido por el engine de Prisma en Alpine.
+# postgresql16-client trae el binario `pg_dump` que usa el job de
+# backup automatizado a R2 (Lote 7). Versión 16 para coincidir con la
+# versión del servidor Postgres en Railway — un cliente más viejo
+# falla con "server version mismatch" al dumpear.
+RUN apk add --no-cache openssl postgresql16-client
 
 # --- Install dependencies ---
 FROM base AS deps
