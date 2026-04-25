@@ -159,12 +159,81 @@ export async function register() {
     }, POLLER_INTERVAL_MS);
   }, 15_000);
 
+  // -------------------------------------------------------------------
+  // Job E — Backup diario de Postgres a R2 (Lote 7). Tick cada hora;
+  // dispara el backup si (a) hoy no hay backup exitoso aún y (b) la
+  // hora UTC actual es >= 03:00 (= 22:00 PET, ventana de bajo tráfico).
+  // -------------------------------------------------------------------
+  const {
+    runBackup,
+    isR2Configured,
+    getBackupState,
+    hydrateBackupStateFromR2,
+  } = await import("./lib/services/backup.service");
+
+  // Hidratar el state al boot para que un container restart no aparezca
+  // como "missing" en /api/health si ayer hubo backup ok.
+  if (isR2Configured()) {
+    hydrateBackupStateFromR2().catch((err) =>
+      logger.warn({ err }, "[cron in-process] hydrate backup state falló"),
+    );
+  }
+
+  const BACKUP_TICK_INTERVAL_MS = 60 * 60 * 1000; // 1h
+  const BACKUP_TARGET_UTC_HOUR = 3; // 03:00 UTC = 22:00 PET
+
+  async function tickBackupDb() {
+    try {
+      if (!isR2Configured()) return; // nada que hacer si no hay R2
+      const s = getBackupState();
+      const now = new Date();
+      // Bucket "hoy UTC".
+      const todayStartMs = Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate(),
+      );
+      if (s.lastSuccessAt && s.lastSuccessAt.getTime() >= todayStartMs) {
+        return; // ya backupeamos hoy
+      }
+      // Ventana objetivo: 03:00 UTC en adelante. Si el container arranca
+      // a las 05:00 UTC, el primer tick (≤1h) lo dispara igual.
+      if (now.getUTCHours() < BACKUP_TARGET_UTC_HOUR) return;
+
+      logger.info("[cron in-process] disparando backup-db");
+      const result = await runBackup();
+      if (result.ok) {
+        logger.info(
+          { key: result.key, sizeBytes: result.sizeBytes, durationMs: result.durationMs },
+          "[cron in-process] backup-db exitoso",
+        );
+      } else {
+        logger.warn(
+          { reason: result.reason },
+          "[cron in-process] backup-db falló",
+        );
+      }
+    } catch (err) {
+      logger.error({ err }, "[cron in-process] tick de backup-db falló");
+    }
+  }
+
+  // Primera corrida 60s tras boot (deja al sistema estabilizarse), luego
+  // cada hora. Si ya backupeamos hoy o no es la ventana, el tick es no-op.
+  setTimeout(() => {
+    void tickBackupDb();
+    setInterval(() => {
+      void tickBackupDb();
+    }, BACKUP_TICK_INTERVAL_MS);
+  }, 60_000);
+
   logger.info(
     {
       cerrarTorneos: `${CERRAR_INTERVAL_MS / 1000}s`,
       importPartidos: `${INTERVALO_IMPORT_MS / 1000 / 60}min`,
       refreshSeasons: `${INTERVALO_REFRESH_SEASONS_MS / 1000 / 3600}h`,
       pollerPartidos: `${POLLER_INTERVAL_MS / 1000}s`,
+      backupDb: `${BACKUP_TICK_INTERVAL_MS / 1000 / 60}min (target ${BACKUP_TARGET_UTC_HOUR}:00 UTC)`,
     },
     "cron in-process registrado",
   );

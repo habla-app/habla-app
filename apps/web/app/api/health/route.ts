@@ -12,12 +12,19 @@
 
 import { prisma } from "@habla/db";
 import { getRedis } from "@/lib/redis";
+import { getBackupHealth } from "@/lib/services/backup.service";
 import { logger } from "@/lib/services/logger";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-type CheckState = "ok" | "error" | "configured" | "missing";
+type CheckState =
+  | "ok"
+  | "error"
+  | "configured"
+  | "missing"
+  | "stale"
+  | "unconfigured";
 
 interface HealthResponse {
   status: "ok" | "error";
@@ -26,6 +33,7 @@ interface HealthResponse {
     redis: CheckState;
     resend: CheckState;
     apiFootball: CheckState;
+    backup: CheckState;
   };
   // Diagnóstico — solo aparece cuando algo falla, para ayudar a
   // identificar la causa raíz desde la response sin tener que ir a
@@ -33,6 +41,7 @@ interface HealthResponse {
   details?: {
     db?: string;
     redis?: string;
+    backup?: string;
   };
   timestamp: string;
 }
@@ -107,10 +116,25 @@ export async function GET(): Promise<Response> {
     logger.error({ err: (err as Error).message }, "health: timeout global");
   }
 
+  // Backup: lectura no-bloqueante del state in-memory. No hacemos llamada
+  // a R2 acá — ya se hidrata al boot y se actualiza tras cada backup.
+  // - 'ok'           → último backup ≤ 26h atrás
+  // - 'stale'        → más de 26h sin backup exitoso (NO degrada el status
+  //                    global porque DB/Redis siguen sirviendo tráfico)
+  // - 'missing'      → R2 configurado pero nunca corrió (post-deploy
+  //                    fresco, antes de la primera ventana 03:00 UTC)
+  // - 'unconfigured' → R2 vars ausentes (dev local típicamente)
+  const backup = getBackupHealth();
+
   const isOk = dbOutcome.state === "ok" && redisOutcome.state === "ok";
   const details: HealthResponse["details"] = {};
   if (dbOutcome.detail) details.db = dbOutcome.detail;
   if (redisOutcome.detail) details.redis = redisOutcome.detail;
+  if (backup.state === "stale" && backup.lastSuccessAt) {
+    details.backup = `último éxito hace ${backup.ageHours}h (${backup.lastSuccessAt})`;
+  } else if (backup.state === "missing") {
+    details.backup = "configurado pero sin backup exitoso aún";
+  }
 
   const body: HealthResponse = {
     status: isOk ? "ok" : "error",
@@ -119,6 +143,7 @@ export async function GET(): Promise<Response> {
       redis: redisOutcome.state,
       resend: checkEnv("RESEND_API_KEY"),
       apiFootball: checkEnv("API_FOOTBALL_KEY"),
+      backup: backup.state,
     },
     ...(Object.keys(details).length > 0 ? { details } : {}),
     timestamp: new Date().toISOString(),
@@ -129,6 +154,14 @@ export async function GET(): Promise<Response> {
 
   if (!isOk) {
     logger.warn({ checks: body.checks, details, elapsedMs }, "health: degraded");
+  } else if (backup.state === "stale") {
+    // Backup stale es una alerta operacional aparte (ya disparamos a
+    // Sentry desde el job), pero también lo logueamos a Railway para que
+    // sea visible en los logs sin hacer cross-service.
+    logger.warn(
+      { backup, elapsedMs },
+      "health: ok pero backup stale (>26h sin éxito)",
+    );
   }
 
   return new Response(JSON.stringify(body), {
