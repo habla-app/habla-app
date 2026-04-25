@@ -7,6 +7,7 @@ import { Suspense } from "react";
 import { ToastProvider } from "@/components/ui";
 import { SessionProviderClient } from "@/components/auth/SessionProviderClient";
 import { PostHogProvider } from "@/components/analytics/PostHogProvider";
+import { CookieBanner } from "@/components/CookieBanner";
 import "./globals.css";
 
 const barlow = Barlow_Condensed({
@@ -80,6 +81,7 @@ export default function RootLayout({
           <Suspense fallback={null}>
             <PostHogProvider>
               <ToastProvider>{children}</ToastProvider>
+              <CookieBanner />
             </PostHogProvider>
           </Suspense>
         </SessionProviderClient>

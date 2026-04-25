@@ -1,13 +1,18 @@
 "use client";
 // PostHogProvider — monta PostHog client-side con la config para App Router.
 //
-// Decisiones (Lote 2 + hotfix Abr 2026):
+// Decisiones (Lote 2 + hotfix Abr 2026 + Lote 3):
 //  - Init condicional SOLO en presencia de `NEXT_PUBLIC_POSTHOG_KEY`.
 //    El guard por `NODE_ENV` que había antes era redundante y ocultaba
 //    bugs: con key no presente igual no-opeamos (dev local sin .env no
 //    rompe), y si la key llega en prod confiamos en que es intencional.
 //    El guard NODE_ENV también se combinaba mal con el bug de Railway
 //    (NEXT_PUBLIC_* no inyectadas en build) — doble filtro silencioso.
+//  - **Consent (Lote 3):** PostHog se inicializa solo si el usuario
+//    aceptó analytics. Si más tarde acepta (vía CookieBanner), el
+//    listener de `habla:cookie-consent-change` levanta init. Si revoca,
+//    llamamos `opt_out_capturing()` — no destruimos la instancia para
+//    evitar reinit complejo si vuelve a aceptar.
 //  - `person_profiles: "identified_only"` — no creamos perfil de anónimos.
 //  - `capture_pageview: false` + pageview manual en cambios de ruta (Next
 //    App Router no dispara navegación completa, usePathname + useSearchParams).
@@ -25,6 +30,10 @@ import { useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { capturePageview, identify, reset, track } from "@/lib/analytics";
+import {
+  hasAnalyticsConsent,
+  listenConsent,
+} from "@/lib/cookie-consent";
 
 let initPromise: Promise<void> | null = null;
 
@@ -70,10 +79,24 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
   const lastIdentifiedRef = useRef<string | null>(null);
   const wasAuthenticatedRef = useRef<boolean>(false);
 
-  // Init una sola vez. initPromise evita doble init si el efecto corre 2x
-  // en dev/strict mode.
+  // Init condicional al consent. Si el usuario aún no decidió o rechazó
+  // analytics, no inicializamos. El listener escucha cambios para
+  // levantar init si más tarde acepta, o para opt-out si revoca.
   useEffect(() => {
-    if (!initPromise) initPromise = initPostHog();
+    function applyConsent() {
+      if (hasAnalyticsConsent()) {
+        if (!initPromise) initPromise = initPostHog();
+      } else if (typeof window !== "undefined" && window.__posthog) {
+        try {
+          window.__posthog.opt_out_capturing();
+        } catch {
+          /* noop */
+        }
+      }
+    }
+    applyConsent();
+    const off = listenConsent(() => applyConsent());
+    return off;
   }, []);
 
   // Pageview en cada cambio de ruta. `pathname` + `searchParams` cubre

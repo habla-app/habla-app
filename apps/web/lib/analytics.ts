@@ -5,17 +5,23 @@
 // cambiamos a Mixpanel o añadimos un segundo sink (GA4, Meta Pixel), solo
 // se edita este archivo.
 //
-// Reglas operacionales (Lote 2):
+// Reglas operacionales (Lote 2 + Lote 3):
 //  - `NODE_ENV !== "production"` → no-op. No queremos ensuciar el dashboard
 //    con eventos de dev/CI.
 //  - `NEXT_PUBLIC_POSTHOG_KEY` ausente → no-op. Permite builds sin las env
 //    vars (Railway previews, local preview).
 //  - Si la ruta actual empieza con `/legal/`, no capturamos nada. Privacy.
+//  - **Consent (Lote 3):** si el usuario rechazó analytics o aún no decidió,
+//    no capturamos. El provider resuelve el init basado en consent; este
+//    archivo es defensa adicional para que `track()` no escriba si el
+//    consent cambia post-init y el provider llamó `opt_out_capturing()`.
+//    `lib/cookie-consent.ts` tiene el state.
 //  - `person_profiles: "identified_only"` — configurado en el provider.
 //    No creamos perfiles de anónimos (ahorra cuota).
 //  - Pageview manual en cambios de ruta — en el provider, no acá.
 
 import type { PostHog } from "posthog-js";
+import { hasAnalyticsConsent } from "@/lib/cookie-consent";
 
 /** Eventos canónicos. Agregar acá antes de llamar a `track`. */
 export type EventName =
@@ -64,6 +70,9 @@ function estaHabilitado(): boolean {
   if (typeof window === "undefined") return false;
   // Respetar ruta privada — /legal/* no captura nada.
   if (window.location.pathname.startsWith("/legal/")) return false;
+  // Respetar consent del usuario. Si rechazó analytics o aún no decidió,
+  // no capturamos. Ver components/CookieBanner.tsx.
+  if (!hasAnalyticsConsent()) return false;
   return true;
 }
 
