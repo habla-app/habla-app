@@ -24,7 +24,10 @@ import { track } from "@/lib/analytics";
 import { PUNTOS } from "@habla/shared";
 import { PredCard } from "./PredCard";
 import { ScorePicker } from "./ScorePicker";
-import { computeComboFooterState } from "./combo-info.mapper";
+import {
+  computeComboFooterState,
+  derivePozosDisplay,
+} from "./combo-info.mapper";
 import {
   computeComboModalUIState,
   statusFromBackendError,
@@ -97,6 +100,17 @@ export function ComboModal({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successInfo, setSuccessInfo] = useState<ComboSuccessInfo | null>(null);
   const [countdown, setCountdown] = useState<string>("--:--");
+  // Bug A del Mini-lote 7.6: el header del modal debe reflejar el pozo y
+  // el primer premio POST-mutación (la combinada recién enviada ya sumó
+  // entrada al pozo y +1 inscrito). El endpoint /api/v1/tickets devuelve
+  // un snapshot del torneo en `data.torneo`; lo guardamos aquí para
+  // sobreescribir los valores derivados del prop `torneo` (que se cargan
+  // ANTES del envío y quedan congelados).
+  const [liveCounters, setLiveCounters] = useState<{
+    pozoBruto: number;
+    primerPremioEstimado: number;
+    totalInscritos: number | null;
+  } | null>(null);
 
   const router = useRouter();
   const balance = useLukasStore((s) => s.balance);
@@ -109,6 +123,7 @@ export function ComboModal({
       setStatus("idle");
       setErrorMessage(null);
       setSuccessInfo(null);
+      setLiveCounters(null);
     }
   }, [isOpen]);
 
@@ -187,6 +202,14 @@ export function ComboModal({
           ticket: { id: string };
           nuevoBalance: number;
           reemplazoPlaceholder: boolean;
+          torneo?: {
+            id: string;
+            totalInscritos: number;
+            pozoBruto: number;
+            pozoNeto: number;
+            entradaLukas: number;
+            cierreAt: string;
+          };
         };
         error?: { code: string; message: string };
       };
@@ -198,6 +221,20 @@ export function ComboModal({
       }
       // Éxito: sincroniza balance global y pinta el panel de confirmación.
       setBalance(json.data.nuevoBalance);
+      // Bug A del Mini-lote 7.6: si el endpoint devolvió el snapshot del
+      // torneo POST-create, repintamos el header con esos valores en
+      // lugar del prop original (cargado pre-envío y por ende stale).
+      if (json.data.torneo) {
+        const derived = derivePozosDisplay({
+          pozoBruto: json.data.torneo.pozoBruto,
+          pozoNeto: json.data.torneo.pozoNeto,
+        });
+        setLiveCounters({
+          pozoBruto: derived.pozoBruto,
+          primerPremioEstimado: derived.primerPremioEstimado,
+          totalInscritos: json.data.torneo.totalInscritos,
+        });
+      }
       // Invalidar el Router Cache para que el detalle del torneo y la
       // lista de matches releen los contadores actualizados (jugadores,
       // pozo) cuando el usuario cierre el modal o navegue. El endpoint
@@ -301,6 +338,12 @@ export function ComboModal({
 
   if (!torneo) return null;
 
+  // Valores efectivos del header: prefiero el snapshot post-mutación
+  // cuando lo tengo (Bug A), si no, vuelvo al prop original.
+  const headerPozoBruto = liveCounters?.pozoBruto ?? torneo.pozoBruto;
+  const headerPrimerPremio =
+    liveCounters?.primerPremioEstimado ?? torneo.primerPremioEstimado;
+
   const faltanLukas = Math.max(0, torneo.entradaLukas - balance);
   const ui = computeComboModalUIState({
     status,
@@ -353,10 +396,10 @@ export function ComboModal({
                 : `${formatoMiles(torneo.entradaLukas)} 🪙`
             }
           />
-          <MetaBox label="Pozo" value={`${formatoMiles(torneo.pozoBruto)} 🪙`} />
+          <MetaBox label="Pozo" value={`${formatoMiles(headerPozoBruto)} 🪙`} />
           <MetaBox
             label="1er premio"
-            value={`${formatoMiles(torneo.primerPremioEstimado)}`}
+            value={`${formatoMiles(headerPrimerPremio)}`}
           />
           <MetaBox label="Cierre" value={countdown} />
         </div>

@@ -52,10 +52,23 @@ export type TicketConTorneo = Ticket & {
   torneo: Torneo & { partido: Partido };
 };
 
+export interface TorneoCountersSnapshot {
+  id: string;
+  totalInscritos: number;
+  pozoBruto: number;
+  pozoNeto: number;
+  entradaLukas: number;
+  cierreAt: Date;
+}
+
 export interface CrearTicketResult {
   ticket: Ticket;
   nuevoBalance: number;
   reemplazoPlaceholder: boolean;
+  /** Snapshot del torneo POST-create. Permite a la UI repintar pozos /
+   *  contadores en el modal de éxito sin un GET adicional. Bug A del
+   *  Mini-lote 7.6: el modal mostraba datos pre-mutación. */
+  torneo: TorneoCountersSnapshot;
 }
 
 export interface MisTicketsResult {
@@ -235,10 +248,21 @@ export async function crear(
         "placeholder actualizado con predicciones reales",
       );
 
+      // Snapshot del torneo (sin cambios de contadores: el placeholder
+      // ya había sumado al inscribirse al torneo). Devolvemos los valores
+      // del read inicial para uniformidad del shape de respuesta.
       return {
         ticket,
         nuevoBalance: usuario.balanceLukas,
         reemplazoPlaceholder,
+        torneo: {
+          id: torneo.id,
+          totalInscritos: torneo.totalInscritos,
+          pozoBruto: torneo.pozoBruto,
+          pozoNeto: torneo.pozoNeto,
+          entradaLukas: torneo.entradaLukas,
+          cierreAt: torneo.cierreAt,
+        },
       };
     }
 
@@ -289,11 +313,19 @@ export async function crear(
       throw err;
     }
 
-    await tx.torneo.update({
+    const torneoActualizado = await tx.torneo.update({
       where: { id: input.torneoId },
       data: {
         totalInscritos: { increment: 1 },
         pozoBruto: { increment: torneo.entradaLukas },
+      },
+      select: {
+        id: true,
+        totalInscritos: true,
+        pozoBruto: true,
+        pozoNeto: true,
+        entradaLukas: true,
+        cierreAt: true,
       },
     });
 
@@ -310,7 +342,12 @@ export async function crear(
       "ticket creado",
     );
 
-    return { ticket, nuevoBalance, reemplazoPlaceholder };
+    return {
+      ticket,
+      nuevoBalance,
+      reemplazoPlaceholder,
+      torneo: torneoActualizado,
+    };
   });
 }
 

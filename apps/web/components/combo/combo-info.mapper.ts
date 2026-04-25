@@ -21,6 +21,30 @@ import { PREMIO_PRIMER_LUGAR_PCT } from "./premios";
 import type { ComboTorneoInfo } from "./ComboModal";
 
 /**
+ * Deriva pozo bruto + primer premio estimado a partir del par
+ * `(pozoBruto, pozoNeto)` que viene de BD. Reglas:
+ *   - Si `pozoNeto > 0` (torneo cerrado o con neto ya computado), se usa
+ *     ese valor como base.
+ *   - Si no, se asume `pozoBruto × 0.88` (rake del 12% por §6 CLAUDE.md).
+ *   - El primer premio estimado es `floor(pozoNeto × 0.45)` (§6).
+ *
+ * Bug A del Mini-lote 7.6: tras enviar la combinada, el modal repinta el
+ * header con estos valores derivados del torneo POST-create devuelto por
+ * el endpoint, en vez del snapshot pre-mutación cargado al abrir.
+ */
+export function derivePozosDisplay(input: {
+  pozoBruto: number;
+  pozoNeto: number;
+}): { pozoBruto: number; primerPremioEstimado: number } {
+  const pozoNeto =
+    input.pozoNeto > 0 ? input.pozoNeto : Math.floor(input.pozoBruto * 0.88);
+  return {
+    pozoBruto: input.pozoBruto,
+    primerPremioEstimado: Math.floor(pozoNeto * PREMIO_PRIMER_LUGAR_PCT),
+  };
+}
+
+/**
  * Forma mínima que devuelve `GET /api/v1/torneos/:id` y que consumen los
  * launchers del ComboModal. Mantenerla en sync con
  * `apps/web/app/api/v1/torneos/[id]/route.ts`.
@@ -46,10 +70,10 @@ export function buildComboTorneoInfo(
   const d = payload.data;
   if (!d) return null;
 
-  const pozoNeto =
-    d.torneo.pozoNeto > 0
-      ? d.torneo.pozoNeto
-      : Math.floor(d.torneo.pozoBruto * 0.88);
+  const { pozoBruto, primerPremioEstimado } = derivePozosDisplay({
+    pozoBruto: d.torneo.pozoBruto,
+    pozoNeto: d.torneo.pozoNeto,
+  });
 
   return {
     torneoId: d.torneo.id,
@@ -57,8 +81,8 @@ export function buildComboTorneoInfo(
     equipoLocal: d.torneo.partido.equipoLocal,
     equipoVisita: d.torneo.partido.equipoVisita,
     entradaLukas: d.torneo.entradaLukas,
-    pozoBruto: d.torneo.pozoBruto,
-    primerPremioEstimado: Math.floor(pozoNeto * PREMIO_PRIMER_LUGAR_PCT),
+    pozoBruto,
+    primerPremioEstimado,
     cierreAt: d.torneo.cierreAt,
     tienePlaceholder: d.miTicket !== null,
   };
