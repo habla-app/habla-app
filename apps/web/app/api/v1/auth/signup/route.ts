@@ -118,19 +118,20 @@ export async function POST(req: NextRequest) {
         data: {
           email,
           // Nombre vacío hasta que el usuario lo complete en /perfil.
-          // Antes copiábamos el username pero confundía la UI (el row de
-          // "Nombre completo" se veía pre-llenado).
           nombre: "",
           username,
           usernameLocked: true,
           tycAceptadosAt: new Date(),
+          // Lote 6A: el bonus de bienvenida va a balanceBonus (no compradas).
           balanceLukas: BONUS_BIENVENIDA_LUKAS,
+          balanceBonus: BONUS_BIENVENIDA_LUKAS,
         },
       });
       await tx.transaccionLukas.create({
         data: {
           usuarioId: usuario.id,
           tipo: "BONUS",
+          bolsa: "BONUS",
           monto: BONUS_BIENVENIDA_LUKAS,
           descripcion: "Bonus de bienvenida",
           venceEn: null,

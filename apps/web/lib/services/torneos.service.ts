@@ -34,7 +34,208 @@ import {
 } from "./errors";
 import { logger } from "./logger";
 import { verificarLimiteInscripcion } from "./limites.service";
-import { ENTRADA_LUKAS } from "../config/economia";
+import { ENTRADA_LUKAS, MESES_VENCIMIENTO_COMPRA } from "../config/economia";
+
+// ---------------------------------------------------------------------------
+// Tipos internos para el sistema de 3 bolsas (Lote 6A)
+// ---------------------------------------------------------------------------
+
+interface ComposicionItem {
+  bolsa: "BONUS" | "COMPRADAS" | "GANADAS";
+  monto: number;
+  /** Solo presente cuando bolsa=COMPRADAS: ID de la TransaccionLukas COMPRA original. */
+  compraTxId?: string;
+}
+
+/** Resultado interno de descontarEntrada — no se exporta. */
+interface DescuentoResult {
+  composicion: ComposicionItem[];
+  nuevoBalanceCompradas: number;
+  nuevoBalanceBonus: number;
+  nuevoBalanceGanadas: number;
+}
+
+/**
+ * Descuenta `monto` Lukas del usuario siguiendo el orden de bolsas:
+ *   1. Bonus (sin vencimiento, gastar primero para no desperdiciarlos)
+ *   2. Compradas FIFO (las más antiguas primero, por `saldoVivo > 0`)
+ *   3. Ganadas (último recurso)
+ *
+ * Actualiza `Usuario.balanceCompradas/Bonus/Ganadas/Lukas` y decrementa
+ * `saldoVivo` de las compras usadas. Devuelve la composición para guardarla
+ * en `metadata.composicion` de la TransaccionLukas.ENTRADA_TORNEO.
+ *
+ * Debe correrse dentro de una `prisma.$transaction`.
+ */
+async function descontarEntrada(
+  tx: Omit<typeof prisma, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">,
+  usuarioId: string,
+  monto: number,
+): Promise<DescuentoResult> {
+  const usuario = await tx.usuario.findUnique({
+    where: { id: usuarioId },
+    select: {
+      balanceLukas: true,
+      balanceCompradas: true,
+      balanceBonus: true,
+      balanceGanadas: true,
+    },
+  });
+  if (!usuario) throw new NoAutenticado();
+
+  const total =
+    usuario.balanceCompradas + usuario.balanceBonus + usuario.balanceGanadas;
+  if (total < monto) {
+    throw new BalanceInsuficiente(total, monto);
+  }
+
+  let restante = monto;
+  const composicion: ComposicionItem[] = [];
+  let deltaCompradas = 0;
+  let deltaBonus = 0;
+  let deltaGanadas = 0;
+
+  // 1. Consumir de Bonus
+  if (restante > 0 && usuario.balanceBonus > 0) {
+    const usado = Math.min(restante, usuario.balanceBonus);
+    composicion.push({ bolsa: "BONUS", monto: usado });
+    deltaBonus += usado;
+    restante -= usado;
+  }
+
+  // 2. Consumir de Compradas FIFO (más antiguas primero, saldoVivo > 0, no vencidas)
+  if (restante > 0 && usuario.balanceCompradas > 0) {
+    const compras = await tx.transaccionLukas.findMany({
+      where: {
+        usuarioId,
+        tipo: "COMPRA",
+        saldoVivo: { gt: 0 },
+        venceEn: { gt: new Date() },
+      },
+      orderBy: { creadoEn: "asc" },
+      select: { id: true, saldoVivo: true },
+    });
+
+    for (const compra of compras) {
+      if (restante <= 0) break;
+      const disponible = compra.saldoVivo ?? 0;
+      const usado = Math.min(restante, disponible);
+      if (usado <= 0) continue;
+
+      composicion.push({ bolsa: "COMPRADAS", monto: usado, compraTxId: compra.id });
+      deltaCompradas += usado;
+      restante -= usado;
+
+      await tx.transaccionLukas.update({
+        where: { id: compra.id },
+        data: { saldoVivo: { decrement: usado } },
+      });
+    }
+  }
+
+  // 3. Consumir de Ganadas (último recurso)
+  if (restante > 0 && usuario.balanceGanadas > 0) {
+    const usado = Math.min(restante, usuario.balanceGanadas);
+    composicion.push({ bolsa: "GANADAS", monto: usado });
+    deltaGanadas += usado;
+    restante -= usado;
+  }
+
+  // Sanity: no debería llegar acá con restante > 0 (el check total lo evita)
+  if (restante > 0) {
+    throw new BalanceInsuficiente(total - monto + restante, monto);
+  }
+
+  const nuevoBalanceCompradas = usuario.balanceCompradas - deltaCompradas;
+  const nuevoBalanceBonus = usuario.balanceBonus - deltaBonus;
+  const nuevoBalanceGanadas = usuario.balanceGanadas - deltaGanadas;
+
+  await tx.usuario.update({
+    where: { id: usuarioId },
+    data: {
+      balanceCompradas: nuevoBalanceCompradas,
+      balanceBonus: nuevoBalanceBonus,
+      balanceGanadas: nuevoBalanceGanadas,
+      balanceLukas: { decrement: monto },
+    },
+  });
+
+  return { composicion, nuevoBalanceCompradas, nuevoBalanceBonus, nuevoBalanceGanadas };
+}
+
+/**
+ * Restaura Lukas a la bolsa de origen según la composición almacenada en
+ * `metadata.composicion` de la TransaccionLukas.ENTRADA_TORNEO original.
+ * Si la compra original ya venció y el `saldoVivo` no puede restaurarse,
+ * crea una nueva COMPRA con vencimiento renovado a 36m.
+ * Debe correrse dentro de una `prisma.$transaction`.
+ */
+async function restaurarEntrada(
+  tx: Omit<typeof prisma, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">,
+  usuarioId: string,
+  composicion: ComposicionItem[],
+  entradaTxId: string,
+): Promise<void> {
+  for (const item of composicion) {
+    if (item.bolsa === "BONUS") {
+      await tx.usuario.update({
+        where: { id: usuarioId },
+        data: {
+          balanceBonus: { increment: item.monto },
+          balanceLukas: { increment: item.monto },
+        },
+      });
+    } else if (item.bolsa === "COMPRADAS" && item.compraTxId) {
+      // Intentar restaurar saldoVivo en la compra original
+      const compra = await tx.transaccionLukas.findUnique({
+        where: { id: item.compraTxId },
+        select: { saldoVivo: true, venceEn: true },
+      });
+      const now = new Date();
+      const vigente = compra?.venceEn && compra.venceEn > now;
+
+      if (vigente) {
+        await tx.transaccionLukas.update({
+          where: { id: item.compraTxId },
+          data: { saldoVivo: { increment: item.monto } },
+        });
+      } else {
+        // Compra vencida: crear nueva COMPRA con vencimiento renovado
+        const venceEn = new Date(
+          now.getTime() +
+            MESES_VENCIMIENTO_COMPRA * 30 * 24 * 60 * 60 * 1000,
+        );
+        await tx.transaccionLukas.create({
+          data: {
+            usuarioId,
+            tipo: "COMPRA",
+            bolsa: "COMPRADAS",
+            monto: item.monto,
+            descripcion: `Reembolso recuperado — compra original vencida (${item.compraTxId})`,
+            saldoVivo: item.monto,
+            venceEn,
+            refId: entradaTxId,
+          },
+        });
+      }
+      await tx.usuario.update({
+        where: { id: usuarioId },
+        data: {
+          balanceCompradas: { increment: item.monto },
+          balanceLukas: { increment: item.monto },
+        },
+      });
+    } else if (item.bolsa === "GANADAS") {
+      await tx.usuario.update({
+        where: { id: usuarioId },
+        data: {
+          balanceGanadas: { increment: item.monto },
+          balanceLukas: { increment: item.monto },
+        },
+      });
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Constantes del negocio
@@ -454,34 +655,15 @@ export async function inscribir(
       throw new TorneoCerrado(torneoId);
     }
 
-    const usuario = await tx.usuario.findUnique({
-      where: { id: usuarioId },
-      select: { balanceLukas: true },
-    });
-    if (!usuario) throw new NoAutenticado();
-    if (usuario.balanceLukas < torneo.entradaLukas) {
-      throw new BalanceInsuficiente(usuario.balanceLukas, torneo.entradaLukas);
-    }
-
     await verificarLimiteInscripcion({
       tx,
       usuarioId,
       entradaLukas: torneo.entradaLukas,
     });
 
-    await tx.usuario.update({
-      where: { id: usuarioId },
-      data: { balanceLukas: { decrement: torneo.entradaLukas } },
-    });
-    await tx.transaccionLukas.create({
-      data: {
-        usuarioId,
-        tipo: "ENTRADA_TORNEO",
-        monto: -torneo.entradaLukas,
-        descripcion: `Inscripción a ${torneo.nombre}`,
-        refId: torneoId,
-      },
-    });
+    // Lote 6A: descontarEntrada maneja la lógica de 3 bolsas + actualiza balanceLukas.
+    // También valida que el total alcance — lanza BalanceInsuficiente si no.
+    const descuento = await descontarEntrada(tx, usuarioId, torneo.entradaLukas);
 
     // Ticket placeholder — predicciones default. Sub-Sprint 4 las edita.
     let ticket: Ticket;
@@ -509,6 +691,24 @@ export async function inscribir(
       throw err;
     }
 
+    // La bolsa principal de la TransaccionLukas es la de mayor monto (para
+    // agrupado en /wallet). El detalle real vive en metadata.composicion.
+    const bolsaPrincipal = descuento.composicion.reduce((max, item) =>
+      item.monto > max.monto ? item : max,
+    ).bolsa;
+
+    await tx.transaccionLukas.create({
+      data: {
+        usuarioId,
+        tipo: "ENTRADA_TORNEO",
+        bolsa: bolsaPrincipal,
+        monto: -torneo.entradaLukas,
+        descripcion: `Inscripción a ${torneo.nombre}`,
+        refId: torneoId,
+        metadata: { ticketId: ticket.id, composicion: descuento.composicion } as object,
+      },
+    });
+
     const torneoActualizado = await tx.torneo.update({
       where: { id: torneoId },
       data: {
@@ -517,7 +717,10 @@ export async function inscribir(
       },
     });
 
-    const nuevoBalance = usuario.balanceLukas - torneo.entradaLukas;
+    const nuevoBalance =
+      descuento.nuevoBalanceCompradas +
+      descuento.nuevoBalanceBonus +
+      descuento.nuevoBalanceGanadas;
 
     logger.info(
       {
@@ -526,6 +729,7 @@ export async function inscribir(
         ticketId: ticket.id,
         entradaLukas: torneo.entradaLukas,
         nuevoBalance,
+        composicion: descuento.composicion,
       },
       "inscripción creada",
     );
@@ -568,19 +772,64 @@ export async function cancelar(
     });
 
     for (const ticket of torneo.tickets) {
-      await tx.usuario.update({
-        where: { id: ticket.usuarioId },
-        data: { balanceLukas: { increment: torneo.entradaLukas } },
-      });
-      await tx.transaccionLukas.create({
-        data: {
+      // Lote 6A: buscar la ENTRADA_TORNEO de este ticket para restaurar la
+      // bolsa de origen según metadata.composicion.
+      const entradaTx = await tx.transaccionLukas.findFirst({
+        where: {
           usuarioId: ticket.usuarioId,
-          tipo: "REEMBOLSO",
-          monto: torneo.entradaLukas,
-          descripcion: `Reembolso torneo cancelado: ${motivo}`,
+          tipo: "ENTRADA_TORNEO",
           refId: torneoId,
+          metadata: { path: ["ticketId"], equals: ticket.id },
         },
+        select: { id: true, metadata: true },
       });
+
+      const composicion =
+        entradaTx?.metadata != null &&
+        typeof entradaTx.metadata === "object" &&
+        "composicion" in (entradaTx.metadata as object)
+          ? (
+              (entradaTx.metadata as { composicion?: ComposicionItem[] })
+                .composicion ?? []
+            )
+          : null;
+
+      if (composicion && composicion.length > 0 && entradaTx) {
+        // Camino nuevo (post-Lote 6A): restaurar cada bolsa al origen.
+        await restaurarEntrada(tx, ticket.usuarioId, composicion, entradaTx.id);
+        await tx.transaccionLukas.create({
+          data: {
+            usuarioId: ticket.usuarioId,
+            tipo: "REEMBOLSO",
+            bolsa: composicion.reduce((max, i) => (i.monto > max.monto ? i : max))
+              .bolsa,
+            monto: torneo.entradaLukas,
+            descripcion: `Reembolso torneo cancelado: ${motivo}`,
+            refId: torneoId,
+            metadata: { composicionOrigen: { entradaTxId: entradaTx.id } },
+          },
+        });
+      } else {
+        // Camino legacy (transacciones pre-Lote 6A sin metadata): fallback
+        // simple — todo va a balanceLukas + balanceCompradas.
+        await tx.usuario.update({
+          where: { id: ticket.usuarioId },
+          data: {
+            balanceLukas: { increment: torneo.entradaLukas },
+            balanceCompradas: { increment: torneo.entradaLukas },
+          },
+        });
+        await tx.transaccionLukas.create({
+          data: {
+            usuarioId: ticket.usuarioId,
+            tipo: "REEMBOLSO",
+            bolsa: "COMPRADAS",
+            monto: torneo.entradaLukas,
+            descripcion: `Reembolso torneo cancelado: ${motivo}`,
+            refId: torneoId,
+          },
+        });
+      }
     }
 
     const reembolsoTotalLukas = torneo.tickets.length * torneo.entradaLukas;

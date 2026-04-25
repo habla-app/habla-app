@@ -227,6 +227,32 @@ export async function register() {
     }, BACKUP_TICK_INTERVAL_MS);
   }, 60_000);
 
+  // -------------------------------------------------------------------
+  // Job F — Vencimiento de Lukas (Lote 6A). Tick cada hora; skip si
+  // ya corrió en las últimas 23h (lógica interna del job).
+  // -------------------------------------------------------------------
+  const { vencimientoLukasJob } = await import(
+    "./lib/services/vencimiento-lukas.job"
+  );
+
+  const VENCIMIENTO_TICK_INTERVAL_MS = 60 * 60 * 1000; // 1h
+
+  async function tickVencimientoLukas() {
+    try {
+      await vencimientoLukasJob();
+    } catch (err) {
+      logger.error({ err }, "[cron in-process] tick vencimiento-lukas falló");
+    }
+  }
+
+  // Primera corrida 90s tras boot para no solapar con otros jobs del boot.
+  setTimeout(() => {
+    void tickVencimientoLukas();
+    setInterval(() => {
+      void tickVencimientoLukas();
+    }, VENCIMIENTO_TICK_INTERVAL_MS);
+  }, 90_000);
+
   logger.info(
     {
       cerrarTorneos: `${CERRAR_INTERVAL_MS / 1000}s`,
@@ -234,6 +260,7 @@ export async function register() {
       refreshSeasons: `${INTERVALO_REFRESH_SEASONS_MS / 1000 / 3600}h`,
       pollerPartidos: `${POLLER_INTERVAL_MS / 1000}s`,
       backupDb: `${BACKUP_TICK_INTERVAL_MS / 1000 / 60}min (target ${BACKUP_TARGET_UTC_HOUR}:00 UTC)`,
+      vencimientoLukas: `${VENCIMIENTO_TICK_INTERVAL_MS / 1000 / 60}min (skip si <23h)`,
     },
     "cron in-process registrado",
   );

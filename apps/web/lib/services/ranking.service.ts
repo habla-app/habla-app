@@ -411,17 +411,20 @@ export async function finalizarTorneo(
       });
 
       if (asig.premioLukas > 0) {
-        // Bug #18: acredita el premio al usuario + crea la transacción
-        // PREMIO_TORNEO. Los Lukas ganados NO vencen (CLAUDE.md §6),
-        // por eso no seteamos venceEn.
+        // Lote 6A: los premios van a balanceGanadas (únicos canjeables).
+        // También se suma a balanceLukas por compatibilidad transicional.
         await tx.usuario.update({
           where: { id: t.usuarioId },
-          data: { balanceLukas: { increment: asig.premioLukas } },
+          data: {
+            balanceGanadas: { increment: asig.premioLukas },
+            balanceLukas: { increment: asig.premioLukas },
+          },
         });
         await tx.transaccionLukas.create({
           data: {
             usuarioId: t.usuarioId,
             tipo: "PREMIO_TORNEO",
+            bolsa: "GANADAS",
             monto: asig.premioLukas,
             descripcion: `Premio ${asig.posicionFinal}° puesto · torneo ${torneoId}`,
             refId: torneoId,
@@ -619,15 +622,19 @@ export async function reconciliarTorneoFinalizado(
       });
 
       if (delta > 0) {
-        // Acredita el delta + crea transacción de ajuste.
+        // Lote 6A: delta también va a balanceGanadas.
         await tx.usuario.update({
           where: { id: t.usuarioId },
-          data: { balanceLukas: { increment: delta } },
+          data: {
+            balanceGanadas: { increment: delta },
+            balanceLukas: { increment: delta },
+          },
         });
         await tx.transaccionLukas.create({
           data: {
             usuarioId: t.usuarioId,
             tipo: "PREMIO_TORNEO",
+            bolsa: "GANADAS",
             monto: delta,
             descripcion: `Ajuste premio ${asig.posicionFinal}° puesto · torneo ${torneoId}`,
             refId: torneoId,

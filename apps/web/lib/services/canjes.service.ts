@@ -19,6 +19,7 @@
 //  - Cancelación reembolsa Lukas + restituye stock.
 
 import { prisma, Prisma, type Canje, type EstadoCanje } from "@habla/db";
+import { getBalanceCanjeable } from "../lukas-display";
 import {
   BalanceInsuficiente,
   DomainError,
@@ -116,7 +117,13 @@ export async function crearCanje(
     // paralelo que agote stock).
     const usuario = await tx.usuario.findUnique({
       where: { id: usuarioId },
-      select: { balanceLukas: true, deletedAt: true },
+      select: {
+        balanceLukas: true,
+        balanceCompradas: true,
+        balanceBonus: true,
+        balanceGanadas: true,
+        deletedAt: true,
+      },
     });
     if (!usuario || usuario.deletedAt) throw new NoAutenticado();
 
@@ -134,13 +141,20 @@ export async function crearCanje(
     if (premioDb.stock <= 0) {
       throw new DomainError("SIN_STOCK", "Este premio se agotó.", 409);
     }
-    if (usuario.balanceLukas < premioDb.costeLukas) {
-      throw new BalanceInsuficiente(usuario.balanceLukas, premioDb.costeLukas);
+
+    // Lote 6A: solo se puede canjear con Lukas GANADOS en torneos.
+    const canjeable = getBalanceCanjeable(usuario);
+    if (canjeable < premioDb.costeLukas) {
+      throw new BalanceInsuficiente(canjeable, premioDb.costeLukas);
     }
 
     await tx.usuario.update({
       where: { id: usuarioId },
-      data: { balanceLukas: { decrement: premioDb.costeLukas } },
+      data: {
+        // Descuenta de balanceGanadas + mantiene balanceLukas en sync
+        balanceGanadas: { decrement: premioDb.costeLukas },
+        balanceLukas: { decrement: premioDb.costeLukas },
+      },
     });
 
     await tx.premio.update({
@@ -164,6 +178,7 @@ export async function crearCanje(
       data: {
         usuarioId,
         tipo: "CANJE",
+        bolsa: "GANADAS",
         monto: -premioDb.costeLukas,
         descripcion: `Canje de ${premioDb.nombre}`,
         refId: canje.id,
@@ -295,11 +310,14 @@ export async function actualizarEstadoAdmin(
   }
 
   if (input.estado === "CANCELADO") {
-    // Reembolso: sumar Lukas al usuario + restituir stock + crear transacción.
+    // Reembolso: sumar Lukas al usuario (bolsa GANADAS) + restituir stock + crear transacción.
     const result = await prisma.$transaction(async (tx) => {
       await tx.usuario.update({
         where: { id: canje.usuarioId },
-        data: { balanceLukas: { increment: canje.lukasUsados } },
+        data: {
+          balanceGanadas: { increment: canje.lukasUsados },
+          balanceLukas: { increment: canje.lukasUsados },
+        },
       });
       await tx.premio.update({
         where: { id: canje.premioId },
@@ -309,6 +327,7 @@ export async function actualizarEstadoAdmin(
         data: {
           usuarioId: canje.usuarioId,
           tipo: "REEMBOLSO",
+          bolsa: "GANADAS",
           monto: canje.lukasUsados,
           descripcion: `Reembolso canje ${canje.premio.nombre}${input.motivoCancelacion ? ` · ${input.motivoCancelacion}` : ""}`,
           refId: canje.id,

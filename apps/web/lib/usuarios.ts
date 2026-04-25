@@ -9,6 +9,7 @@
 // campo es NOT NULL.
 
 import { prisma, type Usuario } from "@habla/db";
+import { getBalanceTotal } from "./lukas-display";
 
 /**
  * Busca usuario por email. Retorna null si no existe.
@@ -22,12 +23,18 @@ export async function encontrarUsuarioPorEmail(
 }
 
 /**
- * Retorna el balance actual de Lukas del usuario. 0 si no existe.
+ * Retorna el balance total de Lukas del usuario (compradas + bonus + ganadas).
+ * 0 si no existe. Usado por el session callback de NextAuth.
  */
 export async function obtenerBalance(usuarioId: string): Promise<number> {
   const usuario = await prisma.usuario.findUnique({
     where: { id: usuarioId },
-    select: { balanceLukas: true },
+    select: {
+      balanceCompradas: true,
+      balanceBonus: true,
+      balanceGanadas: true,
+    },
   });
-  return usuario?.balanceLukas ?? 0;
+  if (!usuario) return 0;
+  return getBalanceTotal(usuario);
 }

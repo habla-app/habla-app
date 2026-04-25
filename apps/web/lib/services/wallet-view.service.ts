@@ -1,16 +1,15 @@
 // Agrega la data que /wallet necesita SSR: balance, totales por tipo,
-// próximo vencimiento (Lukas COMPRADOS con venceEn > ahora) e historial
-// ordenado. No es un endpoint — el page.tsx lo consume directo en SSR.
+// desglose de 3 bolsas (Lote 6A), próximo vencimiento e historial ordenado.
+// No es un endpoint — el page.tsx lo consume directo en SSR.
+//
+// Lote 6A: `totales` ahora incluye `desglose` con las 3 bolsas.
+// `proxVencimiento` usa `saldoVivo` (en lugar del monto original de la compra)
+// para reflejar el monto real disponible que va a vencer.
 //
 // Abr 2026: las transacciones `ENTRADA_TORNEO` y `PREMIO_TORNEO` ahora
 // incluyen el partido relacionado (resuelto vía refId → Torneo → Partido)
 // para que el historial del wallet muestre "Alianza vs Cristal" y no
-// dependa sólo del `descripcion` del torneo. El filtro "Inscripciones"
-// del wallet muestra este enriquecimiento.
-//
-// Nota Sub-Sprint 2: cuando llegue Culqi habrá endpoints `/lukas/balance`
-// y `/lukas/historial`. Este helper puede convivir (para SSR) o reemplazarse
-// por `authedFetch` si se prefiere mover todo a client-side.
+// dependa sólo del `descripcion` del torneo.
 import { prisma, type TipoTransaccion } from "@habla/db";
 
 export interface WalletTotales {
@@ -21,7 +20,17 @@ export interface WalletTotales {
   inscripciones: number;
 }
 
+export interface WalletDesglose {
+  compradas: number;
+  bonus: number;
+  ganadas: number;
+  total: number;
+  /** Solo los Lukas ganados son canjeables en /tienda. */
+  canjeable: number;
+}
+
 export interface WalletProxVencimiento {
+  /** Lukas vivos que van a vencer (saldoVivo, no monto original). */
   lukas: number;
   fecha: Date;
 }
@@ -37,6 +46,7 @@ export interface WalletTxPartido {
 export interface WalletTransaccion {
   id: string;
   tipo: TipoTransaccion;
+  bolsa: string | null;
   monto: number;
   descripcion: string;
   refId: string | null;
@@ -48,6 +58,7 @@ export interface WalletTransaccion {
 
 export interface WalletView {
   balance: number;
+  desglose: WalletDesglose;
   totales: WalletTotales;
   proxVencimiento: WalletProxVencimiento | null;
   transacciones: WalletTransaccion[];
@@ -79,22 +90,32 @@ export async function obtenerWalletView(
   usuarioId: string,
   balance: number,
 ): Promise<WalletView> {
-  const [agregado, proxVenc, transaccionesRaw, totalMovimientos] =
+  const [usuarioBalances, agregado, proxVenc, transaccionesRaw, totalMovimientos] =
     await Promise.all([
+      // Lote 6A: leer las 3 bolsas para el desglose
+      prisma.usuario.findUnique({
+        where: { id: usuarioId },
+        select: {
+          balanceCompradas: true,
+          balanceBonus: true,
+          balanceGanadas: true,
+        },
+      }),
       prisma.transaccionLukas.groupBy({
         by: ["tipo"],
         where: { usuarioId },
         _sum: { monto: true },
       }),
+      // Lote 6A: usa saldoVivo para el monto real que va a vencer
       prisma.transaccionLukas.findFirst({
         where: {
           usuarioId,
           tipo: "COMPRA",
+          saldoVivo: { gt: 0 },
           venceEn: { gt: new Date() },
-          monto: { gt: 0 },
         },
         orderBy: { venceEn: "asc" },
-        select: { venceEn: true },
+        select: { venceEn: true, saldoVivo: true },
       }),
       prisma.transaccionLukas.findMany({
         where: { usuarioId },
@@ -103,6 +124,7 @@ export async function obtenerWalletView(
         select: {
           id: true,
           tipo: true,
+          bolsa: true,
           monto: true,
           descripcion: true,
           refId: true,
@@ -138,6 +160,7 @@ export async function obtenerWalletView(
 
   const transacciones: WalletTransaccion[] = transaccionesRaw.map((t) => ({
     ...t,
+    bolsa: t.bolsa ?? null,
     partido:
       TIPOS_CON_TORNEO.includes(t.tipo) && t.refId
         ? partidosPorTorneo.get(t.refId) ?? null
@@ -174,25 +197,30 @@ export async function obtenerWalletView(
     }
   }
 
+  // Lote 6A: desglose live de las 3 bolsas (desde usuario, no historial)
+  const compradas = usuarioBalances?.balanceCompradas ?? 0;
+  const bonus = usuarioBalances?.balanceBonus ?? 0;
+  const ganadas = usuarioBalances?.balanceGanadas ?? 0;
+  const desglose: WalletDesglose = {
+    compradas,
+    bonus,
+    ganadas,
+    total: compradas + bonus + ganadas,
+    canjeable: ganadas,
+  };
+
+  // Lote 6A: proxVencimiento usa saldoVivo (no el monto original de la compra)
   let proxVencimiento: WalletProxVencimiento | null = null;
-  if (proxVenc?.venceEn) {
-    const lukasVigentes = await prisma.transaccionLukas.aggregate({
-      where: {
-        usuarioId,
-        tipo: "COMPRA",
-        venceEn: { gt: new Date() },
-        monto: { gt: 0 },
-      },
-      _sum: { monto: true },
-    });
-    const lukas = lukasVigentes._sum.monto ?? 0;
-    if (lukas > 0) {
-      proxVencimiento = { lukas, fecha: proxVenc.venceEn };
-    }
+  if (proxVenc?.venceEn && (proxVenc.saldoVivo ?? 0) > 0) {
+    proxVencimiento = {
+      lukas: proxVenc.saldoVivo!,
+      fecha: proxVenc.venceEn,
+    };
   }
 
   return {
     balance,
+    desglose,
     totales,
     proxVencimiento,
     transacciones,

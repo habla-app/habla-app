@@ -23,6 +23,9 @@ import {
   canjeSolicitadoTemplate,
   cuentaEliminadaTemplate,
   datosDescargadosTemplate,
+  lukasVencidosTemplate,
+  lukasPorVencer30dTemplate,
+  lukasPorVencer7dTemplate,
   premioGanadoTemplate,
   solicitudEliminarTemplate,
   torneoCanceladoTemplate,
@@ -42,6 +45,7 @@ export const PREFERENCIAS_DEFAULT = {
   notifCierreTorneo: true,
   notifPromos: false,
   emailSemanal: false,
+  notifVencimientos: true, // Lote 6A: avisos de vencimiento de Lukas comprados
 } as const;
 
 export type PreferenciasKey = keyof typeof PREFERENCIAS_DEFAULT;
@@ -55,6 +59,7 @@ export interface PreferenciasNotificaciones {
   notifCierreTorneo: boolean;
   notifPromos: boolean;
   emailSemanal: boolean;
+  notifVencimientos: boolean; // Lote 6A
 }
 
 /** Lee las preferencias de un usuario. Si no existe registro, crea uno con defaults. */
@@ -115,9 +120,12 @@ export async function debeNotificar(
       notifCierreTorneo: true,
       notifPromos: true,
       emailSemanal: true,
+      notifVencimientos: true,
     },
   });
-  const valor = prefs ? prefs[tipo] : PREFERENCIAS_DEFAULT[tipo];
+  const valor = prefs
+    ? (prefs as Record<string, boolean>)[tipo] ?? PREFERENCIAS_DEFAULT[tipo]
+    : PREFERENCIAS_DEFAULT[tipo];
   return Boolean(valor);
 }
 
@@ -328,5 +336,55 @@ export async function notifyCuentaEliminada(input: {
     await enviarEmail({ to: input.email, ...tpl });
   } catch (err) {
     logger.error({ err, email: input.email }, "notifyCuentaEliminada: error");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Wrappers de vencimiento de Lukas — Lote 6A
+// ---------------------------------------------------------------------------
+
+/** Avisa que una compra de Lukas ya venció y el saldo se descontó. */
+export async function notifyLukasVencidos(input: {
+  usuarioId: string;
+  monto: number;
+  fechaCompra: Date;
+}): Promise<void> {
+  try {
+    if (!(await debeNotificar(input.usuarioId, "notifVencimientos"))) return;
+    const destinatario = await obtenerDestinatario(input.usuarioId);
+    if (!destinatario) return;
+    const tpl = lukasVencidosTemplate({
+      nombreUsuario: destinatario.nombre,
+      monto: input.monto,
+      fechaCompra: input.fechaCompra,
+    });
+    await enviarEmail({ to: destinatario.email, ...tpl });
+  } catch (err) {
+    logger.error({ err, usuarioId: input.usuarioId }, "notifyLukasVencidos: error");
+  }
+}
+
+/** Avisa que una compra de Lukas está próxima a vencer (30d o 7d). */
+export async function notifyLukasPorVencer(input: {
+  usuarioId: string;
+  monto: number;
+  venceEn: Date;
+  dias: 7 | 30;
+}): Promise<void> {
+  try {
+    if (!(await debeNotificar(input.usuarioId, "notifVencimientos"))) return;
+    const destinatario = await obtenerDestinatario(input.usuarioId);
+    if (!destinatario) return;
+    const templateFn =
+      input.dias === 7 ? lukasPorVencer7dTemplate : lukasPorVencer30dTemplate;
+    const tpl = templateFn({
+      nombreUsuario: destinatario.nombre,
+      monto: input.monto,
+      venceEn: input.venceEn,
+      diasRestantes: input.dias,
+    });
+    await enviarEmail({ to: destinatario.email, ...tpl });
+  } catch (err) {
+    logger.error({ err, usuarioId: input.usuarioId }, "notifyLukasPorVencer: error");
   }
 }

@@ -280,6 +280,98 @@ export function datosDescargadosTemplate(input: DatosDescargadosInput) {
   return { subject, html, text };
 }
 
+// ============================================================================
+// Templates de vencimiento de Lukas — Lote 6A
+// ============================================================================
+
+export interface LukasVencidosInput {
+  nombreUsuario: string;
+  monto: number;
+  fechaCompra: Date;
+}
+
+export function lukasVencidosTemplate(input: LukasVencidosInput) {
+  const subject = `⚠️ ${input.monto} Lukas expirados de tu cuenta`;
+  const fechaStr = input.fechaCompra.toLocaleDateString("es-PE", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    timeZone: "America/Lima",
+  });
+  const html = wrapEmail(
+    subject,
+    `<h1 style="margin:0 0 8px;font-size:24px;color:#001050;">⚠️ Lukas expirados</h1>
+    <p style="margin:0 0 16px;font-size:15px;color:rgba(0,16,80,0.85);line-height:1.5;">
+      ${escapeHtml(input.nombreUsuario)}, ${input.monto} Lukas comprados el ${fechaStr} expiraron hoy
+      por los 36 meses de vigencia.
+    </p>
+    <div style="background:#FFF3CD;border-left:4px solid #FFB800;padding:16px;border-radius:8px;margin:16px 0;">
+      <strong>💡 Tip para la próxima:</strong> usa tus Lukas antes de que venzan inscribiéndote en torneos.
+    </div>
+    <p style="margin:16px 0;font-size:14px;color:rgba(0,16,80,0.85);line-height:1.5;">
+      ¿Tienes Lukas ganados? Los Lukas de premio no vencen nunca. Canjéalos en la tienda.
+    </p>
+    ${ctaButton("🎯 Ver torneos", `${BASE_URL}/matches`)}`,
+  );
+  const text = `${input.monto} Lukas expirados. Comprados el ${fechaStr}. Tus Lukas ganados en torneos no vencen. Ver torneos: ${BASE_URL}/matches`;
+  return { subject, html, text };
+}
+
+export interface LukasPorVencerInput {
+  nombreUsuario: string;
+  monto: number;
+  venceEn: Date;
+  diasRestantes: number;
+}
+
+export function lukasPorVencer30dTemplate(input: LukasPorVencerInput) {
+  const fechaStr = input.venceEn.toLocaleDateString("es-PE", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    timeZone: "America/Lima",
+  });
+  const subject = `📅 ${input.monto} Lukas vencen en 30 días (${fechaStr})`;
+  const html = wrapEmail(
+    subject,
+    `<h1 style="margin:0 0 8px;font-size:24px;color:#001050;">📅 Lukas por vencer</h1>
+    <p style="margin:0 0 16px;font-size:15px;color:rgba(0,16,80,0.85);line-height:1.5;">
+      ${escapeHtml(input.nombreUsuario)}, tienes <strong>${input.monto} Lukas comprados</strong>
+      que vencen el ${fechaStr} — en 30 días.
+    </p>
+    <p style="margin:16px 0;font-size:14px;color:rgba(0,16,80,0.85);line-height:1.5;">
+      Úsalos antes de esa fecha inscribiéndote en torneos. Si ganas, los Lukas de premio no vencen nunca.
+    </p>
+    ${ctaButton("🎯 Ver torneos disponibles", `${BASE_URL}/matches`)}`,
+  );
+  const text = `${input.monto} Lukas vencen el ${fechaStr} (en 30 días). Úsalos en torneos: ${BASE_URL}/matches`;
+  return { subject, html, text };
+}
+
+export function lukasPorVencer7dTemplate(input: LukasPorVencerInput) {
+  const fechaStr = input.venceEn.toLocaleDateString("es-PE", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    timeZone: "America/Lima",
+  });
+  const subject = `🚨 ${input.monto} Lukas vencen en 7 días — ¡úsalos ya!`;
+  const html = wrapEmail(
+    subject,
+    `<h1 style="margin:0 0 8px;font-size:24px;color:#FF3D3D;">🚨 Último aviso de vencimiento</h1>
+    <p style="margin:0 0 16px;font-size:15px;color:rgba(0,16,80,0.85);line-height:1.5;">
+      ${escapeHtml(input.nombreUsuario)}, tus <strong>${input.monto} Lukas comprados</strong>
+      vencen el <strong>${fechaStr}</strong> — solo quedan <strong>7 días</strong>.
+    </p>
+    <div style="background:#FFEDD5;border-left:4px solid #FF3D3D;padding:16px;border-radius:8px;margin:16px 0;">
+      <strong>⏰ ¡Actúa ahora!</strong> Inscríbete en un torneo y ponlos a trabajar antes de que expiren.
+    </div>
+    ${ctaButton("🎯 Ver torneos ahora", `${BASE_URL}/matches`)}`,
+  );
+  const text = `URGENTE: ${input.monto} Lukas vencen el ${fechaStr} (en 7 días). Úsalos en torneos: ${BASE_URL}/matches`;
+  return { subject, html, text };
+}
+
 export interface CuentaEliminadaInput {
   nombreUsuario: string;
   modo: "hard" | "soft";

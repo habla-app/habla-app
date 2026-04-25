@@ -1,7 +1,7 @@
 # CLAUDE.md — Habla! App
 
 > Contexto operativo del proyecto. El historial detallado de bugs vive en `CHANGELOG.md` y en `git log`.
-> Última actualización: 25 Abr 2026 (Mini-lote 7.6 — modal post-combinada con datos frescos, logout robusto, eliminación de cuenta in-app).
+> Última actualización: 25 Abr 2026 (Lote 6A — 3 bolsas de Lukas: Compradas, Bonus, Ganadas; vencimiento automático; backfill post-deploy).
 
 ---
 
@@ -78,6 +78,21 @@ Máx **10 tickets** por usuario por torneo; constraint en BD impide tickets idé
 - **Margen en premios físicos:** ~30%.
 - Bonus de bienvenida: **15 Lukas** (BONUS, sin vencimiento). Constante `BONUS_BIENVENIDA_LUKAS`.
 - Lukas **comprados** vencen a los **36 meses**; **ganados** no vencen. Constante `MESES_VENCIMIENTO_COMPRA`.
+
+### 3 bolsas de Lukas (Lote 6A)
+Los Lukas se dividen en 3 bolsas lógicas. La suma siempre iguala `balanceLukas` (compat hacia atrás).
+
+| Bolsa | Campo | Origen | Vence | Canjeable |
+|-------|-------|--------|-------|-----------|
+| **Compradas** | `balanceCompradas` | Compra con Culqi/Yape | Sí, 36 meses por lote FIFO | No |
+| **Bonus** | `balanceBonus` | Bienvenida + bonus de pack | No | No |
+| **Ganadas** | `balanceGanadas` | Premio de torneo | No | **Sí** |
+
+**Reglas de descuento:** Bonus → FIFO Compradas (más antiguas primero via `saldoVivo`) → Ganadas.  
+**Canjes en /tienda:** solo usa bolsa Ganadas (`getBalanceCanjeable`). Si Ganadas < coste → `BalanceInsuficiente`.  
+**Reembolsos:** se restaura a la bolsa de origen (guardada en `metadata.composicion` de la ENTRADA_TORNEO).  
+**Cron vencimiento:** job en `vencimiento-lukas.job.ts`, tick cada 1h vía `instrumentation.ts`. Envía avisos 30d y 7d antes; ejecuta descuento el día 0. Endpoint manual: `POST /api/cron/vencimiento-lukas`.  
+**Backfill post-deploy:** `POST /api/v1/admin/backfill/bolsas` (Bearer CRON_SECRET). Idempotente.
 
 ### Tipos de torneo (Plan v6: solo informativos)
 Las etiquetas `EXPRESS / ESTANDAR / PREMIUM / GRAN_TORNEO` se mantienen como **badge visual** para que el usuario distinga torneos casuales vs grandes finales. **No afectan reglas económicas** (entrada, rake, distribución, cierre — todos uniformes).
@@ -184,15 +199,15 @@ Para explorar a profundidad, usar `ls` sobre el repo.
 
 Schema completo en `packages/db/prisma/schema.prisma`. Modelos principales:
 
-- **Usuario** — email, `username` (@handle, **NOT NULL + unique**, 3-20 chars, `^[a-zA-Z0-9_]+$`, unicidad **case-insensitive** — `Gustavo` y `gustavo` colisionan), `usernameLocked` (true tras completar-perfil, inmutable), `tycAceptadosAt`, balanceLukas, rol (JUGADOR|ADMIN), telefonoVerif, dniVerif, deletedAt (soft delete), relaciones a tickets/transacciones/canjes/preferenciasNotif/limites.
+- **Usuario** — email, `username` (@handle, **NOT NULL + unique**, 3-20 chars, `^[a-zA-Z0-9_]+$`, unicidad **case-insensitive** — `Gustavo` y `gustavo` colisionan), `usernameLocked` (true tras completar-perfil, inmutable), `tycAceptadosAt`, `balanceLukas` (total suma de las 3 bolsas), `balanceCompradas/Bonus/Ganadas` (Lote 6A — las 3 bolsas individuales), rol (JUGADOR|ADMIN), telefonoVerif, dniVerif, deletedAt (soft delete), relaciones a tickets/transacciones/canjes/preferenciasNotif/limites.
 - **Partido** — externalId (api-football), liga, equipoLocal/Visita, fechaInicio, estado (PROGRAMADO|EN_VIVO|FINALIZADO|CANCELADO), golesLocal/Visita, flags btts/mas25Goles/huboTarjetaRoja, round, venue.
 - **EventoPartido** — tipo (GOL|TARJETA_AMARILLA|TARJETA_ROJA|FIN_PARTIDO|SUSTITUCION), minuto, equipo, jugador. Unique natural key `(partidoId, tipo, minuto, equipo, COALESCE(jugador,''))` para upsert idempotente del poller.
 - **Torneo** — tipo (EXPRESS|ESTANDAR|PREMIUM|GRAN_TORNEO), entradaLukas, partidoId, estado (ABIERTO|CERRADO|EN_JUEGO|FINALIZADO|CANCELADO), totalInscritos, pozoBruto, pozoNeto, rake, cierreAt, distribPremios (Json).
 - **Ticket** — 5 predicciones (predResultado, predBtts, predMas25, predTarjetaRoja, predMarcadorLocal, predMarcadorVisita), puntos desglosados, posicionFinal, premioLukas. Unique compuesto de las 5 preds + usuarioId + torneoId.
-- **TransaccionLukas** — tipo (COMPRA|ENTRADA_TORNEO|PREMIO_TORNEO|CANJE|BONUS|VENCIMIENTO|REEMBOLSO), monto (±), refId, venceEn (solo COMPRA).
+- **TransaccionLukas** — tipo (COMPRA|ENTRADA_TORNEO|PREMIO_TORNEO|CANJE|BONUS|VENCIMIENTO|REEMBOLSO), monto (±), refId, venceEn (solo COMPRA). **Lote 6A:** `bolsa BolsaLukas?` (COMPRADAS|BONUS|GANADAS), `saldoVivo Int?` (solo COMPRA, para FIFO), `metadata Json?` (composición de descuento en ENTRADA_TORNEO), `vencAvisado30d/7d Boolean`.
 - **Premio** — categoria (ENTRADA|CAMISETA|GIFT|TECH|EXPERIENCIA), badge (POPULAR|NUEVO|LIMITADO), featured, requiereDireccion, costeLukas, stock, valorSoles (audit interno).
 - **Canje** — estado (PENDIENTE|PROCESANDO|ENVIADO|ENTREGADO|CANCELADO), direccion (Json).
-- **PreferenciasNotif** — 7 toggles. Lazy create con defaults.
+- **PreferenciasNotif** — 8 toggles (7 previos + `notifVencimientos` default true, Lote 6A). Lazy create con defaults.
 - **LimitesJuego** — limiteMensualCompra (default S/ 300), limiteDiarioTickets (default 10), autoExclusionHasta.
 - **VerificacionTelefono** — código 6 dígitos hash SHA-256, TTL 10 min, máx 3 intentos.
 - **VerificacionDni** — imagen local en `apps/web/public/uploads/dni/<hex32>.{jpg|png}`, estado (PENDIENTE|APROBADO|RECHAZADO).
@@ -211,6 +226,13 @@ Schema completo en `packages/db/prisma/schema.prisma`. Modelos principales:
 - Bonus de bienvenida: **15 Lukas** (BONUS, sin vencimiento). Plan v6 — antes 500.
 - Vencimiento Lukas comprados: **36 meses** desde la compra. Plan v6 — antes 12.
 - Packs de compra: 20 (+0), 50 (+5), 100 (+15), 250 (+50).
+
+#### Reglas de descuento entre bolsas (Lote 6A)
+- Orden de descuento: **Bonus → FIFO Compradas → Ganadas** (ver `descontarEntrada` en `torneos.service.ts`).
+- FIFO en Compradas: se consumen por `creadoEn` asc, decrementando `saldoVivo` hasta agotar el monto. No rompe en mitad de un lote.
+- Reembolsos restauran a la bolsa de origen. La composición de la entrada se guarda en `metadata.composicion` de la `TransaccionLukas ENTRADA_TORNEO`. Si el lote de compra original ya expiró, se crea una nueva COMPRA con TTL 36m.
+- Canjes solo permiten gastar bolsa **Ganadas**. Usar `getBalanceCanjeable(u)` de `lib/lukas-display.ts`.
+- Lecturas de balance: **siempre** vía `lib/lukas-display.ts`. Mutaciones directas solo en los 6 services autorizados (torneos, canjes, ranking, compras, vencimiento, wallet-view).
 
 ### Torneos y Tickets
 - **Entrada uniforme: 3 Lukas** para todos los torneos (Plan v6). El tipo es solo metadato visual.
@@ -332,6 +354,7 @@ pnpm exec tsc --noEmit
 - **Ajustes UX sidebar + wallet + perfil (Abr 2026):** Sidebar de `/matches` y `/` reordenado — widget #2 es **"Los Pozos más grandes de la semana"** (torneos de la semana calendario ordenados por `pozoBruto` DESC, TOP 5) y widget #5 es **"Los más pagados de la semana"** (suma de `TransaccionLukas.monto` con tipo `PREMIO_TORNEO` por usuario en la semana, TOP 10); ventana lunes→domingo via `datetime.ts:getWeekBounds`. Balance widget rediseñado (tipografía 52px + border gold + CTA único a `/wallet`). En `/torneo/:id` el CTA desktop vive en la sidebar derecha sobre `RulesCard`. Modal post-envío de combinada invierte énfasis: primario = "Crear otra combinada" (reset), secundario = "Ver mis combinadas" (link). `/wallet` — filtro "Inscripciones" ahora enriquece cada transacción con `partido` (vía `refId → Torneo → Partido`) y muestra el resumen `Local 2-1 Visita` en la lista. Usernames case-sensitive para display, unicidad case-insensitive en BD (regex `^[a-zA-Z0-9_]+$`); filtro `lib/utils/username-filter.ts:esUsernameOfensivo` bloquea slurs + leet-speak básico en los 3 endpoints de auth. `VerificacionSection` actualiza copy DNI a "Requerido para canjear cualquier premio.". `DatosSection` muestra "Por completar" cuando `nombre` está vacío o coincide con el `username`; adapter OAuth ya no copia email/username al nombre. Minuto en vivo simplificado: `getMinutoLabel({ statusShort, minuto, extra })` + propagación de `status.extra` (injury time "45+3'") desde api-football al cache, WS y endpoints REST.
 - **Lote 4 — Hotfixes económicos del Plan v6 (Abr 2026):** centralización de constantes económicas en [`lib/config/economia.ts`](apps/web/lib/config/economia.ts) (`BONUS_BIENVENIDA_LUKAS=15`, `MESES_VENCIMIENTO_COMPRA=36`, `ENTRADA_LUKAS=3`, `LIMITE_MENSUAL_DEFAULT=300`, `LIMITE_MENSUAL_MAX=1000`, `LIMITE_DIARIO_TICKETS_DEFAULT=10`). Cambios: bonus bienvenida 500→15, vencimiento Lukas comprados 12→36 meses, cierre de torneos T-5min→al kickoff (`CIERRE_MIN_BEFORE=0` en `torneos.service.ts`), entrada uniforme **3 Lukas** para todos los torneos (el panel admin perdió el input numérico, se muestra como badge readonly). Tipos `EXPRESS/ESTANDAR/PREMIUM/GRAN_TORNEO` quedan como **etiqueta visual** (no afectan reglas). `LigaConfig` perdió el campo `entradaLukas`. La distribución FLOOR + residual al 1° y los empates con split equitativo acotado a M ya estaban implementados en `lib/utils/premios-distribucion.ts`; sólo se ampliaron los comentarios para que coincidan con el wording del Plan v6. Límite mensual cap subido de 10000 a 1000 (en realidad reducido — antes el Zod aceptaba hasta 10000, ahora 1000). Endpoint temporal `/api/debug/sentry-test` (Lote 1) eliminado. Migración de datos: NINGUNA — los torneos existentes con entrada 5/10/30/100 conservan su valor; las TransaccionLukas con `venceEn` calculado a 12m se mantienen. Solo aplica a creaciones futuras.
 - **Mini-lote 7.6 — Modal post-combinada + logout + eliminación in-app (Abr 2026):** (a) `POST /api/v1/tickets` ahora devuelve `data.torneo` con `{ id, totalInscritos, pozoBruto, pozoNeto, entradaLukas, cierreAt }` leído dentro de la misma `$transaction`; el `ComboModal` lo guarda en un state local que sobreescribe los valores derivados del prop original al pintar el header de éxito (Bug A — datos del pozo/jugadores quedaban congelados pre-mutación). Helper compartido `derivePozosDisplay()` en [`combo-info.mapper.ts`](apps/web/components/combo/combo-info.mapper.ts) extraído para reusar la fórmula de primer-premio entre el load inicial y el repintado. (b) Tier AUTH del rate limit subido de 10→30/min/IP y `/api/auth/signout` **completamente exento** del rate limit (Bug B — signout silenciosamente 429 dejaba la cookie sin borrar). Handlers de `signOut` en [UserMenu](apps/web/components/layout/UserMenu.tsx) + [FooterSections](apps/web/components/perfil/FooterSections.tsx) refactor a `signOut({ redirect: false }) + window.location.href = "/"` para garantizar hard reload con la cookie ya rotada. (c) Feature C — eliminación de cuenta in-app: nuevo endpoint `POST /api/v1/usuarios/me/eliminar/inmediato` con confirmación typing literal `"ELIMINAR"`. El service `eliminarCuentaInmediato` decide hard vs soft según actividad (`ticketsCount + canjesCount`). Hard: `tx.usuario.delete()` con cascade del schema. Soft: anonimización idéntica a la del flujo email-token + **borrado explícito de `Account` y `Session`** (libera identidad OAuth para re-registro) + cleanup de `VerificacionTelefono`/`VerificacionDni`/`PreferenciasNotif`/`LimitesJuego`/`SolicitudEliminacion`/`VerificationToken`. En ambos casos email de confirmación post-mutación al email original (`cuentaEliminadaTemplate` + `notifyCuentaEliminada`). El flujo legacy email-token (`/me/eliminar` + `/me/eliminar/confirmar`) sigue existiendo en el backend pero la UI ya no lo invoca. Modal nuevo en [FooterSections.tsx](apps/web/components/perfil/FooterSections.tsx) con input "ELIMINAR" + botón rojo + auto-signout post-éxito. Sin schema migration: `deletedAt IS NOT NULL` ya cumplía la función de "cuenta eliminada".
+- **Lote 6A — 3 bolsas de Lukas + vencimiento automático (Abr 2026):** Refactor backend completo sin cambio visible en UI. Schema: nuevo enum `BolsaLukas (COMPRADAS|BONUS|GANADAS)`, campos `balanceCompradas/Bonus/Ganadas` en `Usuario`, campos `bolsa/saldoVivo/metadata/vencAvisado30d/7d` en `TransaccionLukas`, campo `notifVencimientos` en `PreferenciasNotif`. Helper central `lib/lukas-display.ts` (lectura) — 4 funciones: `getBalanceTotal/Canjeable/DisponibleParaJugar/Desglosado`. Services refactorizados: `torneos.service` (descuento FIFO Bonus→Compradas→Ganadas + restauración por composicion), `canjes.service` (solo Ganadas), `ranking.service` (premios a Ganadas), `wallet-view.service` (desglose + proxVencimiento via saldoVivo), `compras.service` (nuevo, preview Culqi). Cron Job F en `instrumentation.ts`: `vencimientoLukasJob` tick cada 1h (skip si corrió <23h), vence compras expiradas, envía avisos 30d/7d con `notifyLukasVencidos/PorVencer`. 3 templates de email nuevos. Backfill post-deploy: `lib/services/backfill-bolsas.service.ts` + endpoint `POST /api/v1/admin/backfill/bolsas`. Endpoint cron manual: `POST /api/cron/vencimiento-lukas`. Migration SQL escrita manualmente (no aplicada localmente). `prisma generate` corrido para actualizar tipos. `obtenerBalance` en `lib/usuarios.ts` suma las 3 bolsas (sesión NextAuth compat). 6 test files AST. `pnpm tsc --noEmit` y `pnpm lint` sin errores.
 
 ### ⏳ Pendiente
 - **Sub-Sprint 2 — Pagos Culqi:** `/wallet` ya tiene UI completa (balance hero, 4 packs, historial), falta integración Culqi.js + webhook `/webhooks/culqi` + acreditación real de Lukas. Endpoints diseñados: `POST /lukas/comprar`, `POST /webhooks/culqi`. Enforcement de límite mensual ya listo (`verificarLimiteCompra` en `limites.service.ts`).
@@ -508,13 +531,19 @@ Socket.io montado sobre custom Next server (`apps/web/server.ts`). Path `/socket
 - Client components que muestren balance usan **pattern mounted-guard:** `mounted ? storeBalance : initialBalance`. Prohibido leer `session.user.balanceLukas` directo en Client Component (whitelist: 4 RSC que lo pasan como prop).
 - Tras toda mutación de Lukas (inscripción, canje, compra, reembolso), el endpoint retorna `{ ..., nuevoBalance }` y el cliente llama `setBalance(json.data.nuevoBalance)`. Prohibido derivar balance sumando/restando transacciones client-side.
 
+### Bolsas de Lukas — lectura y mutación (Lote 6A)
+- **Lectura:** todo código que necesite el balance total, canjeable o desglosado usa `lib/lukas-display.ts` (`getBalanceTotal`, `getBalanceCanjeable`, `getBalanceDesglosado`). Prohibido leer `balanceCompradas/Bonus/Ganadas` directo fuera de los services autorizados.
+- **Mutación directa autorizada** solo en: `torneos.service` (descuento inscripción + reembolso), `canjes.service` (descuento canje + reembolso), `ranking.service` (premio torneo), `compras.service` (acreditación Culqi), `vencimiento-lukas.job` (vencimiento + avisos), `wallet-view.service` (lectura desglose para UI). Los demás módulos usan `getBalanceTotal()` de `lukas-display.ts`.
+- **`balanceLukas` sigue siendo la suma de las 3 bolsas** (compat con sesión NextAuth y store Zustand). Toda mutación actualiza las 3 bolsas afectadas Y `balanceLukas` en la misma `$transaction`.
+- **`notifVencimientos`** toggle en `PreferenciasNotif` (default true). Los wrappers `notifyLukasVencidos` y `notifyLukasPorVencer` lo respetan.
+
 ### Modales
 - Modales DEBEN renderizar con `createPortal(overlay, document.body)` (`components/ui/Modal.tsx`). Sin esto, cualquier ancestor con `transform`/`filter`/`opacity` rompe el `position: fixed`.
 
 ### Emails y notificaciones
-- SIEMPRE pasar por wrappers `notifyXxx` de `lib/services/notificaciones.service.ts` (8: `notifyPremioGanado`, `notifyCanjeSolicitado`, `notifyCanjeEnviado`, `notifyCanjeEntregado`, `notifyTorneoCancelado`, `notifyVerifCodigoEmail`, `notifySolicitudEliminar`, `notifyDatosDescargados`). Prohibido llamar `enviarEmail` directo.
+- SIEMPRE pasar por wrappers `notifyXxx` de `lib/services/notificaciones.service.ts` (10: `notifyPremioGanado`, `notifyCanjeSolicitado`, `notifyCanjeEnviado`, `notifyCanjeEntregado`, `notifyTorneoCancelado`, `notifyVerifCodigoEmail`, `notifySolicitudEliminar`, `notifyDatosDescargados`, `notifyLukasVencidos`, `notifyLukasPorVencer`). Prohibido llamar `enviarEmail` directo.
 - Cada wrapper: (1) chequea `debeNotificar(usuarioId, tipo)`, (2) skippea si `deletedAt` o sin email, (3) renderiza template puro, (4) dispara `enviarEmail`. try/catch con `logger.error` — email fallido NO rompe flujo.
-- `PreferenciasNotif` lazy-create con defaults. 5 toggles `true` por default; `notifPromos` y `emailSemanal` son opt-in.
+- `PreferenciasNotif` lazy-create con defaults. 5 toggles `true` por default (incluye `notifVencimientos`, Lote 6A); `notifPromos` y `emailSemanal` son opt-in.
 - Emails fire-and-forget DESPUÉS del commit, NO dentro de `$transaction`.
 
 ### Límites de juego responsable
@@ -627,6 +656,8 @@ Baseline operacional activo tras Lote 1 (Abr 2026).
 ### Endpoints de infra
 - `GET /api/health` — para Uptime Robot. Chequea Postgres (`SELECT 1`) y Redis (`PING`) en paralelo con timeout 3s. Adicionalmente reporta el check `backup` (ok/stale/missing/unconfigured) leyendo state in-memory del job (no llama a R2). Respuesta `200 {"status":"ok"}` o `503 {"status":"error",...}` identificando el check caído. **Backup stale (>26h) NO degrada el status** — se loggea warning y Sentry alerta aparte. `Cache-Control: no-store`. Excluido del rate limit.
 - `POST /api/cron/backup-db` — dispara backup ad-hoc. Auth `Authorization: Bearer <CRON_SECRET>`. `GET` con misma auth devuelve estado + listado de últimos 10 backups en R2.
+- `POST /api/cron/vencimiento-lukas` — dispara job de vencimiento de Lukas ad-hoc (Lote 6A). Auth `Authorization: Bearer <CRON_SECRET>`. En producción corre automáticamente cada 1h en `instrumentation.ts` (Job F); este endpoint es para pruebas/debug.
+- `POST /api/v1/admin/backfill/bolsas` — dispara backfill de las 3 bolsas post-deploy (Lote 6A). Auth `Authorization: Bearer <CRON_SECRET>`. Idempotente: si ya corrió (todas las txs tienen bolsa), retorna inmediatamente.
 
 ### Headers de seguridad
 Aplicados globalmente vía `next.config.js` → `headers()`:
@@ -788,6 +819,12 @@ NextAuth v5 con `useSession()` golpea `/api/auth/session` en cada mount de Clien
 
 ### Logout robusto: `redirect: false` + hard reload manual
 El default de NextAuth (`signOut({ callbackUrl: "/" })`) hace POST a `/api/auth/signout` y redirige automáticamente, sin retornar control al cliente. Si ese POST falla (429, red rota, edge runtime que cuelga) la cookie no se borra y la redirección bounce trae al usuario logueado de nuevo — síntoma "el botón no responde". Patrón en uso: `await signOut({ redirect: false, callbackUrl: "/" })` + `window.location.href = "/"` para hacer hard reload (mismo patrón que el `update({})` post-completar-perfil documentado más arriba). El hard reload garantiza que el SSR vea la cookie nueva y los Server Components renderen como visitante. Aplicado en `UserMenu.tsx`, `FooterSections.tsx` y el modal de eliminar cuenta tras eliminación exitosa.
+
+### Bolsas de Lukas — `balanceLukas` como total compat (Lote 6A)
+La sesión NextAuth, el store Zustand y los endpoints que devuelven `nuevoBalance` siempre trabajan con el total de las 3 bolsas. `balanceLukas` en `Usuario` es redundante con `balanceCompradas + balanceBonus + balanceGanadas` pero se mantiene para que todos los callers que ya existen sigan funcionando sin cambio de interfaz. En Lote 6B, cuando la UI empiece a mostrar el desglose, los endpoints pueden devolver además `desglose: { compradas, bonus, ganadas }`. Por ahora la regla es: toda mutación actualiza AMBOS (las bolsas afectadas Y `balanceLukas`) en la misma transacción.
+
+### Por qué el service de backfill está en `apps/web/lib/services/` y no en `packages/db/scripts/`
+El script `packages/db/scripts/backfill-bolsas.ts` es para ejecución directa (`tsx`). Para exponerlo como endpoint HTTP necesitamos importar desde `apps/web`; el package `@habla/db` no exporta subpaths de `scripts/` y crear un path alias cross-package añade fragilidad. La solución pragmática es un service equivalente en `apps/web/lib/services/backfill-bolsas.service.ts` que usa la instancia prisma compartida del app. El script tsx permanece como herramienta de emergencia si hay acceso shell directo al container.
 
 ---
 

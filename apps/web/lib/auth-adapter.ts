@@ -78,7 +78,9 @@ export function HablaPrismaAdapter(): Adapter {
             nombre,
             username: usernameTemporal,
             usernameLocked: false,
+            // Lote 6A: el bonus de bienvenida va a balanceBonus.
             balanceLukas: BONUS_BIENVENIDA_LUKAS,
+            balanceBonus: BONUS_BIENVENIDA_LUKAS,
             emailVerified: data.emailVerified,
             image: data.image,
           },
@@ -88,6 +90,7 @@ export function HablaPrismaAdapter(): Adapter {
           data: {
             usuarioId: creado.id,
             tipo: "BONUS",
+            bolsa: "BONUS",
             monto: BONUS_BIENVENIDA_LUKAS,
             descripcion: "Bonus de bienvenida",
             venceEn: null,
