@@ -16,6 +16,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/Modal";
 import { useLukasStore } from "@/stores/lukas.store";
 import { authedFetch } from "@/lib/api-client";
@@ -97,6 +98,7 @@ export function ComboModal({
   const [successInfo, setSuccessInfo] = useState<ComboSuccessInfo | null>(null);
   const [countdown, setCountdown] = useState<string>("--:--");
 
+  const router = useRouter();
   const balance = useLukasStore((s) => s.balance);
   const setBalance = useLukasStore((s) => s.setBalance);
 
@@ -196,6 +198,12 @@ export function ComboModal({
       }
       // Éxito: sincroniza balance global y pinta el panel de confirmación.
       setBalance(json.data.nuevoBalance);
+      // Invalidar el Router Cache para que el detalle del torneo y la
+      // lista de matches releen los contadores actualizados (jugadores,
+      // pozo) cuando el usuario cierre el modal o navegue. El endpoint
+      // ya llamó revalidatePath; router.refresh fuerza el re-fetch
+      // client-side sin perder el modal abierto.
+      router.refresh();
       // Analytics. Todas las 5 preds se envían siempre (el UI las fuerza),
       // pero las 4 booleanas pueden estar undefined en el form hasta que el
       // usuario las toque. Contamos las que el form ya había marcado.
@@ -268,6 +276,7 @@ export function ComboModal({
     preds,
     puntosMax,
     setBalance,
+    router,
     onCreated,
   ]);
 

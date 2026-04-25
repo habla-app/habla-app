@@ -8,6 +8,7 @@
 // contrario se crea y se descuenta la entrada del balance.
 
 import { NextRequest } from "next/server";
+import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { crear } from "@/lib/services/tickets.service";
 import { CrearTicketBodySchema } from "@/lib/services/tickets.schema";
@@ -34,6 +35,16 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await crear(session.user.id, parsed.data);
+
+    // Invalidar el cache de Server Components que muestran datos del
+    // torneo (totalInscritos, pozo) y las listas que los agregan. Sin
+    // esto, el detalle del torneo y /matches siguen mostrando los
+    // contadores viejos hasta el próximo F5 del usuario. El cliente
+    // complementa con router.refresh() para invalidar el Router Cache
+    // local y forzar un re-fetch.
+    revalidatePath(`/torneo/${parsed.data.torneoId}`);
+    revalidatePath("/matches");
+    revalidatePath("/");
 
     // Fire-and-forget: si el partido ya empezó, un ticket nuevo modifica
     // el ranking — re-puntuarlo y emitir actualización. Lo hacemos fuera

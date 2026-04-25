@@ -5,6 +5,7 @@
 // editar las predicciones del ticket.
 
 import { NextRequest } from "next/server";
+import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { inscribir } from "@/lib/services/torneos.service";
 import { NoAutenticado, toErrorResponse } from "@/lib/services/errors";
@@ -20,6 +21,14 @@ export async function POST(_req: NextRequest, { params }: Context) {
     if (!session?.user?.id) throw new NoAutenticado();
 
     const result = await inscribir(session.user.id, params.id);
+
+    // Invalidar el cache del detalle del torneo y de las listas que
+    // muestran sus contadores (jugadores, pozo). Mismo patrón que en
+    // POST /api/v1/tickets — cubre el flujo "Inscribirme" sin combinada.
+    revalidatePath(`/torneo/${params.id}`);
+    revalidatePath("/matches");
+    revalidatePath("/");
+
     return Response.json({ data: result });
   } catch (err) {
     logger.error(
