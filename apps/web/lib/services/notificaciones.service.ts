@@ -21,6 +21,7 @@ import {
   canjeEnviadoTemplate,
   canjeEntregadoTemplate,
   canjeSolicitadoTemplate,
+  cuentaEliminadaTemplate,
   datosDescargadosTemplate,
   premioGanadoTemplate,
   solicitudEliminarTemplate,
@@ -301,5 +302,31 @@ export async function notifyDatosDescargados(input: {
     await enviarEmail({ to: destinatario.email, ...tpl });
   } catch (err) {
     logger.error({ err, usuarioId: input.usuarioId }, "notifyDatosDescargados: error");
+  }
+}
+
+/**
+ * Confirmación post-eliminación de cuenta (Mini-lote 7.6). A diferencia
+ * de los otros wrappers, recibe email + nombre EXPLÍCITOS porque al
+ * llamarse el usuario puede estar ya anonimizado (soft delete) o borrado
+ * (hard delete) — no podemos resolverlo desde la BD por usuarioId.
+ *
+ * El caller (`eliminarCuentaInmediato`) lee email + nombre antes de la
+ * transacción y los pasa acá como fire-and-forget.
+ */
+export async function notifyCuentaEliminada(input: {
+  email: string;
+  nombre: string;
+  modo: "hard" | "soft";
+}): Promise<void> {
+  try {
+    if (!input.email) return;
+    const tpl = cuentaEliminadaTemplate({
+      nombreUsuario: input.nombre || "Hola",
+      modo: input.modo,
+    });
+    await enviarEmail({ to: input.email, ...tpl });
+  } catch (err) {
+    logger.error({ err, email: input.email }, "notifyCuentaEliminada: error");
   }
 }

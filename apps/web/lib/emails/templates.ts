@@ -279,3 +279,39 @@ export function datosDescargadosTemplate(input: DatosDescargadosInput) {
   const text = `Tus datos están listos: ${input.urlDescarga} (expira en ${input.expiraEnHoras}h).`;
   return { subject, html, text };
 }
+
+export interface CuentaEliminadaInput {
+  nombreUsuario: string;
+  modo: "hard" | "soft";
+}
+
+/**
+ * Confirmación post-eliminación. Se envía AL EMAIL ORIGINAL antes de la
+ * anonimización (caller debe leer el email y luego ejecutar la
+ * eliminación). Mini-lote 7.6.
+ */
+export function cuentaEliminadaTemplate(input: CuentaEliminadaInput) {
+  const subject = `Tu cuenta de Habla! fue eliminada`;
+  const detalleModo =
+    input.modo === "hard"
+      ? "Tu cuenta y todos los datos asociados se borraron por completo."
+      : "Tu cuenta se anonimizó: borramos tus datos personales (nombre, email, teléfono, imagen). Conservamos solo los registros de tickets y transacciones por motivos de auditoría e integridad de los torneos en los que participaste, sin asociación a tu identidad.";
+  const html = wrapEmail(
+    subject,
+    `<h1 style="margin:0 0 8px;font-size:24px;color:#001050;">Cuenta eliminada</h1>
+    <p style="margin:0 0 16px;font-size:15px;color:rgba(0,16,80,0.85);line-height:1.5;">
+      ${escapeHtml(input.nombreUsuario)}, confirmamos la eliminación de tu cuenta de Habla!.
+    </p>
+    <p style="margin:16px 0;font-size:14px;color:rgba(0,16,80,0.85);line-height:1.5;">
+      ${detalleModo}
+    </p>
+    <div style="background:#FFEDD5;border-left:4px solid #FF7A00;padding:16px;border-radius:8px;margin:16px 0;font-size:13px;color:rgba(0,16,80,0.85);line-height:1.5;">
+      Si esto fue un error, escribinos a <a href="mailto:equipo@hablaplay.com" style="color:#001050;font-weight:700;">equipo@hablaplay.com</a> dentro de los próximos 30 días.
+    </div>
+    <p style="margin:24px 0 0;font-size:13px;color:rgba(0,16,80,0.58);text-align:center;">
+      Gracias por haber sido parte de Habla!. Te vamos a extrañar 💛
+    </p>`,
+  );
+  const text = `Confirmamos la eliminación de tu cuenta de Habla!. ${detalleModo} Si fue un error, escribinos a equipo@hablaplay.com dentro de 30 días.`;
+  return { subject, html, text };
+}

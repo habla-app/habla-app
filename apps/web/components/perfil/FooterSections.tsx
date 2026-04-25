@@ -5,8 +5,16 @@
 //   - Legal: términos, privacidad, juego responsable, sobre lukas, acerca
 //   - Danger zone: cerrar sesión + eliminar cuenta
 //
-// Endpoints preservados del SS7 (nada nuevo): POST /me/datos-download,
-// POST /me/eliminar. Modal de eliminar usa createPortal.
+// Mini-lote 7.6:
+//   - "Cerrar sesión" usa signOut con redirect:false + hard reload (mismo
+//     patrón que UserMenu). Evita el 429 silencioso del rate limit y el
+//     loop a OAuth que terminaba en lockout de Google.
+//   - "Eliminar cuenta" reemplaza el flujo email-token por uno in-app
+//     inmediato con confirmación typing "ELIMINAR". El endpoint nuevo
+//     `/me/eliminar/inmediato` decide hard vs soft delete según
+//     actividad histórica. El flujo email-token (POST /me/eliminar +
+//     /me/eliminar/confirmar) queda como legacy en el backend pero la UI
+//     no lo invoca.
 
 import { useState } from "react";
 import { signOut } from "next-auth/react";
@@ -30,6 +38,19 @@ export function FooterSections({ balanceLukas, email }: Props) {
     { tipo: "ok" | "error"; texto: string } | null
   >(null);
   const [descargando, setDescargando] = useState(false);
+  const [cerrandoSesion, setCerrandoSesion] = useState(false);
+
+  async function cerrarSesion() {
+    if (cerrandoSesion) return;
+    setCerrandoSesion(true);
+    try {
+      await signOut({ redirect: false, callbackUrl: "/" });
+    } catch {
+      // signOut nunca rechaza con redirect:false; por si NextAuth tira
+      // un edge inesperado, el hard reload muestra el estado real.
+    }
+    window.location.href = "/";
+  }
 
   async function descargar() {
     setDescargaMsg(null);
@@ -153,10 +174,11 @@ export function FooterSections({ balanceLukas, email }: Props) {
         </div>
         <button
           type="button"
-          onClick={() => signOut({ callbackUrl: "/" })}
-          className="mb-2.5 flex w-full items-center justify-center gap-2 rounded-sm border border-accent-clasico-dark/40 bg-white px-4 py-3 text-sm font-bold text-accent-clasico-dark transition hover:border-accent-clasico-dark hover:bg-accent-clasico-dark hover:text-white"
+          disabled={cerrandoSesion}
+          onClick={() => void cerrarSesion()}
+          className="mb-2.5 flex w-full items-center justify-center gap-2 rounded-sm border border-accent-clasico-dark/40 bg-white px-4 py-3 text-sm font-bold text-accent-clasico-dark transition hover:border-accent-clasico-dark hover:bg-accent-clasico-dark hover:text-white disabled:cursor-wait disabled:opacity-60"
         >
-          🚪 Cerrar sesión
+          🚪 {cerrandoSesion ? "Cerrando sesión…" : "Cerrar sesión"}
         </button>
         <button
           type="button"
@@ -181,6 +203,12 @@ export function FooterSections({ balanceLukas, email }: Props) {
   );
 }
 
+// EliminarCuentaModal — flujo in-app inmediato (Mini-lote 7.6). El usuario
+// confirma tipeando "ELIMINAR" en un input; al click, POST a
+// /api/v1/usuarios/me/eliminar/inmediato. El backend decide hard vs soft
+// y devuelve `{ modo }`. Tras éxito, signOut() + hard reload a "/".
+const TEXTO_CONFIRMACION = "ELIMINAR";
+
 function EliminarCuentaModal({
   balanceLukas,
   onClose,
@@ -188,24 +216,50 @@ function EliminarCuentaModal({
   balanceLukas: number;
   onClose: () => void;
 }) {
+  const [confirmacion, setConfirmacion] = useState("");
   const [cargando, setCargando] = useState(false);
-  const [estado, setEstado] = useState<"idle" | "enviado" | "error">("idle");
+  const [estado, setEstado] = useState<"idle" | "ok" | "error">("idle");
+  const [modoAplicado, setModoAplicado] = useState<"hard" | "soft" | null>(
+    null,
+  );
   const [error, setError] = useState("");
 
-  async function solicitar() {
+  const puedeConfirmar = confirmacion === TEXTO_CONFIRMACION && !cargando;
+
+  async function eliminar() {
+    if (!puedeConfirmar) return;
     setCargando(true);
     setError("");
     try {
-      const resp = await authedFetch("/api/v1/usuarios/me/eliminar", {
-        method: "POST",
-      });
+      const resp = await authedFetch(
+        "/api/v1/usuarios/me/eliminar/inmediato",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ confirmacion: TEXTO_CONFIRMACION }),
+        },
+      );
       const json = await resp.json();
       if (!resp.ok) {
         setEstado("error");
         setError(json?.error?.message ?? "No se pudo procesar.");
         return;
       }
-      setEstado("enviado");
+      setModoAplicado(json?.data?.modo ?? "soft");
+      setEstado("ok");
+      // Pequeño delay para que el usuario lea el feedback antes del
+      // signOut + hard reload — UX más amable que cortar al instante.
+      setTimeout(async () => {
+        try {
+          await signOut({ redirect: false, callbackUrl: "/" });
+        } catch {
+          // ignore — el hard reload de abajo limpia la cookie igual
+        }
+        window.location.href = "/";
+      }, 1800);
+    } catch {
+      setEstado("error");
+      setError("Error de red. Reintentá en unos segundos.");
     } finally {
       setCargando(false);
     }
@@ -219,17 +273,21 @@ function EliminarCuentaModal({
         </h2>
       </ModalHeader>
       <ModalBody>
-        {estado === "enviado" ? (
+        {estado === "ok" ? (
           <div className="py-4 text-center">
             <div aria-hidden className="text-5xl">
-              📧
+              👋
             </div>
             <h3 className="mt-3 font-display text-lg font-bold text-dark">
-              Revisá tu email
+              Tu cuenta se eliminó
             </h3>
             <p className="mt-2 text-[13px] text-body">
-              Te enviamos un link de confirmación. Es válido por 48 horas. Si no
-              lo confirmás, tu cuenta sigue activa.
+              {modoAplicado === "hard"
+                ? "Borramos todos tus datos. Te enviamos un correo de confirmación."
+                : "Anonimizamos tu información personal y borramos tus sesiones. Conservamos solo registros de tickets y transacciones por integridad histórica. Te enviamos un correo de confirmación."}
+            </p>
+            <p className="mt-3 text-[12px] text-muted-d">
+              Cerrando sesión en un instante…
             </p>
           </div>
         ) : (
@@ -240,18 +298,50 @@ function EliminarCuentaModal({
                 <strong>
                   {balanceLukas.toLocaleString("es-PE")} Lukas canjeables
                 </strong>
-                . Si querés canjearlos antes, ignorá este flujo y visitá la
+                . Si querés canjearlos antes, cerrá este diálogo y visitá la
                 tienda.
               </div>
             ) : null}
             <p className="mt-3 text-sm text-body">
-              Al confirmar, tu cuenta se anonimiza: tu nombre, email, teléfono
-              e imagen se borran. Los tickets y transacciones se preservan para
-              auditoría pero sin asociación a tu identidad.
+              Al confirmar:
             </p>
-            <p className="mt-2 text-[13px] text-muted-d">
+            <ul className="mt-2 list-disc pl-5 text-[13px] leading-relaxed text-body">
+              <li>Se borran tus datos personales (nombre, email, teléfono, imagen, DNI).</li>
+              <li>Se cierran todas tus sesiones activas.</li>
+              <li>Se desvincula tu cuenta de Google si la tenías conectada.</li>
+              <li>
+                Tus tickets en torneos en curso siguen contando, pero quedan
+                como <em>“Usuario eliminado”</em> en los rankings.
+              </li>
+            </ul>
+            <p className="mt-3 text-[13px] font-semibold text-urgent-critical">
               Esta acción NO se puede revertir.
             </p>
+
+            <div className="mt-4">
+              <label
+                htmlFor="confirmacion-eliminar"
+                className="block text-[12px] font-semibold uppercase tracking-[0.06em] text-muted-d"
+              >
+                Para confirmar, escribí{" "}
+                <span className="font-bold text-dark">{TEXTO_CONFIRMACION}</span>
+              </label>
+              <input
+                id="confirmacion-eliminar"
+                type="text"
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                value={confirmacion}
+                onChange={(e) =>
+                  setConfirmacion(e.target.value.toUpperCase())
+                }
+                disabled={cargando}
+                className="mt-1.5 w-full rounded-md border border-light bg-card px-3 py-2.5 text-[15px] font-mono tracking-[0.08em] text-dark outline-none transition-colors focus:border-urgent-critical disabled:opacity-50"
+                placeholder={TEXTO_CONFIRMACION}
+              />
+            </div>
+
             {error ? (
               <div className="mt-3 rounded-md bg-pred-wrong-bg px-3 py-2 text-[13px] text-pred-wrong">
                 {error}
@@ -261,23 +351,25 @@ function EliminarCuentaModal({
         )}
       </ModalBody>
       <ModalFooter>
-        {estado === "enviado" ? (
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-full rounded-md bg-brand-blue-main px-4 py-3 font-bold text-white"
-          >
-            Entendido
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={solicitar}
-            disabled={cargando}
-            className="w-full rounded-md bg-urgent-critical px-4 py-3 font-bold text-white disabled:opacity-50"
-          >
-            {cargando ? "Enviando..." : "Enviarme el link de confirmación"}
-          </button>
+        {estado === "ok" ? null : (
+          <div className="flex w-full flex-col gap-2 sm:flex-row">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={cargando}
+              className="w-full rounded-md border border-strong bg-card px-4 py-3 text-sm font-bold text-body transition hover:border-brand-blue-main hover:text-brand-blue-main disabled:opacity-50 sm:w-auto sm:flex-1"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={eliminar}
+              disabled={!puedeConfirmar}
+              className="w-full rounded-md bg-urgent-critical px-4 py-3 text-sm font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto sm:flex-1"
+            >
+              {cargando ? "Eliminando…" : "Eliminar cuenta permanentemente"}
+            </button>
+          </div>
         )}
       </ModalFooter>
     </Modal>

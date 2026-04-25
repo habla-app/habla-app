@@ -20,6 +20,7 @@ import {
 } from "../utils/nivel";
 import { calcularStats } from "./tickets.service";
 import {
+  notifyCuentaEliminada,
   notifyDatosDescargados,
   notifySolicitudEliminar,
 } from "./notificaciones.service";
@@ -268,6 +269,145 @@ export async function confirmarEliminarCuenta(
   logger.info({ usuarioId: solicitud.usuarioId }, "cuenta eliminada (soft)");
 
   return { usuarioId: solicitud.usuarioId };
+}
+
+// ---------------------------------------------------------------------------
+// Eliminación inmediata in-app (Mini-lote 7.6)
+// ---------------------------------------------------------------------------
+//
+// Reemplaza el flujo email-token por uno directo: el usuario confirma
+// in-app tipeando "ELIMINAR", el endpoint llama esto, y la cuenta se
+// elimina al instante. La función decide automáticamente entre:
+//
+//   - HARD delete: si NO hay actividad (tickets ni canjes). Borra el
+//     Usuario; el `onDelete: Cascade` se encarga de Account, Session,
+//     PreferenciasNotif, LimitesJuego, VerificacionTelefono,
+//     VerificacionDni, SolicitudEliminacion. Esto libera el email
+//     original Y la identidad OAuth (Account.providerAccountId) para
+//     que el usuario pueda re-registrarse limpio.
+//
+//   - SOFT delete: si tiene tickets o canjes. Anonimiza PII,
+//     marca deletedAt, y borra explícitamente Account/Session +
+//     dependencias cascade en una transacción atómica. Preserva
+//     Ticket/TransaccionLukas/Canje (audit + integridad de torneos
+//     históricos).
+//
+// En ambos casos, antes de tocar la BD se lee el email original para
+// poder mandar el correo de confirmación post-eliminación (fire-and-
+// forget — no bloquea la respuesta al cliente).
+
+export interface EliminarInmediatoResult {
+  modo: "hard" | "soft";
+}
+
+export async function eliminarCuentaInmediato(
+  usuarioId: string,
+): Promise<EliminarInmediatoResult> {
+  const usuario = await prisma.usuario.findUnique({
+    where: { id: usuarioId },
+    select: {
+      id: true,
+      email: true,
+      nombre: true,
+      deletedAt: true,
+    },
+  });
+  if (!usuario || usuario.deletedAt) throw new NoAutenticado();
+
+  // Detectar actividad histórica para decidir hard vs soft. Cualquier
+  // ticket o canje (incluso CANCELADO) es razón suficiente para soft —
+  // la integridad de torneos pasados / audit financiero pesa más que
+  // la limpieza total de la BD.
+  const [ticketsCount, canjesCount] = await Promise.all([
+    prisma.ticket.count({ where: { usuarioId } }),
+    prisma.canje.count({ where: { usuarioId } }),
+  ]);
+  const tieneActividad = ticketsCount > 0 || canjesCount > 0;
+  const modo: "hard" | "soft" = tieneActividad ? "soft" : "hard";
+
+  // Capturar email + nombre ANTES de mutar (luego del soft delete el
+  // email queda anonimizado y no se podría recuperar para el aviso).
+  const emailOriginal = usuario.email;
+  const nombreOriginal = usuario.nombre;
+
+  if (modo === "hard") {
+    await prisma.$transaction(async (tx) => {
+      // VerificationToken no tiene FK al Usuario (NextAuth lo indexa
+      // por email/identifier). Lo limpiamos por email para no dejar
+      // magic links pendientes en el aire.
+      await tx.verificationToken.deleteMany({
+        where: { identifier: emailOriginal },
+      });
+      // El delete del Usuario dispara cascade en: Account, Session,
+      // PreferenciasNotif, LimitesJuego, VerificacionTelefono,
+      // VerificacionDni, SolicitudEliminacion. (Ticket / Transaccion /
+      // Canje no tienen onDelete declarado, pero acá no hay ninguno —
+      // por eso es hard.)
+      await tx.usuario.delete({ where: { id: usuarioId } });
+    });
+
+    logger.info({ usuarioId }, "cuenta eliminada (hard)");
+  } else {
+    await prisma.$transaction(async (tx) => {
+      // Anonimización PII — mismo shape que confirmarEliminarCuenta para
+      // que las invariantes (deleted-<id8>-<ts>@deleted.habla.local,
+      // username deleted_<id10>) sigan reconocibles por las consultas
+      // que filtran por `deletedAt IS NOT NULL`.
+      const anonEmail = `deleted-${usuarioId.slice(0, 8)}-${Date.now()}@deleted.habla.local`;
+      const anonUsername = `deleted_${usuarioId.slice(0, 10)}`;
+      await tx.usuario.update({
+        where: { id: usuarioId },
+        data: {
+          nombre: "Usuario eliminado",
+          email: anonEmail,
+          username: anonUsername,
+          usernameLocked: true,
+          telefono: null,
+          ubicacion: null,
+          image: null,
+          deletedAt: new Date(),
+        },
+      });
+
+      // Borrar OAuth links (libera providerAccountId para que un futuro
+      // sign-in con la misma cuenta de Google cree un usuario nuevo en
+      // vez de chocar con el unique compuesto). El soft delete previo
+      // (confirmarEliminarCuenta) NO hacía esto y bloqueaba re-registro.
+      await tx.account.deleteMany({ where: { userId: usuarioId } });
+      await tx.session.deleteMany({ where: { userId: usuarioId } });
+
+      // Limpiar tablas con PII residual. El cascade del Usuario.delete
+      // las atendería, pero acá no borramos al Usuario — las tocamos
+      // explícitas. `deleteMany` (no `delete`) para que no falle si no
+      // hay registro previo (PreferenciasNotif puede no existir hasta
+      // que el usuario abra /perfil por primera vez).
+      await tx.verificacionTelefono.deleteMany({ where: { usuarioId } });
+      await tx.verificacionDni.deleteMany({ where: { usuarioId } });
+      await tx.preferenciasNotif.deleteMany({ where: { usuarioId } });
+      await tx.limitesJuego.deleteMany({ where: { usuarioId } });
+      await tx.solicitudEliminacion.deleteMany({ where: { usuarioId } });
+
+      // Magic links pendientes al email original.
+      await tx.verificationToken.deleteMany({
+        where: { identifier: emailOriginal },
+      });
+    });
+
+    logger.info(
+      { usuarioId, ticketsCount, canjesCount },
+      "cuenta eliminada (soft inmediato)",
+    );
+  }
+
+  // Email de confirmación al email original (fire-and-forget — no
+  // bloquea la respuesta del endpoint).
+  void notifyCuentaEliminada({
+    email: emailOriginal,
+    nombre: nombreOriginal,
+    modo,
+  });
+
+  return { modo };
 }
 
 // ---------------------------------------------------------------------------
