@@ -21,6 +21,7 @@ export default function robots(): MetadataRoute.Robots {
           "/torneo/",
           "/live-match",
           "/legal/",
+          "/ayuda/",
         ],
         disallow: [
           "/admin",

@@ -3,9 +3,11 @@
 // Lote 2 — SEO. Se sirve en /sitemap.xml.
 //
 // Incluye:
-//  - Páginas estáticas públicas (home, matches, tienda).
-//  - Rutas /legal/* declaradas anticipadamente (placeholders, llegan en
-//    Lote 3 — se listan ya para no revisitar el sitemap).
+//  - Páginas estáticas públicas (home, matches, tienda, /live-match,
+//    /ayuda/faq).
+//  - Rutas /legal/* (Lote 3): terminos, privacidad, cookies,
+//    juego-responsable, canjes, aviso. `lastModified` apunta a la fecha
+//    de vigencia del documento (2026-04-24).
 //  - Torneos públicos (ABIERTO o EN_VIVO) con `lastModified` del torneo.
 //
 // Excluye rutas privadas (/wallet, /perfil, /mis-combinadas, /admin, /auth)
@@ -36,21 +38,38 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.9,
     },
     {
+      url: `${BASE_URL}/live-match`,
+      lastModified: now,
+      changeFrequency: "hourly",
+      priority: 0.8,
+    },
+    {
       url: `${BASE_URL}/tienda`,
       lastModified: now,
       changeFrequency: "weekly",
       priority: 0.7,
     },
+    {
+      url: `${BASE_URL}/ayuda/faq`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.5,
+    },
   ];
 
+  // Fecha de vigencia v1.0 de los documentos legales (24 abr 2026).
+  // Cuando se publique una nueva versión, actualizar este valor.
+  const legalLastMod = new Date("2026-04-24T00:00:00.000Z");
   const legales: MetadataRoute.Sitemap = [
     "terminos",
     "privacidad",
-    "juego-responsable",
     "cookies",
+    "juego-responsable",
+    "canjes",
+    "aviso",
   ].map((slug) => ({
     url: `${BASE_URL}/legal/${slug}`,
-    lastModified: now,
+    lastModified: legalLastMod,
     changeFrequency: "weekly" as const,
     priority: 0.3,
   }));
