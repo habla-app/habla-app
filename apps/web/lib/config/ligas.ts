@@ -13,21 +13,25 @@
 // Agregar una liga = agregar una entrada acá. El import automático la
 // recoge en la siguiente corrida, y el admin puede forzar con
 // POST /api/v1/admin/partidos/importar.
+//
+// Plan v6 (Lote 4): el campo `tipoTorneo` queda como etiqueta informativa
+// (afecta sólo el badge visual). La entrada es uniforme `ENTRADA_LUKAS`
+// (lib/config/economia.ts) para todos los torneos, así que ya no se
+// declara en la config de cada liga.
 
 export type LigaConfig = {
   apiFootballId: number;
   nombre: string; /* se guarda en Partido.liga — fuente de verdad del nombre */
   tipoTorneo: "EXPRESS" | "ESTANDAR" | "PREMIUM" | "GRAN_TORNEO";
-  entradaLukas: number; /* entrada por ticket del torneo auto-creado */
 };
 
 export const LIGAS_ACTIVAS: LigaConfig[] = [
-  { apiFootballId: 281, nombre: "Liga 1 Perú",       tipoTorneo: "EXPRESS",  entradaLukas: 5 },
-  { apiFootballId: 2,   nombre: "Champions League",  tipoTorneo: "ESTANDAR", entradaLukas: 10 },
-  { apiFootballId: 13,  nombre: "Copa Libertadores", tipoTorneo: "ESTANDAR", entradaLukas: 10 },
-  { apiFootballId: 39,  nombre: "Premier League",    tipoTorneo: "EXPRESS",  entradaLukas: 5 },
-  { apiFootballId: 140, nombre: "La Liga",           tipoTorneo: "EXPRESS",  entradaLukas: 5 },
-  { apiFootballId: 1,   nombre: "Mundial 2026",      tipoTorneo: "PREMIUM",  entradaLukas: 30 },
+  { apiFootballId: 281, nombre: "Liga 1 Perú",       tipoTorneo: "EXPRESS"  },
+  { apiFootballId: 2,   nombre: "Champions League",  tipoTorneo: "ESTANDAR" },
+  { apiFootballId: 13,  nombre: "Copa Libertadores", tipoTorneo: "ESTANDAR" },
+  { apiFootballId: 39,  nombre: "Premier League",    tipoTorneo: "EXPRESS"  },
+  { apiFootballId: 140, nombre: "La Liga",           tipoTorneo: "EXPRESS"  },
+  { apiFootballId: 1,   nombre: "Mundial 2026",      tipoTorneo: "PREMIUM"  },
 ];
 
 export const DIAS_VENTANA_IMPORT = 14;

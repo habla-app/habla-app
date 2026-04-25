@@ -34,6 +34,7 @@ import {
 } from "./errors";
 import { logger } from "./logger";
 import { verificarLimiteInscripcion } from "./limites.service";
+import { ENTRADA_LUKAS } from "../config/economia";
 
 // ---------------------------------------------------------------------------
 // Constantes del negocio
@@ -358,23 +359,27 @@ export async function listarInscritos(
 }
 
 // ---------------------------------------------------------------------------
-// crear — admin crea un torneo sobre un partido disponible
+// crear — admin crea un torneo sobre un partido disponible.
+//
+// Plan v6 (Lote 4): la entrada se unifica a ENTRADA_LUKAS (3) para
+// TODOS los tipos de torneo. Si el caller envía un valor distinto en
+// `input.entradaLukas`, se ignora y se loguea — mantenemos el campo en
+// `CrearInput` por compat con el panel admin existente, pero ya no
+// configura nada. Los torneos preexistentes con entrada distinta
+// quedan como están.
 // ---------------------------------------------------------------------------
 
 export interface CrearInput {
   partidoId: string;
   tipo: TipoTorneo;
-  entradaLukas: number;
+  /** @deprecated Plan v6 — la entrada es siempre ENTRADA_LUKAS. Sólo se
+   *  mantiene para compat del panel admin; cualquier valor enviado se
+   *  ignora silenciosamente. */
+  entradaLukas?: number;
   nombre?: string;
 }
 
 export async function crear(input: CrearInput): Promise<TorneoConPartido> {
-  if (input.entradaLukas < 1) {
-    throw new ValidacionFallida("La entrada debe ser al menos 1 Luka.", {
-      entradaLukas: input.entradaLukas,
-    });
-  }
-
   const partido = await prisma.partido.findUnique({
     where: { id: input.partidoId },
   });
@@ -403,7 +408,7 @@ export async function crear(input: CrearInput): Promise<TorneoConPartido> {
     data: {
       nombre,
       tipo: input.tipo,
-      entradaLukas: input.entradaLukas,
+      entradaLukas: ENTRADA_LUKAS,
       partidoId: input.partidoId,
       cierreAt,
       distribPremios: DISTRIB_PREMIOS_DESCRIPTOR,
@@ -416,7 +421,7 @@ export async function crear(input: CrearInput): Promise<TorneoConPartido> {
       torneoId: torneo.id,
       partidoId: partido.id,
       tipo: input.tipo,
-      entradaLukas: input.entradaLukas,
+      entradaLukas: ENTRADA_LUKAS,
     },
     "torneo creado",
   );

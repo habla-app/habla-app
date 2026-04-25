@@ -19,6 +19,7 @@ import { useToast } from "@/components/ui";
 import { Button } from "@/components/ui";
 import { formatKickoff } from "@/lib/utils/datetime";
 import { authedFetch } from "@/lib/api-client";
+import { ENTRADA_LUKAS } from "@/lib/config/economia";
 
 interface PartidoDisponible {
   id: string;
@@ -213,7 +214,6 @@ function CrearTorneoRow({
   const [tipo, setTipo] = useState<
     "EXPRESS" | "ESTANDAR" | "PREMIUM" | "GRAN_TORNEO"
   >("ESTANDAR");
-  const [entradaLukas, setEntradaLukas] = useState(10);
   const [nombre, setNombre] = useState("");
   const [creando, setCreando] = useState(false);
 
@@ -228,7 +228,9 @@ function CrearTorneoRow({
         body: JSON.stringify({
           partidoId: partido.id,
           tipo,
-          entradaLukas,
+          // Plan v6: la entrada es uniforme; el backend ignora el campo
+          // pero lo enviamos por explicitud del request.
+          entradaLukas: ENTRADA_LUKAS,
           nombre: nombre.trim() || undefined,
         }),
       });
@@ -274,14 +276,14 @@ function CrearTorneoRow({
 
       <label className="flex flex-col gap-1 text-[11px] font-bold uppercase tracking-[0.06em] text-muted-d">
         Entrada (Lukas)
-        <input
-          type="number"
-          min={1}
-          max={10000}
-          value={entradaLukas}
-          onChange={(e) => setEntradaLukas(Number(e.target.value))}
-          className="w-32 rounded-sm border-[1.5px] border-light bg-card px-3 py-2 font-body text-[13px] text-dark outline-none focus:border-brand-blue-main focus:ring-2 focus:ring-brand-blue-main/10"
-        />
+        <div
+          aria-readonly
+          className="flex w-32 items-center gap-1 rounded-sm border-[1.5px] border-light bg-subtle px-3 py-2 font-body text-[13px] font-bold text-dark"
+          title="Plan v6: entrada uniforme para todos los torneos."
+        >
+          <span aria-hidden>🪙</span>
+          <span>{ENTRADA_LUKAS}</span>
+        </div>
       </label>
 
       <label className="flex min-w-0 flex-col gap-1 text-[11px] font-bold uppercase tracking-[0.06em] text-muted-d">

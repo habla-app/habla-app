@@ -20,6 +20,10 @@ export const ListarTorneosQuerySchema = z.object({
 export const CrearTorneoBodySchema = z.object({
   partidoId: z.string().min(1),
   tipo: z.enum(["EXPRESS", "ESTANDAR", "PREMIUM", "GRAN_TORNEO"]),
-  entradaLukas: z.number().int().positive().max(10_000),
+  // Plan v6: entradaLukas ya no se configura (entrada uniforme = 3
+  // Lukas). El campo se mantiene opcional por compat del panel admin
+  // pero el service ignora cualquier valor. Ver `crear()` en
+  // `torneos.service.ts`.
+  entradaLukas: z.number().int().positive().max(10_000).optional(),
   nombre: z.string().min(1).max(120).optional(),
 });

@@ -34,6 +34,7 @@ import {
   CIERRE_MIN_BEFORE,
   DISTRIB_PREMIOS_DESCRIPTOR,
 } from "./torneos.service";
+import { ENTRADA_LUKAS } from "../config/economia";
 import { logger } from "./logger";
 
 export interface ImportLigaResult {
@@ -180,7 +181,9 @@ async function procesarFixtures(
       data: {
         nombre: `${partido.equipoLocal} vs ${partido.equipoVisita}`,
         tipo: liga.tipoTorneo,
-        entradaLukas: liga.entradaLukas,
+        // Plan v6: entrada uniforme. `liga.tipoTorneo` se conserva
+        // sólo como badge visual.
+        entradaLukas: ENTRADA_LUKAS,
         partidoId: partido.id,
         cierreAt,
         distribPremios: DISTRIB_PREMIOS_DESCRIPTOR,
