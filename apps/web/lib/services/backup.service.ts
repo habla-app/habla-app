@@ -31,13 +31,16 @@ import {
   type ListObjectsV2CommandOutput,
 } from "@aws-sdk/client-s3";
 import * as Sentry from "@sentry/nextjs";
-import { spawn } from "node:child_process";
-import { createWriteStream } from "node:fs";
-import { readFile, stat, unlink } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { pipeline } from "node:stream/promises";
-import { createGzip } from "node:zlib";
+// Sin prefix `node:` — Webpack 5 no lo maneja nativamente y rompe el
+// build con UnhandledSchemeError. Los módulos siguen siendo built-in y
+// quedan externos en el server bundle.
+import { spawn } from "child_process";
+import { createWriteStream } from "fs";
+import { readFile, stat, unlink } from "fs/promises";
+import { tmpdir } from "os";
+import { join } from "path";
+import { pipeline } from "stream/promises";
+import { createGzip } from "zlib";
 import { logger } from "./logger";
 
 const RETENTION_DAYS = 30;

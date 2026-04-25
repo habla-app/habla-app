@@ -13,18 +13,46 @@ const nextConfig = {
     // En Next.js 15+ es on-by-default.
     instrumentationHook: true,
   },
-  webpack: (config, { isServer }) => {
-    // ioredis usa módulos Node nativos (net/dns/tls/stream/crypto) que
-    // webpack intenta bundlear incluso cuando es código server-only.
-    // Lo marcamos como external para que el bundler lo deje como
-    // `require("ioredis")` en runtime — el custom server (Node) lo
-    // resuelve directo de node_modules.
+  webpack: (config, { isServer, nextRuntime }) => {
     if (isServer) {
+      // ioredis usa módulos Node nativos (net/dns/tls/stream/crypto) que
+      // webpack intenta bundlear incluso cuando es código server-only.
+      // Lo marcamos como external para que el bundler lo deje como
+      // `require("ioredis")` en runtime — el custom server (Node) lo
+      // resuelve directo de node_modules.
       const externals = Array.isArray(config.externals)
         ? config.externals
         : [config.externals].filter(Boolean);
-      config.externals = [...externals, "ioredis"];
+      const serverExternals = ["ioredis"];
+      // @aws-sdk/client-s3 (Lote 7 — backup a R2) solo se usa en Node
+      // runtime (no edge, no client). Lo dejamos external solo allí —
+      // pesa ~2MB y no tiene sentido bundlearlo en chunks de Next.
+      if (nextRuntime !== "edge") {
+        serverExternals.push("@aws-sdk/client-s3");
+      }
+      config.externals = [...externals, ...serverExternals];
     }
+
+    // Edge runtime + client bundle: los builtins de Node que solo
+    // usamos server-only (Lote 7 — child_process/fs/etc para pg_dump)
+    // deben quedar como módulos vacíos. El código que los importa
+    // está guardado por `runtime = "nodejs"` en los handlers y por
+    // `if (NEXT_RUNTIME !== "nodejs") return` en instrumentation.ts —
+    // la fallback es solo para que webpack no falle al hacer bundle.
+    if (nextRuntime === "edge" || !isServer) {
+      config.resolve = config.resolve || {};
+      config.resolve.fallback = {
+        ...(config.resolve.fallback || {}),
+        child_process: false,
+        fs: false,
+        "fs/promises": false,
+        os: false,
+        path: false,
+        "stream/promises": false,
+        zlib: false,
+      };
+    }
+
     return config;
   },
 
