@@ -7,6 +7,13 @@
 // Registro formal (Abr 2026): header del dropdown muestra `@username` en
 // vez de `nombre`. Si `usernameLocked=false` (OAuth sin completar),
 // muestra CTA "Elegí tu @handle →" linkeando a /auth/completar-perfil.
+//
+// Mini-lote 7.6: el handler de "Cerrar sesión" hace `signOut({ redirect:
+// false })` y luego hard reload manual. El default de NextAuth (redirect
+// automático) silenciaba 429 del rate limit y dejaba la cookie sin
+// borrar — síntoma "el botón no responde". El hard reload garantiza que
+// el SSR vea la cookie nueva y los Server Components renderen el header
+// como visitante.
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
@@ -25,7 +32,22 @@ export function UserMenu({
   email,
 }: UserMenuProps) {
   const [abierto, setAbierto] = useState(false);
+  const [cerrandoSesion, setCerrandoSesion] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  async function cerrarSesion() {
+    if (cerrandoSesion) return;
+    setCerrandoSesion(true);
+    try {
+      await signOut({ redirect: false, callbackUrl: "/" });
+    } catch {
+      // signOut nunca rechaza con redirect:false, pero por si NextAuth
+      // tira un edge: igual hacemos el hard reload abajo. El cookie ya
+      // se borró en el server o no se borró y el reload muestra el
+      // estado real de la sesión.
+    }
+    window.location.href = "/";
+  }
 
   useEffect(() => {
     if (!abierto) return;
@@ -98,13 +120,14 @@ export function UserMenu({
           <button
             type="button"
             role="menuitem"
+            disabled={cerrandoSesion}
             onClick={() => {
               setAbierto(false);
-              signOut({ callbackUrl: "/" });
+              void cerrarSesion();
             }}
-            className="block w-full border-t border-light px-4 py-2.5 text-left text-sm font-semibold text-danger transition-colors hover:bg-subtle"
+            className="block w-full border-t border-light px-4 py-2.5 text-left text-sm font-semibold text-danger transition-colors hover:bg-subtle disabled:cursor-wait disabled:opacity-60"
           >
-            Cerrar sesión
+            {cerrandoSesion ? "Cerrando sesión…" : "Cerrar sesión"}
           </button>
         </div>
       )}

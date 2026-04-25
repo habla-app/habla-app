@@ -48,7 +48,13 @@ export const PROTECTED_MATCHERS = [
 const WINDOW_MS = 60_000;
 
 const RATE_TIERS = {
-  AUTH: 10, // /api/auth/*
+  // /api/auth/* — subido a 30/min (Mini-lote 7.6). NextAuth v5 con
+  // useSession() golpea /api/auth/session en cada mount + window-focus
+  // y /api/auth/csrf en cada flujo OAuth: 10/min era suficiente para
+  // login/logout aislado pero se quedaba corto en navegación normal,
+  // dando 429 silenciosos al hacer signOut() y dejando la cookie sin
+  // borrar (logout aparentemente "no responde").
+  AUTH: 30,
   CRITICAL: 30, // tickets, torneo inscribir (por usuario)
   DEFAULT: 60, // resto /api/*
 } as const;
@@ -83,7 +89,13 @@ function getRateLimitConfig(
   // Sentry debug: también excluido (ya tiene guard por token).
   if (pathname.startsWith("/api/debug/")) return null;
 
-  // Auth endpoints: tier AUTH (10/min).
+  // Signout: NUNCA rate-limiteamos (Mini-lote 7.6). Si el usuario quiere
+  // cerrar sesión, debe poder siempre. Un 429 acá deja la cookie sin
+  // borrar y se rompe la UX (botón "no responde", luego loop a OAuth y
+  // lockout de Google). Cubre tanto GET (NextAuth pre-form) como POST.
+  if (pathname === "/api/auth/signout") return null;
+
+  // Auth endpoints: tier AUTH (30/min).
   if (pathname.startsWith("/api/auth/")) {
     return { limit: RATE_TIERS.AUTH, keyPrefix: "auth", perUser: false };
   }
