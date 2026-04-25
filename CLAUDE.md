@@ -1,7 +1,7 @@
 # CLAUDE.md — Habla! App
 
 > Contexto operativo del proyecto. El historial detallado de bugs vive en `CHANGELOG.md` y en `git log`.
-> Última actualización: 25 Abr 2026 (Adenda — Política de validación producción-primero).
+> Última actualización: 25 Abr 2026 (Mini-lote 7.6 — modal post-combinada con datos frescos, logout robusto, eliminación de cuenta in-app).
 
 ---
 
@@ -236,6 +236,14 @@ Schema completo en `packages/db/prisma/schema.prisma`. Modelos principales:
 - Auto-exclusión: solo **7, 30 o 90 días** (constante `AUTOEXCLUSION_DIAS_VALIDOS`).
 - Mostrar siempre rake y distribución del pozo antes de inscribir.
 
+### Eliminación de cuenta
+- Derecho ARCO de Cancelación según Ley 29733. Mini-lote 7.6: el flujo principal es in-app inmediato, con confirmación typing literal `"ELIMINAR"` en un input. Endpoint: `POST /api/v1/usuarios/me/eliminar/inmediato`. Sirve a la UI desde `/perfil` zona peligro.
+- El service `eliminarCuentaInmediato` decide automáticamente:
+  - **Hard delete** si NO hay actividad histórica (tickets ni canjes). Borra el `Usuario`; el cascade del schema se encarga de Account, Session, PreferenciasNotif, LimitesJuego, VerificacionTelefono, VerificacionDni, SolicitudEliminacion. Email + identidad OAuth quedan libres para re-registro limpio.
+  - **Soft delete (anonimización)** si tiene tickets o canjes. Anonimiza PII (`nombre`/`email`/`username`/`telefono`/`ubicacion`/`image`), marca `deletedAt`, **borra explícito `Account` + `Session`** (libera el OAuth para re-registro) + dependencias cascade en una transacción atómica. Preserva tickets/transacciones/canjes para audit + integridad de torneos.
+- En ambos modos se manda email de confirmación al email original ANTES de la mutación (fire-and-forget), template `cuentaEliminadaTemplate` + wrapper `notifyCuentaEliminada`.
+- El flujo legacy email-token (`POST /me/eliminar` + `POST /me/eliminar/confirmar`) sigue existiendo en el backend pero la UI ya no lo invoca. Queda como fallback admin si se necesita.
+
 ### Navegación
 - Navegación libre sin login (torneos, ranking, tienda).
 - Login solo al intentar: inscribirse, canjear, ver wallet/perfil.
@@ -243,7 +251,7 @@ Schema completo en `packages/db/prisma/schema.prisma`. Modelos principales:
 - Middleware bloquea el grupo `(main)` si `session.user.usernameLocked === false` → redirect a `/auth/completar-perfil?callbackUrl=<ruta>` (OAuth primera vez sin @handle definitivo).
 
 ### Seguridad
-- Rate limiting en middleware edge (Lote 1) con tiers: `/api/auth/*` 10/min·IP, tickets + inscribir 30/min·usuario, resto `/api/*` 60/min·IP. Excluidos: `/api/health`, `/api/debug/*`, webhooks. Detalle en §16.
+- Rate limiting en middleware edge (Lote 1) con tiers: `/api/auth/*` 30/min·IP (Mini-lote 7.6 — antes 10), tickets + inscribir 30/min·usuario, resto `/api/*` 60/min·IP. Excluidos: `/api/health`, `/api/debug/*`, webhooks **y `/api/auth/signout`** (el logout debe poder ejecutarse siempre). Detalle en §16.
 - Headers de seguridad globales (HSTS, XFO, XCTO, Referrer-Policy, Permissions-Policy, CSP en Report-Only). Detalle en §16.
 - Verificación email obligatoria para comprar Lukas.
 
@@ -323,6 +331,7 @@ pnpm exec tsc --noEmit
 - **Lote 2 — Analytics y SEO (Abr 2026):** PostHog integrado vía `lib/analytics.ts` (helper único) + `PostHogProvider` client con pageview manual, `identify()` en login, `reset()` en logout, opt-out en `/legal/*`. 13 eventos canónicos cableados (detalle en §18). SEO completo: `sitemap.ts` dinámico, `robots.ts`, metadata con OG + Twitter + `metadataBase`, `opengraph-image.tsx` edge-generado, `icon.tsx` + `apple-icon.tsx` placeholders, `manifest.ts` PWA con colores brand correctos (reemplaza `public/manifest.json` legacy). JSON-LD `SportsEvent` en `/torneo/[id]`. Detalle en §18 + §19, funnels en `docs/analytics-funnels.md`.
 - **Ajustes UX sidebar + wallet + perfil (Abr 2026):** Sidebar de `/matches` y `/` reordenado — widget #2 es **"Los Pozos más grandes de la semana"** (torneos de la semana calendario ordenados por `pozoBruto` DESC, TOP 5) y widget #5 es **"Los más pagados de la semana"** (suma de `TransaccionLukas.monto` con tipo `PREMIO_TORNEO` por usuario en la semana, TOP 10); ventana lunes→domingo via `datetime.ts:getWeekBounds`. Balance widget rediseñado (tipografía 52px + border gold + CTA único a `/wallet`). En `/torneo/:id` el CTA desktop vive en la sidebar derecha sobre `RulesCard`. Modal post-envío de combinada invierte énfasis: primario = "Crear otra combinada" (reset), secundario = "Ver mis combinadas" (link). `/wallet` — filtro "Inscripciones" ahora enriquece cada transacción con `partido` (vía `refId → Torneo → Partido`) y muestra el resumen `Local 2-1 Visita` en la lista. Usernames case-sensitive para display, unicidad case-insensitive en BD (regex `^[a-zA-Z0-9_]+$`); filtro `lib/utils/username-filter.ts:esUsernameOfensivo` bloquea slurs + leet-speak básico en los 3 endpoints de auth. `VerificacionSection` actualiza copy DNI a "Requerido para canjear cualquier premio.". `DatosSection` muestra "Por completar" cuando `nombre` está vacío o coincide con el `username`; adapter OAuth ya no copia email/username al nombre. Minuto en vivo simplificado: `getMinutoLabel({ statusShort, minuto, extra })` + propagación de `status.extra` (injury time "45+3'") desde api-football al cache, WS y endpoints REST.
 - **Lote 4 — Hotfixes económicos del Plan v6 (Abr 2026):** centralización de constantes económicas en [`lib/config/economia.ts`](apps/web/lib/config/economia.ts) (`BONUS_BIENVENIDA_LUKAS=15`, `MESES_VENCIMIENTO_COMPRA=36`, `ENTRADA_LUKAS=3`, `LIMITE_MENSUAL_DEFAULT=300`, `LIMITE_MENSUAL_MAX=1000`, `LIMITE_DIARIO_TICKETS_DEFAULT=10`). Cambios: bonus bienvenida 500→15, vencimiento Lukas comprados 12→36 meses, cierre de torneos T-5min→al kickoff (`CIERRE_MIN_BEFORE=0` en `torneos.service.ts`), entrada uniforme **3 Lukas** para todos los torneos (el panel admin perdió el input numérico, se muestra como badge readonly). Tipos `EXPRESS/ESTANDAR/PREMIUM/GRAN_TORNEO` quedan como **etiqueta visual** (no afectan reglas). `LigaConfig` perdió el campo `entradaLukas`. La distribución FLOOR + residual al 1° y los empates con split equitativo acotado a M ya estaban implementados en `lib/utils/premios-distribucion.ts`; sólo se ampliaron los comentarios para que coincidan con el wording del Plan v6. Límite mensual cap subido de 10000 a 1000 (en realidad reducido — antes el Zod aceptaba hasta 10000, ahora 1000). Endpoint temporal `/api/debug/sentry-test` (Lote 1) eliminado. Migración de datos: NINGUNA — los torneos existentes con entrada 5/10/30/100 conservan su valor; las TransaccionLukas con `venceEn` calculado a 12m se mantienen. Solo aplica a creaciones futuras.
+- **Mini-lote 7.6 — Modal post-combinada + logout + eliminación in-app (Abr 2026):** (a) `POST /api/v1/tickets` ahora devuelve `data.torneo` con `{ id, totalInscritos, pozoBruto, pozoNeto, entradaLukas, cierreAt }` leído dentro de la misma `$transaction`; el `ComboModal` lo guarda en un state local que sobreescribe los valores derivados del prop original al pintar el header de éxito (Bug A — datos del pozo/jugadores quedaban congelados pre-mutación). Helper compartido `derivePozosDisplay()` en [`combo-info.mapper.ts`](apps/web/components/combo/combo-info.mapper.ts) extraído para reusar la fórmula de primer-premio entre el load inicial y el repintado. (b) Tier AUTH del rate limit subido de 10→30/min/IP y `/api/auth/signout` **completamente exento** del rate limit (Bug B — signout silenciosamente 429 dejaba la cookie sin borrar). Handlers de `signOut` en [UserMenu](apps/web/components/layout/UserMenu.tsx) + [FooterSections](apps/web/components/perfil/FooterSections.tsx) refactor a `signOut({ redirect: false }) + window.location.href = "/"` para garantizar hard reload con la cookie ya rotada. (c) Feature C — eliminación de cuenta in-app: nuevo endpoint `POST /api/v1/usuarios/me/eliminar/inmediato` con confirmación typing literal `"ELIMINAR"`. El service `eliminarCuentaInmediato` decide hard vs soft según actividad (`ticketsCount + canjesCount`). Hard: `tx.usuario.delete()` con cascade del schema. Soft: anonimización idéntica a la del flujo email-token + **borrado explícito de `Account` y `Session`** (libera identidad OAuth para re-registro) + cleanup de `VerificacionTelefono`/`VerificacionDni`/`PreferenciasNotif`/`LimitesJuego`/`SolicitudEliminacion`/`VerificationToken`. En ambos casos email de confirmación post-mutación al email original (`cuentaEliminadaTemplate` + `notifyCuentaEliminada`). El flujo legacy email-token (`/me/eliminar` + `/me/eliminar/confirmar`) sigue existiendo en el backend pero la UI ya no lo invoca. Modal nuevo en [FooterSections.tsx](apps/web/components/perfil/FooterSections.tsx) con input "ELIMINAR" + botón rojo + auto-signout post-éxito. Sin schema migration: `deletedAt IS NOT NULL` ya cumplía la función de "cuenta eliminada".
 
 ### ⏳ Pendiente
 - **Sub-Sprint 2 — Pagos Culqi:** `/wallet` ya tiene UI completa (balance hero, 4 packs, historial), falta integración Culqi.js + webhook `/webhooks/culqi` + acreditación real de Lukas. Endpoints diseñados: `POST /lukas/comprar`, `POST /webhooks/culqi`. Enforcement de límite mensual ya listo (`verificarLimiteCompra` en `limites.service.ts`).
@@ -632,10 +641,10 @@ Objetivo: A+ en securityheaders.com.
 
 ### Rate limiting
 Middleware edge (`apps/web/middleware.ts` + `lib/rate-limit.ts`) con sliding-window in-memory. Ventana 1 min:
-- `/api/auth/*`: 10 req/min por IP
+- `/api/auth/*`: 30 req/min por IP (Mini-lote 7.6 — antes 10; `useSession()` golpea `/api/auth/session` en cada mount + window-focus, 10 era insuficiente para navegación normal y disparaba 429 silencioso al hacer signOut)
 - `/api/v1/tickets/*` y `/api/v1/torneos/*/inscribir`: 30 req/min por usuario
 - Resto `/api/*`: 60 req/min por IP
-- Excluidos: `/api/health`, `/api/v1/webhooks/*` (HMAC en su handler)
+- Excluidos: `/api/health`, `/api/v1/webhooks/*` (HMAC en su handler), **`/api/auth/signout`** (logout siempre debe poder ejecutarse, sin rate limit — Mini-lote 7.6)
 
 Respuesta 429 con `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`. Violaciones se reportan a Sentry como `warning`. CAVEAT: store in-memory → correcto solo con 1 réplica (realidad hoy). Al escalar, migrar a Redis (ioredis con INCR+EXPIRE o Upstash via HTTP).
 
@@ -770,6 +779,15 @@ NextAuth v5 con strategy JWT cachea los datos del usuario (id, rol, username, us
 
 ### Invalidación de cache tras mutaciones (App Router)
 En App Router, los Server Components fetchean datos en cada SSR pero el navegador mantiene un **Router Cache** que sirve la versión renderizada hasta que algo lo invalida. Tras una mutación que afecte data renderizada en SSR (crear ticket, inscribir, cancelar canje), hay que invalidar en dos niveles: (1) el endpoint llama `revalidatePath(ruta)` o `revalidateTag(tag)` de `next/cache` para purgar el cache del data fetcher en el servidor; (2) el cliente, si se mantiene en una página afectada, llama `router.refresh()` de `next/navigation` para invalidar el Router Cache local y forzar un re-fetch del Server Component. Sin (1) los nuevos requests SSR reciclan datos viejos; sin (2) el cliente que ya tenía la página renderizada no la re-pide. Patrón aplicado en `POST /api/v1/tickets`, `POST /api/v1/torneos/:id/inscribir` y `ComboModal.tsx`.
+
+### Modales con snapshot de datos congelado
+Cuando un modal muestra datos que cambian con la mutación que lo dispara (ej. el `ComboModal` muestra pozo + 1er premio del torneo), el endpoint debe devolver la entidad actualizada en su response y el modal usar esos datos para repintar — NO confiar en `router.refresh()` ni en datos pre-mutación que ya viven en el state del padre. `router.refresh()` solo invalida el Router Cache del cliente para futuras navegaciones; no muta props que ya están en memoria. Patrón aplicado: `POST /api/v1/tickets` devuelve `data.torneo` con `{ totalInscritos, pozoBruto, pozoNeto, ... }` y el modal lo guarda en un state local que sobreescribe los valores derivados del prop original. Helper compartido `derivePozosDisplay()` en `combo-info.mapper.ts` evita duplicar la fórmula de primer-premio entre el load inicial y el repintado post-mutación.
+
+### Rate limiting de NextAuth — `useSession()` y `signOut`
+NextAuth v5 con `useSession()` golpea `/api/auth/session` en cada mount de Client Component que lo usa, en cada window-focus, y al llamar `update({})` (post-completar-perfil). Sumado a `/api/auth/csrf` (1× por flujo OAuth) y `/api/auth/callback/google`, un usuario que navega varias páginas + cambia de tab fácilmente excede 10 req/min. Por eso el tier AUTH del middleware está en **30/min/IP** (Mini-lote 7.6 — antes 10), y `/api/auth/signout` está **completamente exento del rate limit** (cerrar sesión debe funcionar siempre, un 429 silencioso ahí deja la cookie sin borrar y el botón "no responde"). Si en el futuro escalamos a >1 réplica, este caveat se agrava (cada réplica tiene su propia ventana → límite efectivo N×); migrar a Redis con INCR+EXPIRE o Upstash.
+
+### Logout robusto: `redirect: false` + hard reload manual
+El default de NextAuth (`signOut({ callbackUrl: "/" })`) hace POST a `/api/auth/signout` y redirige automáticamente, sin retornar control al cliente. Si ese POST falla (429, red rota, edge runtime que cuelga) la cookie no se borra y la redirección bounce trae al usuario logueado de nuevo — síntoma "el botón no responde". Patrón en uso: `await signOut({ redirect: false, callbackUrl: "/" })` + `window.location.href = "/"` para hacer hard reload (mismo patrón que el `update({})` post-completar-perfil documentado más arriba). El hard reload garantiza que el SSR vea la cookie nueva y los Server Components renderen como visitante. Aplicado en `UserMenu.tsx`, `FooterSections.tsx` y el modal de eliminar cuenta tras eliminación exitosa.
 
 ---
 
