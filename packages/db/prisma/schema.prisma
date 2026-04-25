@@ -157,8 +157,8 @@ enum EstadoPartido {
 model Torneo {
   id             String       @id @default(cuid())
   nombre         String
-  tipo           TipoTorneo
-  entradaLukas   Int // Costo en centavos de Lukas
+  tipo           TipoTorneo // Plan v6: etiqueta informativa, no afecta reglas economicas
+  entradaLukas   Int // Plan v6: uniforme = ENTRADA_LUKAS (lib/config/economia.ts). Torneos viejos pueden tener otros valores.
   partidoId      String
   partido        Partido      @relation(fields: [partidoId], references: [id])
   estado         EstadoTorneo @default(ABIERTO)
@@ -166,7 +166,7 @@ model Torneo {
   pozoBruto      Int          @default(0) // Suma de todas las entradas
   pozoNeto       Int          @default(0) // Pozo bruto - rake
   rake           Int          @default(0) // 12% del pozo bruto
-  cierreAt       DateTime // 5 min antes del partido
+  cierreAt       DateTime // Plan v6: al kickoff (= partido.fechaInicio)
   distribPremios Json? // Snapshot de distribucion al cerrar
   creadoEn       DateTime     @default(now())
 
@@ -175,6 +175,8 @@ model Torneo {
   @@map("torneos")
 }
 
+// Plan v6 (Lote 4): el tipo de torneo es informativo (badge visual).
+// La entrada, el rake, la distribucion y el cierre NO dependen del tipo.
 enum TipoTorneo {
   EXPRESS
   ESTANDAR
