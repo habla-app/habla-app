@@ -230,9 +230,18 @@ export async function auditarTodos(): Promise<ReporteAuditoriaTodos> {
   });
   const usuarioById = new Map(usuarios.map((u) => [u.id, u]));
 
+  // Lote 6C-fix6: en TODAS las queries que escanean transacciones o tickets
+  // filtramos por `usuario: { deletedAt: null }`. Los usuarios soft-deleted
+  // y todo su rastro quedan FUERA del scope de auditoría — son fantasmas
+  // económicos que ya no afectan el sistema activo. Si quedaron datos
+  // colgados (tickets, tx) tras el soft-delete, se pueden limpiar con
+  // `POST /admin/auditoria/reset-completo` con `incluirEliminados: true`.
+  const SCOPE_ACTIVO = { usuario: { deletedAt: null } } as const;
+
   // -- Query 2: suma de TODAS las transacciones por usuario --------------
   const sumTotalByUser = await prisma.transaccionLukas.groupBy({
     by: ["usuarioId"],
+    where: SCOPE_ACTIVO,
     _sum: { monto: true },
     _count: true,
   });
@@ -247,6 +256,7 @@ export async function auditarTodos(): Promise<ReporteAuditoriaTodos> {
   // -- Query 3: suma de transacciones por usuario+bolsa ------------------
   const sumByBolsa = await prisma.transaccionLukas.groupBy({
     by: ["usuarioId", "bolsa"],
+    where: SCOPE_ACTIVO,
     _sum: { monto: true },
   });
   // Map<usuarioId, { COMPRADAS, BONUS, GANADAS, sinBolsa }>
@@ -276,6 +286,7 @@ export async function auditarTodos(): Promise<ReporteAuditoriaTodos> {
       tipo: "COMPRA",
       saldoVivo: { gt: 0 },
       venceEn: { gt: now },
+      ...SCOPE_ACTIVO,
     },
     _sum: { saldoVivo: true },
   });
@@ -289,6 +300,7 @@ export async function auditarTodos(): Promise<ReporteAuditoriaTodos> {
       tipo: "COMPRA",
       saldoVivo: { gt: 0 },
       venceEn: { lt: now },
+      ...SCOPE_ACTIVO,
     },
     select: {
       id: true,
@@ -302,7 +314,7 @@ export async function auditarTodos(): Promise<ReporteAuditoriaTodos> {
   // -- Query 6: ENTRADA_TORNEO con monto, metadata, refId ----------------
   // Necesario para I9 (composición) e I11 (suma por torneo).
   const entradas = await prisma.transaccionLukas.findMany({
-    where: { tipo: "ENTRADA_TORNEO" },
+    where: { tipo: "ENTRADA_TORNEO", ...SCOPE_ACTIVO },
     select: {
       id: true,
       usuarioId: true,
@@ -315,6 +327,7 @@ export async function auditarTodos(): Promise<ReporteAuditoriaTodos> {
 
   // -- Query 7: tickets para I10 ----------------------------------------
   const tickets = await prisma.ticket.findMany({
+    where: SCOPE_ACTIVO,
     select: { id: true, usuarioId: true, torneoId: true },
   });
 
@@ -333,7 +346,7 @@ export async function auditarTodos(): Promise<ReporteAuditoriaTodos> {
   // -- Query 9: reembolsos por refId (para I12) -------------------------
   const reembolsos = await prisma.transaccionLukas.groupBy({
     by: ["refId"],
-    where: { tipo: "REEMBOLSO", refId: { not: null } },
+    where: { tipo: "REEMBOLSO", refId: { not: null }, ...SCOPE_ACTIVO },
     _sum: { monto: true },
   });
   const reembolsosByTorneo = new Map(
@@ -343,7 +356,7 @@ export async function auditarTodos(): Promise<ReporteAuditoriaTodos> {
   // -- Query 10: premios por refId (para I13) ---------------------------
   const premios = await prisma.transaccionLukas.groupBy({
     by: ["refId"],
-    where: { tipo: "PREMIO_TORNEO", refId: { not: null } },
+    where: { tipo: "PREMIO_TORNEO", refId: { not: null }, ...SCOPE_ACTIVO },
     _sum: { monto: true },
   });
   const premiosByTorneo = new Map(
@@ -355,7 +368,7 @@ export async function auditarTodos(): Promise<ReporteAuditoriaTodos> {
   // bolsa volvieron. Pre-Lote 6A pueden no tenerla — los contamos como
   // warns, no errors, porque son históricos.
   const reembolsosSinBolsa = await prisma.transaccionLukas.findMany({
-    where: { tipo: "REEMBOLSO", bolsa: null },
+    where: { tipo: "REEMBOLSO", bolsa: null, ...SCOPE_ACTIVO },
     select: {
       id: true,
       usuarioId: true,
@@ -365,12 +378,13 @@ export async function auditarTodos(): Promise<ReporteAuditoriaTodos> {
     },
   });
   const totalReembolsos = await prisma.transaccionLukas.count({
-    where: { tipo: "REEMBOLSO" },
+    where: { tipo: "REEMBOLSO", ...SCOPE_ACTIVO },
   });
 
   // -- Query 12: tickets agrupados por torneo con suma de premios -------
   const ticketsPremiosByTorneo = await prisma.ticket.groupBy({
     by: ["torneoId"],
+    where: SCOPE_ACTIVO,
     _sum: { premioLukas: true },
   });
   const ticketsPremiosMap = new Map(
@@ -520,7 +534,7 @@ export async function auditarTodos(): Promise<ReporteAuditoriaTodos> {
   // El query 5 ya devuelve solo las que ROMPEN la invariante. Las que
   // cumplen no se cuentan individualmente — reportamos un agregado.
   const totalCompras = await prisma.transaccionLukas.count({
-    where: { tipo: "COMPRA" },
+    where: { tipo: "COMPRA", ...SCOPE_ACTIVO },
   });
   if (comprasVencidasConSaldo.length > 0) {
     for (const c of comprasVencidasConSaldo) {

@@ -239,6 +239,30 @@ describe("Invariantes de balance — endpoints admin", () => {
     // Inyecta bonus de bienvenida
     expect(src).toMatch(/BONUS_BIENVENIDA_LUKAS/);
   });
+
+  it("/admin/auditoria/reset-completo soporta flag incluirEliminados (Lote 6C-fix6)", () => {
+    const src = readService(
+      "app/api/v1/admin/auditoria/reset-completo/route.ts",
+    );
+    expect(src).toMatch(/incluirEliminados/);
+    // Si está en true, expande el scope a soft-deleted
+    expect(src).toMatch(/incluirEliminados\s*\?\s*\{\s*\}\s*:\s*\{\s*deletedAt:\s*null\s*\}/);
+    // Soft-deleted no recibe bonus de bienvenida (esActivo == false)
+    expect(src).toMatch(/esActivo/);
+    expect(src).toMatch(/u\.deletedAt === null/);
+  });
+
+  it("auditoria-balances.service filtra usuarios soft-deleted (Lote 6C-fix6)", () => {
+    const src = readService("lib/services/auditoria-balances.service.ts");
+    // Constante SCOPE_ACTIVO compartida
+    expect(src).toMatch(/SCOPE_ACTIVO/);
+    expect(src).toMatch(/usuario:\s*\{\s*deletedAt:\s*null\s*\}/);
+    // Aplicado en queries clave (entradas, tickets, reembolsos, premios)
+    expect(src).toMatch(/tipo:\s*["']ENTRADA_TORNEO["'][\s\S]{0,80}?SCOPE_ACTIVO/);
+    expect(src).toMatch(/ticket\.findMany[\s\S]{0,80}?SCOPE_ACTIVO/);
+    expect(src).toMatch(/tipo:\s*["']REEMBOLSO["'][\s\S]{0,150}?SCOPE_ACTIVO/);
+    expect(src).toMatch(/tipo:\s*["']PREMIO_TORNEO["'][\s\S]{0,80}?SCOPE_ACTIVO/);
+  });
 });
 
 describe("Invariantes de balance — Job G en instrumentation.ts", () => {

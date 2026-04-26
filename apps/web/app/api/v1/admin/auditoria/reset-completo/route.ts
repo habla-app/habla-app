@@ -55,12 +55,14 @@ export async function POST(req: NextRequest) {
 
     const body = (await req.json().catch(() => ({}))) as {
       confirmacion?: string;
+      incluirEliminados?: boolean;
     };
     if (body.confirmacion !== "RESET_COMPLETO_TESTING") {
       throw new ValidacionFallida(
         "Falta confirmación literal. Enviá { confirmacion: 'RESET_COMPLETO_TESTING' }.",
       );
     }
+    const incluirEliminados = body.incluirEliminados === true;
 
     // Guard inmutable: si HAY compras Culqi reales en cualquier usuario,
     // abortamos todo. Este endpoint es incompatible con producción real.
@@ -78,9 +80,15 @@ export async function POST(req: NextRequest) {
 
     const refId = `reset-completo-${Date.now()}`;
 
+    // Lote 6C-fix6: si `incluirEliminados=true`, ampliamos el scope a usuarios
+    // soft-deleted. Para esos NO inyectamos bonus de bienvenida (están
+    // eliminados, no deberían tener saldo) — solo borramos sus tickets/
+    // tx/canjes para que la auditoría no los vea como ruido. Guard
+    // countCompras > 0 ya descartó usuarios con compras Culqi (también
+    // los soft-deleted con compras).
     const usuarios = await prisma.usuario.findMany({
-      where: { deletedAt: null },
-      select: { id: true, username: true },
+      where: incluirEliminados ? {} : { deletedAt: null },
+      select: { id: true, username: true, deletedAt: true },
     });
 
     const detalle: DetalleReset[] = [];
@@ -125,33 +133,53 @@ export async function POST(req: NextRequest) {
           where: { usuarioId: u.id },
         });
 
-        // 4. Inyectar bonus de bienvenida limpio
-        await tx.transaccionLukas.create({
-          data: {
-            usuarioId: u.id,
-            tipo: "BONUS",
-            bolsa: "BONUS",
-            monto: BONUS_BIENVENIDA_LUKAS,
-            descripcion: "Bonus de bienvenida (post reset-completo)",
-            refId,
-          },
-        });
+        // Lote 6C-fix6: solo inyectamos bonus + reseteamos balances
+        // si el usuario está activo. Soft-deleted: lo dejamos vacío.
+        const esActivo = u.deletedAt === null;
+        const bonusInyectado = esActivo ? BONUS_BIENVENIDA_LUKAS : 0;
 
-        // 5. Resetear balances a estado de cuenta nueva
-        await tx.usuario.update({
-          where: { id: u.id },
-          data: {
-            balanceCompradas: 0,
-            balanceBonus: BONUS_BIENVENIDA_LUKAS,
-            balanceGanadas: 0,
-            balanceLukas: BONUS_BIENVENIDA_LUKAS,
-          },
-        });
+        if (esActivo) {
+          // 4. Inyectar bonus de bienvenida limpio
+          await tx.transaccionLukas.create({
+            data: {
+              usuarioId: u.id,
+              tipo: "BONUS",
+              bolsa: "BONUS",
+              monto: BONUS_BIENVENIDA_LUKAS,
+              descripcion: "Bonus de bienvenida (post reset-completo)",
+              refId,
+            },
+          });
+
+          // 5. Resetear balances a estado de cuenta nueva
+          await tx.usuario.update({
+            where: { id: u.id },
+            data: {
+              balanceCompradas: 0,
+              balanceBonus: BONUS_BIENVENIDA_LUKAS,
+              balanceGanadas: 0,
+              balanceLukas: BONUS_BIENVENIDA_LUKAS,
+            },
+          });
+        } else {
+          // Soft-deleted: balances en 0, sin bonus.
+          await tx.usuario.update({
+            where: { id: u.id },
+            data: {
+              balanceCompradas: 0,
+              balanceBonus: 0,
+              balanceGanadas: 0,
+              balanceLukas: 0,
+            },
+          });
+        }
 
         return {
           ticketsBorrados: tickets.count,
           canjesBorrados: canjes.count,
           transaccionesBorradas: transacciones.count,
+          bonusInyectado,
+          esActivo,
         };
       });
 
@@ -159,8 +187,11 @@ export async function POST(req: NextRequest) {
         {
           userId: u.id,
           username: u.username,
-          ...resultado,
-          bonusInyectado: BONUS_BIENVENIDA_LUKAS,
+          ticketsBorrados: resultado.ticketsBorrados,
+          canjesBorrados: resultado.canjesBorrados,
+          transaccionesBorradas: resultado.transaccionesBorradas,
+          bonusInyectado: resultado.bonusInyectado,
+          esActivo: resultado.esActivo,
           refId,
         },
         "auditoria/reset-completo: usuario reseteado",
@@ -172,7 +203,7 @@ export async function POST(req: NextRequest) {
         ticketsBorrados: resultado.ticketsBorrados,
         canjesBorrados: resultado.canjesBorrados,
         transaccionesBorradas: resultado.transaccionesBorradas,
-        bonusInyectado: BONUS_BIENVENIDA_LUKAS,
+        bonusInyectado: resultado.bonusInyectado,
       });
     }
 
@@ -193,6 +224,7 @@ export async function POST(req: NextRequest) {
         usuariosReseteados: detalle.length,
         torneosReseteados: torneosUpdated.count,
         bonusBienvenida: BONUS_BIENVENIDA_LUKAS,
+        incluirEliminados,
         refId,
       },
       "POST /api/v1/admin/auditoria/reset-completo completado",
@@ -203,6 +235,7 @@ export async function POST(req: NextRequest) {
         usuariosReseteados: detalle.length,
         torneosReseteados: torneosUpdated.count,
         bonusBienvenida: BONUS_BIENVENIDA_LUKAS,
+        incluirEliminados,
         refId,
         detalle,
       },
