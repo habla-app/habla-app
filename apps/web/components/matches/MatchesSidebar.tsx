@@ -20,7 +20,6 @@
 // sincronizado (Hotfix #5 Bug #14).
 import Link from "next/link";
 import { auth } from "@/lib/auth";
-import { obtenerBalanceGanadas } from "@/lib/usuarios";
 import { listarRanking } from "@/lib/services/ranking.service";
 import {
   elegirTorneoPrincipal,
@@ -117,21 +116,18 @@ function cortoNombre(nombre: string): string {
 export async function MatchesSidebar() {
   const session = await auth();
   const balance = session?.user?.balanceLukas ?? null;
-  const userId = session?.user?.id ?? null;
 
-  const [liveMatches, pozosSemana, masPagadosSemana, balanceGanadas] =
-    await Promise.all([
-      fetchLiveMatches(),
-      listarPozosMasGrandesSemana({ limit: 5 }),
-      listarMasPagadosSemana({ limit: 10 }),
-      userId ? obtenerBalanceGanadas(userId) : Promise.resolve(0),
-    ]);
+  const [liveMatches, pozosSemana, masPagadosSemana] = await Promise.all([
+    fetchLiveMatches(),
+    listarPozosMasGrandesSemana({ limit: 5 }),
+    listarMasPagadosSemana({ limit: 10 }),
+  ]);
 
   return (
     <aside className="flex flex-col gap-3.5">
       <LiveAhoraWidget matches={liveMatches} />
       <PozosSemanaWidget rows={pozosSemana} />
-      <SidebarBalanceWidget initialBalance={balance} initialBalanceGanadas={balanceGanadas} />
+      <SidebarBalanceWidget initialBalance={balance} />
       <PrizeRulesCard />
       <MasPagadosSemanaWidget rows={masPagadosSemana} />
     </aside>

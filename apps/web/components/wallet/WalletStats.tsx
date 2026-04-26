@@ -1,24 +1,39 @@
-// 3 mini stats debajo del hero (mockup `.wallet-stats .wstat`):
-// Ganadas en premios (green), Lukas compradas (gold), Gastadas en combinadas (purple).
-// Responsive: 1 col (mobile) → 2+1 (sm–lg) → 3 iguales (lg+).
+// Lote 6C-fix7: 5 mini stats debajo del hero, alineadas con los 5 grupos
+// del filtro del historial (mismo emoji y mismo orden):
+//   Compras (💳)        — totales.comprado     — gold
+//   Inscripciones (⚽)   — totales.inscripciones — purple
+//   Premios (🏆)        — totales.ganado       — green
+//   Canjes (🎁)         — totales.canjeado     — blue
+//   Bonus (⭐)          — totales.bonos        — orange
+// Layout: 2 cols (mobile) → 3+2 (sm) → 5 (lg).
 
 interface Props {
-  ganadas: number;
-  compradas: number;
-  gastadoEnCombinadas: number;
+  comprado: number;
+  inscripciones: number;
+  ganado: number;
+  canjeado: number;
+  bonos: number;
 }
 
-export function WalletStats({ ganadas, compradas, gastadoEnCombinadas }: Props) {
+export function WalletStats({
+  comprado,
+  inscripciones,
+  ganado,
+  canjeado,
+  bonos,
+}: Props) {
   return (
-    <section className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      <Stat icon="🏆" color="green" value={ganadas} label="Ganadas en premios" />
-      <Stat icon="💳" color="gold" value={compradas} label="Lukas compradas" />
+    <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <Stat icon="💳" color="gold" value={comprado} label="Compras" />
+      <Stat icon="⚽" color="purple" value={inscripciones} label="Inscripciones" />
+      <Stat icon="🏆" color="green" value={ganado} label="Premios" />
+      <Stat icon="🎁" color="blue" value={canjeado} label="Canjes" />
       <Stat
-        icon="⚽"
-        color="purple"
-        value={gastadoEnCombinadas}
-        label="Gastadas en combinadas"
-        className="sm:col-span-2 lg:col-span-1"
+        icon="⭐"
+        color="orange"
+        value={bonos}
+        label="Bonus"
+        className="col-span-2 sm:col-span-1"
       />
     </section>
   );
@@ -32,7 +47,7 @@ function Stat({
   className = "",
 }: {
   icon: string;
-  color: "gold" | "green" | "purple";
+  color: "gold" | "green" | "purple" | "blue" | "orange";
   value: number;
   label: string;
   className?: string;
@@ -42,7 +57,11 @@ function Stat({
       ? "text-brand-gold-dark"
       : color === "green"
         ? "text-alert-success-text"
-        : "text-accent-mundial-dark";
+        : color === "purple"
+          ? "text-accent-mundial-dark"
+          : color === "blue"
+            ? "text-brand-blue-main"
+            : "text-brand-orange";
   return (
     <div
       className={`rounded-md border border-light bg-card p-4 text-center shadow-sm ${className}`}

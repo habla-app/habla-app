@@ -27,9 +27,9 @@ describe("notificaciones.service — preferencias default", () => {
     expect(PREFERENCIAS_DEFAULT.emailSemanal).toBe(false);
   });
 
-  it("define 7 toggles según §10.8 del mockup", () => {
+  it("define 8 toggles (7 base + notifVencimientos del Lote 6A)", () => {
     const keys = Object.keys(PREFERENCIAS_DEFAULT);
-    expect(keys.length).toBe(7);
+    expect(keys.length).toBe(8);
     for (const k of [
       "notifInicioTorneo",
       "notifResultados",
@@ -38,6 +38,7 @@ describe("notificaciones.service — preferencias default", () => {
       "notifCierreTorneo",
       "notifPromos",
       "emailSemanal",
+      "notifVencimientos",
     ]) {
       expect(keys).toContain(k);
     }

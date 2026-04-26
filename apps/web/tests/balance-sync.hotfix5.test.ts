@@ -213,7 +213,6 @@ describe("WalletView.tsx — cadena balance: page → WalletView → WalletBalan
  */
 const WHITELIST: ReadonlyArray<string> = [
   "app/(main)/layout.tsx",
-  "app/(main)/mis-combinadas/page.tsx",
   "app/(main)/wallet/page.tsx",
   // Sub-Sprint 6: /tienda es RSC que lee la sesión una vez y pasa
   // `initialBalance` a TiendaContent (client) que se suscribe al store.

@@ -9,7 +9,6 @@ import { useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import type { PremioDTO } from "@/lib/services/premios.service";
 import { useLukasStore } from "@/stores/lukas.store";
-import { LUKAS_PREMIOS_LABEL } from "@/lib/lukas-display";
 import { CatFilters } from "./CatFilters";
 import { PrizeCardV2 } from "./PrizeCardV2";
 import { FeaturedPrize } from "./FeaturedPrize";
@@ -80,7 +79,7 @@ export function TiendaContent({
               {ganadas.toLocaleString("es-PE")} 🪙
             </div>
             <div className="mt-0.5 text-[11px] font-bold uppercase tracking-[0.06em] text-muted-d">
-              {LUKAS_PREMIOS_LABEL} · Disponibles para canjear
+              Todas tus Lukas disponibles para canjear en Premios
             </div>
           </div>
         </div>

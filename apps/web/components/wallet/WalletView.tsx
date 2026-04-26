@@ -92,11 +92,13 @@ export function WalletView({
         </div>
       </div>
 
-      {/* Bloque 3 — 3 stats: Ganadas / Compradas / Gastadas */}
+      {/* Bloque 3 — 5 stats alineados con los 5 filtros del historial */}
       <WalletStats
-        ganadas={desglose.ganadas}
-        compradas={desglose.compradas + desglose.bonus}
-        gastadoEnCombinadas={totales.inscripciones}
+        comprado={totales.comprado}
+        inscripciones={totales.inscripciones}
+        ganado={totales.ganado}
+        canjeado={totales.canjeado}
+        bonos={totales.bonos}
       />
 
       <BuyPacksPlaceholder />

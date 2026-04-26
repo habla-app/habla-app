@@ -1,6 +1,7 @@
-// Tests AST — TxList bolsa badge (Lote 6B).
-// Verifica que cada tx muestra el chip de bolsa (Comprados/Bonus/Ganados)
-// con los colores del design system.
+// Tests AST — TxList: chips de bolsa removidos (Lote 6B-fix2).
+// Originalmente Lote 6B introdujo chips Comprados/Bonus/Ganados en cada tx.
+// Lote 6B-fix2 los removió (CLAUDE.md sección 8) por decisión de UX.
+// Este test ahora verifica que los chips siguen FUERA del componente.
 
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
@@ -12,52 +13,27 @@ function read(p: string): string {
   return readFileSync(resolve(ROOT, p), "utf-8");
 }
 
-describe("TxList — bolsa badge Lote 6B", () => {
+describe("TxList — sin chips de bolsa (Lote 6B-fix2)", () => {
   const SRC = read("components/wallet/TxList.tsx");
 
-  it("define BOLSA_CHIP con las 3 bolsas", () => {
-    expect(SRC).toMatch(/BOLSA_CHIP/);
-    expect(SRC).toMatch(/COMPRADAS/);
-    expect(SRC).toMatch(/BONUS/);
-    expect(SRC).toMatch(/GANADAS/);
+  it("NO define BOLSA_CHIP", () => {
+    expect(SRC).not.toMatch(/BOLSA_CHIP/);
   });
 
-  it("etiqueta COMPRADAS → 'Comprados'", () => {
-    expect(SRC).toMatch(/COMPRADAS[\s\S]{0,120}Comprados/);
+  it("NO renderiza chips Comprados/Bonus/Ganados inline", () => {
+    expect(SRC).not.toMatch(/>Comprados</);
+    expect(SRC).not.toMatch(/>Ganados</);
   });
 
-  it("etiqueta BONUS → 'Bonus'", () => {
-    expect(SRC).toMatch(/BONUS[\s\S]{0,80}Bonus/);
-  });
-
-  it("etiqueta GANADAS → 'Ganados'", () => {
-    expect(SRC).toMatch(/GANADAS[\s\S]{0,120}Ganados/);
-  });
-
-  it("chip COMPRADAS usa token brand-blue-light (no hex)", () => {
-    expect(SRC).toMatch(/brand-blue-light/);
+  it("usa tokens Tailwind, sin hex hardcodeados", () => {
     const hexMatches = SRC.match(/#[0-9a-fA-F]{3,6}\b/g) ?? [];
     expect(hexMatches).toHaveLength(0);
-  });
-
-  it("chip BONUS usa token brand-gold (no hex)", () => {
-    expect(SRC).toMatch(/brand-gold/);
-  });
-
-  it("chip GANADAS usa token brand-green (no hex)", () => {
-    expect(SRC).toMatch(/brand-green/);
-  });
-
-  it("guarda el chip con doble guard tx.bolsa && BOLSA_CHIP[tx.bolsa]", () => {
-    expect(SRC).toMatch(/tx\.bolsa\s*&&\s*BOLSA_CHIP\[tx\.bolsa\]/);
-  });
-
-  it("el chip se renderiza inline en TxItem (no función separada BolsaChip)", () => {
-    expect(SRC).not.toMatch(/function\s+BolsaChip/);
   });
 });
 
 describe("WalletTransaccion — tipo incluye bolsa opcional", () => {
+  // Aunque la UI ya no muestra chip, el tipo sigue exponiendo bolsa
+  // para futuros usos (ej. agrupados o filtros adicionales).
   const SRC = read("lib/services/wallet-view.service.ts");
 
   it("WalletTransaccion incluye campo bolsa", () => {

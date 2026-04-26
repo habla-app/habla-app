@@ -121,10 +121,12 @@ describe("POST /api/v1/auth/signup — contrato del endpoint", () => {
     expect(SRC).toMatch(/USERNAME_OFENSIVO/);
   });
 
-  it("crea usuario con usernameLocked=true + tycAceptadosAt=now + bonus 500", () => {
+  it("crea usuario con usernameLocked=true + tycAceptadosAt=now + bonus de bienvenida", () => {
+    // Lote 4: BONUS_BIENVENIDA_LUKAS = 15 (Plan v6, antes 500). Verificamos
+    // que el endpoint use la constante centralizada, no un literal.
     expect(SRC).toMatch(/usernameLocked:\s*true/);
     expect(SRC).toMatch(/tycAceptadosAt:\s*new\s+Date\(\)/);
-    expect(SRC).toMatch(/BONUS_BIENVENIDA_LUKAS\s*=\s*500/);
+    expect(SRC).toMatch(/BONUS_BIENVENIDA_LUKAS/);
     expect(SRC).toMatch(/tipo:\s*["']BONUS["']/);
   });
 

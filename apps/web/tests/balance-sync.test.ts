@@ -149,23 +149,24 @@ describe("NavBar.tsx — delega el chip a BalanceBadge", () => {
   });
 });
 
-describe("/mis-combinadas — usa BalancePill, no pill con stats.neto", () => {
+describe("/mis-combinadas — usa LukasPremiosPill, no pill con stats.neto", () => {
+  // Lote 6C: BalancePill (que mostraba el total) fue reemplazado por
+  // LukasPremiosPill que muestra solo balanceGanadas (canjeables en /tienda).
   const SRC = readSrc("app/(main)/mis-combinadas/page.tsx");
 
-  it("importa BalancePill", () => {
+  it("importa LukasPremiosPill", () => {
     expect(SRC).toMatch(
-      /import\s*\{\s*BalancePill\s*\}\s*from\s*["']@\/components\/tickets\/BalancePill["']/,
+      /import\s*\{\s*LukasPremiosPill\s*\}\s*from\s*["']@\/components\/tickets\/LukasPremiosPill["']/,
     );
   });
 
-  it("renderiza <BalancePill initialBalance={...} />", () => {
-    expect(SRC).toMatch(/<BalancePill[\s\S]*?initialBalance=\{/);
+  it("renderiza <LukasPremiosPill lukasPremios={...} />", () => {
+    expect(SRC).toMatch(/<LukasPremiosPill[\s\S]*?lukasPremios=\{/);
   });
 
   it("ya NO renderiza un StatsPill con label='Balance neto'", () => {
     // El StatsPill con stats.neto + label "Balance neto" daba -5 tras
-    // la primera inscripción. Fue reemplazado por BalancePill que lee
-    // el balance absoluto del store.
+    // la primera inscripción. Fue reemplazado por LukasPremiosPill.
     expect(SRC).not.toMatch(/label=["']Balance neto["']/);
   });
 });

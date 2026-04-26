@@ -15,13 +15,25 @@ describe("torneos.service — inscripción con 3 bolsas", () => {
     expect(SRC).toMatch(/descontarEntrada/);
   });
 
-  it("orden de descuento: BONUS primero", () => {
-    const idxBonus = SRC.indexOf("balanceBonus");
-    const idxCompradas = SRC.indexOf("balanceCompradas");
-    // balanceBonus debe referenciarse antes que balanceCompradas en el flujo de descuento
-    expect(idxBonus).toBeGreaterThan(-1);
-    expect(idxCompradas).toBeGreaterThan(-1);
-    expect(idxBonus).toBeLessThan(idxCompradas);
+  it("orden de descuento: BONUS antes que COMPRADAS antes que GANADAS", () => {
+    // Verificamos el ORDEN de consumo (FIFO) por los comentarios numerados
+    // dentro de descontarEntrada: "1. Consumir de Bonus" → "2. Consumir de
+    // Compradas" → "3. Consumir de Ganadas". Si alguien reordena los
+    // bloques, el test rompe.
+    const fnStart = SRC.indexOf("export async function descontarEntrada");
+    expect(fnStart).toBeGreaterThan(-1);
+    const nextExport = SRC.indexOf("\nexport ", fnStart + 1);
+    const fnEnd = nextExport > -1 ? nextExport : SRC.length;
+    const fnBody = SRC.slice(fnStart, fnEnd);
+
+    const idxConsumirBonus = fnBody.search(/Consumir\s+de\s+Bonus/i);
+    const idxConsumirCompradas = fnBody.search(/Consumir\s+de\s+Compradas/i);
+    const idxConsumirGanadas = fnBody.search(/Consumir\s+de\s+Ganadas/i);
+    expect(idxConsumirBonus).toBeGreaterThan(-1);
+    expect(idxConsumirCompradas).toBeGreaterThan(-1);
+    expect(idxConsumirGanadas).toBeGreaterThan(-1);
+    expect(idxConsumirBonus).toBeLessThan(idxConsumirCompradas);
+    expect(idxConsumirCompradas).toBeLessThan(idxConsumirGanadas);
   });
 
   it("decrementa saldoVivo en transacciones COMPRA usadas", () => {

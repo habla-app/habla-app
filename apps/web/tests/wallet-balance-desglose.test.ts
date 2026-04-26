@@ -33,9 +33,12 @@ describe("WalletView — restaura WalletBalanceHero (no WalletBalanceDesglose)",
     expect(SRC).not.toMatch(/from\s+["']posthog-js["']/);
   });
 
-  it("pasa gastadoEnCombinadas como totales.inscripciones", () => {
-    expect(SRC).toMatch(/inscripciones/);
-    expect(SRC).toMatch(/gastadoEnCombinadas/);
+  it("pasa los 5 totales del filtro de historial a WalletStats (Lote 6C-fix7)", () => {
+    expect(SRC).toMatch(/comprado=\{totales\.comprado\}/);
+    expect(SRC).toMatch(/inscripciones=\{totales\.inscripciones\}/);
+    expect(SRC).toMatch(/ganado=\{totales\.ganado\}/);
+    expect(SRC).toMatch(/canjeado=\{totales\.canjeado\}/);
+    expect(SRC).toMatch(/bonos=\{totales\.bonos\}/);
   });
 
   it("usa tokens Tailwind, no hex hardcodeados", () => {
@@ -44,32 +47,35 @@ describe("WalletView — restaura WalletBalanceHero (no WalletBalanceDesglose)",
   });
 });
 
-describe("WalletStats — nuevos contenidos", () => {
+describe("WalletStats — 5 cards alineadas con filtros del historial (Lote 6C-fix7)", () => {
   const SRC = read("components/wallet/WalletStats.tsx");
 
-  it("tiene card Ganadas en premios", () => {
-    expect(SRC).toMatch(/[Gg]anadas/);
-    expect(SRC).toMatch(/premios/i);
+  it("tiene los 5 labels: Compras, Inscripciones, Premios, Canjes, Bonus", () => {
+    expect(SRC).toMatch(/label="Compras"/);
+    expect(SRC).toMatch(/label="Inscripciones"/);
+    expect(SRC).toMatch(/label="Premios"/);
+    expect(SRC).toMatch(/label="Canjes"/);
+    expect(SRC).toMatch(/label="Bonus"/);
   });
 
-  it("tiene card Lukas compradas", () => {
-    expect(SRC).toMatch(/[Cc]ompradas/);
+  it("usa los emojis del filtro del historial (💳 ⚽ 🏆 🎁 ⭐)", () => {
+    expect(SRC).toMatch(/icon="💳"/);
+    expect(SRC).toMatch(/icon="⚽"/);
+    expect(SRC).toMatch(/icon="🏆"/);
+    expect(SRC).toMatch(/icon="🎁"/);
+    expect(SRC).toMatch(/icon="⭐"/);
   });
 
-  it("tiene card Gastadas en combinadas", () => {
-    expect(SRC).toMatch(/[Gg]astadas/i);
-    expect(SRC).toMatch(/combinadas/i);
+  it("acepta props comprado, inscripciones, ganado, canjeado, bonos", () => {
+    expect(SRC).toMatch(/comprado:\s*number/);
+    expect(SRC).toMatch(/inscripciones:\s*number/);
+    expect(SRC).toMatch(/ganado:\s*number/);
+    expect(SRC).toMatch(/canjeado:\s*number/);
+    expect(SRC).toMatch(/bonos:\s*number/);
   });
 
-  it("acepta props ganadas, compradas, gastadoEnCombinadas", () => {
-    expect(SRC).toMatch(/ganadas/);
-    expect(SRC).toMatch(/compradas/);
-    expect(SRC).toMatch(/gastadoEnCombinadas/);
-  });
-
-  it("usa responsive grid 2+1 en sm", () => {
-    expect(SRC).toMatch(/sm:col-span-2/);
-    expect(SRC).toMatch(/lg:col-span-1/);
+  it("usa grid responsive de 5 columnas en lg", () => {
+    expect(SRC).toMatch(/lg:grid-cols-5/);
   });
 
   it("usa tokens Tailwind, no hex hardcodeados", () => {

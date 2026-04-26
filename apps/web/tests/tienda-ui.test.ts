@@ -96,9 +96,9 @@ describe("/tienda — TiendaContent", () => {
   });
 
   it("nota legal sobre Lukas (no son efectivo)", () => {
-    // Mockup v5: "no son convertibles a efectivo". Versiones anteriores
-    // usaban "no se retiran como efectivo" — ambas variantes son
-    // semánticamente equivalentes.
-    expect(SRC).toMatch(/no\s+son\s+convertibles\s+a\s+efectivo/i);
+    // Wording vigente: "no son efectivo". Versiones anteriores usaban
+    // variantes "no son convertibles a efectivo" / "no se retiran como
+    // efectivo" — todas semánticamente equivalentes.
+    expect(SRC).toMatch(/no\s+son\s+(convertibles\s+a\s+)?efectivo/i);
   });
 });

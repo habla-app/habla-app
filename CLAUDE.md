@@ -1,7 +1,7 @@
 # CLAUDE.md — Habla! App
 
 > Contexto operativo del proyecto. El historial detallado de bugs vive en `CHANGELOG.md` y en `git log`.
-> Última actualización: 26 Abr 2026 (Lote 6C-fix3 completo — auditoría de 13 invariantes + recategorizar-bolsas + guards en 5 services + cron diario con email a admin + tests AST).
+> Última actualización: 27 Abr 2026 (Lote 6C-fix7 — display unificado de Lukas: header sidebar simplificado, wallet hero en 2 columnas con divider sutil, 5 stats alineados con filtros del historial).
 
 ---
 
@@ -857,6 +857,14 @@ Toda devolución de Lukas (`tipo: REEMBOLSO`) debe retornar a la bolsa donde el 
 
 ### Scope de auditoría — usuarios soft-deleted son fantasmas (Lote 6C-fix6)
 La auditoría (`auditarTodos`) ignora a usuarios con `deletedAt != null` Y todas sus transacciones, tickets, canjes. Las queries usan filtro `usuario: { deletedAt: null }` (constante interna `SCOPE_ACTIVO`). Implicación: si un usuario se elimina pero deja datos colgados, esos datos NO aparecen como hallazgos. Si por alguna razón hace falta limpiarlos físicamente (ej. sus tx están afectando contadores de torneos), correr `POST /admin/auditoria/reset-completo` con body `{ incluirEliminados: true }`.
+
+### Display unificado de Lukas — labels y patrón visual (Lote 6C-fix7)
+Convención de wording por superficie:
+- **Sidebar `/matches` y `/`**: label `Tus Lukas` con monto único, copy `Todas tus Lukas disponibles para jugar`. **Sin** chip/desglose de Premios ([SidebarBalanceWidget.tsx](apps/web/components/matches/SidebarBalanceWidget.tsx)).
+- **`/mis-combinadas` (LukasPremiosPill)**: label `Total en Premios` con `balanceGanadas`.
+- **`/tienda` (TiendaContent)**: chip verde con `balanceGanadas` y copy `Todas tus Lukas disponibles para canjear en Premios`.
+- **`/wallet` hero**: layout en 2 columnas separadas por divider sutil — izquierda label `Tus Lukas` + monto grande (gold) + `Todas tus Lukas disponibles para jugar`; derecha label `Lukas Premios` + monto más pequeño (green) + `Disponibles para canjear en Premios`. Sin emoji ⚽. Mismo formato visual (`N 🪙`) en ambos lados para enfatizar que premios es subgrupo del total.
+- **`/wallet` stats** (`WalletStats`): 5 cards alineados 1:1 con los filtros de `MovesFilter` — Compras (💳/gold), Inscripciones (⚽/purple), Premios (🏆/green), Canjes (🎁/blue), Bonus (⭐/orange). Recibe `totales: WalletTotales` con los 5 campos correspondientes; layout `grid-cols-2 sm:grid-cols-3 lg:grid-cols-5`.
 
 ### Por qué el service de backfill está en `apps/web/lib/services/` y no en `packages/db/scripts/`
 El script `packages/db/scripts/backfill-bolsas.ts` es para ejecución directa (`tsx`). Para exponerlo como endpoint HTTP necesitamos importar desde `apps/web`; el package `@habla/db` no exporta subpaths de `scripts/` y crear un path alias cross-package añade fragilidad. La solución pragmática es un service equivalente en `apps/web/lib/services/backfill-bolsas.service.ts` que usa la instancia prisma compartida del app. El script tsx permanece como herramienta de emergencia si hay acceso shell directo al container.
