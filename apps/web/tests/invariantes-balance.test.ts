@@ -122,8 +122,21 @@ describe("Invariantes de balance — endpoints admin", () => {
     );
     expect(src).toMatch(/CRON_SECRET/);
     expect(src).toMatch(/AJUSTE/);
-    // Idempotencia: si los deltas son 0, no debe crear AJUSTE
     expect(src).toMatch(/deltaCompradas === 0/);
+  });
+
+  it("/admin/auditoria/reset-y-inyectar-bonus exige confirmación literal y borra AJUSTE", () => {
+    const src = readService(
+      "app/api/v1/admin/auditoria/reset-y-inyectar-bonus/route.ts",
+    );
+    expect(src).toMatch(/CRON_SECRET/);
+    expect(src).toMatch(/INYECTAR_TEST_LUKAS/);
+    expect(src).toMatch(/deleteMany/);
+    expect(src).toMatch(/tipo:\s*["']AJUSTE["']/);
+    // Compensación por déficit en COMPRADAS (caso pre-Lote 6A)
+    expect(src).toMatch(/compensacionDeficitCompradas/);
+    // Inyección final de bonus de testing
+    expect(src).toMatch(/Bonus de testing/);
   });
 });
 
