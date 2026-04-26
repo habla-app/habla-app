@@ -65,38 +65,61 @@ export function TiendaContent({
         </p>
       </header>
 
-      {/* Balance de Lukas Premios — único relevante en /tienda */}
-      {isLoggedIn ? (
-        <div className="mb-4 flex items-center gap-3 rounded-md border border-pred-correct/30 bg-alert-success-bg px-4 py-3.5 shadow-sm">
-          <div
-            aria-hidden
-            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-sm border border-pred-correct/30 bg-alert-success-bg text-[22px]"
-          >
-            🏆
-          </div>
-          <div className="min-w-0">
-            <div className="font-display text-[26px] font-black leading-none text-alert-success-text">
-              {ganadas.toLocaleString("es-PE")} 🪙
-            </div>
-            <div className="mt-0.5 text-[11px] font-bold uppercase tracking-[0.06em] text-muted-d">
-              Todas tus Lukas disponibles para canjear en Premios
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {/* Card combinado — balance de Lukas Premios + explicación.
+          Lote 6C-fix8: junta los 2 mensajes anteriores en un solo recuadro
+          con divider sutil interno (mismo patrón visual que wallet hero).
+          Layout: izq (balance gigante con ícono circular verde) → divider
+          → der (mini-explainer "ganadas vs otras"). Mobile: stack vertical
+          con divider horizontal. Sin agrandar respecto a la suma de los 2
+          cards anteriores. */}
+      <section
+        className="mb-6 overflow-hidden rounded-md border border-brand-gold/30 bg-gradient-to-br from-alert-success-bg via-card to-card shadow-sm"
+        data-testid="tienda-premios-card"
+      >
+        <div className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:gap-4">
+          {isLoggedIn ? (
+            <>
+              {/* Lado izq — balance */}
+              <div className="flex items-center gap-3 sm:flex-shrink-0">
+                <div
+                  aria-hidden
+                  className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border-2 border-brand-green/40 bg-card text-[24px] shadow-sm"
+                >
+                  🏆
+                </div>
+                <div className="min-w-0">
+                  <div className="font-display text-[28px] font-black leading-none text-alert-success-text">
+                    {ganadas.toLocaleString("es-PE")} 🪙
+                  </div>
+                  <div className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.06em] text-muted-d">
+                    Lukas Premios · Para canjear
+                  </div>
+                </div>
+              </div>
 
-      {/* Mensaje descriptivo */}
-      <div className="mb-6 flex items-start gap-2.5 rounded-sm border border-l-4 border-brand-gold/30 border-l-brand-gold bg-[#FFFBF5] px-3.5 py-3 text-xs leading-relaxed text-body">
-        <span aria-hidden className="flex-shrink-0 text-base">
-          💡
-        </span>
-        <div>
-          Las <strong className="text-brand-gold-dark">Lukas</strong> no son
-          efectivo. Usa tus{" "}
-          <strong className="text-brand-gold-dark">Lukas Premios</strong> — las
-          que ganaste en torneos — para canjear lo que quieras de la Tienda.
+              {/* Divider sutil — vertical en desktop, horizontal en mobile */}
+              <div
+                aria-hidden
+                className="h-px w-full flex-shrink-0 bg-light sm:h-12 sm:w-px"
+              />
+            </>
+          ) : null}
+
+          {/* Lado der (o fila completa si anónimo) — explicación */}
+          <div className="flex items-start gap-2 text-[12px] leading-relaxed text-body sm:flex-1">
+            <span aria-hidden className="flex-shrink-0 text-base">
+              💡
+            </span>
+            <p>
+              Solo las{" "}
+              <strong className="text-alert-success-text">Lukas Premios</strong>
+              {" "}(ganadas en torneos) sirven para canjear acá. Las{" "}
+              <strong className="text-brand-gold-dark">otras Lukas</strong> son
+              para inscribirte en torneos.
+            </p>
+          </div>
         </div>
-      </div>
+      </section>
 
       {featured ? (
         <FeaturedPrize

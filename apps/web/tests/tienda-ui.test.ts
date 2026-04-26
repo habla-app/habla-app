@@ -95,10 +95,14 @@ describe("/tienda — TiendaContent", () => {
     expect(SRC).toMatch(/PrizeCardV2/);
   });
 
-  it("nota legal sobre Lukas (no son efectivo)", () => {
-    // Wording vigente: "no son efectivo". Versiones anteriores usaban
-    // variantes "no son convertibles a efectivo" / "no se retiran como
-    // efectivo" — todas semánticamente equivalentes.
-    expect(SRC).toMatch(/no\s+son\s+(convertibles\s+a\s+)?efectivo/i);
+  it("card combinado de premios (Lote 6C-fix8) explica que solo Premios canjean", () => {
+    // El card combinado fusionó la nota legal anterior. Wording vigente:
+    // "Solo las Lukas Premios (ganadas en torneos) sirven para canjear
+    // acá. Las otras Lukas son para inscribirte en torneos."
+    expect(SRC).toMatch(/data-testid="tienda-premios-card"/);
+    expect(SRC).toMatch(/Solo\s+las[\s\S]{0,200}Lukas\s+Premios/i);
+    expect(SRC).toMatch(/canjear/i);
+    expect(SRC).toMatch(/otras\s+Lukas/i);
+    expect(SRC).toMatch(/inscribirte\s+en\s+torneos/i);
   });
 });
