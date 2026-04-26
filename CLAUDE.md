@@ -365,6 +365,7 @@ pnpm exec tsc --noEmit
   - `POST /api/v1/admin/auditoria/recategorizar-bolsas` — redistribuye bolsas a partir de `sumTx` por bolsa. Skippea si I1 violada o bolsas negativas resultantes.
   - `POST /api/v1/admin/auditoria/reset-y-inyectar-bonus` — body `{ confirmacion: "INYECTAR_TEST_LUKAS", montoBonus?: 100 }`. Borra todas las `AJUSTE` del usuario, recompone bolsas desde tx legítimas, compensa déficit en COMPRADAS con BONUS, inyecta bonus de testing. **No idempotente.**
   - `POST /api/v1/admin/auditoria/mover-compradas-a-bonus` — body `{ confirmacion: "MOVER_COMPRADAS_A_BONUS" }`. Para cada user con `balanceCompradas > 0`: mueve el saldo a BONUS (crea tx BONUS + AJUSTE compensador con bolsa=COMPRADAS). Idempotente. Útil mientras no haya Culqi y no debería existir saldo en COMPRADAS.
+  - `POST /api/v1/admin/auditoria/sanear-historial` — body `{ confirmacion: "SANEAR_HISTORIAL_PRE_PROD", montoBonusExtra?: 0 }`. **MUTA tx legítimas** (cambia `bolsa`) para que el historial refleje la realidad económica. Para cada user sin `tipo: COMPRA` registrada: reasigna tx con `bolsa = COMPRADAS` o `bolsa = null` a `bolsa = BONUS`, borra todas las AJUSTE, recalcula balances. Resuelve I3, I4 cuando hay residuos pre-Lote 6A o pre-fix. **NO usar en producción real con compras Culqi reales** — el guard `countCompras > 0` lo skippea automáticamente.
   
   Env var nueva: `ADMIN_ALERT_EMAIL` (opcional). Si falta, alertas se loggean sin enviar.
 

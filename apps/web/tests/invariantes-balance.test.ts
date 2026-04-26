@@ -175,6 +175,25 @@ describe("Invariantes de balance — endpoints admin", () => {
     // balanceCompradas se setea a 0
     expect(src).toMatch(/balanceCompradas:\s*0/);
   });
+
+  it("/admin/auditoria/sanear-historial muta bolsas legítimas y borra AJUSTE", () => {
+    const src = readService(
+      "app/api/v1/admin/auditoria/sanear-historial/route.ts",
+    );
+    expect(src).toMatch(/CRON_SECRET/);
+    expect(src).toMatch(/SANEAR_HISTORIAL_PRE_PROD/);
+    // Solo muta tx si countCompras == 0 (guard contra producción real)
+    expect(src).toMatch(/tieneCompras/);
+    expect(src).toMatch(/tipo:\s*["']COMPRA["']/);
+    // Mutaciones via updateMany de bolsa
+    expect(src).toMatch(/updateMany/);
+    expect(src).toMatch(/bolsa:\s*["']COMPRADAS["']/);
+    expect(src).toMatch(/bolsa:\s*null/);
+    expect(src).toMatch(/bolsa:\s*["']BONUS["']/);
+    // Borra AJUSTE
+    expect(src).toMatch(/deleteMany/);
+    expect(src).toMatch(/tipo:\s*["']AJUSTE["']/);
+  });
 });
 
 describe("Invariantes de balance — Job G en instrumentation.ts", () => {
