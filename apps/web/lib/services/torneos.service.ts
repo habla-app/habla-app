@@ -37,18 +37,18 @@ import { verificarLimiteInscripcion } from "./limites.service";
 import { ENTRADA_LUKAS, MESES_VENCIMIENTO_COMPRA } from "../config/economia";
 
 // ---------------------------------------------------------------------------
-// Tipos internos para el sistema de 3 bolsas (Lote 6A)
+// Tipos del sistema de 3 bolsas (Lote 6A)
 // ---------------------------------------------------------------------------
 
-interface ComposicionItem {
+export interface ComposicionItem {
   bolsa: "BONUS" | "COMPRADAS" | "GANADAS";
   monto: number;
   /** Solo presente cuando bolsa=COMPRADAS: ID de la TransaccionLukas COMPRA original. */
   compraTxId?: string;
 }
 
-/** Resultado interno de descontarEntrada — no se exporta. */
-interface DescuentoResult {
+/** Resultado de descontarEntrada — exportado para reuso en tickets.service. */
+export interface DescuentoResult {
   composicion: ComposicionItem[];
   nuevoBalanceCompradas: number;
   nuevoBalanceBonus: number;
@@ -66,8 +66,12 @@ interface DescuentoResult {
  * en `metadata.composicion` de la TransaccionLukas.ENTRADA_TORNEO.
  *
  * Debe correrse dentro de una `prisma.$transaction`.
+ *
+ * Exportado (Lote 6C-fix2) para que `tickets.service.crear()` reuse la
+ * misma lógica al crear tickets nuevos sin placeholder. Antes ese flujo
+ * solo decrementaba `balanceLukas` y omitía las 3 bolsas → divergencia.
  */
-async function descontarEntrada(
+export async function descontarEntrada(
   tx: Omit<typeof prisma, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">,
   usuarioId: string,
   monto: number,
@@ -150,7 +154,7 @@ async function descontarEntrada(
   // bajo READ COMMITTED: dos inscripciones concurrentes que lean el mismo
   // valor de bolsa ya no sobreescriben con un SET sino que decrementan
   // atómicamente, igual que balanceLukas. Solo emitimos el campo si el delta > 0.
-  await tx.usuario.update({
+  const refrescado = await tx.usuario.update({
     where: { id: usuarioId },
     data: {
       ...(deltaCompradas > 0 && { balanceCompradas: { decrement: deltaCompradas } }),
@@ -158,15 +162,42 @@ async function descontarEntrada(
       ...(deltaGanadas > 0 && { balanceGanadas: { decrement: deltaGanadas } }),
       balanceLukas: { decrement: monto },
     },
+    select: {
+      balanceLukas: true,
+      balanceCompradas: true,
+      balanceBonus: true,
+      balanceGanadas: true,
+    },
   });
 
-  // Valores aproximados para el optimistic update del cliente (store Zustand).
-  // El total real en BD = balanceLukas - monto (atómico y correcto).
-  const nuevoBalanceCompradas = usuario.balanceCompradas - deltaCompradas;
-  const nuevoBalanceBonus = usuario.balanceBonus - deltaBonus;
-  const nuevoBalanceGanadas = usuario.balanceGanadas - deltaGanadas;
+  // Guard de consistencia (Lote 6C-fix2): tras todo descuento, balanceLukas
+  // DEBE igualar la suma de las 3 bolsas. Si diverge, hay un bug en algún
+  // path de mutación — loggeamos como error para detectarlo en Sentry sin
+  // romper el flujo del usuario. Ejemplos de divergencia: un decrement de
+  // balanceLukas sin tocar bolsas, o viceversa. La detección post-commit
+  // sirve como early-warning para nuevos bugs.
+  const sumaBolsas =
+    refrescado.balanceCompradas + refrescado.balanceBonus + refrescado.balanceGanadas;
+  if (refrescado.balanceLukas !== sumaBolsas) {
+    logger.error(
+      {
+        usuarioId,
+        contexto: "descontarEntrada",
+        balanceLukas: refrescado.balanceLukas,
+        sumaBolsas,
+        delta: refrescado.balanceLukas - sumaBolsas,
+        monto,
+      },
+      "DESINCRONIZACION: balanceLukas != suma bolsas tras descuento",
+    );
+  }
 
-  return { composicion, nuevoBalanceCompradas, nuevoBalanceBonus, nuevoBalanceGanadas };
+  return {
+    composicion,
+    nuevoBalanceCompradas: refrescado.balanceCompradas,
+    nuevoBalanceBonus: refrescado.balanceBonus,
+    nuevoBalanceGanadas: refrescado.balanceGanadas,
+  };
 }
 
 /**

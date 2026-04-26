@@ -25,7 +25,6 @@ import {
   type Partido,
 } from "@habla/db";
 import {
-  BalanceInsuficiente,
   DomainError,
   LimiteExcedido,
   NoAutenticado,
@@ -35,6 +34,8 @@ import {
 import { logger } from "./logger";
 import type { CrearTicketBody } from "./tickets.schema";
 import { verificarLimiteInscripcion, bloquearSiAutoExcluido } from "./limites.service";
+import { descontarEntrada } from "./torneos.service";
+import { getBalanceTotal } from "../lukas-display";
 
 // ---------------------------------------------------------------------------
 // Constantes
@@ -149,10 +150,17 @@ export async function crear(
       throw new TorneoCerrado(input.torneoId);
     }
 
-    // 2. Usuario existe
+    // 2. Usuario existe — leemos las 3 bolsas (no balanceLukas) porque
+    //    `getBalanceTotal` es la fuente única para el balance visible
+    //    al cliente. Si balanceLukas estuviera desincronizado pre-fix
+    //    (Lote 6C-fix2), prefiero el valor consistente.
     const usuario = await tx.usuario.findUnique({
       where: { id: usuarioId },
-      select: { balanceLukas: true },
+      select: {
+        balanceCompradas: true,
+        balanceBonus: true,
+        balanceGanadas: true,
+      },
     });
     if (!usuario) throw new NoAutenticado();
 
@@ -253,7 +261,7 @@ export async function crear(
       // del read inicial para uniformidad del shape de respuesta.
       return {
         ticket,
-        nuevoBalance: usuario.balanceLukas,
+        nuevoBalance: getBalanceTotal(usuario),
         reemplazoPlaceholder,
         torneo: {
           id: torneo.id,
@@ -266,25 +274,13 @@ export async function crear(
       };
     }
 
-    // 6. Ticket nuevo — requiere descuento de entrada
-    if (usuario.balanceLukas < torneo.entradaLukas) {
-      throw new BalanceInsuficiente(usuario.balanceLukas, torneo.entradaLukas);
-    }
-
-    await tx.usuario.update({
-      where: { id: usuarioId },
-      data: { balanceLukas: { decrement: torneo.entradaLukas } },
-    });
-
-    await tx.transaccionLukas.create({
-      data: {
-        usuarioId,
-        tipo: "ENTRADA_TORNEO",
-        monto: -torneo.entradaLukas,
-        descripcion: `Inscripción a ${torneo.nombre}`,
-        refId: input.torneoId,
-      },
-    });
+    // 6. Ticket nuevo — requiere descuento de entrada.
+    // Lote 6C-fix2: usamos `descontarEntrada` (compartido con torneos.service)
+    // para mantener `balanceLukas + balanceCompradas/Bonus/Ganadas + saldoVivo`
+    // en sync. Antes este flujo solo decrementaba `balanceLukas` y omitía las
+    // bolsas → divergencia visible en /wallet (header alto, transacciones bajas).
+    // descontarEntrada lanza BalanceInsuficiente si no alcanza el total.
+    const descuento = await descontarEntrada(tx, usuarioId, torneo.entradaLukas);
 
     try {
       ticket = await tx.ticket.create({
@@ -313,6 +309,27 @@ export async function crear(
       throw err;
     }
 
+    // La bolsa principal de la TransaccionLukas es la de mayor monto (para
+    // agrupado en /wallet). El detalle real vive en metadata.composicion.
+    const bolsaPrincipal = descuento.composicion.reduce((max, item) =>
+      item.monto > max.monto ? item : max,
+    ).bolsa;
+
+    await tx.transaccionLukas.create({
+      data: {
+        usuarioId,
+        tipo: "ENTRADA_TORNEO",
+        bolsa: bolsaPrincipal,
+        monto: -torneo.entradaLukas,
+        descripcion: `Inscripción a ${torneo.nombre}`,
+        refId: input.torneoId,
+        metadata: {
+          ticketId: ticket.id,
+          composicion: descuento.composicion,
+        } as object,
+      },
+    });
+
     const torneoActualizado = await tx.torneo.update({
       where: { id: input.torneoId },
       data: {
@@ -329,7 +346,10 @@ export async function crear(
       },
     });
 
-    const nuevoBalance = usuario.balanceLukas - torneo.entradaLukas;
+    const nuevoBalance =
+      descuento.nuevoBalanceCompradas +
+      descuento.nuevoBalanceBonus +
+      descuento.nuevoBalanceGanadas;
 
     logger.info(
       {
