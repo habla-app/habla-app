@@ -101,8 +101,24 @@ export async function POST(req: NextRequest) {
     });
 
     const reseteados: UsuarioReseteado[] = [];
+    const skippeados: Array<{ userId: string; username: string; razon: string }> = [];
 
     for (const u of usuarios) {
+      // Guard countCompras (Lote 6C-fix5): saltea usuarios con compras
+      // reales — el reset borra AJUSTE y recompone bolsas, que en
+      // producción real podría destruir información de compras Culqi.
+      const countCompras = await prisma.transaccionLukas.count({
+        where: { usuarioId: u.id, tipo: "COMPRA" },
+      });
+      if (countCompras > 0) {
+        skippeados.push({
+          userId: u.id,
+          username: u.username,
+          razon: `Usuario tiene ${countCompras} TransaccionLukas tipo=COMPRA. NO se resetea — el endpoint es solo para pre-prod sin compras Culqi reales.`,
+        });
+        continue;
+      }
+
       const resultado = await prisma.$transaction(async (tx) => {
         // 1. Borrar AJUSTE del usuario (ruido de fixes anteriores)
         const borrados = await tx.transaccionLukas.deleteMany({
@@ -231,6 +247,7 @@ export async function POST(req: NextRequest) {
     logger.info(
       {
         usuariosReseteados: reseteados.length,
+        skippeados: skippeados.length,
         montoBonus,
         refId,
       },
@@ -240,9 +257,11 @@ export async function POST(req: NextRequest) {
     return Response.json({
       data: {
         usuariosReseteados: reseteados.length,
+        skippeados: skippeados.length,
         montoBonus,
         refId,
         detalle: reseteados,
+        skipDetalle: skippeados,
       },
     });
   } catch (err) {

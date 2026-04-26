@@ -66,8 +66,25 @@ export async function POST(req: NextRequest) {
       bonusAntes: number;
       bonusDespues: number;
     }> = [];
+    const skippeados: Array<{ userId: string; username: string; razon: string }> = [];
 
     for (const u of usuarios) {
+      // Guard countCompras (Lote 6C-fix5): si el usuario tiene compras
+      // reales con Culqi, su balanceCompradas NO debe moverse a BONUS —
+      // saldría dinero de la bolsa "comprado con plata" hacia BONUS,
+      // que no vence ni acumula saldoVivo. Solo aplicable en pre-prod.
+      const countCompras = await prisma.transaccionLukas.count({
+        where: { usuarioId: u.id, tipo: "COMPRA" },
+      });
+      if (countCompras > 0) {
+        skippeados.push({
+          userId: u.id,
+          username: u.username,
+          razon: `Usuario tiene ${countCompras} TransaccionLukas tipo=COMPRA. NO se mueve balanceCompradas — esos Lukas son compras reales con Culqi.`,
+        });
+        continue;
+      }
+
       const monto = u.balanceCompradas;
       await prisma.$transaction([
         prisma.transaccionLukas.create({
@@ -124,6 +141,7 @@ export async function POST(req: NextRequest) {
     logger.info(
       {
         usuariosTocados: detalle.length,
+        skippeados: skippeados.length,
         refId,
       },
       "POST /api/v1/admin/auditoria/mover-compradas-a-bonus completado",
@@ -132,8 +150,10 @@ export async function POST(req: NextRequest) {
     return Response.json({
       data: {
         usuariosTocados: detalle.length,
+        skippeados: skippeados.length,
         refId,
         detalle,
+        skipDetalle: skippeados,
       },
     });
   } catch (err) {

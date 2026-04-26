@@ -104,6 +104,21 @@ export async function POST(req: NextRequest) {
     const skippeados: Array<{ userId: string; username: string; razon: string }> = [];
 
     for (const u of usuarios) {
+      // Guard countCompras (Lote 6C-fix5): saltea usuarios con compras
+      // reales — la recategorización reescribe `balanceCompradas` como
+      // residual, lo que destruye el saldo verdadero comprado con Culqi.
+      const countCompras = await prisma.transaccionLukas.count({
+        where: { usuarioId: u.id, tipo: "COMPRA" },
+      });
+      if (countCompras > 0) {
+        skippeados.push({
+          userId: u.id,
+          username: u.username,
+          razon: `Usuario tiene ${countCompras} TransaccionLukas tipo=COMPRA. NO se recategoriza — el endpoint es solo para pre-prod sin compras Culqi reales.`,
+        });
+        continue;
+      }
+
       // Sanity check: si I1 ya falla para este user (balanceLukas != suma bolsas),
       // NO lo recategorizamos — ese caso requiere el endpoint /balance/corregir
       // primero, no este. Skippeamos con razón explícita.

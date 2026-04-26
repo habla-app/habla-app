@@ -194,6 +194,51 @@ describe("Invariantes de balance — endpoints admin", () => {
     expect(src).toMatch(/deleteMany/);
     expect(src).toMatch(/tipo:\s*["']AJUSTE["']/);
   });
+
+  // Lote 6C-fix5: guard countCompras debe estar en los 4 endpoints
+  // destructivos por-usuario. reset-completo lo lleva más lejos
+  // (aborta todo el batch si hay cualquier compra).
+  it.each([
+    "mover-compradas-a-bonus",
+    "reset-y-inyectar-bonus",
+    "recategorizar-bolsas",
+    "sanear-historial",
+  ])(
+    "/admin/auditoria/%s skippea usuarios con countCompras > 0 (Lote 6C-fix5)",
+    (endpoint) => {
+      const src = readService(
+        `app/api/v1/admin/auditoria/${endpoint}/route.ts`,
+      );
+      // Tiene una query countCompras tipo=COMPRA
+      expect(src).toMatch(/transaccionLukas\.count[\s\S]{0,200}?tipo:\s*["']COMPRA["']/);
+      // Y los skippea (el flujo de skipping varía pero todos contienen
+      // alguna referencia a "skip" o el guard "countCompras > 0").
+      expect(src).toMatch(/countCompras|tieneCompras/);
+    },
+  );
+
+  it("/admin/auditoria/reset-completo aborta TODO si hay cualquier compra en el sistema", () => {
+    const src = readService(
+      "app/api/v1/admin/auditoria/reset-completo/route.ts",
+    );
+    expect(src).toMatch(/CRON_SECRET/);
+    expect(src).toMatch(/RESET_COMPLETO_TESTING/);
+    // Aborta global si totalCompras > 0
+    expect(src).toMatch(/totalCompras/);
+    expect(src).toMatch(/RESET_BLOQUEADO_POR_COMPRAS/);
+    // Wipea ticket, canje, transaccionLukas
+    expect(src).toMatch(/ticket\.deleteMany/);
+    expect(src).toMatch(/canje\.deleteMany/);
+    expect(src).toMatch(/transaccionLukas\.deleteMany/);
+    // Restituye stock por canjes
+    expect(src).toMatch(/stock:\s*\{\s*increment/);
+    // Resetea torneos (pozoBruto, pozoNeto, rake, totalInscritos)
+    expect(src).toMatch(/torneo\.updateMany/);
+    expect(src).toMatch(/pozoBruto:\s*0/);
+    expect(src).toMatch(/totalInscritos:\s*0/);
+    // Inyecta bonus de bienvenida
+    expect(src).toMatch(/BONUS_BIENVENIDA_LUKAS/);
+  });
 });
 
 describe("Invariantes de balance — Job G en instrumentation.ts", () => {
