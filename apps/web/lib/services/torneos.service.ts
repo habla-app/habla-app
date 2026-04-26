@@ -146,19 +146,25 @@ async function descontarEntrada(
     throw new BalanceInsuficiente(total - monto + restante, monto);
   }
 
-  const nuevoBalanceCompradas = usuario.balanceCompradas - deltaCompradas;
-  const nuevoBalanceBonus = usuario.balanceBonus - deltaBonus;
-  const nuevoBalanceGanadas = usuario.balanceGanadas - deltaGanadas;
-
+  // Atomic decrements evitan la race condition de escrituras simultáneas
+  // bajo READ COMMITTED: dos inscripciones concurrentes que lean el mismo
+  // valor de bolsa ya no sobreescriben con un SET sino que decrementan
+  // atómicamente, igual que balanceLukas. Solo emitimos el campo si el delta > 0.
   await tx.usuario.update({
     where: { id: usuarioId },
     data: {
-      balanceCompradas: nuevoBalanceCompradas,
-      balanceBonus: nuevoBalanceBonus,
-      balanceGanadas: nuevoBalanceGanadas,
+      ...(deltaCompradas > 0 && { balanceCompradas: { decrement: deltaCompradas } }),
+      ...(deltaBonus > 0 && { balanceBonus: { decrement: deltaBonus } }),
+      ...(deltaGanadas > 0 && { balanceGanadas: { decrement: deltaGanadas } }),
       balanceLukas: { decrement: monto },
     },
   });
+
+  // Valores aproximados para el optimistic update del cliente (store Zustand).
+  // El total real en BD = balanceLukas - monto (atómico y correcto).
+  const nuevoBalanceCompradas = usuario.balanceCompradas - deltaCompradas;
+  const nuevoBalanceBonus = usuario.balanceBonus - deltaBonus;
+  const nuevoBalanceGanadas = usuario.balanceGanadas - deltaGanadas;
 
   return { composicion, nuevoBalanceCompradas, nuevoBalanceBonus, nuevoBalanceGanadas };
 }

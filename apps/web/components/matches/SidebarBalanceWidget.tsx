@@ -76,11 +76,11 @@ function LoggedBalance({
       </div>
 
       {/* Subconjunto Lukas Premios */}
-      <div className="mt-3 flex items-center gap-1.5 rounded-sm border border-brand-green/25 bg-alert-success-bg px-3 py-2 text-[12px] font-semibold text-alert-success-text">
-        <span aria-hidden className="text-[13px]">↳ 🏆</span>
+      <div className="mt-3 flex items-center gap-2 rounded-sm border border-brand-green/25 bg-alert-success-bg px-3 py-2 text-[12px] font-semibold text-alert-success-text">
+        <span aria-hidden className="text-[14px] leading-none">🏆</span>
         <span>
           <strong>{premios.toLocaleString("es-PE")}</strong>
-          {premios === 1 ? " es Luka Premio" : " son Lukas Premios"} · canjeables en Tienda
+          {premios === 1 ? " Luka Premio" : " Lukas Premios"} · canjeables en Tienda
         </span>
       </div>
 

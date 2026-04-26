@@ -74,10 +74,10 @@ export function WalletBalanceHero({
 
         {/* Subconjunto Lukas Premios */}
         <div className="mt-3 inline-flex items-center gap-2 rounded-sm border border-brand-green/30 bg-white/10 px-3 py-2 text-[13px] font-semibold text-white/90">
-          <span aria-hidden>↳ 🏆</span>
+          <span aria-hidden className="text-[15px] leading-none">🏆</span>
           <span>
             <strong className="text-brand-green">{premios.toLocaleString("es-PE")}</strong>
-            {" "}son Lukas Premios · canjeables en Tienda
+            {" son Lukas Premios · canjeables en Tienda"}
           </span>
         </div>
 

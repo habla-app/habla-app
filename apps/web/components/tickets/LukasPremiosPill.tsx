@@ -7,7 +7,7 @@
 // cuando un torneo finaliza y acredita premios — evento server-side que
 // provoca un refresh completo de la página.
 
-import { LUKAS_PREMIOS_DESC, LUKAS_PREMIOS_LABEL } from "@/lib/lukas-display";
+import { LUKAS_PREMIOS_LABEL } from "@/lib/lukas-display";
 
 interface Props {
   lukasPremios: number;
@@ -30,10 +30,7 @@ export function LukasPremiosPill({ lukasPremios }: Props) {
         {lukasPremios.toLocaleString("es-PE")} 🪙
       </div>
       <div className="mt-1.5 text-[11px] font-bold uppercase leading-tight tracking-[0.06em] text-muted-d">
-        {LUKAS_PREMIOS_LABEL}
-      </div>
-      <div className="mt-0.5 text-[10px] leading-tight text-muted-d">
-        {LUKAS_PREMIOS_DESC}
+        Lukas Ganadas en Torneo
       </div>
     </div>
   );

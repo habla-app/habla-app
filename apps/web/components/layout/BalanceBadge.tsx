@@ -49,14 +49,16 @@ export function BalanceBadge({ initialBalance, initialBalanceGanadas = 0 }: Prop
         <span>{fmt(juego)}</span>
       </span>
 
-      {/* Desktop: dos líneas — Lukas Juego + subconjunto Lukas Premios */}
-      <span className="hidden flex-col gap-px sm:flex">
-        <span className="flex items-center gap-1.5 text-[13px] leading-none">
+      {/* Desktop: Lukas Juego + separador + Lukas Premios inline */}
+      <span className="hidden items-center gap-2 text-[13px] sm:flex">
+        <span className="flex items-center gap-1.5 leading-none">
           <span aria-hidden className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-brand-gold text-[10px] font-black leading-none text-black">⚽</span>
-          <span>{fmt(juego)} Lukas Juego</span>
+          <span>{fmt(juego)}</span>
+          <span className="font-normal opacity-60">Juego</span>
         </span>
-        <span className="flex items-center gap-1 pl-[22px] text-[11px] leading-none opacity-80">
-          <span aria-hidden>↳ 🏆</span>
+        <span aria-hidden className="h-3 w-px rounded-full bg-brand-gold/40" />
+        <span className="flex items-center gap-1 text-[11px] leading-none opacity-75">
+          <span aria-hidden>🏆</span>
           <span>{fmt(premios)} Premios</span>
         </span>
       </span>
