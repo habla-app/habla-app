@@ -1,7 +1,7 @@
 # CLAUDE.md — Habla! App
 
 > Contexto operativo del proyecto. El historial detallado de bugs vive en `CHANGELOG.md` y en `git log`.
-> Última actualización: 25 Abr 2026 (Lote 6B — UX de 3 bolsas: desglose en /wallet, stat Canjeables en /tienda, ModalSinGanadas para BALANCE_INSUFICIENTE).
+> Última actualización: 26 Abr 2026 (Lote 6B-fix — realineamiento visual al mockup de WalletBalanceDesglose, TxList, stats de tienda y ModalSinGanadas).
 
 ---
 

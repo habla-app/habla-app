@@ -73,17 +73,17 @@ export function TiendaContent({
         <section className="mb-4 grid grid-cols-3 gap-3">
           {/* Canjeables (Ganados) — solo los ganados en torneos sirven para canjear */}
           <div
-            className="flex items-center gap-3 rounded-md border border-brand-green/40 bg-brand-green/5 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+            className="flex items-center gap-3 rounded-md border border-light bg-card p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
             title="Solo los Lukas que ganaste en torneos se pueden canjear"
           >
             <div
               aria-hidden
-              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-sm border border-brand-green/30 bg-brand-green/10 text-[22px]"
+              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-sm border border-pred-correct/30 bg-alert-success-bg text-[22px]"
             >
               🏆
             </div>
             <div className="min-w-0">
-              <div className="font-display text-[22px] font-black leading-none text-brand-green">
+              <div className="font-display text-[22px] font-black leading-none text-alert-success-text">
                 {ganadas.toLocaleString("es-PE")}
               </div>
               <div className="mt-1 text-[11px] font-bold uppercase tracking-[0.06em] text-muted-d">

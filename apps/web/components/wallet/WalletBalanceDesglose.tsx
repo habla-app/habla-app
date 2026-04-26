@@ -51,25 +51,27 @@ export function WalletBalanceDesglose({ totales, proximoVencimiento }: Props) {
   return (
     <div className="mb-5">
       {/* 3 bloques de bolsa */}
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3 md:gap-4">
+      <div className="grid grid-cols-3 gap-3">
         {/* Comprados */}
         <BolsaCard
-          emoji="🛒"
-          emojiColorClass="text-brand-blue-light"
-          emojiBgClass="bg-brand-blue-light/15"
+          emoji="💳"
+          iconBgClass="bg-alert-info-bg"
+          iconBorderClass="border border-alert-info-border"
           label="Comprados"
           borderColorClass="border-l-brand-blue-light"
+          valueColorClass="text-brand-blue-light"
           monto={totales.compradas}
           subtexto={subtextoCompradas(proximoVencimiento)}
           tooltip="Los Lukas que compraste. Sirven para inscribirte en torneos. Vencen a los 36 meses de la compra."
         />
         {/* Bonus */}
         <BolsaCard
-          emoji="🎁"
-          emojiColorClass="text-brand-gold"
-          emojiBgClass="bg-brand-gold/15"
-          label="De regalo"
+          emoji="⭐"
+          iconBgClass="bg-brand-gold-dim"
+          iconBorderClass="border border-brand-gold/30"
+          label="Bonus"
           borderColorClass="border-l-brand-gold"
+          valueColorClass="text-brand-gold-dark"
           monto={totales.bonus}
           subtexto="No vencen"
           tooltip="Lukas de bienvenida o bonus de pack. Sirven para inscribirte en torneos. No vencen nunca."
@@ -77,20 +79,21 @@ export function WalletBalanceDesglose({ totales, proximoVencimiento }: Props) {
         {/* Ganados */}
         <BolsaCard
           emoji="🏆"
-          emojiColorClass="text-brand-green"
-          emojiBgClass="bg-brand-green/15"
+          iconBgClass="bg-alert-success-bg"
+          iconBorderClass="border border-pred-correct/30"
           label="Ganados"
           borderColorClass="border-l-brand-green"
+          valueColorClass="text-alert-success-text"
           monto={totales.ganadas}
-          subtexto="Canjeables en la tienda"
+          subtexto="Canjeables en tienda"
           tooltip="Los Lukas que ganaste compitiendo. Sirven para inscribirte Y para canjear premios en la tienda. No vencen."
         />
       </div>
 
       {/* Total bajo los bloques */}
-      <div className="mt-3 text-right text-[13px] text-white/50">
+      <div className="mt-3 text-right text-[13px] text-muted-d">
         Total disponible:{" "}
-        <span className="font-semibold text-white/70">
+        <span className="font-semibold text-dark">
           {totales.total.toLocaleString("es-PE")} Lukas
         </span>
       </div>
@@ -153,10 +156,11 @@ function subtextoCompradas(pv: ProximoVencimiento | null): string {
 
 interface BolsaCardProps {
   emoji: string;
-  emojiColorClass: string;
-  emojiBgClass: string;
+  iconBgClass: string;
+  iconBorderClass: string;
   label: string;
   borderColorClass: string;
+  valueColorClass: string;
   monto: number;
   subtexto: string;
   tooltip: string;
@@ -164,42 +168,35 @@ interface BolsaCardProps {
 
 function BolsaCard({
   emoji,
-  emojiColorClass,
-  emojiBgClass,
+  iconBgClass,
+  iconBorderClass,
   label,
   borderColorClass,
+  valueColorClass,
   monto,
   subtexto,
   tooltip,
 }: BolsaCardProps) {
   return (
     <div
-      className={`rounded-xl bg-dark-card p-4 border-l-[3px] ${borderColorClass}`}
+      title={tooltip}
+      className={`flex items-center gap-3 rounded-md border border-light bg-card p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md border-l-[3px] ${borderColorClass}`}
     >
-      {/* Header: ícono + label + tooltip */}
-      <div className="mb-2 flex items-center gap-2">
-        <span
-          aria-hidden
-          className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[14px] ${emojiBgClass} ${emojiColorClass}`}
-        >
-          {emoji}
-        </span>
-        <span className="text-[12px] font-medium text-white/70">{label}</span>
-        <button
-          type="button"
-          title={tooltip}
-          aria-label={tooltip}
-          className="ml-auto flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-white/10 text-[10px] font-bold text-white/50 hover:bg-white/20 hover:text-white/70 transition-colors"
-        >
-          ?
-        </button>
+      <div
+        aria-hidden
+        className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-sm text-[22px] ${iconBgClass} ${iconBorderClass}`}
+      >
+        {emoji}
       </div>
-      {/* Monto */}
-      <div className="font-display text-[32px] font-black leading-none text-white">
-        {monto.toLocaleString("es-PE")}
+      <div className="min-w-0">
+        <div className={`font-display text-[22px] font-black leading-none ${valueColorClass}`}>
+          {monto.toLocaleString("es-PE")}
+        </div>
+        <div className="mt-1 text-[11px] font-bold uppercase tracking-[0.06em] text-muted-d">
+          {label}
+        </div>
+        <div className="mt-0.5 text-[10px] text-muted-d">{subtexto}</div>
       </div>
-      {/* Subtexto */}
-      <div className="mt-1 text-[12px] text-white/70">{subtexto}</div>
     </div>
   );
 }
