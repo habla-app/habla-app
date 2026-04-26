@@ -25,6 +25,8 @@ import { BalanceBadge } from "@/components/layout/BalanceBadge";
 interface Props {
   /** Count del SSR (del layout, via contarLiveMatches). 0 default. */
   initialLiveCount?: number;
+  /** Lukas Premios (ganadas) del SSR — para mostrar el subconjunto en el badge. Lote 6C. */
+  initialBalanceGanadas?: number;
 }
 
 function iniciales(username: string, email: string): string {
@@ -33,7 +35,7 @@ function iniciales(username: string, email: string): string {
   return base.trim().slice(0, 2).toUpperCase();
 }
 
-export async function NavBar({ initialLiveCount = 0 }: Props = {}) {
+export async function NavBar({ initialLiveCount = 0, initialBalanceGanadas = 0 }: Props = {}) {
   const session = await auth();
   const usuario = session?.user ?? null;
 
@@ -62,7 +64,10 @@ export async function NavBar({ initialLiveCount = 0 }: Props = {}) {
         <div className="flex items-center gap-3">
           {usuario ? (
             <>
-              <BalanceBadge initialBalance={usuario.balanceLukas ?? 0} />
+              <BalanceBadge
+                initialBalance={usuario.balanceLukas ?? 0}
+                initialBalanceGanadas={initialBalanceGanadas}
+              />
               <UserMenu
                 iniciales={iniciales(
                   usuario.username ?? "",

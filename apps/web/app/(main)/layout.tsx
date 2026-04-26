@@ -16,6 +16,7 @@ import type { ReactNode } from "react";
 import { auth } from "@/lib/auth";
 import { contarLiveMatches } from "@/lib/services/live-matches.service";
 import { logger } from "@/lib/services/logger";
+import { obtenerBalanceGanadas } from "@/lib/usuarios";
 import { NavBar } from "@/components/layout/NavBar";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { Footer } from "@/components/layout/Footer";
@@ -31,15 +32,20 @@ async function obtenerLiveCount(): Promise<number> {
 }
 
 export default async function MainLayout({ children }: { children: ReactNode }) {
-  // Dos awaits secuenciales (no es cuello de botella — ambos son cheap
-  // y evita que el test antidrift se queje por estilo Promise.all).
   const session = await auth();
-  const liveCount = await obtenerLiveCount();
+  const userId = session?.user?.id ?? null;
   const initialBalance = session?.user?.balanceLukas ?? null;
+
+  // Fetch liveCount y balanceGanadas en paralelo (ambos son cheap y
+  // no dependen entre sí). Lote 6C: balanceGanadas para el badge del header.
+  const [liveCount, initialBalanceGanadas] = await Promise.all([
+    obtenerLiveCount(),
+    userId ? obtenerBalanceGanadas(userId) : Promise.resolve(0),
+  ]);
 
   return (
     <div className="flex min-h-screen flex-col bg-page">
-      <NavBar initialLiveCount={liveCount} />
+      <NavBar initialLiveCount={liveCount} initialBalanceGanadas={initialBalanceGanadas} />
       <LukasBalanceHydrator initialBalance={initialBalance} />
       <main className="flex-1 pb-24 lg:pb-10">{children}</main>
       <Footer />

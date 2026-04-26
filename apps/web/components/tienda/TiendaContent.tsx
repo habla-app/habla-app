@@ -1,13 +1,15 @@
 "use client";
 // TiendaContent — orquesta /tienda (Sub-Sprint 6).
 // Lote 6B: stats muestra balance Ganados (canjeables) en lugar del total.
-// Progress bars y affordability ahora usan balanceGanadas.
-// ModalSinGanadas se abre cuando la API rechaza por BALANCE_INSUFICIENTE.
+// Lote 6C: elimina los 3 cuadros de stats (Canjeables/Disp. ahora/Ya canjeados).
+// Muestra solo el balance de Lukas Premios con label "Disponibles para canjear".
+// Nuevo mensaje descriptivo enfatiza que son Lukas Premios las que funcionan acá.
 
 import { useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import type { PremioDTO } from "@/lib/services/premios.service";
 import { useLukasStore } from "@/stores/lukas.store";
+import { LUKAS_PREMIOS_LABEL } from "@/lib/lukas-display";
 import { CatFilters } from "./CatFilters";
 import { PrizeCardV2 } from "./PrizeCardV2";
 import { FeaturedPrize } from "./FeaturedPrize";
@@ -48,11 +50,6 @@ export function TiendaContent({
     setGanadas((prev) => Math.max(0, prev - costeLukas));
   }, []);
 
-  const canjeablesAhora = useMemo(
-    () => premios.filter((p) => p.stock > 0 && ganadas >= p.costeLukas).length,
-    [premios, ganadas],
-  );
-
   const grid = useMemo(
     () => premios.filter((p) => !p.featured || p.id !== featured?.id),
     [premios, featured],
@@ -69,57 +66,36 @@ export function TiendaContent({
         </p>
       </header>
 
+      {/* Balance de Lukas Premios — único relevante en /tienda */}
       {isLoggedIn ? (
-        <section className="mb-4 grid grid-cols-3 gap-3">
-          {/* Canjeables (Ganados) — solo los ganados en torneos sirven para canjear */}
+        <div className="mb-4 flex items-center gap-3 rounded-md border border-pred-correct/30 bg-alert-success-bg px-4 py-3.5 shadow-sm">
           <div
-            className="flex items-center gap-3 rounded-md border border-light bg-card p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-            title="Solo los Lukas que ganaste en torneos se pueden canjear"
+            aria-hidden
+            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-sm border border-pred-correct/30 bg-alert-success-bg text-[22px]"
           >
-            <div
-              aria-hidden
-              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-sm border border-pred-correct/30 bg-alert-success-bg text-[22px]"
-            >
-              🏆
+            🏆
+          </div>
+          <div className="min-w-0">
+            <div className="font-display text-[26px] font-black leading-none text-alert-success-text">
+              {ganadas.toLocaleString("es-PE")} 🪙
             </div>
-            <div className="min-w-0">
-              <div className="font-display text-[22px] font-black leading-none text-alert-success-text">
-                {ganadas.toLocaleString("es-PE")}
-              </div>
-              <div className="mt-1 text-[11px] font-bold uppercase tracking-[0.06em] text-muted-d">
-                Canjeables
-              </div>
+            <div className="mt-0.5 text-[11px] font-bold uppercase tracking-[0.06em] text-muted-d">
+              {LUKAS_PREMIOS_LABEL} · Disponibles para canjear
             </div>
           </div>
-          <ShopStat
-            icon="✓"
-            iconBg="avail"
-            color="green"
-            value={canjeablesAhora.toString()}
-            label="Disp. ahora"
-          />
-          <ShopStat
-            icon="🎁"
-            iconBg="redeemed"
-            color="purple"
-            value={totalCanjeados.toString()}
-            label="Ya canjeados"
-          />
-        </section>
+        </div>
       ) : null}
 
+      {/* Mensaje descriptivo */}
       <div className="mb-6 flex items-start gap-2.5 rounded-sm border border-l-4 border-brand-gold/30 border-l-brand-gold bg-[#FFFBF5] px-3.5 py-3 text-xs leading-relaxed text-body">
         <span aria-hidden className="flex-shrink-0 text-base">
           💡
         </span>
         <div>
-          Los <strong className="text-brand-gold-dark">Lukas</strong> son
-          créditos para canjear estos premios. Se ganan jugando torneos o
-          comprándolos en la Billetera —{" "}
-          <strong className="text-brand-gold-dark">
-            no son convertibles a efectivo
-          </strong>
-          .
+          Las <strong className="text-brand-gold-dark">Lukas</strong> no son
+          efectivo. Usa tus{" "}
+          <strong className="text-brand-gold-dark">Lukas Premios</strong> — las
+          que ganaste en torneos — para canjear lo que quieras de la Tienda.
         </div>
       </div>
 
@@ -166,53 +142,6 @@ export function TiendaContent({
       )}
 
       <ShopEarnCta isLoggedIn={isLoggedIn} />
-    </div>
-  );
-}
-
-function ShopStat({
-  icon,
-  iconBg,
-  color,
-  value,
-  label,
-}: {
-  icon: string;
-  iconBg: "bal" | "avail" | "redeemed";
-  color: "gold" | "green" | "purple";
-  value: string;
-  label: string;
-}) {
-  const iconBgClass =
-    iconBg === "bal"
-      ? "bg-brand-gold-dim border border-brand-gold/30"
-      : iconBg === "avail"
-        ? "bg-alert-success-bg border border-pred-correct/30"
-        : "bg-accent-champions-bg border border-alert-info-border";
-  const colorClass =
-    color === "gold"
-      ? "text-brand-gold-dark"
-      : color === "green"
-        ? "text-alert-success-text"
-        : "text-accent-mundial-dark";
-  return (
-    <div className="flex items-center gap-3 rounded-md border border-light bg-card p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <div
-        aria-hidden
-        className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-sm text-[22px] ${iconBgClass}`}
-      >
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <div
-          className={`font-display text-[22px] font-black leading-none ${colorClass}`}
-        >
-          {value}
-        </div>
-        <div className="mt-1 text-[11px] font-bold uppercase tracking-[0.06em] text-muted-d">
-          {label}
-        </div>
-      </div>
     </div>
   );
 }

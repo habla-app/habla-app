@@ -11,13 +11,14 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
+import { obtenerBalanceGanadas } from "@/lib/usuarios";
 import {
   calcularStats,
   listarMisTickets,
   type TicketConTorneo,
 } from "@/lib/services/tickets.service";
 import { StatsPill } from "@/components/tickets/StatsPill";
-import { BalancePill } from "@/components/tickets/BalancePill";
+import { LukasPremiosPill } from "@/components/tickets/LukasPremiosPill";
 import { MisTicketsTabs, type TicketsTab } from "@/components/tickets/MisTicketsTabs";
 import { MatchGroup } from "@/components/tickets/MatchGroup";
 import { HistoryList } from "@/components/tickets/HistoryList";
@@ -49,12 +50,14 @@ export default async function MisCombinadasPage({ searchParams }: Props) {
     redirect("/auth/signin?callbackUrl=/mis-combinadas");
   }
   const tab = resolveTab(searchParams?.tab);
-  const [activasRes, ganadasRes, historialRes, stats] = await Promise.all([
-    listarMisTickets(session.user.id, { estado: "ACTIVOS", limit: 100 }),
-    listarMisTickets(session.user.id, { estado: "GANADOS", limit: 100 }),
-    listarMisTickets(session.user.id, { estado: "HISTORIAL", limit: 100 }),
-    calcularStats(session.user.id),
-  ]);
+  const [activasRes, ganadasRes, historialRes, stats, balanceGanadas] =
+    await Promise.all([
+      listarMisTickets(session.user.id, { estado: "ACTIVOS", limit: 100 }),
+      listarMisTickets(session.user.id, { estado: "GANADOS", limit: 100 }),
+      listarMisTickets(session.user.id, { estado: "HISTORIAL", limit: 100 }),
+      calcularStats(session.user.id),
+      obtenerBalanceGanadas(session.user.id),
+    ]);
 
   const counts = {
     activas: activasRes.total,
@@ -100,12 +103,9 @@ export default async function MisCombinadasPage({ searchParams }: Props) {
           label="Tasa de acierto"
           tone="green"
         />
-        {/* Bug #7: balance ABSOLUTO del store, no el delta neto de tickets.
-            Antes mostraba stats.neto (-5 tras primera inscripción sin
-            premios), engañando al usuario al leerlo como "balance". */}
-        <BalancePill
-          initialBalance={session.user.balanceLukas ?? 0}
-        />
+        {/* Lote 6C: muestra Lukas Premios (ganadas, canjeables en /tienda)
+            en lugar del balance total. Dato SSR via obtenerBalanceGanadas. */}
+        <LukasPremiosPill lukasPremios={balanceGanadas} />
         <StatsPill
           icon="⭐"
           value={stats.mejorPuesto !== null ? `${stats.mejorPuesto}°` : "—"}

@@ -38,3 +38,16 @@ export async function obtenerBalance(usuarioId: string): Promise<number> {
   if (!usuario) return 0;
   return getBalanceTotal(usuario);
 }
+
+/**
+ * Retorna solo el balance de Lukas Ganadas (= Lukas Premios, canjeables en /tienda).
+ * 0 si no existe. Lote 6C — para display del subconjunto canjeable en NavBar,
+ * sidebar y mis-combinadas sin necesidad de añadir el campo a la sesión JWT.
+ */
+export async function obtenerBalanceGanadas(usuarioId: string): Promise<number> {
+  const usuario = await prisma.usuario.findUnique({
+    where: { id: usuarioId },
+    select: { balanceGanadas: true },
+  });
+  return usuario?.balanceGanadas ?? 0;
+}

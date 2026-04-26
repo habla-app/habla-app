@@ -170,9 +170,10 @@ const config: Config = {
         /* Dark stadium — hero live dedicado */
         stadium:
           "linear-gradient(180deg, #001050 0%, #000530 70%, #000420 100%)",
-        /* Hero azul — wallet hero, perfil hero, combo-panel-head */
+        /* Hero azul — wallet hero, perfil hero, combo-panel-head.
+           Lote 6C: corregido al mockup .balance-hero-v2 (--blue-main → --blue-dark). */
         "hero-blue":
-          "linear-gradient(135deg, #0052CC 0%, #0038B8 100%)",
+          "linear-gradient(135deg, #0052CC 0%, #001050 100%)",
         /* Logo mark circular */
         "gold-radial":
           "radial-gradient(circle at 30% 30%, #FFB800, #FF8C00)",

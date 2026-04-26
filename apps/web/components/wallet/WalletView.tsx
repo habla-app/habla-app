@@ -62,25 +62,34 @@ export function WalletView({
         </p>
       </header>
 
-      {/* Bloque 1 — Hero grande con balance total en gold */}
+      {/* Bloque 1 — Hero grande con Lukas Juego + subconjunto Lukas Premios */}
       <WalletBalanceHero
         initialBalance={initialBalance}
+        initialBalanceGanadas={desglose.ganadas}
         proxVencimiento={proxVencimiento}
       />
 
-      {/* Bloque 2 — Mensaje explicativo entre hero y cards */}
+      {/* Bloque 2 — Explicación de las dos categorías (Lote 6C) */}
       <div className="mb-5 flex gap-2.5 rounded-sm border border-light bg-subtle px-4 py-3 text-xs leading-relaxed text-muted-d">
         <span aria-hidden className="flex-shrink-0 text-base opacity-70">
           ℹ️
         </span>
-        <p>
-          Tus Lukas tienen dos orígenes:{" "}
-          <strong className="text-dark">Compradas</strong> — las que adquiriste
-          con soles, solo sirven para entrar a torneos.{" "}
-          <strong className="text-dark">Ganadas en premios</strong> — las que
-          ganaste compitiendo, estas sí puedes canjear por premios reales en la
-          Tienda.
-        </p>
+        <div>
+          <p className="mb-1">
+            <strong className="text-dark">¿Cómo se calcula cada balance?</strong>
+          </p>
+          <p className="mb-1">
+            <strong className="text-dark">Lukas Juego:</strong> empiezas con las
+            Lukas que compraste y el bonus de bienvenida. Se restan cuando te
+            inscribes en torneos y se suman cuando ganas premios. Es todo lo que
+            tienes disponible para seguir jugando.
+          </p>
+          <p>
+            <strong className="text-dark">Lukas Premios:</strong> solo las Lukas
+            que ganaste en torneos. Son parte de tus Lukas Juego, pero además
+            puedes usarlas para canjear premios en la Tienda.
+          </p>
+        </div>
       </div>
 
       {/* Bloque 3 — 3 stats: Ganadas / Compradas / Gastadas */}

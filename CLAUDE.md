@@ -867,3 +867,71 @@ Las 6 rutas legales son `generateStaticParams` con `LEGAL_SLUGS` en `lib/legal-c
 
 ### Cookie consent
 `components/CookieBanner.tsx` montado en root layout — aparece en TODA ruta hasta que el usuario decide. Persistencia en localStorage `habla_cookie_consent_v1` con shape `{ status, preferences, analytics, decidedAt }`. Lógica del estado en `lib/cookie-consent.ts`. PostHog respeta el consent: init solo si `analytics === true`, y `opt_out_capturing()` si revoca. Ver §18.
+
+---
+
+## 22. LUKAS JUEGO Y LUKAS PREMIOS
+
+Implementado en **Lote 6C** (26 Abr 2026). Cambio 100% de display — cero cambios de schema Prisma ni de lógica de negocio.
+
+### Definición
+
+| Concepto | Fórmula | Descripción |
+|---|---|---|
+| **Lukas Juego** | `balanceLukas` (= suma de las 3 bolsas) | Todo el saldo disponible para inscribirse en torneos y ganar |
+| **Lukas Premios** | `balanceGanadas` | Subconjunto de Lukas Juego — solo los ganados en torneos, únicos canjeables en /tienda |
+
+**Lukas Premios siempre es ≤ Lukas Juego.** El display deja eso visualmente claro como subconjunto con el patrón `↳`.
+
+### Fuente única de verdad
+
+Toda lectura pasa por **`lib/lukas-display.ts`**:
+- `getLukasJuego(u)` — alias de `getBalanceTotal` (suma de las 3 bolsas)
+- `getLukasPremios(u)` — alias de `getBalanceCanjeable` (solo `balanceGanadas`)
+- `LUKAS_JUEGO_LABEL = "Lukas Juego"`, `LUKAS_JUEGO_DESC = "Todo tu saldo · Para jugar y ganar"`
+- `LUKAS_PREMIOS_LABEL = "Lukas Premios"`, `LUKAS_PREMIOS_DESC = "Ganadas en torneos · Canjeables en Tienda"`
+
+### Patrón visual de subconjunto
+
+En todos los puntos de display que muestren ambos balances:
+
+```
+⚽ Lukas Juego     250 🪙
+   ↳ 🏆 100 son Lukas Premios · canjeables en Tienda
+```
+
+Si Lukas Premios es 0: `↳ 🏆 0 son Lukas Premios · canjeables en Tienda` (se muestra igual).
+
+### Páginas donde aplica el patrón
+
+| Página / Componente | Implementación |
+|---|---|
+| **Header (NavBar)** | `BalanceBadge`: dos líneas en desktop (Lukas Juego + `↳` Lukas Premios), solo total en mobile para no romper layout |
+| **`/matches` sidebar** | `SidebarBalanceWidget`: chip verde `↳ 🏆 X son Lukas Premios` bajo el monto principal |
+| **`/wallet` hero** | `WalletBalanceHero`: label "⚽ Lukas Juego" + chip inline `↳ 🏆 X son Lukas Premios` |
+| **`/wallet` info box** | Texto `¿Cómo se calcula cada balance?` explica cada concepto |
+| **`/tienda`** | Sin 3-card stats; muestra solo chip de `balanceGanadas` con label "Disponibles para canjear" |
+| **`/mis-combinadas`** | `LukasPremiosPill` reemplaza `BalancePill` — muestra `balanceGanadas` con stripe verde |
+
+### Propagación del dato `balanceGanadas`
+
+`balanceGanadas` **no está en el JWT de sesión** (solo `balanceLukas` total). Flujo para cada punto de display:
+
+1. **`(main)/layout.tsx`** — llama `obtenerBalanceGanadas(userId)` en paralelo con `contarLiveMatches()` → pasa a `NavBar` como `initialBalanceGanadas`.
+2. **`MatchesSidebar.tsx`** — llama `obtenerBalanceGanadas(userId)` en su `Promise.all` → pasa a `SidebarBalanceWidget`.
+3. **`/wallet`** — `WalletView` ya recibe `desglose.ganadas` (del `wallet-view.service`) → pasa a `WalletBalanceHero`.
+4. **`/tienda`** — página ya lee `initialBalanceGanadas` del server → pasa a `TiendaContent`.
+5. **`/mis-combinadas`** — página llama `obtenerBalanceGanadas()` en su `Promise.all` → pasa a `LukasPremiosPill`.
+
+`obtenerBalanceGanadas(userId)` vive en `lib/usuarios.ts` (un `findUnique` con `select: { balanceGanadas: true }`).
+
+### Reactividad
+
+- **Lukas Juego (total)**: reactivo — el store Zustand (`useLukasStore`) se actualiza tras inscripción/canje/compra.
+- **Lukas Premios (ganadas)**: valor SSR — solo cambia cuando un torneo finaliza y acredita premios (evento server-side). Se refresca en la siguiente navegación completa. No requiere reactividad client-side para el MVP.
+
+### Corrección visual simultánea
+
+El token Tailwind `bg-hero-blue` se corrigió en Lote 6C para coincidir exactamente con el mockup `.balance-hero-v2`:
+- Antes: `linear-gradient(135deg, #0052CC 0%, #0038B8 100%)` (terminaba en azul-mid)
+- Después: `linear-gradient(135deg, #0052CC 0%, #001050 100%)` (termina en azul-dark navy, per mockup)
