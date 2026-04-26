@@ -51,20 +51,6 @@ export function TxList({
   );
 }
 
-const BOLSA_CHIP: Record<string, { label: string; cls: string }> = {
-  COMPRADAS: {
-    label: "Comprados",
-    cls: "bg-brand-blue-light/15 text-brand-blue-light",
-  },
-  BONUS: {
-    label: "Bonus",
-    cls: "bg-brand-gold/15 text-brand-gold-dark",
-  },
-  GANADAS: {
-    label: "Ganados",
-    cls: "bg-brand-green/15 text-brand-green",
-  },
-};
 
 function TxItem({ tx }: { tx: WalletTransaccion }) {
   const meta = metaPorTipo(tx.tipo);
@@ -97,20 +83,13 @@ function TxItem({ tx }: { tx: WalletTransaccion }) {
           )}
         </div>
       </div>
-      <div className="flex flex-shrink-0 flex-col items-end gap-1">
+      <div className="flex-shrink-0">
         <div
           className={`font-display text-lg font-black ${amountColor}`}
         >
           {sign}
           {Math.abs(tx.monto).toLocaleString("es-PE")}
         </div>
-        {tx.bolsa && BOLSA_CHIP[tx.bolsa] ? (
-          <span
-            className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${BOLSA_CHIP[tx.bolsa].cls}`}
-          >
-            {BOLSA_CHIP[tx.bolsa].label}
-          </span>
-        ) : null}
       </div>
     </li>
   );
@@ -135,6 +114,8 @@ function metaPorTipo(tipo: TipoTransaccion): {
       return { icon: "⌛", bg: "bg-subtle" };
     case "REEMBOLSO":
       return { icon: "↩️", bg: "bg-alert-info-bg" };
+    case "AJUSTE":
+      return { icon: "⚖️", bg: "bg-subtle" };
     default:
       return { icon: "•", bg: "bg-subtle" };
   }

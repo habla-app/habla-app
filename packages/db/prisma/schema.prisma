@@ -275,6 +275,7 @@ enum TipoTransaccion {
   BONUS // Lukas gratis (referidos, promociones)
   VENCIMIENTO // Lukas expirados
   REEMBOLSO // Torneo cancelado por falta de inscritos, admin refund
+  AJUSTE // Corrección administrativa de balance (auditoría)
 }
 
 model Premio {

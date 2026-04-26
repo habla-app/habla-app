@@ -333,7 +333,7 @@ function derivarLigasPresentes(partidos: PartidoLive[]): LigaChipInfo[] {
 
 function EmptyLive() {
   return (
-    <div className="mx-auto w-full max-w-[860px] px-4 pt-10 md:px-6 md:pt-16">
+    <div className="mx-auto w-full max-w-[960px] px-4 pt-10 md:px-6 md:pt-16">
       <div className="rounded-lg border border-light bg-card px-6 py-16 text-center shadow-sm">
         <div aria-hidden className="mb-3 text-5xl">
           🌙

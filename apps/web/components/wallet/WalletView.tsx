@@ -1,14 +1,15 @@
 "use client";
-// Orquestador client de /wallet. Recibe transacciones iniciales (SSR) y
-// gestiona los chips de filtro localmente (sin roundtrip). El balance en el
-// hero se hidrata via store.
+// Orquestador client de /wallet. Recibe datos SSR y gestiona filtros localmente.
+// Lote 6B-fix2: restaura WalletBalanceHero (hero grande con balance total en gold)
+// y rediseña los 3 stats: Ganadas / Compradas / Gastadas en combinadas.
 
-import { useMemo, useState } from "react";
-import { WalletBalanceDesglose } from "./WalletBalanceDesglose";
+import { useEffect, useMemo, useState } from "react";
+import { WalletBalanceHero } from "./WalletBalanceHero";
 import { WalletStats } from "./WalletStats";
 import { BuyPacksPlaceholder } from "./BuyPacksPlaceholder";
 import { MovesFilter, type MoveFiltro } from "./MovesFilter";
 import { TxList } from "./TxList";
+import { track } from "@/lib/analytics";
 import { MESES_VENCIMIENTO_COMPRA } from "@/lib/config/economia";
 import type {
   WalletDesglose,
@@ -27,7 +28,7 @@ interface Props {
 }
 
 export function WalletView({
-  initialBalance: _initialBalance,
+  initialBalance,
   desglose,
   totales,
   proxVencimiento,
@@ -40,19 +41,18 @@ export function WalletView({
     [transacciones, filtro],
   );
 
-  const proximoVencimiento = proxVencimiento
-    ? {
-        monto: proxVencimiento.lukas,
-        venceEn: new Date(proxVencimiento.fecha),
-        diasRestantes: Math.ceil(
-          (new Date(proxVencimiento.fecha).getTime() - Date.now()) /
-            (1000 * 60 * 60 * 24),
-        ),
-      }
-    : null;
+  useEffect(() => {
+    track("wallet_desglose_viewed", {
+      compradas: desglose.compradas,
+      bonus: desglose.bonus,
+      ganadas: desglose.ganadas,
+      total: desglose.total,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 pt-6 md:px-6 md:pt-8">
+    <div className="mx-auto w-full max-w-[960px] px-4 pb-28 pt-6 md:px-6 md:pt-8">
       <header className="mb-5">
         <h1 className="font-display text-[40px] font-black uppercase leading-none tracking-[0.01em] text-dark">
           💰 Billetera
@@ -62,15 +62,32 @@ export function WalletView({
         </p>
       </header>
 
-      <WalletBalanceDesglose
-        totales={desglose}
-        proximoVencimiento={proximoVencimiento}
+      {/* Bloque 1 — Hero grande con balance total en gold */}
+      <WalletBalanceHero
+        initialBalance={initialBalance}
+        proxVencimiento={proxVencimiento}
       />
 
+      {/* Bloque 2 — Mensaje explicativo entre hero y cards */}
+      <div className="mb-5 flex gap-2.5 rounded-sm border border-light bg-subtle px-4 py-3 text-xs leading-relaxed text-muted-d">
+        <span aria-hidden className="flex-shrink-0 text-base opacity-70">
+          ℹ️
+        </span>
+        <p>
+          Tus Lukas tienen dos orígenes:{" "}
+          <strong className="text-dark">Compradas</strong> — las que adquiriste
+          con soles, solo sirven para entrar a torneos.{" "}
+          <strong className="text-dark">Ganadas en premios</strong> — las que
+          ganaste compitiendo, estas sí puedes canjear por premios reales en la
+          Tienda.
+        </p>
+      </div>
+
+      {/* Bloque 3 — 3 stats: Ganadas / Compradas / Gastadas */}
       <WalletStats
-        comprado={totales.comprado}
-        ganado={totales.ganado}
-        canjeado={totales.canjeado}
+        ganadas={desglose.ganadas}
+        compradas={desglose.compradas + desglose.bonus}
+        gastadoEnCombinadas={totales.inscripciones}
       />
 
       <BuyPacksPlaceholder />

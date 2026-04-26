@@ -59,7 +59,7 @@ export function TiendaContent({
   );
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 md:py-10">
+    <div className="mx-auto max-w-[960px] px-4 py-6 md:py-10">
       <header className="mb-5">
         <h1 className="font-display text-[40px] font-black uppercase leading-none tracking-[0.01em] text-dark">
           🎁 Tienda de premios

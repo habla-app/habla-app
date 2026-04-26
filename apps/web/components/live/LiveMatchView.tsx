@@ -196,7 +196,7 @@ export function LiveMatchView({
     : null;
 
   return (
-    <div className="mx-auto w-full max-w-[1040px] px-4 pb-20 pt-6 md:px-6 md:pt-8">
+    <div className="mx-auto w-full max-w-[960px] px-4 pb-20 pt-6 md:px-6 md:pt-8">
       <header className="mb-4">
         <h1 className="font-display text-[38px] font-black uppercase leading-none tracking-[0.01em] text-dark">
           🔴 Partidos en vivo

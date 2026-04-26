@@ -176,6 +176,7 @@ export async function runBackfill(): Promise<BackfillResult> {
         balanceCompradas: compradas,
         balanceBonus: bonus,
         balanceGanadas: ganadas,
+        balanceLukas: compradas + bonus + ganadas,
       },
     });
 
