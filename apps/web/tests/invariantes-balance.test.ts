@@ -35,6 +35,23 @@ describe("Invariantes de balance — guards en services", () => {
     expect(src).toMatch(/DESINCRONIZACION/);
   });
 
+  it("torneos.service.cancelar fallback legacy reembolsa a BONUS (Lote 6C-fix4, no a COMPRADAS)", () => {
+    const src = readService("lib/services/torneos.service.ts");
+    // El comentario inline explicativo de la regla dura debe estar.
+    expect(src).toMatch(/REGLA DE REEMBOLSO/);
+    // El bloque del fallback (después del comentario "REGLA DE REEMBOLSO")
+    // debe asignar la bolsa BONUS al usuario y a la TransaccionLukas.
+    const reglaIdx = src.indexOf("REGLA DE REEMBOLSO");
+    expect(reglaIdx).toBeGreaterThan(-1);
+    const blockAfterRegla = src.slice(reglaIdx, reglaIdx + 2000);
+    expect(blockAfterRegla).toMatch(/balanceBonus:\s*\{\s*increment/);
+    expect(blockAfterRegla).toMatch(/bolsa:\s*["']BONUS["']/);
+    // Y NO debe asignar bolsa COMPRADAS en el fallback.
+    expect(blockAfterRegla).not.toMatch(
+      /balanceCompradas:\s*\{\s*increment/,
+    );
+  });
+
   it("canjes.service importa y usa verificarConsistenciaBalance", () => {
     const src = readService("lib/services/canjes.service.ts");
     expect(src).toMatch(
@@ -70,10 +87,10 @@ describe("Invariantes de balance — guards en services", () => {
   });
 });
 
-describe("Invariantes de balance — auditoria-balances.service expone las 13", () => {
+describe("Invariantes de balance — auditoria-balances.service expone las 14", () => {
   const src = readService("lib/services/auditoria-balances.service.ts");
 
-  it("define las 13 invariantes I1-I13", () => {
+  it("define las 14 invariantes I1-I14", () => {
     for (const codigo of [
       "I1",
       "I2",
@@ -88,9 +105,16 @@ describe("Invariantes de balance — auditoria-balances.service expone las 13", 
       "I11",
       "I12",
       "I13",
+      "I14",
     ]) {
       expect(src).toMatch(new RegExp(`["']${codigo}["']`));
     }
+  });
+
+  it("I14 detecta REEMBOLSO sin bolsa asignada", () => {
+    expect(src).toMatch(/REEMBOLSO sin bolsa asignada/);
+    expect(src).toMatch(/tipo:\s*["']REEMBOLSO["']/);
+    expect(src).toMatch(/bolsa:\s*null/);
   });
 
   it("exporta auditarTodos y auditarUsuario", () => {

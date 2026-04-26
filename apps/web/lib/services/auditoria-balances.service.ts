@@ -201,6 +201,11 @@ const INVARIANTES_META: Record<string, Pick<InvarianteSummary, "codigo" | "nombr
     nombre: "Torneo finalizado: premios != pozo neto",
     descripcion: "Para torneos FINALIZADO, la suma de PREMIO_TORNEO con refId=torneoId debe igualar pozoNeto, y suma de tickets.premioLukas también.",
   },
+  I14: {
+    codigo: "I14",
+    nombre: "REEMBOLSO sin bolsa asignada",
+    descripcion: "Todo REEMBOLSO debe tener bolsa asignada para poder rastrear a qué bolsa se devolvió. Lote 6C-fix4: los reembolsos siempre vuelven a la bolsa de origen.",
+  },
 };
 
 // ----------------------------------------------------------------------------
@@ -345,7 +350,25 @@ export async function auditarTodos(): Promise<ReporteAuditoriaTodos> {
     premios.map((r) => [r.refId!, r._sum.monto ?? 0]),
   );
 
-  // -- Query 11: tickets agrupados por torneo con suma de premios -------
+  // -- Query 11.5: REEMBOLSOS sin bolsa asignada (I14, Lote 6C-fix4) ----
+  // Los reembolsos siempre deben tener bolsa para poder rastrear a qué
+  // bolsa volvieron. Pre-Lote 6A pueden no tenerla — los contamos como
+  // warns, no errors, porque son históricos.
+  const reembolsosSinBolsa = await prisma.transaccionLukas.findMany({
+    where: { tipo: "REEMBOLSO", bolsa: null },
+    select: {
+      id: true,
+      usuarioId: true,
+      monto: true,
+      creadoEn: true,
+      refId: true,
+    },
+  });
+  const totalReembolsos = await prisma.transaccionLukas.count({
+    where: { tipo: "REEMBOLSO" },
+  });
+
+  // -- Query 12: tickets agrupados por torneo con suma de premios -------
   const ticketsPremiosByTorneo = await prisma.ticket.groupBy({
     by: ["torneoId"],
     _sum: { premioLukas: true },
@@ -520,6 +543,28 @@ export async function auditarTodos(): Promise<ReporteAuditoriaTodos> {
     }
   }
   counters.I7.ok = totalCompras - comprasVencidasConSaldo.length;
+
+  // -- I14: REEMBOLSO sin bolsa asignada (Lote 6C-fix4) ---------------
+  for (const r of reembolsosSinBolsa) {
+    const u = usuarioById.get(r.usuarioId);
+    hallazgos.push({
+      invariante: "I14",
+      severidad: "warn",
+      mensaje: "REEMBOLSO sin bolsa asignada",
+      usuarioId: r.usuarioId,
+      username: u?.username,
+      torneoId: r.refId ?? undefined,
+      detalle: {
+        txId: r.id,
+        monto: r.monto,
+        creadoEn: r.creadoEn,
+        esPreLote6A: r.creadoEn < new Date("2026-04-25"),
+      },
+    });
+    counters.I14.fallidos++;
+    if (u) usuariosConProblemas.add(r.usuarioId);
+  }
+  counters.I14.ok = totalReembolsos - reembolsosSinBolsa.length;
 
   // -- I9: ENTRADA_TORNEO sin composición o composición rota -----------
   for (const e of entradas) {

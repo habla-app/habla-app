@@ -848,21 +848,31 @@ export async function cancelar(
         });
       } else {
         // Camino legacy (transacciones pre-Lote 6A sin metadata): fallback
-        // simple — todo va a balanceLukas + balanceCompradas.
+        // a BONUS porque sin composicionOrigen no podemos saber a qué
+        // bolsa volver. BONUS es la opción más conservadora:
+        //   - No tiene vencimiento (no hay que setear venceEn).
+        //   - No es canjeable en /tienda (no inflamos balanceGanadas).
+        //   - No genera saldoVivo (no afecta el FIFO de Compradas).
+        // REGLA DE REEMBOLSO (Lote 6C-fix4): los reembolsos siempre
+        // vuelven a la bolsa de origen vía metadata.composicion. Si no
+        // hay metadata (txs históricas pre-Lote 6A), van a BONUS por
+        // default. Nunca van a COMPRADAS por fallback — eso inflaría
+        // saldos sin venceEn ni saldoVivo y rompe la coherencia con
+        // las invariantes I3 y I6.
         await tx.usuario.update({
           where: { id: ticket.usuarioId },
           data: {
             balanceLukas: { increment: torneo.entradaLukas },
-            balanceCompradas: { increment: torneo.entradaLukas },
+            balanceBonus: { increment: torneo.entradaLukas },
           },
         });
         await tx.transaccionLukas.create({
           data: {
             usuarioId: ticket.usuarioId,
             tipo: "REEMBOLSO",
-            bolsa: "COMPRADAS",
+            bolsa: "BONUS",
             monto: torneo.entradaLukas,
-            descripcion: `Reembolso torneo cancelado: ${motivo}`,
+            descripcion: `Reembolso torneo cancelado (legacy fallback): ${motivo}`,
             refId: torneoId,
           },
         });
