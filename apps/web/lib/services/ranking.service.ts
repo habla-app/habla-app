@@ -23,6 +23,7 @@ import {
 } from "../utils/premios-distribucion";
 import { recalcularTorneo } from "./puntuacion.service";
 import { notifyPremioGanado } from "./notificaciones.service";
+import { verificarConsistenciaBalance } from "./balance-consistency.helper";
 
 // ---------------------------------------------------------------------------
 // Tipos públicos
@@ -430,6 +431,8 @@ export async function finalizarTorneo(
             refId: torneoId,
           },
         });
+        // Lote 6C-fix3: guard de consistencia post-mutación.
+        await verificarConsistenciaBalance(tx, t.usuarioId, "ranking.finalizarTorneo");
         const handle = handleDisplay(t.usuario);
         ganadores.push({
           rank: asig.posicionFinal,
@@ -640,6 +643,8 @@ export async function reconciliarTorneoFinalizado(
             refId: torneoId,
           },
         });
+        // Lote 6C-fix3: guard de consistencia post-mutación.
+        await verificarConsistenciaBalance(tx, t.usuarioId, "ranking.reconciliar");
         // Actualizamos el map para evitar re-acreditar si el mismo
         // usuario aparece de nuevo (multi-ticket).
         acreditadoPorUsuario.set(t.usuarioId, (previo > 0 ? previo : 0) + delta);

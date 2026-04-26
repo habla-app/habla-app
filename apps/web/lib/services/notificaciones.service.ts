@@ -18,6 +18,7 @@
 import { prisma } from "@habla/db";
 import { enviarEmail } from "./email.service";
 import {
+  auditoriaAlertaTemplate,
   canjeEnviadoTemplate,
   canjeEntregadoTemplate,
   canjeSolicitadoTemplate,
@@ -30,6 +31,7 @@ import {
   solicitudEliminarTemplate,
   torneoCanceladoTemplate,
   verifCodigoSmsEmailTemplate,
+  type AuditoriaAlertaInput,
 } from "../emails/templates";
 import { logger } from "./logger";
 
@@ -386,5 +388,47 @@ export async function notifyLukasPorVencer(input: {
     await enviarEmail({ to: destinatario.email, ...tpl });
   } catch (err) {
     logger.error({ err, usuarioId: input.usuarioId }, "notifyLukasPorVencer: error");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Auditoría de balances — alerta interna al admin (Lote 6C-fix3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Envía una alerta por email al admin cuando la auditoría diaria detecta
+ * hallazgos. Destinatario configurable vía env var `ADMIN_ALERT_EMAIL`. Si
+ * no está seteada, loggea warn y NO envía (no rompe el cron).
+ *
+ * NO consulta `PreferenciasNotif` — es una notificación interna del sistema,
+ * no del usuario.
+ */
+export async function enviarAlertaAuditoria(
+  input: AuditoriaAlertaInput,
+): Promise<void> {
+  const to = process.env.ADMIN_ALERT_EMAIL;
+  if (!to) {
+    logger.warn(
+      {
+        totalHallazgos: input.totalHallazgos,
+        usuariosConProblemas: input.usuariosConProblemas,
+      },
+      "auditoria: ADMIN_ALERT_EMAIL no configurado, alerta NO enviada",
+    );
+    return;
+  }
+  try {
+    const tpl = auditoriaAlertaTemplate(input);
+    await enviarEmail({ to, ...tpl });
+    logger.info(
+      {
+        to,
+        totalHallazgos: input.totalHallazgos,
+        usuariosConProblemas: input.usuariosConProblemas,
+      },
+      "auditoria: alerta enviada por email",
+    );
+  } catch (err) {
+    logger.error({ err }, "enviarAlertaAuditoria: error");
   }
 }

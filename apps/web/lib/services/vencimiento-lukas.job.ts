@@ -14,6 +14,7 @@
 import { prisma } from "@habla/db";
 import { logger } from "./logger";
 import { notifyLukasVencidos, notifyLukasPorVencer } from "./notificaciones.service";
+import { verificarConsistenciaBalance } from "./balance-consistency.helper";
 
 let lastRunAt: Date | null = null;
 
@@ -78,6 +79,8 @@ export async function vencimientoLukasJob(): Promise<VencimientoJobResult> {
             refId: compra.id,
           },
         });
+        // Lote 6C-fix3: guard de consistencia post-mutación.
+        await verificarConsistenciaBalance(tx, compra.usuarioId, "vencimiento-lukas.vencer");
       });
 
       vencidos++;

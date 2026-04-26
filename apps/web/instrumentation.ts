@@ -253,6 +253,98 @@ export async function register() {
     }, VENCIMIENTO_TICK_INTERVAL_MS);
   }, 90_000);
 
+  // -------------------------------------------------------------------
+  // Job G — Auditoría diaria de balances (Lote 6C-fix3). Tick cada hora;
+  // skip si ya corrió en las últimas 23h. Si encuentra hallazgos error,
+  // envía email al admin (ADMIN_ALERT_EMAIL).
+  // -------------------------------------------------------------------
+  const { auditarTodos } = await import(
+    "./lib/services/auditoria-balances.service"
+  );
+  const { enviarAlertaAuditoria } = await import(
+    "./lib/services/notificaciones.service"
+  );
+
+  const AUDIT_TICK_INTERVAL_MS = 60 * 60 * 1000; // 1h
+  const AUDIT_MIN_BETWEEN_RUNS_MS = 23 * 60 * 60 * 1000; // 23h
+  let lastAuditAt: Date | null = null;
+
+  async function tickAuditoriaBalances() {
+    try {
+      const now = new Date();
+      if (
+        lastAuditAt &&
+        now.getTime() - lastAuditAt.getTime() < AUDIT_MIN_BETWEEN_RUNS_MS
+      ) {
+        return; // ya corrió en las últimas 23h
+      }
+      const reporte = await auditarTodos();
+      lastAuditAt = now;
+
+      const errors = reporte.hallazgos.filter((h) => h.severidad === "error");
+      const warns = reporte.hallazgos.filter((h) => h.severidad === "warn");
+
+      if (errors.length === 0 && warns.length === 0) {
+        logger.info(
+          {
+            usuariosAuditados: reporte.totales.usuariosAuditados,
+            torneosAuditados: reporte.totales.torneosAuditados,
+            durationMs: reporte.durationMs,
+          },
+          "[cron in-process] auditoría diaria: ✅ todo OK",
+        );
+        return;
+      }
+
+      // Hay hallazgos — log + email solo si hay errors (warns no satura).
+      logger.warn(
+        {
+          totalHallazgos: reporte.totalHallazgos,
+          errors: errors.length,
+          warns: warns.length,
+          usuariosConProblemas: reporte.usuariosConProblemas,
+          torneosConProblemas: reporte.torneosConProblemas,
+        },
+        "[cron in-process] auditoría diaria: hallazgos detectados",
+      );
+
+      if (errors.length > 0) {
+        await enviarAlertaAuditoria({
+          scaneadoEn: reporte.scaneadoEn,
+          totalHallazgos: reporte.totalHallazgos,
+          hallazgosError: errors.length,
+          hallazgosWarn: warns.length,
+          usuariosConProblemas: reporte.usuariosConProblemas,
+          torneosConProblemas: reporte.torneosConProblemas,
+          topHallazgos: reporte.hallazgos.map((h) => ({
+            invariante: h.invariante,
+            severidad: h.severidad,
+            username: h.username,
+            torneoId: h.torneoId,
+            mensaje: h.mensaje,
+          })),
+          invariantes: reporte.invariantes.map((i) => ({
+            codigo: i.codigo,
+            nombre: i.nombre,
+            ok: i.ok,
+            fallidos: i.fallidos,
+          })),
+        });
+      }
+    } catch (err) {
+      logger.error({ err }, "[cron in-process] tick auditoría-balances falló");
+    }
+  }
+
+  // Primera corrida 120s tras boot. Después corre cada hora pero la lógica
+  // interna skipea si ya corrió en las últimas 23h.
+  setTimeout(() => {
+    void tickAuditoriaBalances();
+    setInterval(() => {
+      void tickAuditoriaBalances();
+    }, AUDIT_TICK_INTERVAL_MS);
+  }, 120_000);
+
   logger.info(
     {
       cerrarTorneos: `${CERRAR_INTERVAL_MS / 1000}s`,
@@ -261,6 +353,7 @@ export async function register() {
       pollerPartidos: `${POLLER_INTERVAL_MS / 1000}s`,
       backupDb: `${BACKUP_TICK_INTERVAL_MS / 1000 / 60}min (target ${BACKUP_TARGET_UTC_HOUR}:00 UTC)`,
       vencimientoLukas: `${VENCIMIENTO_TICK_INTERVAL_MS / 1000 / 60}min (skip si <23h)`,
+      auditoriaBalances: `${AUDIT_TICK_INTERVAL_MS / 1000 / 60}min (skip si <23h, email a ADMIN_ALERT_EMAIL)`,
     },
     "cron in-process registrado",
   );

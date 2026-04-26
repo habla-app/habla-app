@@ -11,6 +11,7 @@ import { prisma } from "@habla/db";
 import { getBalanceTotal } from "../lukas-display";
 import { logger } from "./logger";
 import { MESES_VENCIMIENTO_COMPRA } from "../config/economia";
+import { verificarConsistenciaBalance } from "./balance-consistency.helper";
 
 // Bonus por pack según los packs actuales (§2 CLAUDE.md):
 // 20 (+0), 50 (+5), 100 (+15), 250 (+50)
@@ -94,6 +95,9 @@ export async function acreditarCompra(
         balanceGanadas: true,
       },
     });
+
+    // Lote 6C-fix3: guard de consistencia post-mutación.
+    await verificarConsistenciaBalance(tx, input.usuarioId, "compras.acreditar");
 
     return {
       nuevoBalance: getBalanceTotal(usuario!),

@@ -407,3 +407,117 @@ export function cuentaEliminadaTemplate(input: CuentaEliminadaInput) {
   const text = `Confirmamos la eliminación de tu cuenta de Habla!. ${detalleModo} Si fue un error, escribinos a equipo@hablaplay.com dentro de 30 días.`;
   return { subject, html, text };
 }
+
+// ============================================================================
+// Auditoría de balances — alerta interna al admin (Lote 6C-fix3)
+// ============================================================================
+
+export interface AuditoriaAlertaInput {
+  scaneadoEn: string;
+  totalHallazgos: number;
+  hallazgosError: number;
+  hallazgosWarn: number;
+  usuariosConProblemas: number;
+  torneosConProblemas: number;
+  /** Top hallazgos a mostrar inline en el email. */
+  topHallazgos: Array<{
+    invariante: string;
+    severidad: "error" | "warn";
+    username?: string;
+    torneoId?: string;
+    mensaje: string;
+  }>;
+  /** Resumen por invariante. */
+  invariantes: Array<{
+    codigo: string;
+    nombre: string;
+    ok: number;
+    fallidos: number;
+  }>;
+}
+
+/**
+ * Email interno al admin cuando la auditoría diaria detecta hallazgos.
+ * Subject prefijado con [Habla! AUDIT] para filtrar fácilmente.
+ */
+export function auditoriaAlertaTemplate(input: AuditoriaAlertaInput) {
+  const subject = `[Habla! AUDIT] ${input.hallazgosError} errores · ${input.hallazgosWarn} warnings · ${input.usuariosConProblemas} usuarios afectados`;
+
+  const filasInvariantesFallidas = input.invariantes
+    .filter((i) => i.fallidos > 0)
+    .map(
+      (i) =>
+        `<tr><td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-family:monospace;font-weight:700;color:#001050;">${i.codigo}</td><td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:13px;color:rgba(0,16,80,0.85);">${escapeHtml(i.nombre)}</td><td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#FF3D3D;font-weight:700;text-align:right;">${i.fallidos}</td><td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:13px;color:rgba(0,16,80,0.58);text-align:right;">${i.ok}</td></tr>`,
+    )
+    .join("");
+
+  const filasTop = input.topHallazgos
+    .slice(0, 20)
+    .map((h) => {
+      const sevColor = h.severidad === "error" ? "#FF3D3D" : "#FF7A00";
+      const target = h.username
+        ? `@${escapeHtml(h.username)}`
+        : h.torneoId
+          ? `torneo ${escapeHtml(h.torneoId.slice(0, 12))}…`
+          : "—";
+      return `<tr><td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-family:monospace;color:${sevColor};font-weight:700;">${h.invariante}</td><td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;color:rgba(0,16,80,0.85);">${target}</td><td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;color:rgba(0,16,80,0.85);">${escapeHtml(h.mensaje)}</td></tr>`;
+    })
+    .join("");
+
+  const fechaStr = new Date(input.scaneadoEn).toLocaleString("es-PE", {
+    timeZone: "America/Lima",
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+
+  const html = wrapEmail(
+    subject,
+    `<h1 style="margin:0 0 8px;font-size:22px;color:#FF3D3D;">⚠️ Auditoría diaria: hallazgos detectados</h1>
+    <p style="margin:0 0 16px;font-size:14px;color:rgba(0,16,80,0.85);line-height:1.5;">
+      Scan automático del ${escapeHtml(fechaStr)} (hora Lima).
+    </p>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
+      <tr><td style="padding:8px;background:#F5F7FC;font-weight:700;">Total hallazgos</td><td style="padding:8px;text-align:right;">${input.totalHallazgos}</td></tr>
+      <tr><td style="padding:8px;background:#F5F7FC;font-weight:700;color:#FF3D3D;">Errores</td><td style="padding:8px;text-align:right;color:#FF3D3D;font-weight:700;">${input.hallazgosError}</td></tr>
+      <tr><td style="padding:8px;background:#F5F7FC;font-weight:700;color:#FF7A00;">Warnings</td><td style="padding:8px;text-align:right;color:#FF7A00;">${input.hallazgosWarn}</td></tr>
+      <tr><td style="padding:8px;background:#F5F7FC;font-weight:700;">Usuarios afectados</td><td style="padding:8px;text-align:right;">${input.usuariosConProblemas}</td></tr>
+      <tr><td style="padding:8px;background:#F5F7FC;font-weight:700;">Torneos afectados</td><td style="padding:8px;text-align:right;">${input.torneosConProblemas}</td></tr>
+    </table>
+    ${
+      filasInvariantesFallidas
+        ? `<h2 style="margin:24px 0 8px;font-size:16px;color:#001050;">Invariantes con fallas</h2><table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#001050;color:#FFFFFF;"><th style="padding:8px;text-align:left;">#</th><th style="padding:8px;text-align:left;">Invariante</th><th style="padding:8px;text-align:right;">Falla</th><th style="padding:8px;text-align:right;">OK</th></tr></thead><tbody>${filasInvariantesFallidas}</tbody></table>`
+        : ""
+    }
+    ${
+      filasTop
+        ? `<h2 style="margin:24px 0 8px;font-size:16px;color:#001050;">Top hallazgos (máx 20)</h2><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:#001050;color:#FFFFFF;"><th style="padding:8px;text-align:left;">Inv</th><th style="padding:8px;text-align:left;">Target</th><th style="padding:8px;text-align:left;">Mensaje</th></tr></thead><tbody>${filasTop}</tbody></table>`
+        : ""
+    }
+    <p style="margin:24px 0 0;font-size:13px;color:rgba(0,16,80,0.85);line-height:1.5;">
+      Para investigar usuarios específicos, abrí la consola del navegador en hablaplay.com y corré:
+      <br/><code style="background:#F5F7FC;padding:4px 8px;border-radius:4px;font-size:12px;">GET /api/v1/admin/auditoria/usuario/&lt;userId&gt;</code>
+    </p>`,
+  );
+
+  const text = [
+    `Auditoría diaria — ${fechaStr}`,
+    `Hallazgos: ${input.totalHallazgos} (errores: ${input.hallazgosError}, warnings: ${input.hallazgosWarn})`,
+    `Usuarios afectados: ${input.usuariosConProblemas} · Torneos: ${input.torneosConProblemas}`,
+    "",
+    "Invariantes con fallas:",
+    ...input.invariantes
+      .filter((i) => i.fallidos > 0)
+      .map((i) => `  · ${i.codigo} ${i.nombre}: ${i.fallidos} falla(s) · ${i.ok} ok`),
+    "",
+    "Top hallazgos:",
+    ...input.topHallazgos
+      .slice(0, 20)
+      .map(
+        (h) =>
+          `  · [${h.severidad}] ${h.invariante} ${h.username ? `@${h.username}` : h.torneoId ?? "—"}: ${h.mensaje}`,
+      ),
+  ].join("\n");
+
+  return { subject, html, text };
+}
+

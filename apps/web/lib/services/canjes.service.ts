@@ -29,6 +29,7 @@ import {
 } from "./errors";
 import { logger } from "./logger";
 import { verificarLimiteCanje } from "./limites.service";
+import { verificarConsistenciaBalance } from "./balance-consistency.helper";
 import {
   notifyCanjeEnviado,
   notifyCanjeEntregado,
@@ -185,6 +186,9 @@ export async function crearCanje(
       },
     });
 
+    // Lote 6C-fix3: guard de consistencia post-mutación.
+    await verificarConsistenciaBalance(tx, usuarioId, "canjes.solicitar");
+
     return {
       canje,
       nuevoBalance: usuario.balanceLukas - premioDb.costeLukas,
@@ -337,6 +341,8 @@ export async function actualizarEstadoAdmin(
         where: { id: canjeId },
         data: { estado: "CANCELADO" },
       });
+      // Lote 6C-fix3: guard de consistencia post-mutación.
+      await verificarConsistenciaBalance(tx, canje.usuarioId, "canjes.cancelar");
       return updated;
     });
     logger.info(
