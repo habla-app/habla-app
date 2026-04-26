@@ -133,10 +133,23 @@ describe("Invariantes de balance — endpoints admin", () => {
     expect(src).toMatch(/INYECTAR_TEST_LUKAS/);
     expect(src).toMatch(/deleteMany/);
     expect(src).toMatch(/tipo:\s*["']AJUSTE["']/);
-    // Compensación por déficit en COMPRADAS (caso pre-Lote 6A)
     expect(src).toMatch(/compensacionDeficitCompradas/);
-    // Inyección final de bonus de testing
     expect(src).toMatch(/Bonus de testing/);
+  });
+
+  it("/admin/auditoria/mover-compradas-a-bonus exige confirmación y es idempotente", () => {
+    const src = readService(
+      "app/api/v1/admin/auditoria/mover-compradas-a-bonus/route.ts",
+    );
+    expect(src).toMatch(/CRON_SECRET/);
+    expect(src).toMatch(/MOVER_COMPRADAS_A_BONUS/);
+    // Filtra usuarios donde ya está en 0 (idempotencia)
+    expect(src).toMatch(/balanceCompradas:\s*\{\s*gt:\s*0/);
+    // Crea ambas tx (BONUS + AJUSTE) en transacción atómica
+    expect(src).toMatch(/tipo:\s*["']BONUS["']/);
+    expect(src).toMatch(/tipo:\s*["']AJUSTE["']/);
+    // balanceCompradas se setea a 0
+    expect(src).toMatch(/balanceCompradas:\s*0/);
   });
 });
 
