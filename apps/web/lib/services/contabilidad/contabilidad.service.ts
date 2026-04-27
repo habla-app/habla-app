@@ -347,12 +347,23 @@ export async function registrarCompraLukasLegacy(
 }
 
 /**
- * Cierre de torneo. El rake bruto se compone de las 3 bolsas según las
- * `TransaccionLukas ENTRADA_TORNEO` (FIFO Bonus → Compradas → Ganadas);
- * sumamos los descuentos por bolsa y los giramos a:
- *   DEBE  Pasivo {Bonus, Compradas, Ganadas}   ← rake del torneo
- *   HABER Ingreso por Rake (× 100/118)
- *   HABER IGV por Pagar    (× 18/118)
+ * Cierre de torneo. Refleja el flujo completo de la economía del pozo:
+ *   - Las 3 bolsas perdieron pozoBruto al inscribirse los jugadores (composición
+ *     desde `TransaccionLukas ENTRADA_TORNEO.metadata`).
+ *   - Del pozoBruto: rake (12%) → Ingreso por Rake (neto) + IGV por Pagar.
+ *   - El pozoNeto (88%) se acredita a Pasivo Lukas Ganadas (premios distribuidos
+ *     a los ganadores).
+ *
+ * Asiento (debe = haber = pozoBruto):
+ *   DEBE  Pasivo Bonus       bonusDescontado
+ *   DEBE  Pasivo Compradas   compradasDescontado
+ *   DEBE  Pasivo Ganadas     ganadasDescontado          ← entradas pagadas con Ganadas
+ *   HABER Ingreso por Rake   rake × 100/118
+ *   HABER IGV por Pagar      rake × 18/118
+ *   HABER Pasivo Ganadas     pozoNeto                   ← premios distribuidos
+ *
+ * Cuando una cuenta aparece tanto en debe como en haber (Pasivo Ganadas), las
+ * dos líneas conviven — la suma neta refleja el flujo correcto.
  *
  * Idempotente por (origenTipo=CIERRE_TORNEO, origenId=torneoId).
  */
@@ -367,86 +378,97 @@ export async function registrarCierreTorneo(
 
     const torneo = await innerTx.torneo.findUnique({
       where: { id: torneoId },
-      select: { rake: true, pozoBruto: true, nombre: true },
+      select: { rake: true, pozoBruto: true, pozoNeto: true, nombre: true },
     });
-    if (!torneo || torneo.rake <= 0) return null;
+    if (!torneo) return null;
+    if (torneo.pozoBruto <= 0) return null;
 
-    // Composición proporcional del rake según los descuentos de inscripción.
-    // Para cada ENTRADA_TORNEO de este torneo, leemos su `metadata.composicion`
-    // y agregamos por bolsa.
+    // Composición de pozoBruto según las ENTRADA_TORNEO de los inscritos.
     const entradas = await innerTx.transaccionLukas.findMany({
       where: { tipo: "ENTRADA_TORNEO", refId: torneoId },
       select: { monto: true, metadata: true },
     });
 
-    const totalEntradas = entradas.reduce((acc, e) => acc + Math.abs(e.monto), 0);
-    if (totalEntradas <= 0) return null;
-
-    let bonusDescontado = 0;
-    let compradasDescontado = 0;
-    let ganadasDescontado = 0;
+    let bonusDesc = 0;
+    let compradasDesc = 0;
+    let ganadasDesc = 0;
 
     for (const e of entradas) {
       const md = (e.metadata as { composicion?: { bolsa: string; monto: number }[] } | null) ?? null;
       const comp = md?.composicion;
       if (Array.isArray(comp) && comp.length > 0) {
         for (const c of comp) {
-          if (c.bolsa === "BONUS") bonusDescontado += c.monto;
-          else if (c.bolsa === "COMPRADAS") compradasDescontado += c.monto;
-          else if (c.bolsa === "GANADAS") ganadasDescontado += c.monto;
+          if (c.bolsa === "BONUS") bonusDesc += c.monto;
+          else if (c.bolsa === "COMPRADAS") compradasDesc += c.monto;
+          else if (c.bolsa === "GANADAS") ganadasDesc += c.monto;
         }
       } else {
-        // Fallback (txs pre-Lote 6A): se asume Bonus.
-        bonusDescontado += Math.abs(e.monto);
+        // Fallback (txs pre-Lote 6A sin metadata): se asume Bonus.
+        bonusDesc += Math.abs(e.monto);
       }
     }
 
-    // Proporción del rake = rake / totalEntradas.
-    const ratio = torneo.rake / totalEntradas;
-    const rakeBonus     = Math.round(bonusDescontado     * ratio * 100) / 100;
-    const rakeCompradas = Math.round(compradasDescontado * ratio * 100) / 100;
-    const rakeGanadas   = Math.round(ganadasDescontado   * ratio * 100) / 100;
+    let totalDesc = bonusDesc + compradasDesc + ganadasDesc;
+    if (totalDesc <= 0) return null;
 
-    let rakeTotal = rakeBonus + rakeCompradas + rakeGanadas;
-    // Ajuste por redondeo: si suma != torneo.rake, sumamos el delta a la
-    // bolsa con mayor descuento para que cuadre el asiento.
-    const delta = torneo.rake - rakeTotal;
-    if (Math.abs(delta) > 0.001) {
-      let bigger: "bonus" | "compradas" | "ganadas" = "bonus";
-      if (rakeCompradas >= rakeBonus && rakeCompradas >= rakeGanadas) bigger = "compradas";
-      if (rakeGanadas >= rakeBonus && rakeGanadas >= rakeCompradas) bigger = "ganadas";
-      if (bigger === "bonus")     rakeTotal = rakeTotal - rakeBonus     + (rakeBonus + delta);
-      if (bigger === "compradas") rakeTotal = rakeTotal - rakeCompradas + (rakeCompradas + delta);
-      if (bigger === "ganadas")   rakeTotal = rakeTotal - rakeGanadas   + (rakeGanadas + delta);
+    // Si por algún drift histórico totalDesc != pozoBruto, ajustar
+    // proporcionalmente y dejar el residual en la bolsa más grande para que
+    // la suma de líneas coincida con pozoBruto exactamente.
+    if (totalDesc !== torneo.pozoBruto) {
+      const factor = torneo.pozoBruto / totalDesc;
+      bonusDesc = Math.round(bonusDesc * factor);
+      compradasDesc = Math.round(compradasDesc * factor);
+      ganadasDesc = torneo.pozoBruto - bonusDesc - compradasDesc;
+      if (ganadasDesc < 0) {
+        // Si el residual cayó negativo, lo absorbe la bolsa con mayor saldo.
+        const exceso = -ganadasDesc;
+        ganadasDesc = 0;
+        if (bonusDesc >= compradasDesc) bonusDesc -= exceso;
+        else compradasDesc -= exceso;
+      }
+      totalDesc = bonusDesc + compradasDesc + ganadasDesc;
     }
 
-    // Recalcular tras delta:
-    const recalc = bonusDescontado + compradasDescontado + ganadasDescontado;
-    const fix = (n: number) => Math.round(n * 100) / 100;
-    const fBonus = fix(rakeBonus);
-    const fComp = fix(rakeCompradas);
-    let fGan = fix(torneo.rake - fBonus - fComp);
-    if (recalc <= 0) fGan = 0;
-    if (fGan < 0) fGan = 0;
+    // Split del rake en ingreso neto + IGV (asegurando suma exacta = rake).
+    const ingresoRakeNeto =
+      Math.round((torneo.rake * 100) / (100 + IGV_PCT) * 100) / 100;
+    const igvRake = Math.round((torneo.rake - ingresoRakeNeto) * 100) / 100;
 
-    const ingresoNeto = fix(torneo.rake * 100 / (100 + IGV_PCT));
-    const igv = fix(torneo.rake - ingresoNeto);
+    const pozoNeto = torneo.pozoNeto; // ya es entero en BD
+
+    // Validación final: debe == haber
+    const debeTotal = bonusDesc + compradasDesc + ganadasDesc;
+    const haberTotal = ingresoRakeNeto + igvRake + pozoNeto;
+    if (Math.abs(debeTotal - haberTotal) > 0.01) {
+      throw new Error(
+        `registrarCierreTorneo torneo=${torneoId}: cuadre roto debe=${debeTotal} haber=${haberTotal} (pozoBruto=${torneo.pozoBruto}, rake=${torneo.rake}, pozoNeto=${pozoNeto})`,
+      );
+    }
 
     const lineas: LineaInput[] = [];
-    if (fBonus > 0) lineas.push({ codigo: COD.PASIVO_BONUS,     debe: fBonus,     descripcion: "Rake desde Bonus" });
-    if (fComp > 0)  lineas.push({ codigo: COD.PASIVO_COMPRADAS, debe: fComp,      descripcion: "Rake desde Compradas" });
-    if (fGan > 0)   lineas.push({ codigo: COD.PASIVO_GANADAS,   debe: fGan,       descripcion: "Rake desde Ganadas" });
-    lineas.push({ codigo: COD.ING_RAKE,     haber: ingresoNeto, descripcion: "Ingreso neto por rake" });
-    lineas.push({ codigo: COD.IGV_POR_PAGAR, haber: igv,        descripcion: "IGV 18% por pagar" });
+    if (bonusDesc > 0)
+      lineas.push({ codigo: COD.PASIVO_BONUS,     debe: bonusDesc,     descripcion: "Entradas pagadas desde Bonus" });
+    if (compradasDesc > 0)
+      lineas.push({ codigo: COD.PASIVO_COMPRADAS, debe: compradasDesc, descripcion: "Entradas pagadas desde Compradas" });
+    if (ganadasDesc > 0)
+      lineas.push({ codigo: COD.PASIVO_GANADAS,   debe: ganadasDesc,   descripcion: "Entradas pagadas desde Ganadas" });
+    if (ingresoRakeNeto > 0)
+      lineas.push({ codigo: COD.ING_RAKE,         haber: ingresoRakeNeto, descripcion: "Rake neto (12% × 100/118)" });
+    if (igvRake > 0)
+      lineas.push({ codigo: COD.IGV_POR_PAGAR,    haber: igvRake,         descripcion: "IGV 18% del rake" });
+    if (pozoNeto > 0)
+      lineas.push({ codigo: COD.PASIVO_GANADAS,   haber: pozoNeto,        descripcion: "Pozo neto distribuido a ganadores" });
 
     return registrarAsiento(innerTx, {
       origenTipo: "CIERRE_TORNEO",
       origenId: torneoId,
-      descripcion: `Cierre torneo ${torneo.nombre}: rake S/ ${torneo.rake.toFixed(2)}`,
+      descripcion: `Cierre torneo ${torneo.nombre}: pozoBruto S/ ${torneo.pozoBruto}, rake S/ ${torneo.rake}, pozoNeto S/ ${pozoNeto}`,
       metadata: {
         torneoId,
-        rakeTotal: torneo.rake,
-        composicion: { bonus: fBonus, compradas: fComp, ganadas: fGan },
+        pozoBruto: torneo.pozoBruto,
+        rake: torneo.rake,
+        pozoNeto,
+        composicion: { bonus: bonusDesc, compradas: compradasDesc, ganadas: ganadasDesc },
       },
       lineas,
     });

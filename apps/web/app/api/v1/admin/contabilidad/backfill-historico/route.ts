@@ -138,23 +138,40 @@ export async function POST(req: NextRequest) {
     }
 
     // ========================================================================
-    // 3. CIERRE_TORNEO (Torneos FINALIZADOS — recalcula composición del rake)
+    // 3. CIERRE_TORNEO — todos los torneos donde efectivamente se distribuyeron
+    // premios (presencia de PREMIO_TORNEO en TransaccionLukas) O cuyo estado
+    // ya es FINALIZADO. La presencia de PREMIO_TORNEO es la prueba económica
+    // (ya hubo movimiento de Lukas), independiente del campo `estado`.
     // ========================================================================
-    const torneos = await prisma.torneo.findMany({
+    const tx_premios = await prisma.transaccionLukas.findMany({
+      where: { tipo: "PREMIO_TORNEO" },
+      select: { refId: true },
+      distinct: ["refId"],
+    });
+    const torneoIdsConPremio = tx_premios
+      .map((t) => t.refId)
+      .filter((id): id is string => !!id);
+
+    const torneosFinalizados = await prisma.torneo.findMany({
       where: { estado: "FINALIZADO" },
       select: { id: true },
-      orderBy: { creadoEn: "asc" },
     });
+    const torneoIdsFinalizados = torneosFinalizados.map((t) => t.id);
 
-    for (const t of torneos) {
+    // Unión: todos los IDs únicos
+    const torneoIds = Array.from(
+      new Set([...torneoIdsConPremio, ...torneoIdsFinalizados]),
+    );
+
+    for (const torneoId of torneoIds) {
       result.torneos.procesados++;
       try {
-        const asiento = await registrarCierreTorneo(t.id);
+        const asiento = await registrarCierreTorneo(torneoId);
         if (asiento) result.torneos.creados++;
         else result.torneos.saltados++;
       } catch (err) {
         result.torneos.errores++;
-        logger.error({ err, torneoId: t.id }, "backfill CIERRE_TORNEO: error");
+        logger.error({ err, torneoId }, "backfill CIERRE_TORNEO: error");
       }
     }
 
