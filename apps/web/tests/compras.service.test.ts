@@ -9,6 +9,10 @@ const SRC = readFileSync(
   resolve(ROOT, "lib/services/compras.service.ts"),
   "utf-8",
 );
+const PACKS_SRC = readFileSync(
+  resolve(ROOT, "lib/constants/packs-lukas.ts"),
+  "utf-8",
+);
 
 describe("compras.service — acreditación con 3 bolsas", () => {
   it("crea TransaccionLukas COMPRA con bolsa COMPRADAS", () => {
@@ -54,12 +58,31 @@ describe("compras.service — acreditación con 3 bolsas", () => {
   });
 });
 
-describe("compras.service — BONUS_POR_PACK", () => {
-  it("exporta BONUS_POR_PACK con los 4 packs definidos", () => {
+describe("packs-lukas — fuente única (Lote 8 repricing)", () => {
+  it("define los 4 packs nuevos: basic, medium, large, vip", () => {
+    expect(PACKS_SRC).toMatch(/id:\s*["']basic["']/);
+    expect(PACKS_SRC).toMatch(/id:\s*["']medium["']/);
+    expect(PACKS_SRC).toMatch(/id:\s*["']large["']/);
+    expect(PACKS_SRC).toMatch(/id:\s*["']vip["']/);
+  });
+
+  it("aplica los precios autoritativos 10/25/50/100", () => {
+    expect(PACKS_SRC).toMatch(/soles:\s*10\b/);
+    expect(PACKS_SRC).toMatch(/soles:\s*25\b/);
+    expect(PACKS_SRC).toMatch(/soles:\s*50\b/);
+    expect(PACKS_SRC).toMatch(/soles:\s*100\b/);
+  });
+
+  it("aplica los bonos autoritativos 0/5/10/20", () => {
+    // basic 0, medium 5, large 10, vip 20
+    expect(PACKS_SRC).toMatch(/bonus:\s*0\b/);
+    expect(PACKS_SRC).toMatch(/bonus:\s*5\b/);
+    expect(PACKS_SRC).toMatch(/bonus:\s*10\b/);
+    expect(PACKS_SRC).toMatch(/bonus:\s*20\b/);
+  });
+
+  it("compras.service re-exporta BONUS_POR_PACK desde la fuente única", () => {
+    expect(SRC).toMatch(/from\s+["']\.\.\/constants\/packs-lukas["']/);
     expect(SRC).toMatch(/BONUS_POR_PACK/);
-    expect(SRC).toMatch(/pack-20/);
-    expect(SRC).toMatch(/pack-50/);
-    expect(SRC).toMatch(/pack-100/);
-    expect(SRC).toMatch(/pack-250/);
   });
 });

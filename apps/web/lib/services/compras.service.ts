@@ -1,8 +1,9 @@
-// Servicio de compras de Lukas — Lote 6A (preview, sin cablear a Culqi aún).
+// Servicio de compras de Lukas — Lote 6A + Lote 8 (Culqi mockeado).
 //
-// El Lote 8 (integración Culqi real) invocará `acreditarCompra` desde el
-// webhook `/webhooks/culqi` tras verificar la firma. Aquí solo modelamos
-// la lógica de acreditación pura, con tests.
+// Llamado desde el webhook `/webhooks/culqi` tras verificar la firma. La
+// lógica de acreditación es pura; el webhook se encarga de idempotencia
+// (`EventoCulqi.eventId @unique`) y de validar el pack contra la tabla
+// autoritativa `PACKS_LUKAS` (`lib/constants/packs-lukas.ts`).
 //
 // Bolsas: los Lukas comprados van a COMPRADAS (con vencimiento 36m);
 // el bonus del pack (si aplica) va a BONUS (sin vencimiento).
@@ -13,14 +14,9 @@ import { logger } from "./logger";
 import { MESES_VENCIMIENTO_COMPRA } from "../config/economia";
 import { verificarConsistenciaBalance } from "./balance-consistency.helper";
 
-// Bonus por pack según los packs actuales (§2 CLAUDE.md):
-// 20 (+0), 50 (+5), 100 (+15), 250 (+50)
-export const BONUS_POR_PACK: Record<string, number> = {
-  "pack-20": 0,
-  "pack-50": 5,
-  "pack-100": 15,
-  "pack-250": 50,
-};
+// Re-export para no romper callers existentes. La fuente única vive en
+// `lib/constants/packs-lukas.ts` (Lote 8).
+export { BONUS_POR_PACK } from "../constants/packs-lukas";
 
 export interface AcreditarCompraInput {
   usuarioId: string;

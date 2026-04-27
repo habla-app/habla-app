@@ -225,7 +225,7 @@ Schema completo en `packages/db/prisma/schema.prisma`. Modelos principales:
 - Lukas **NO retirables** en efectivo.
 - Bonus de bienvenida: **15 Lukas** (BONUS, sin vencimiento). Plan v6 — antes 500.
 - Vencimiento Lukas comprados: **36 meses** desde la compra. Plan v6 — antes 12.
-- Packs de compra: 20 (+0), 50 (+5), 100 (+15), 250 (+50).
+- Packs de compra: 10 (+0), 25 (+5), 50 (+10), 100 (+20). Fuente única: `lib/constants/packs-lukas.ts`.
 
 #### Reglas de descuento entre bolsas (Lote 6A)
 - Orden de descuento: **Bonus → FIFO Compradas → Ganadas** (ver `descontarEntrada` en `torneos.service.ts`).
