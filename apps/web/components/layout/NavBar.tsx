@@ -76,6 +76,7 @@ export async function NavBar({ initialLiveCount = 0, initialBalanceGanadas = 0 }
                 username={usuario.username ?? ""}
                 usernameLocked={usuario.usernameLocked ?? false}
                 email={usuario.email ?? ""}
+                esAdmin={usuario.rol === "ADMIN"}
               />
             </>
           ) : (

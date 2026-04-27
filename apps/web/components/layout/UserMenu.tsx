@@ -23,6 +23,8 @@ interface UserMenuProps {
   username: string;
   usernameLocked: boolean;
   email: string;
+  /** Lote 8: muestra el item "⚙️ Panel admin" si rol=ADMIN. Solo lo ven admins. */
+  esAdmin?: boolean;
 }
 
 export function UserMenu({
@@ -30,6 +32,7 @@ export function UserMenu({
   username,
   usernameLocked,
   email,
+  esAdmin = false,
 }: UserMenuProps) {
   const [abierto, setAbierto] = useState(false);
   const [cerrandoSesion, setCerrandoSesion] = useState(false);
@@ -117,6 +120,16 @@ export function UserMenu({
           >
             Mi billetera
           </Link>
+          {esAdmin && (
+            <Link
+              href="/admin"
+              onClick={() => setAbierto(false)}
+              role="menuitem"
+              className="block border-t border-light px-4 py-2.5 text-sm font-semibold text-brand-blue-main transition-colors hover:bg-subtle"
+            >
+              ⚙️ Panel admin
+            </Link>
+          )}
           <button
             type="button"
             role="menuitem"

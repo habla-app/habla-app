@@ -279,25 +279,68 @@ export type MotivoBonus = "pack_bonus" | "bienvenida" | "manual";
  * Emite Lukas BONUS al usuario. El costo se carga a marketing.
  *  DEBE  Costo Marketing-Bonus
  *  HABER Pasivo Bonus
+ *
+ * Idempotencia: por defecto `origenId = usuarioId` (callers actuales — un asiento
+ * por usuario). Cuando se llama desde el backfill histórico se pasa `origenId =
+ * txId` para asentar UN asiento por cada `TransaccionLukas BONUS` existente
+ * (un usuario puede haber recibido múltiples bonus en su historia).
  */
 export async function registrarBonusEmitido(
   usuarioId: string,
   montoLukas: number,
   motivo: MotivoBonus,
   tx?: Tx,
-): Promise<Asiento> {
+  origenIdOverride?: string,
+): Promise<Asiento | null> {
   if (montoLukas <= 0) {
     throw new Error("registrarBonusEmitido: monto debe ser > 0");
   }
+  const origenId = origenIdOverride ?? usuarioId;
   return withTx(async (innerTx) => {
+    if (origenIdOverride && (await yaExiste(innerTx, "BONUS_EMITIDO", origenId))) {
+      return null;
+    }
     return registrarAsiento(innerTx, {
       origenTipo: "BONUS_EMITIDO",
-      origenId: usuarioId,
+      origenId,
       descripcion: `Bonus ${motivo} (${montoLukas} Lukas) a ${usuarioId}`,
       metadata: { usuarioId, motivo, montoLukas },
       lineas: [
         { codigo: COD.COSTO_BONUS,  debe: montoLukas },
         { codigo: COD.PASIVO_BONUS, haber: montoLukas },
+      ],
+    });
+  }, tx);
+}
+
+/**
+ * Variante "legacy" para `TransaccionLukas` tipo COMPRA pre-Lote 8 (sin packId).
+ * Misma forma de asiento que `registrarCompraLukas` (DEBE Caja-Banco / HABER
+ * Pasivo Compradas) pero usa `txId` como `origenId` para idempotencia per-tx.
+ *
+ * Solo usado por el backfill histórico — no llamarlo desde flujos nuevos.
+ */
+export async function registrarCompraLukasLegacy(
+  usuarioId: string,
+  txId: string,
+  montoLukas: number,
+  tx?: Tx,
+): Promise<Asiento | null> {
+  if (montoLukas <= 0) {
+    throw new Error("registrarCompraLukasLegacy: monto debe ser > 0");
+  }
+  return withTx(async (innerTx) => {
+    if (await yaExiste(innerTx, "COMPRA_LUKAS", txId)) {
+      return null;
+    }
+    return registrarAsiento(innerTx, {
+      origenTipo: "COMPRA_LUKAS",
+      origenId: txId,
+      descripcion: `Compra histórica (legacy) ${montoLukas} Lukas — usuario ${usuarioId}`,
+      metadata: { usuarioId, txId, montoLukas, legacy: true },
+      lineas: [
+        { codigo: COD.CAJA_BANCO,       debe: montoLukas,  descripcion: `Compra legacy tx=${txId}` },
+        { codigo: COD.PASIVO_COMPRADAS, haber: montoLukas, descripcion: `Lukas Compradas para ${usuarioId}` },
       ],
     });
   }, tx);
