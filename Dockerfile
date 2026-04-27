@@ -1,16 +1,20 @@
-# Pineamos Alpine a 3.22 porque el tag mutable `node:20-alpine` puede
-# resolverse a Alpine 3.20/3.21, donde el repo estable solo trae hasta
-# `postgresql17-client`. Alpine 3.22+ tiene `postgresql18-client`, que
-# necesitamos para el backup a R2 (Job H).
+# Alpine 3.22 es la base más nueva donde Railway puede pullear node:20.
 FROM node:20-alpine3.22 AS base
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 # OpenSSL es requerido por el engine de Prisma en Alpine.
-# postgresql18-client trae el binario `pg_dump` 18 que usa el job de
-# backup automatizado a R2 (Lote 7). Railway corre Postgres 18.3 desde
-# Abr 2026 — un cliente más viejo (16/17) revienta con
-# "aborting because of server version mismatch" al dumpear. La regla:
-# `pg_dump` debe ser >= versión del servidor.
-RUN apk add --no-cache openssl postgresql18-client
+#
+# `postgresql18-client` (binario `pg_dump` 18) lo necesitamos para el
+# job de backup a R2 (Lote 7). Railway corre Postgres 18.3 desde Abr
+# 2026 — un cliente más viejo revienta con
+# "aborting because of server version mismatch" al dumpear.
+#
+# Alpine 3.22 stable sólo trae hasta `postgresql17-client`. Habilitamos
+# el repo `edge` con el alias `@edge` y pedimos sólo ese paquete (y sus
+# deps, que también vienen de edge — incluyendo `libpq` 18). El resto
+# del sistema queda en stable.
+RUN apk add --no-cache openssl \
+    && echo "@edge https://dl-cdn.alpinelinux.org/alpine/edge/main" >> /etc/apk/repositories \
+    && apk add --no-cache postgresql18-client@edge
 
 # --- Install dependencies ---
 FROM base AS deps
