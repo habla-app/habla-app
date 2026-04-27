@@ -6,10 +6,12 @@
 // Estructura: header homologado al resto de widgets de la sidebar (live,
 // pozos, top — todos con `text-[13px] font-extrabold uppercase` y padding
 // `px-3.5 py-3`). El distintivo del balance está en el body — número grande
-// en gold con la moneda 🪙 a la derecha. Fondo dinámico: gradient diagonal
-// blue-dark→blue-pale→blue-dark + glow dorado radial sutil al fondo, en
-// lugar de un dark-surface plano. Mantiene la barra shimmer dorada superior
-// como hint visual del valor.
+// en gold con la moneda 🪙 a la derecha.
+//
+// Fondo idéntico al WalletBalanceHero pero a escala chica: gradient
+// `bg-hero-blue` (135deg, blue-main → blue-dark) + barra shimmer dorada
+// superior + emoji 🪙 gigante rotado al fondo (escalado al tamaño del
+// widget). Así el sidebar visualmente "rima" con el hero del wallet.
 //
 // Hotfix #5 Bug #14: suscripción a useLukasStore para reflejar mutaciones
 // sin esperar un full-refresh. SSR initialBalance para el primer paint.
@@ -34,24 +36,25 @@ export function SidebarBalanceWidget({ initialBalance }: Props) {
   }
   return (
     <section
-      className="relative overflow-hidden rounded-md bg-gradient-to-br from-dark-surface via-dark-card to-dark-surface shadow-md"
+      className="relative overflow-hidden rounded-md bg-hero-blue shadow-md"
       data-testid="sidebar-balance-widget"
     >
-      {/* Barra shimmer dorada superior — hint visual del valor. */}
+      {/* Barra shimmer dorada superior — hint visual del valor (4px,
+          un poco más fina que los 5px del WalletBalanceHero porque el
+          widget es más chico). */}
       <div
         aria-hidden
         className="absolute inset-x-0 top-0 z-10 h-[4px] bg-gold-shimmer bg-[length:200%_100%] animate-shimmer"
       />
-      {/* Glow dorado radial sutil al fondo derecho — fondo dinámico que
-          rompe la planura del color base sin cambiarlo. */}
+      {/* Emoji 🪙 gigante rotado al fondo — mismo recurso decorativo
+          del WalletBalanceHero, escalado al tamaño del sidebar widget
+          (140px vs 220px del hero). */}
       <div
         aria-hidden
-        className="pointer-events-none absolute -right-12 -top-6 h-40 w-40 rounded-full bg-brand-gold/10 blur-3xl"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -bottom-16 -left-8 h-36 w-36 rounded-full bg-brand-blue-light/10 blur-3xl"
-      />
+        className="pointer-events-none absolute -right-6 -top-6 rotate-[-15deg] text-[140px] leading-none opacity-[0.06]"
+      >
+        🪙
+      </div>
       <LoggedBalance initialBalance={initialBalance} />
     </section>
   );
