@@ -3,10 +3,12 @@
 // linear-gradient(135deg, #0052CC → #001050)), shimmer dorado en borde superior,
 // emoji 🪙 gigante rotado al fondo.
 //
-// Lote 6C-fix7: layout en dos columnas separadas por línea sutil — izquierda
-// el balance total ("Tus Lukas"), derecha el subconjunto canjeable
-// ("Lukas Premios"). Mismo formato (número + 🪙) en ambos lados, premios un
-// poco más pequeño para indicar visualmente que es subgrupo. Sin emoji ⚽.
+// Layout en dos columnas con baseline alignment (items-end) — los bloques
+// izq (label + número total + subtexto) y der (número canjeables +
+// subtexto) se alinean por su parte inferior, así los subtextos quedan en
+// la misma línea horizontal y los números coinciden por baseline aunque
+// tengan tamaños distintos. Divider vertical justo después del bloque izq,
+// con altura equivalente al stack izq para no quedarse corto.
 
 import { useEffect, useState } from "react";
 import { useLukasStore } from "@/stores/lukas.store";
@@ -53,10 +55,15 @@ export function WalletBalanceHero({
         🪙
       </div>
 
-      {/* Layout: 2 columnas separadas por línea sutil. Mobile: stack vertical */}
-      <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center">
+      {/* Layout 2 columnas: izq con label + número grande + subtexto, der
+          con número (más pequeño) + subtexto. items-end alinea ambos por
+          su parte inferior — los subtextos quedan en la misma línea
+          horizontal y los números coinciden por baseline. Divider con
+          altura del stack izq, justo después del subtexto izq.
+          Mobile: stack vertical con divider horizontal. */}
+      <div className="relative flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-5">
         {/* Lado izquierdo — Tus Lukas (total) */}
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0">
           <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-white/70">
             Tus Lukas
           </div>
@@ -74,16 +81,16 @@ export function WalletBalanceHero({
           </div>
         </div>
 
-        {/* Línea sutil divisora — vertical en desktop, horizontal en mobile */}
+        {/* Divider — vertical en desktop con altura del stack izq, horizontal en mobile */}
         <div
           aria-hidden
-          className="h-px w-full bg-white/15 sm:h-24 sm:w-px sm:flex-shrink-0"
+          className="h-px w-full bg-white/15 sm:h-[110px] sm:w-px sm:flex-shrink-0"
         />
 
-        {/* Lado derecho — subconjunto canjeable. Sin label/título encima:
-            solo el número (verde) y la nota inferior aclaran que es un
-            subset del balance total, no un saldo separado. */}
-        <div className="flex-shrink-0 min-w-0 sm:w-[42%]">
+        {/* Lado derecho — subconjunto canjeable. Alineado por bottom al
+            stack izq (items-end). Sin label arriba: queda visualmente como
+            "subgrupo" del total, no como balance separado. */}
+        <div className="flex-1 min-w-0">
           <div
             className="font-display text-[36px] font-black leading-none text-brand-green [text-shadow:0_4px_20px_rgba(0,214,143,0.25)] sm:text-[44px]"
             data-testid="wallet-balance-premios"
@@ -94,7 +101,7 @@ export function WalletBalanceHero({
             </span>
           </div>
           <div className="mt-1.5 text-[12px] font-semibold text-brand-green/80">
-            De los cuales canjeables
+            Tus Lukas disponibles para canjear premios
           </div>
         </div>
       </div>

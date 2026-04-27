@@ -6,8 +6,8 @@
 //
 // Diseño alineado 1:1 con StatsPill: misma altura tipográfica del valor
 // (text-[30px]) y misma estrategia de alineación (flex-col items-center con
-// padding horizontal uniforme). Emoji 💼 (bolsa de dinero) — antes 🏆, que
-// ya se usa en el 2do pill "Ganadas con premio".
+// padding horizontal uniforme). Emoji 💰 (bolsa con signo de dólares) —
+// antes 🏆, que ya se usaba en el 2do pill "Ganadas con premio".
 //
 // Dato SSR: balanceGanadas es estático al momento del render. Solo cambia
 // cuando un torneo finaliza y acredita premios — evento server-side que
@@ -28,7 +28,7 @@ export function LukasPremiosPill({ lukasPremios }: Props) {
         className="absolute bottom-0 left-0 top-0 w-1 bg-brand-green"
       />
       <div aria-hidden className="mb-1.5 text-center text-[24px] leading-none">
-        💼
+        💰
       </div>
       <div className="text-center font-display text-[30px] font-black leading-none text-alert-success-text">
         {lukasPremios.toLocaleString("es-PE")} 🪙

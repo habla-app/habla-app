@@ -95,12 +95,12 @@ describe("/tienda — TiendaContent", () => {
     expect(SRC).toMatch(/PrizeCardV2/);
   });
 
-  it("banner de saldo (split dark) explica que solo Lukas ganadas canjean", () => {
-    // Layout split horizontal: izq balance "Lukas para canjear", der nota
-    // "Sólo las Lukas ganadas en torneos sirven para canjear acá".
+  it("banner compacto explica que solo Lukas ganadas canjean", () => {
+    // Banner informativo compacto centrado: "Sólo las Lukas ganadas en
+    // torneos sirven para canjear acá". Sin balance dentro (vive en el
+    // header global BalanceBadge y en /wallet).
     expect(SRC).toMatch(/data-testid="tienda-premios-card"/);
-    expect(SRC).toMatch(/Lukas\s+para\s+canjear/i);
-    expect(SRC).toMatch(/S[oó]lo\s+las\s+Lukas\s+ganadas\s+en\s+torneos/i);
+    expect(SRC).toMatch(/S[oó]lo\s+las[\s\S]{0,80}Lukas\s+ganadas[\s\S]{0,80}torneos/i);
     expect(SRC).toMatch(/canjear/i);
   });
 });

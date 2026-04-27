@@ -65,60 +65,26 @@ export function TiendaContent({
         </p>
       </header>
 
-      {/* Banner split horizontal dark — izq balance Lukas Premios sobre
-          fondo blue-dark, der explicación sobre fondo dark-card (un tono
-          más claro). Sin bordes internos visibles excepto un separador
-          sutil. Mobile: stack vertical (separador horizontal). Mismo dato
-          que el card combinado anterior, solo cambia presentación. */}
+      {/* Banner compacto — solo mensaje informativo centrado. Variante
+          ligera del shop-note del mockup (fondo crema con border gold y
+          shimmer dorada superior). Sin balance: el balance vive en el
+          stat header global (BalanceBadge) y en /wallet — repetirlo acá
+          ya no aporta. Padding vertical reducido (py-2.5) para que el
+          banner sea bajo. */}
       <section
-        className="mb-6 flex flex-col overflow-hidden rounded-md shadow-md sm:flex-row"
+        className="relative mb-5 overflow-hidden rounded-md border border-brand-gold/30 bg-gradient-to-br from-alert-success-bg via-card to-card px-4 py-2.5 shadow-sm"
         data-testid="tienda-premios-card"
       >
-        {isLoggedIn ? (
-          <>
-            {/* Lado izq (~40%) — balance, fondo blue-dark */}
-            <div className="bg-dark-surface px-5 py-4 sm:w-[40%] sm:flex-shrink-0">
-              <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-brand-gold/80">
-                Lukas para canjear
-              </div>
-              <div
-                className="mt-1 font-display text-[36px] font-black leading-none text-brand-gold [text-shadow:0_4px_20px_rgba(255,184,0,0.25)] sm:text-[40px]"
-                data-testid="tienda-balance-amount"
-              >
-                {ganadas.toLocaleString("es-PE")}{" "}
-                <span aria-hidden className="align-middle text-[0.55em]">
-                  🪙
-                </span>
-              </div>
-            </div>
-
-            {/* Separador sutil — horizontal en mobile, vertical en desktop */}
-            <div
-              aria-hidden
-              className="h-px w-full flex-shrink-0 bg-dark-border sm:h-auto sm:w-px"
-            />
-
-            {/* Lado der (~60%) — explicación, fondo dark-card */}
-            <div className="flex flex-1 items-start gap-2 bg-dark-card px-5 py-4 text-[12px] leading-relaxed text-white/70">
-              <span aria-hidden className="flex-shrink-0 text-base">
-                💡
-              </span>
-              <p>
-                Sólo las Lukas ganadas en torneos sirven para canjear acá
-              </p>
-            </div>
-          </>
-        ) : (
-          /* Anónimo — usa fila única con el mismo fondo dark-card */
-          <div className="flex items-start gap-2 bg-dark-card px-5 py-4 text-[12px] leading-relaxed text-white/70">
-            <span aria-hidden className="flex-shrink-0 text-base">
-              💡
-            </span>
-            <p>
-              Sólo las Lukas ganadas en torneos sirven para canjear acá
-            </p>
-          </div>
-        )}
+        <div className="flex items-center justify-center gap-2 text-center text-[12px] leading-relaxed text-body">
+          <span aria-hidden className="flex-shrink-0 text-base">
+            💡
+          </span>
+          <p>
+            Sólo las{" "}
+            <strong className="text-alert-success-text">Lukas ganadas</strong>{" "}
+            en torneos sirven para canjear acá
+          </p>
+        </div>
       </section>
 
       {featured ? (
