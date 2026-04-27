@@ -1,7 +1,7 @@
 # CLAUDE.md — Habla! App
 
 > Contexto operativo del proyecto. El historial detallado de bugs vive en `CHANGELOG.md` y en `git log`.
-> Última actualización: 27 Abr 2026 (Lote 6C-fix7 — display unificado de Lukas: header sidebar simplificado, wallet hero en 2 columnas con divider sutil, 5 stats alineados con filtros del historial).
+> Última actualización: 27 Abr 2026 (Lote 7 — Backups automatizados a R2 con auto-monitoreo por email).
 
 ---
 
@@ -371,6 +371,7 @@ pnpm exec tsc --noEmit
   **Regla compartida — guard `countCompras` en endpoints destructivos (Lote 6C-fix5):** los 4 endpoints que mutan datos por usuario (`mover-compradas-a-bonus`, `reset-y-inyectar-bonus`, `recategorizar-bolsas`, `sanear-historial`) saltean al usuario que tiene `TransaccionLukas tipo: COMPRA` con razón explícita en `skipDetalle`. Esto protege contra ejecutar fixes pre-prod sobre usuarios con compras Culqi reales. `reset-completo` lleva esta regla más lejos: si hay UNA sola compra en el sistema entero, aborta antes de tocar nada — es un endpoint exclusivo de pre-producción.
   
   Env var nueva: `ADMIN_ALERT_EMAIL` (opcional). Si falta, alertas se loggean sin enviar.
+- **Lote 7 — Backups automatizados a R2 con auto-monitoreo por email (27 Abr 2026):** [`lib/services/backup-r2.service.ts`](apps/web/lib/services/backup-r2.service.ts) ejecuta `pg_dump -Fc` 1x/día y sube a R2 como `daily/habla-YYYY-MM-DD.dump` + (día 1 del mes) `monthly/habla-YYYY-MM.dump`. Retención: 30 días daily, indefinido monthly. Job H en `instrumentation.ts` tick cada 1h, dispara cuando hora Lima ≥ 04:00 y no hubo backup hoy. Cada intento se registra en la tabla nueva `BackupLog` (migration `20260427000000_add_backup_log_lote7`). Si los últimos 2 fallaron consecutivos, `notifyBackupFallo` envía email a `ADMIN_ALERT_EMAIL` (template `backupFalloTemplate`). Endpoints admin (Bearer CRON_SECRET): `POST /api/v1/admin/backup/ejecutar` (manual) y `GET /api/v1/admin/backup/historial` (últimos 30 intentos). `/api/health` lee el state desde `BackupLog` (no más in-memory). Reemplaza la implementación previa basada en Sentry alerts; `backup.service.ts` y `/api/cron/backup-db` eliminados. Runbook actualizado en [docs/runbook-restore.md](docs/runbook-restore.md).
 
 ### ⏳ Pendiente
 - **Sub-Sprint 2 — Pagos Culqi:** `/wallet` ya tiene UI completa (balance hero, 4 packs, historial), falta integración Culqi.js + webhook `/webhooks/culqi` + acreditación real de Lukas. Endpoints diseñados: `POST /lukas/comprar`, `POST /webhooks/culqi`. Enforcement de límite mensual ya listo (`verificarLimiteCompra` en `limites.service.ts`).
@@ -720,12 +721,13 @@ Si está seteada, el cron diario de auditoría (Job G) envía email al destinata
 
 Lote 7 (Abr 2026) — credenciales R2 para backups automatizados (vault 1Password "Habla! Infra"):
 ```
+R2_ACCOUNT_ID=<configured>            # account ID de Cloudflare (visible en el dashboard de R2)
 R2_ACCESS_KEY_ID=<configured>
 R2_SECRET_ACCESS_KEY=<configured>
+R2_BUCKET_BACKUPS=habla-backups       # bucket dedicado a dumps de Postgres
 R2_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
-R2_BUCKET=habla-db-backups
 ```
-Si falta cualquiera de las 4, el job se autodeshabilita (`/api/health` reporta `checks.backup: "unconfigured"`). `CRON_SECRET` ya existía para `/api/cron/cerrar-torneos`; se reutiliza para `/api/cron/backup-db`.
+Si falta cualquiera de las 5, el job se autodeshabilita (`/api/health` reporta `checks.backup: "unconfigured"` y `BackupLog` registra el intento como fallido). `CRON_SECRET` ya existía para otros crons; se reutiliza para `/api/v1/admin/backup/ejecutar` y `/api/v1/admin/backup/historial`.
 
 Nuevas en Lote 3 — datos legales (se completarán cuando llegue el RUC y la partida SUNARP). Mientras estén ausentes, los placeholders `{{LEGAL_*}}` aparecen literales en los documentos públicos:
 ```

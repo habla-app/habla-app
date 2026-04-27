@@ -411,3 +411,19 @@ model SolicitudEliminacion {
 
   @@map("solicitudes_eliminacion")
 }
+
+// Lote 7: Log persistente de cada intento de backup. La fila singleton más
+// reciente decide si el job de hoy ya corrió, y los últimos 2 rows deciden
+// si dispara la alerta por email (2 fallos consecutivos).
+model BackupLog {
+  id           String   @id @default(cuid())
+  fechaIntento DateTime @default(now())
+  ok           Boolean
+  archivo      String?
+  bytes        Int?
+  durationMs   Int?
+  errorMsg     String?
+
+  @@index([fechaIntento])
+  @@map("backup_logs")
+}

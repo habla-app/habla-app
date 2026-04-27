@@ -160,70 +160,82 @@ export async function register() {
   }, 15_000);
 
   // -------------------------------------------------------------------
-  // Job E — Backup diario de Postgres a R2 (Lote 7). Tick cada hora;
+  // Job H — Backup diario de Postgres a R2 (Lote 7). Tick cada hora;
   // dispara el backup si (a) hoy no hay backup exitoso aún y (b) la
-  // hora UTC actual es >= 03:00 (= 22:00 PET, ventana de bajo tráfico).
+  // hora local Lima cae en la ventana objetivo (04:00 PET = 09:00 UTC).
+  //
+  // Auto-monitoreo: cada intento (éxito o fallo) inserta un row en
+  // `BackupLog`. Si los últimos 2 fallaron consecutivos, el service
+  // dispara email al `ADMIN_ALERT_EMAIL` vía notifyBackupFallo.
   // -------------------------------------------------------------------
-  const {
-    runBackup,
-    isR2Configured,
-    getBackupState,
-    hydrateBackupStateFromR2,
-  } = await import("./lib/services/backup.service");
-
-  // Hidratar el state al boot para que un container restart no aparezca
-  // como "missing" en /api/health si ayer hubo backup ok.
-  if (isR2Configured()) {
-    hydrateBackupStateFromR2().catch((err) =>
-      logger.warn({ err }, "[cron in-process] hydrate backup state falló"),
-    );
-  }
+  const { ejecutarBackupDiario, isR2Configured, ultimoExitoso } = await import(
+    "./lib/services/backup-r2.service"
+  );
 
   const BACKUP_TICK_INTERVAL_MS = 60 * 60 * 1000; // 1h
-  const BACKUP_TARGET_UTC_HOUR = 3; // 03:00 UTC = 22:00 PET
+  const BACKUP_TARGET_LIMA_HOUR = 4; // 04:00 PET (= 09:00 UTC)
 
-  async function tickBackupDb() {
+  // Hora actual en zona Lima usando Intl (Lima es UTC-5 sin DST).
+  function horaLima(d: Date): number {
+    const fmt = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Lima",
+      hour: "numeric",
+      hour12: false,
+    });
+    return Number(fmt.format(d));
+  }
+
+  async function tickBackupDiario() {
     try {
-      if (!isR2Configured()) return; // nada que hacer si no hay R2
-      const s = getBackupState();
+      if (!isR2Configured()) return; // nada que hacer si no hay R2 configurado
       const now = new Date();
-      // Bucket "hoy UTC".
+
+      // Skip si ya backupeamos exitosamente hoy (UTC). Esto evita doble
+      // ejecución por hora dentro de la misma jornada.
       const todayStartMs = Date.UTC(
         now.getUTCFullYear(),
         now.getUTCMonth(),
         now.getUTCDate(),
       );
-      if (s.lastSuccessAt && s.lastSuccessAt.getTime() >= todayStartMs) {
-        return; // ya backupeamos hoy
+      const last = await ultimoExitoso();
+      if (last && last.fechaIntento.getTime() >= todayStartMs) {
+        return;
       }
-      // Ventana objetivo: 03:00 UTC en adelante. Si el container arranca
-      // a las 05:00 UTC, el primer tick (≤1h) lo dispara igual.
-      if (now.getUTCHours() < BACKUP_TARGET_UTC_HOUR) return;
 
-      logger.info("[cron in-process] disparando backup-db");
-      const result = await runBackup();
+      // Ventana objetivo: hora Lima >= 4. Si el container arrancó tarde
+      // (digamos 06:00 Lima), el primer tick lo dispara igual porque
+      // hora >= 4.
+      if (horaLima(now) < BACKUP_TARGET_LIMA_HOUR) return;
+
+      logger.info("[cron in-process] disparando backup-diario");
+      const result = await ejecutarBackupDiario();
       if (result.ok) {
         logger.info(
-          { key: result.key, sizeBytes: result.sizeBytes, durationMs: result.durationMs },
-          "[cron in-process] backup-db exitoso",
+          {
+            archivo: result.archivo,
+            archivoMensual: result.archivoMensual,
+            bytes: result.bytes,
+            durationMs: result.durationMs,
+          },
+          "[cron in-process] backup-diario exitoso",
         );
       } else {
         logger.warn(
-          { reason: result.reason },
-          "[cron in-process] backup-db falló",
+          { error: result.error },
+          "[cron in-process] backup-diario falló (ver BackupLog)",
         );
       }
     } catch (err) {
-      logger.error({ err }, "[cron in-process] tick de backup-db falló");
+      logger.error({ err }, "[cron in-process] tick de backup-diario falló");
     }
   }
 
   // Primera corrida 60s tras boot (deja al sistema estabilizarse), luego
   // cada hora. Si ya backupeamos hoy o no es la ventana, el tick es no-op.
   setTimeout(() => {
-    void tickBackupDb();
+    void tickBackupDiario();
     setInterval(() => {
-      void tickBackupDb();
+      void tickBackupDiario();
     }, BACKUP_TICK_INTERVAL_MS);
   }, 60_000);
 
@@ -351,7 +363,7 @@ export async function register() {
       importPartidos: `${INTERVALO_IMPORT_MS / 1000 / 60}min`,
       refreshSeasons: `${INTERVALO_REFRESH_SEASONS_MS / 1000 / 3600}h`,
       pollerPartidos: `${POLLER_INTERVAL_MS / 1000}s`,
-      backupDb: `${BACKUP_TICK_INTERVAL_MS / 1000 / 60}min (target ${BACKUP_TARGET_UTC_HOUR}:00 UTC)`,
+      backupDiario: `${BACKUP_TICK_INTERVAL_MS / 1000 / 60}min (target ${BACKUP_TARGET_LIMA_HOUR}:00 PET, email a ADMIN_ALERT_EMAIL si 2 fallos)`,
       vencimientoLukas: `${VENCIMIENTO_TICK_INTERVAL_MS / 1000 / 60}min (skip si <23h)`,
       auditoriaBalances: `${AUDIT_TICK_INTERVAL_MS / 1000 / 60}min (skip si <23h, email a ADMIN_ALERT_EMAIL)`,
     },

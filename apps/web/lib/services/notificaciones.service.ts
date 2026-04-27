@@ -19,6 +19,7 @@ import { prisma } from "@habla/db";
 import { enviarEmail } from "./email.service";
 import {
   auditoriaAlertaTemplate,
+  backupFalloTemplate,
   canjeEnviadoTemplate,
   canjeEntregadoTemplate,
   canjeSolicitadoTemplate,
@@ -32,6 +33,7 @@ import {
   torneoCanceladoTemplate,
   verifCodigoSmsEmailTemplate,
   type AuditoriaAlertaInput,
+  type BackupFalloInput,
 } from "../emails/templates";
 import { logger } from "./logger";
 
@@ -430,5 +432,39 @@ export async function enviarAlertaAuditoria(
     );
   } catch (err) {
     logger.error({ err }, "enviarAlertaAuditoria: error");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Backups — alerta interna al admin (Lote 7)
+// ---------------------------------------------------------------------------
+
+/**
+ * Envía email al admin cuando el job de backup falla 2 veces consecutivas.
+ * Destinatario configurable vía env var `ADMIN_ALERT_EMAIL`. Si no está
+ * seteada, loggea warn y NO envía (no rompe el cron).
+ *
+ * NO consulta `PreferenciasNotif` — es alerta de operación, no del usuario.
+ */
+export async function notifyBackupFallo(
+  input: BackupFalloInput,
+): Promise<void> {
+  const to = process.env.ADMIN_ALERT_EMAIL;
+  if (!to) {
+    logger.warn(
+      { intentos: input.intentos.length },
+      "backup: ADMIN_ALERT_EMAIL no configurado, alerta NO enviada",
+    );
+    return;
+  }
+  try {
+    const tpl = backupFalloTemplate(input);
+    await enviarEmail({ to, ...tpl });
+    logger.info(
+      { to, intentos: input.intentos.length },
+      "backup: alerta de fallos consecutivos enviada por email",
+    );
+  } catch (err) {
+    logger.error({ err }, "notifyBackupFallo: error");
   }
 }

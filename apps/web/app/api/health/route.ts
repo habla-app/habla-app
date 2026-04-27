@@ -12,7 +12,7 @@
 
 import { prisma } from "@habla/db";
 import { getRedis } from "@/lib/redis";
-import { getBackupHealth } from "@/lib/services/backup.service";
+import { getBackupHealth } from "@/lib/services/backup-r2.service";
 import { logger } from "@/lib/services/logger";
 
 export const dynamic = "force-dynamic";
@@ -116,15 +116,27 @@ export async function GET(): Promise<Response> {
     logger.error({ err: (err as Error).message }, "health: timeout global");
   }
 
-  // Backup: lectura no-bloqueante del state in-memory. No hacemos llamada
-  // a R2 acá — ya se hidrata al boot y se actualiza tras cada backup.
+  // Backup: leemos el último intento exitoso desde la tabla BackupLog
+  // (Lote 7). Una sola query indexada — cheap.
   // - 'ok'           → último backup ≤ 26h atrás
   // - 'stale'        → más de 26h sin backup exitoso (NO degrada el status
   //                    global porque DB/Redis siguen sirviendo tráfico)
   // - 'missing'      → R2 configurado pero nunca corrió (post-deploy
-  //                    fresco, antes de la primera ventana 03:00 UTC)
+  //                    fresco, antes de la primera ventana 04:00 PET)
   // - 'unconfigured' → R2 vars ausentes (dev local típicamente)
-  const backup = getBackupHealth();
+  let backup: Awaited<ReturnType<typeof getBackupHealth>> = {
+    state: "missing",
+    lastSuccessAt: null,
+    ageHours: null,
+  };
+  try {
+    backup = await getBackupHealth();
+  } catch (err) {
+    logger.warn(
+      { err: (err as Error).message },
+      "health: backup check falló (no crítico)",
+    );
+  }
 
   const isOk = dbOutcome.state === "ok" && redisOutcome.state === "ok";
   const details: HealthResponse["details"] = {};
@@ -155,9 +167,9 @@ export async function GET(): Promise<Response> {
   if (!isOk) {
     logger.warn({ checks: body.checks, details, elapsedMs }, "health: degraded");
   } else if (backup.state === "stale") {
-    // Backup stale es una alerta operacional aparte (ya disparamos a
-    // Sentry desde el job), pero también lo logueamos a Railway para que
-    // sea visible en los logs sin hacer cross-service.
+    // Backup stale ya dispara email al ADMIN_ALERT_EMAIL desde el service
+    // cuando hay 2 fallos seguidos. Lo logueamos también acá para que sea
+    // visible en Railway logs sin tener que cruzar a Resend.
     logger.warn(
       { backup, elapsedMs },
       "health: ok pero backup stale (>26h sin éxito)",
