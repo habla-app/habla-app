@@ -1,7 +1,7 @@
 # CLAUDE.md — Habla! App
 
 > Contexto operativo del proyecto. El historial detallado de bugs vive en `CHANGELOG.md` y en `git log`.
-> Última actualización: 27 Abr 2026 (Lote 7 — Backups automatizados a R2 con auto-monitoreo por email).
+> Última actualización: 27 Abr 2026 (Lote 8 — Culqi mockeado + contabilidad partida doble + conciliación Interbank + Job I).
 
 ---
 
@@ -277,6 +277,9 @@ Schema completo en `packages/db/prisma/schema.prisma`. Modelos principales:
 - Headers de seguridad globales (HSTS, XFO, XCTO, Referrer-Policy, Permissions-Policy, CSP en Report-Only). Detalle en §16.
 - Verificación email obligatoria para comprar Lukas.
 
+### Contabilidad de partida doble (Lote 8)
+- Toda mutación que afecte caja, pasivos Lukas o resultados pasa por `lib/services/contabilidad/contabilidad.service.ts`. Cada función valida `debe === haber` antes de commitear. IGV se calcula con `× 18/118` sobre montos brutos. Saldo de cuentas vive en `CuentaContable.saldoActual` y se cuadra contra el ledger por Job I. Pasivos Lukas (cuentas 4010/4020/4030) deben coincidir con `∑ Usuario.balance{Compradas|Bonus|Ganadas}`. Flag `PAGOS_HABILITADOS` gobierna modo preview (datos descartables, reseteables vía `POST /admin/contabilidad/reset-preview`) vs producción (irreversible).
+
 ---
 
 ## 7. ENTORNO Y COMANDOS
@@ -372,6 +375,7 @@ pnpm exec tsc --noEmit
   
   Env var nueva: `ADMIN_ALERT_EMAIL` (opcional). Si falta, alertas se loggean sin enviar.
 - **Lote 7 — Backups automatizados a R2 con auto-monitoreo por email (27 Abr 2026):** [`lib/services/backup-r2.service.ts`](apps/web/lib/services/backup-r2.service.ts) ejecuta `pg_dump -Fc` 1x/día y sube a R2 como `daily/habla-YYYY-MM-DD.dump` + (día 1 del mes) `monthly/habla-YYYY-MM.dump`. Retención: 30 días daily, indefinido monthly. Job H en `instrumentation.ts` tick cada 1h, dispara cuando hora Lima ≥ 04:00 y no hubo backup hoy. Cada intento se registra en la tabla nueva `BackupLog` (migration `20260427000000_add_backup_log_lote7`). Si los últimos 2 fallaron consecutivos, `notifyBackupFallo` envía email a `ADMIN_ALERT_EMAIL` (template `backupFalloTemplate`). Endpoints admin (Bearer CRON_SECRET): `POST /api/v1/admin/backup/ejecutar` (manual) y `GET /api/v1/admin/backup/historial` (últimos 30 intentos). `/api/health` lee el state desde `BackupLog` (no más in-memory). Reemplaza la implementación previa basada en Sentry alerts; `backup.service.ts` y `/api/cron/backup-db` eliminados. Runbook actualizado en [docs/runbook-restore.md](docs/runbook-restore.md).
+- **Lote 8 — Culqi mockeado + contabilidad partida doble + conciliación Interbank + Job I (27 Abr 2026):** Pasarela `PasarelaPagos` con `CulqiAdapter` (real, fetch a `api.culqi.com`) y `MockPasarelaPagos` (firma HMAC y dispara webhook al server local); selector vía `pagosHabilitados()` en [lib/feature-flags.ts](apps/web/lib/feature-flags.ts) con boot guard si faltan creds. Webhook `/api/v1/webhooks/culqi` idempotente vía `EventoCulqi.eventId @unique`. Sistema contable: 11 cuentas seed en [`lib/services/contabilidad/plan-de-cuentas.ts`](apps/web/lib/services/contabilidad/plan-de-cuentas.ts), service con 8 funciones (`registrarApertura/CompraLukas/BonusEmitido/CierreTorneo/CanjeAprobado/CompraPremioFisico/PagoIGV/AjusteManual`), todas validan `debe===haber` y proyectan a `MovimientoBancoEsperado` cuando tocan Caja-Banco. Hooks dentro de `$transaction` en `compras.service`, `ranking.finalizarTorneo`, `canjes.actualizarEstadoAdmin`, `auth/signup`, `auth-adapter` (OAuth). IGV split bruto → neto (`× 100/118`) + IGV (`× 18/118`). Conciliación: parser Interbank en [`extracto-interbank.parser.ts`](apps/web/lib/services/extracto-interbank.parser.ts), match por monto exacto + ±3 días, vista `/admin/conciliacion` con conciliados + pendientes (esperados/reales). Job I en `instrumentation.ts` con timing **idéntico a Job G** (120s tras boot, tick 1h, skip <23h); 6 invariantes C1-C6, persiste en `AuditoriaContableLog`, email tras 2 errores consecutivos. **Modo preview vs producción** gobernado por `PAGOS_HABILITADOS`: con flag OFF los hooks contables igualmente registran asientos (descartables, banner ⚠️ visual en vistas admin), endpoint `POST /admin/contabilidad/reset-preview` con triple guard (`pagosHabilitados()===false` + cero compras + confirmación literal `"RESET_PREVIEW_CONTABILIDAD"`). Repricing packs incluido (Parte 1 del lote): 10/25/50/100 con bonos 0/5/10/20, fuente única [`lib/constants/packs-lukas.ts`](apps/web/lib/constants/packs-lukas.ts). 1 enum nuevo (`TipoCuenta`) + 8 tablas nuevas; migration `20260427100000_lote_8_contabilidad`. `pnpm tsc --noEmit` y `pnpm lint` sin errores.
 
 ### ⏳ Pendiente
 - **Sub-Sprint 2 — Pagos Culqi:** `/wallet` ya tiene UI completa (balance hero, 4 packs, historial), falta integración Culqi.js + webhook `/webhooks/culqi` + acreditación real de Lukas. Endpoints diseñados: `POST /lukas/comprar`, `POST /webhooks/culqi`. Enforcement de límite mensual ya listo (`verificarLimiteCompra` en `limites.service.ts`).
@@ -668,6 +672,7 @@ Baseline operacional activo tras Lote 1 (Abr 2026).
 | Cloudflare Email Routing | Email entrante `@hablaplay.com` | `soporte@`, `hola@`, `legal@`, catch-all → `hablaplay@gmail.com` |
 | Railway Backups nativos | DB recovery | 3 schedules: Daily / Weekly / Monthly |
 | R2 `habla-db-backups` (Lote 7) | Backup externo automatizado | `pg_dump` + gzip 1x/día desde el cron in-process; ventana objetivo 03:00 UTC. Retención: 30 daily + 1/mes indefinido. Restauración en [docs/runbook-restore.md](docs/runbook-restore.md). |
+| Culqi (Lote 8) | Pasarela de pagos | Activado por flag `PAGOS_HABILITADOS=true` + 3 creds (`CULQI_PUBLIC_KEY/SECRET_KEY/WEBHOOK_SECRET`). Webhook idempotente con `EventoCulqi.eventId @unique`. Adaptador real `CulqiAdapter`, mock `MockPasarelaPagos`. |
 | Google Search Console | SEO + ownership | `hablaplay.com` verificado via Cloudflare |
 
 ### Endpoints de infra
@@ -676,6 +681,7 @@ Baseline operacional activo tras Lote 1 (Abr 2026).
 - `POST /api/cron/vencimiento-lukas` — dispara job de vencimiento de Lukas ad-hoc (Lote 6A). Auth `Authorization: Bearer <CRON_SECRET>`. En producción corre automáticamente cada 1h en `instrumentation.ts` (Job F); este endpoint es para pruebas/debug.
 - `POST /api/v1/admin/backfill/bolsas` — dispara backfill de las 3 bolsas post-deploy (Lote 6A). Auth `Authorization: Bearer <CRON_SECRET>`. Idempotente: si ya corrió (todas las txs tienen bolsa), retorna inmediatamente.
 - Endpoints de auditoría de balances (Lote 6C-fix3+fix4+fix5) — listados con detalle en la entrada del lote arriba. Todos `Bearer <CRON_SECRET>`. Resumen: `GET /admin/auditoria/full` (scan), `GET /admin/auditoria/usuario/[id]` (drill-down), `GET /admin/auditoria/balance` (legacy I1 only), `POST /admin/auditoria/balance/corregir`, `POST /admin/auditoria/recategorizar-bolsas`, `POST /admin/auditoria/reset-y-inyectar-bonus`, `POST /admin/auditoria/mover-compradas-a-bonus`, `POST /admin/auditoria/sanear-historial`, `POST /admin/auditoria/reset-completo` (este último wipea todo: tickets, tx, canjes — pre-prod ONLY).
+- Endpoints contabilidad (Lote 8) — todos `Bearer <CRON_SECRET>`. Resumen: `POST /admin/contabilidad/{apertura, backfill-torneos, reset-preview, cargar-extracto, conciliar-manual, ajuste-manual, auditoria/ejecutar}`, `GET /admin/contabilidad/auditoria/historial`. Vistas SSR: `/admin/contabilidad`, `/admin/conciliacion`, `/admin/ingresos`. `reset-preview` con triple guard (`pagosHabilitados()===false` + cero compras + confirmación literal).
 
 ### Headers de seguridad
 Aplicados globalmente vía `next.config.js` → `headers()`:
@@ -728,6 +734,15 @@ R2_BUCKET_BACKUPS=habla-backups       # bucket dedicado a dumps de Postgres
 R2_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
 ```
 Si falta cualquiera de las 5, el job se autodeshabilita (`/api/health` reporta `checks.backup: "unconfigured"` y `BackupLog` registra el intento como fallido). `CRON_SECRET` ya existía para otros crons; se reutiliza para `/api/v1/admin/backup/ejecutar` y `/api/v1/admin/backup/historial`.
+
+Lote 8 (Abr 2026) — flag maestro de pagos + creds Culqi (las 3 vars activas con flag ON):
+```
+PAGOS_HABILITADOS=false              # gobierna Culqi Y modo preview/producción del sistema contable
+CULQI_PUBLIC_KEY=<configured if ON>  # ya existía como placeholder
+CULQI_SECRET_KEY=<configured if ON>
+CULQI_WEBHOOK_SECRET=<configured if ON>
+```
+Boot guard en [feature-flags.ts](apps/web/lib/feature-flags.ts): si `PAGOS_HABILITADOS=true` pero falta cualquiera de las 3 creds, el flag se fuerza a `false` y se loggea error — evita abrir el endpoint de compra contra una pasarela rota.
 
 Nuevas en Lote 3 — datos legales (se completarán cuando llegue el RUC y la partida SUNARP). Mientras estén ausentes, los placeholders `{{LEGAL_*}}` aparecen literales en los documentos públicos:
 ```
