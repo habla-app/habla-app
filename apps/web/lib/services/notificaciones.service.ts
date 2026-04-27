@@ -19,6 +19,7 @@ import { prisma } from "@habla/db";
 import { enviarEmail } from "./email.service";
 import {
   auditoriaAlertaTemplate,
+  auditoriaContableAlertaTemplate,
   backupFalloTemplate,
   canjeEnviadoTemplate,
   canjeEntregadoTemplate,
@@ -33,6 +34,7 @@ import {
   torneoCanceladoTemplate,
   verifCodigoSmsEmailTemplate,
   type AuditoriaAlertaInput,
+  type AuditoriaContableAlertaInput,
   type BackupFalloInput,
 } from "../emails/templates";
 import { logger } from "./logger";
@@ -466,5 +468,36 @@ export async function notifyBackupFallo(
     );
   } catch (err) {
     logger.error({ err }, "notifyBackupFallo: error");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Auditoría contable (Lote 8 §2.D) — alerta interna
+// ---------------------------------------------------------------------------
+
+/**
+ * Envía email al admin cuando Job I detecta hallazgos `error` 2 veces
+ * seguidas. NO consulta `PreferenciasNotif` — operación interna del sistema.
+ */
+export async function notifyAuditoriaContable(
+  input: AuditoriaContableAlertaInput,
+): Promise<void> {
+  const to = process.env.ADMIN_ALERT_EMAIL;
+  if (!to) {
+    logger.warn(
+      { errores: input.errores, warns: input.warns },
+      "auditoria-contable: ADMIN_ALERT_EMAIL no configurado, alerta NO enviada",
+    );
+    return;
+  }
+  try {
+    const tpl = auditoriaContableAlertaTemplate(input);
+    await enviarEmail({ to, ...tpl });
+    logger.info(
+      { to, errores: input.errores, warns: input.warns },
+      "auditoria-contable: alerta enviada por email",
+    );
+  } catch (err) {
+    logger.error({ err }, "notifyAuditoriaContable: error");
   }
 }

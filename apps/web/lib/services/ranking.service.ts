@@ -24,6 +24,7 @@ import {
 import { recalcularTorneo } from "./puntuacion.service";
 import { notifyPremioGanado } from "./notificaciones.service";
 import { verificarConsistenciaBalance } from "./balance-consistency.helper";
+import { registrarCierreTorneo } from "./contabilidad/contabilidad.service";
 
 // ---------------------------------------------------------------------------
 // Tipos públicos
@@ -450,6 +451,18 @@ export async function finalizarTorneo(
       where: { id: torneoId },
       data: { estado: "FINALIZADO" },
     });
+
+    // Lote 8: asiento contable de cierre (rake → ingreso neto + IGV).
+    // Idempotente — si ya existe, hace no-op.
+    try {
+      await registrarCierreTorneo(torneoId, tx);
+    } catch (err) {
+      logger.error(
+        { err, torneoId },
+        "registrarCierreTorneo falló dentro de finalizarTorneo",
+      );
+      throw err;
+    }
 
     return ganadores;
   });

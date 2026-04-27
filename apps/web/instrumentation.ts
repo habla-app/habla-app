@@ -357,6 +357,106 @@ export async function register() {
     }, AUDIT_TICK_INTERVAL_MS);
   }, 120_000);
 
+  // -------------------------------------------------------------------
+  // Job I — Auditoría contable (Lote 8). Mismo timing exacto que Job G:
+  // primera corrida 120s tras boot, tick cada 1h, skip si <23h. Persiste
+  // resultado en AuditoriaContableLog. Si los últimos 2 rows muestran
+  // hallazgos `error` consecutivos, dispara email al ADMIN_ALERT_EMAIL.
+  // -------------------------------------------------------------------
+  const { ejecutarAuditoria } = await import(
+    "./lib/services/auditoria-contable.service"
+  );
+  const { notifyAuditoriaContable } = await import(
+    "./lib/services/notificaciones.service"
+  );
+
+  let lastAuditContableAt: Date | null = null;
+  const AUDIT_CONTABLE_MIN_BETWEEN_RUNS_MS = 23 * 60 * 60 * 1000;
+
+  async function tickAuditoriaContable() {
+    try {
+      const now = new Date();
+      if (
+        lastAuditContableAt &&
+        now.getTime() - lastAuditContableAt.getTime() <
+          AUDIT_CONTABLE_MIN_BETWEEN_RUNS_MS
+      ) {
+        return;
+      }
+      const reporte = await ejecutarAuditoria();
+      lastAuditContableAt = now;
+
+      // Persistir en BD para historial.
+      const { prisma } = await import("@habla/db");
+      await prisma.auditoriaContableLog.create({
+        data: {
+          ok: reporte.ok,
+          totalHallazgos: reporte.totalHallazgos,
+          errores: reporte.errores,
+          warns: reporte.warns,
+          resumen: {
+            scaneadoEn: reporte.scaneadoEn,
+            durationMs: reporte.durationMs,
+            hallazgos: reporte.hallazgos.slice(0, 50),
+            totales: reporte.totales,
+          } as unknown as object,
+        },
+      });
+
+      if (reporte.ok && reporte.warns === 0) {
+        logger.info(
+          { durationMs: reporte.durationMs, totales: reporte.totales },
+          "[cron in-process] auditoría contable: ✅ todo OK",
+        );
+        return;
+      }
+
+      logger.warn(
+        {
+          errores: reporte.errores,
+          warns: reporte.warns,
+          totalHallazgos: reporte.totalHallazgos,
+        },
+        "[cron in-process] auditoría contable: hallazgos",
+      );
+
+      // Si hay errors, decidir si emitimos email (regla "2 fallos consecutivos").
+      if (reporte.errores > 0) {
+        const ultimos = await prisma.auditoriaContableLog.findMany({
+          orderBy: { fechaIntento: "desc" },
+          take: 2,
+        });
+        const dosSeguidos = ultimos.length === 2 && ultimos.every((r) => r.errores > 0);
+        if (dosSeguidos) {
+          await notifyAuditoriaContable({
+            scaneadoEn: reporte.scaneadoEn,
+            totalHallazgos: reporte.totalHallazgos,
+            errores: reporte.errores,
+            warns: reporte.warns,
+            hallazgos: reporte.hallazgos.map((h) => ({
+              codigo: h.codigo,
+              severidad: h.severidad,
+              mensaje: h.mensaje,
+            })),
+          });
+        }
+      }
+    } catch (err) {
+      logger.error(
+        { err },
+        "[cron in-process] tick auditoría-contable falló",
+      );
+    }
+  }
+
+  // Mismo timing exacto que Job G — primera corrida 120s tras boot.
+  setTimeout(() => {
+    void tickAuditoriaContable();
+    setInterval(() => {
+      void tickAuditoriaContable();
+    }, AUDIT_TICK_INTERVAL_MS);
+  }, 120_000);
+
   logger.info(
     {
       cerrarTorneos: `${CERRAR_INTERVAL_MS / 1000}s`,
@@ -366,6 +466,7 @@ export async function register() {
       backupDiario: `${BACKUP_TICK_INTERVAL_MS / 1000 / 60}min (target ${BACKUP_TARGET_LIMA_HOUR}:00 PET, email a ADMIN_ALERT_EMAIL si 2 fallos)`,
       vencimientoLukas: `${VENCIMIENTO_TICK_INTERVAL_MS / 1000 / 60}min (skip si <23h)`,
       auditoriaBalances: `${AUDIT_TICK_INTERVAL_MS / 1000 / 60}min (skip si <23h, email a ADMIN_ALERT_EMAIL)`,
+      auditoriaContable: `${AUDIT_TICK_INTERVAL_MS / 1000 / 60}min (skip si <23h, mismo timing que Job G)`,
     },
     "cron in-process registrado",
   );

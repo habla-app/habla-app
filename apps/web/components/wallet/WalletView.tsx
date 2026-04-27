@@ -25,6 +25,8 @@ interface Props {
   proxVencimiento: WalletProxVencimiento | null;
   transacciones: WalletTransaccion[];
   totalMovimientos: number;
+  /** Lote 8: si false, los pack cards muestran "Próximamente disponible". */
+  pagosHabilitados: boolean;
 }
 
 export function WalletView({
@@ -34,6 +36,7 @@ export function WalletView({
   proxVencimiento,
   transacciones,
   totalMovimientos,
+  pagosHabilitados,
 }: Props) {
   const [filtro, setFiltro] = useState<MoveFiltro>("TODOS");
   const filtradas = useMemo(
@@ -101,7 +104,7 @@ export function WalletView({
         bonos={totales.bonos}
       />
 
-      <BuyPacksPlaceholder />
+      <BuyPacksPlaceholder pagosHabilitados={pagosHabilitados} />
 
       <div className="mb-6 flex items-start gap-2.5 rounded-sm border border-light bg-subtle px-4 py-3 text-xs leading-relaxed text-muted-d">
         <span aria-hidden className="flex-shrink-0 text-base opacity-70">

@@ -23,6 +23,7 @@ import { esReservado } from "@/lib/config/usernames-reservados";
 import { BONUS_BIENVENIDA_LUKAS } from "@/lib/config/economia";
 import { esUsernameOfensivo } from "@/lib/utils/username-filter";
 import { logger } from "@/lib/services/logger";
+import { registrarBonusEmitido } from "@/lib/services/contabilidad/contabilidad.service";
 
 export const dynamic = "force-dynamic";
 // Abr 2026: case-sensitive para display (Gustavo ≠ gustavo en UI), pero
@@ -137,6 +138,14 @@ export async function POST(req: NextRequest) {
           venceEn: null,
         },
       });
+
+      // Lote 8: asiento contable del bonus de bienvenida.
+      await registrarBonusEmitido(
+        usuario.id,
+        BONUS_BIENVENIDA_LUKAS,
+        "bienvenida",
+        tx,
+      );
     });
 
     logger.info({ email, username }, "signup email completado");

@@ -35,6 +35,7 @@ import {
   notifyCanjeEntregado,
   notifyCanjeSolicitado,
 } from "./notificaciones.service";
+import { registrarCanjeAprobado } from "./contabilidad/contabilidad.service";
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -352,10 +353,17 @@ export async function actualizarEstadoAdmin(
     return { canje: result, reembolso: canje.lukasUsados };
   }
 
-  // Transiciones no destructivas: solo update + notify.
-  const updated = await prisma.canje.update({
-    where: { id: canjeId },
-    data: { estado: input.estado },
+  // Transiciones no destructivas: update + asiento contable si aplica + notify.
+  const updated = await prisma.$transaction(async (tx) => {
+    const u = await tx.canje.update({
+      where: { id: canjeId },
+      data: { estado: input.estado },
+    });
+    // Lote 8: aprobación SOLICITADO/PENDIENTE → PROCESANDO genera asiento.
+    if (canje.estado === "PENDIENTE" && input.estado === "PROCESANDO") {
+      await registrarCanjeAprobado(canjeId, tx);
+    }
+    return u;
   });
 
   if (input.estado === "ENVIADO") {

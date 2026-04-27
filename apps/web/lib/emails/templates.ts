@@ -603,3 +603,76 @@ export function backupFalloTemplate(input: BackupFalloInput) {
   return { subject, html, text };
 }
 
+// ---------------------------------------------------------------------------
+// Auditoría contable — alerta interna (Lote 8 §2.D)
+// ---------------------------------------------------------------------------
+
+export interface AuditoriaContableAlertaInput {
+  scaneadoEn: string;
+  totalHallazgos: number;
+  errores: number;
+  warns: number;
+  hallazgos: Array<{
+    codigo: string;
+    severidad: "error" | "warn";
+    mensaje: string;
+  }>;
+}
+
+/**
+ * Email interno al admin cuando Job I detecta hallazgos `error` 2 veces
+ * seguidas. Patrón idéntico al de backup. Subject prefijado con [Habla! AUDIT].
+ */
+export function auditoriaContableAlertaTemplate(
+  input: AuditoriaContableAlertaInput,
+) {
+  const subject = `[Habla! AUDIT] ${input.errores} hallazgos contables — auditoría diaria`;
+  const filas = input.hallazgos
+    .slice(0, 25)
+    .map((h) => {
+      const color = h.severidad === "error" ? "#FF3D3D" : "#FFB800";
+      return `<tr>
+        <td style="padding:8px;border-bottom:1px solid #e5e7eb;font-size:13px;color:${color};font-weight:700;">${escapeHtml(h.codigo)}</td>
+        <td style="padding:8px;border-bottom:1px solid #e5e7eb;font-size:13px;color:rgba(0,16,80,0.85);">${escapeHtml(h.mensaje)}</td>
+      </tr>`;
+    })
+    .join("");
+
+  const html = wrapEmail(
+    subject,
+    `<h1 style="margin:0 0 8px;font-size:22px;color:#FF3D3D;">⚠️ Auditoría contable: ${input.errores} hallazgos error</h1>
+    <p style="margin:0 0 16px;font-size:14px;color:rgba(0,16,80,0.85);line-height:1.5;">
+      Job I detectó <strong>${input.errores} hallazgos error</strong> y ${input.warns} warns en el último scan.
+      Revisar el balance general y los asientos antes de que el problema escale.
+    </p>
+    <p style="margin:0 0 16px;font-size:13px;color:rgba(0,16,80,0.58);">
+      Scaneado: ${escapeHtml(input.scaneadoEn)}
+    </p>
+    <h2 style="margin:24px 0 8px;font-size:16px;color:#001050;">Hallazgos (top 25)</h2>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <thead><tr style="background:#001050;color:#FFFFFF;">
+        <th style="padding:8px;text-align:left;">Código</th>
+        <th style="padding:8px;text-align:left;">Mensaje</th>
+      </tr></thead>
+      <tbody>${filas}</tbody>
+    </table>
+    <h2 style="margin:24px 0 8px;font-size:16px;color:#001050;">Acciones sugeridas</h2>
+    <ul style="margin:0;padding-left:20px;font-size:13px;color:rgba(0,16,80,0.85);line-height:1.6;">
+      <li>Drill-down: <code>POST /api/v1/admin/contabilidad/auditoria/ejecutar</code> con <code>Bearer CRON_SECRET</code>.</li>
+      <li>Revisar el balance general: <code>GET /api/v1/admin/contabilidad/balance-general</code>.</li>
+      <li>Si C1 falla (Activo ≠ Pasivo+Patrimonio+Resultado): hay un asiento desbalanceado o un hook contable que omitió alguna cuenta.</li>
+      <li>Si C4 falla (pasivos Lukas ≠ usuarios): cruzar con la auditoría de balances Job G — probablemente hay correlación.</li>
+    </ul>`,
+  );
+
+  const text = [
+    `Auditoría contable: ${input.errores} hallazgos error / ${input.warns} warns`,
+    `Scaneado: ${input.scaneadoEn}`,
+    "",
+    "Hallazgos (top 25):",
+    ...input.hallazgos.slice(0, 25).map((h) => `  [${h.codigo}] ${h.severidad}: ${h.mensaje}`),
+  ].join("\n");
+
+  return { subject, html, text };
+}
+

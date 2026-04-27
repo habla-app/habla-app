@@ -10,6 +10,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { obtenerWalletView } from "@/lib/services/wallet-view.service";
 import { WalletView } from "@/components/wallet/WalletView";
+import { pagosHabilitados } from "@/lib/feature-flags";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,7 @@ export default async function WalletPage() {
 
   const balance = session.user.balanceLukas ?? 0;
   const vista = await obtenerWalletView(session.user.id, balance);
+  const pagosOn = pagosHabilitados();
 
   return (
     <WalletView
@@ -28,6 +30,7 @@ export default async function WalletPage() {
       proxVencimiento={vista.proxVencimiento}
       transacciones={vista.transacciones}
       totalMovimientos={vista.totalMovimientos}
+      pagosHabilitados={pagosOn}
     />
   );
 }

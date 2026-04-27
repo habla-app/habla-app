@@ -28,6 +28,15 @@ export default async function AdminPage() {
           <Link href="/admin/canjes" className="hover:underline">
             🎁 Gestionar canjes →
           </Link>
+          <Link href="/admin/contabilidad" className="hover:underline">
+            📒 Contabilidad →
+          </Link>
+          <Link href="/admin/conciliacion" className="hover:underline">
+            🏦 Conciliación →
+          </Link>
+          <Link href="/admin/ingresos" className="hover:underline">
+            💰 Ingresos →
+          </Link>
         </div>
       </header>
 

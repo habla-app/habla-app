@@ -24,8 +24,30 @@ const VISUALS: Record<PackLukasId, PackVisual> = {
   vip:    { id: "vip",    emoji: "👑", variant: "best",    badge: "⭐ Mejor valor" },
 };
 
-export function BuyPacksPlaceholder() {
+interface BuyPacksPlaceholderProps {
+  /** Lote 8: si false, los packs muestran tooltip "Próximamente". */
+  pagosHabilitados?: boolean;
+}
+
+export function BuyPacksPlaceholder({
+  pagosHabilitados = false,
+}: BuyPacksPlaceholderProps = {}) {
   const [selected, setSelected] = useState<PackLukasId | null>("large");
+  const [toast, setToast] = useState<string | null>(null);
+
+  const handleSelect = (pack: (typeof PACKS_LUKAS)[number]) => {
+    setSelected(pack.id);
+    track("lukas_purchase_started", {
+      pack_id: pack.id,
+      amount: pack.soles,
+    });
+    if (!pagosHabilitados) {
+      setToast(
+        `Próximamente disponible. Estamos cerrando Culqi para habilitar la compra del pack ${pack.id}.`,
+      );
+      setTimeout(() => setToast(null), 4000);
+    }
+  };
 
   return (
     <section className="mb-5 rounded-md border border-light bg-card p-6 shadow-sm">
@@ -52,22 +74,28 @@ export function BuyPacksPlaceholder() {
               pack={pack}
               visual={visual}
               selected={selected === pack.id}
-              onSelect={() => {
-                setSelected(pack.id);
-                track("lukas_purchase_started", {
-                  pack_id: pack.id,
-                  amount: pack.soles,
-                });
-              }}
+              disabled={!pagosHabilitados}
+              onSelect={() => handleSelect(pack)}
             />
           );
         })}
       </div>
 
-      <div className="mt-4 rounded-sm border border-alert-info-border bg-alert-info-bg px-4 py-3 text-[12px] leading-relaxed text-alert-info-text">
-        <strong>Próximamente disponible.</strong> Estamos cerrando Culqi para
-        habilitar la compra de Lukas con tarjeta y Yape.
-      </div>
+      {!pagosHabilitados && (
+        <div className="mt-4 rounded-sm border border-alert-info-border bg-alert-info-bg px-4 py-3 text-[12px] leading-relaxed text-alert-info-text">
+          <strong>Próximamente disponible.</strong> Estamos cerrando Culqi para
+          habilitar la compra de Lukas con tarjeta y Yape.
+        </div>
+      )}
+
+      {toast && (
+        <div
+          role="status"
+          className="mt-3 rounded-sm border border-alert-warning-border bg-alert-warning-bg px-4 py-3 text-[12px] text-alert-warning-text"
+        >
+          {toast}
+        </div>
+      )}
     </section>
   );
 }
@@ -76,11 +104,13 @@ function PackCard({
   pack,
   visual,
   selected,
+  disabled,
   onSelect,
 }: {
   pack: { id: PackLukasId; soles: number; lukas: number; bonus: number };
   visual: PackVisual;
   selected: boolean;
+  disabled?: boolean;
   onSelect: () => void;
 }) {
   const variantClass =
@@ -104,7 +134,8 @@ function PackCard({
       type="button"
       onClick={onSelect}
       aria-pressed={selected}
-      className={`relative rounded-md border-2 p-5 pt-6 text-center transition hover:-translate-y-0.5 hover:border-brand-gold hover:shadow-md ${variantClass} ${selectedClass}`}
+      title={disabled ? "Próximamente disponible" : undefined}
+      className={`relative rounded-md border-2 p-5 pt-6 text-center transition hover:-translate-y-0.5 hover:border-brand-gold hover:shadow-md ${variantClass} ${selectedClass} ${disabled ? "opacity-90" : ""}`}
     >
       {visual.badge ? (
         <span

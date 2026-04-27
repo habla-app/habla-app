@@ -13,6 +13,11 @@ import { getBalanceTotal } from "../lukas-display";
 import { logger } from "./logger";
 import { MESES_VENCIMIENTO_COMPRA } from "../config/economia";
 import { verificarConsistenciaBalance } from "./balance-consistency.helper";
+import {
+  registrarCompraLukas,
+  registrarBonusEmitido,
+} from "./contabilidad/contabilidad.service";
+import { type PackLukasId } from "../constants/packs-lukas";
 
 // Re-export para no romper callers existentes. La fuente única vive en
 // `lib/constants/packs-lukas.ts` (Lote 8).
@@ -26,6 +31,9 @@ export interface AcreditarCompraInput {
   montoBonusExtra: number;
   /** ID de la transacción Culqi, para idempotencia y audit. */
   refId: string;
+  /** ID del pack para registro contable (Lote 8). Opcional para callers
+   *  legacy; sin él, la acreditación funciona pero no genera asiento. */
+  packId?: PackLukasId;
 }
 
 export interface AcreditarCompraResult {
@@ -94,6 +102,20 @@ export async function acreditarCompra(
 
     // Lote 6C-fix3: guard de consistencia post-mutación.
     await verificarConsistenciaBalance(tx, input.usuarioId, "compras.acreditar");
+
+    // Lote 8: registrar contabilidad dentro de la misma tx. Si packId no
+    // viene (callers legacy), salteamos el asiento — Lote 9 los migrará.
+    if (input.packId) {
+      await registrarCompraLukas(input.usuarioId, input.packId, input.refId, tx);
+      if (input.montoBonusExtra > 0) {
+        await registrarBonusEmitido(
+          input.usuarioId,
+          input.montoBonusExtra,
+          "pack_bonus",
+          tx,
+        );
+      }
+    }
 
     return {
       nuevoBalance: getBalanceTotal(usuario!),

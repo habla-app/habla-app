@@ -17,6 +17,7 @@
 import type { Adapter, AdapterUser } from "next-auth/adapters";
 import { prisma, type Usuario } from "@habla/db";
 import { BONUS_BIENVENIDA_LUKAS } from "./config/economia";
+import { registrarBonusEmitido } from "./services/contabilidad/contabilidad.service";
 
 function toAdapterUser(u: Usuario): AdapterUser {
   return {
@@ -96,6 +97,14 @@ export function HablaPrismaAdapter(): Adapter {
             venceEn: null,
           },
         });
+
+        // Lote 8: asiento contable del bonus de bienvenida (OAuth primera vez).
+        await registrarBonusEmitido(
+          creado.id,
+          BONUS_BIENVENIDA_LUKAS,
+          "bienvenida",
+          tx,
+        );
 
         return creado;
       });
