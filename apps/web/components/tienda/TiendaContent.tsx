@@ -65,60 +65,60 @@ export function TiendaContent({
         </p>
       </header>
 
-      {/* Card combinado — balance de Lukas Premios + explicación.
-          Lote 6C-fix8: junta los 2 mensajes anteriores en un solo recuadro
-          con divider sutil interno (mismo patrón visual que wallet hero).
-          Layout: izq (balance gigante con ícono circular verde) → divider
-          → der (mini-explainer "ganadas vs otras"). Mobile: stack vertical
-          con divider horizontal. Sin agrandar respecto a la suma de los 2
-          cards anteriores. */}
+      {/* Banner split horizontal dark — izq balance Lukas Premios sobre
+          fondo blue-dark, der explicación sobre fondo dark-card (un tono
+          más claro). Sin bordes internos visibles excepto un separador
+          sutil. Mobile: stack vertical (separador horizontal). Mismo dato
+          que el card combinado anterior, solo cambia presentación. */}
       <section
-        className="mb-6 overflow-hidden rounded-md border border-brand-gold/30 bg-gradient-to-br from-alert-success-bg via-card to-card shadow-sm"
+        className="mb-6 flex flex-col overflow-hidden rounded-md shadow-md sm:flex-row"
         data-testid="tienda-premios-card"
       >
-        <div className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:gap-4">
-          {isLoggedIn ? (
-            <>
-              {/* Lado izq — balance */}
-              <div className="flex items-center gap-3 sm:flex-shrink-0">
-                <div
-                  aria-hidden
-                  className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border-2 border-brand-green/40 bg-card text-[24px] shadow-sm"
-                >
-                  🏆
-                </div>
-                <div className="min-w-0">
-                  <div className="font-display text-[28px] font-black leading-none text-alert-success-text">
-                    {ganadas.toLocaleString("es-PE")} 🪙
-                  </div>
-                  <div className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.06em] text-muted-d">
-                    Lukas Premios · Para canjear
-                  </div>
-                </div>
+        {isLoggedIn ? (
+          <>
+            {/* Lado izq (~40%) — balance, fondo blue-dark */}
+            <div className="bg-dark-surface px-5 py-4 sm:w-[40%] sm:flex-shrink-0">
+              <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-brand-gold/80">
+                Lukas para canjear
               </div>
-
-              {/* Divider sutil — vertical en desktop, horizontal en mobile */}
               <div
-                aria-hidden
-                className="h-px w-full flex-shrink-0 bg-light sm:h-12 sm:w-px"
-              />
-            </>
-          ) : null}
+                className="mt-1 font-display text-[36px] font-black leading-none text-brand-gold [text-shadow:0_4px_20px_rgba(255,184,0,0.25)] sm:text-[40px]"
+                data-testid="tienda-balance-amount"
+              >
+                {ganadas.toLocaleString("es-PE")}{" "}
+                <span aria-hidden className="align-middle text-[0.55em]">
+                  🪙
+                </span>
+              </div>
+            </div>
 
-          {/* Lado der (o fila completa si anónimo) — explicación */}
-          <div className="flex items-start gap-2 text-[12px] leading-relaxed text-body sm:flex-1">
+            {/* Separador sutil — horizontal en mobile, vertical en desktop */}
+            <div
+              aria-hidden
+              className="h-px w-full flex-shrink-0 bg-dark-border sm:h-auto sm:w-px"
+            />
+
+            {/* Lado der (~60%) — explicación, fondo dark-card */}
+            <div className="flex flex-1 items-start gap-2 bg-dark-card px-5 py-4 text-[12px] leading-relaxed text-white/70">
+              <span aria-hidden className="flex-shrink-0 text-base">
+                💡
+              </span>
+              <p>
+                Sólo las Lukas ganadas en torneos sirven para canjear acá
+              </p>
+            </div>
+          </>
+        ) : (
+          /* Anónimo — usa fila única con el mismo fondo dark-card */
+          <div className="flex items-start gap-2 bg-dark-card px-5 py-4 text-[12px] leading-relaxed text-white/70">
             <span aria-hidden className="flex-shrink-0 text-base">
               💡
             </span>
             <p>
-              Solo las{" "}
-              <strong className="text-alert-success-text">Lukas Premios</strong>
-              {" "}(ganadas en torneos) sirven para canjear acá. Las{" "}
-              <strong className="text-brand-gold-dark">otras Lukas</strong> son
-              para inscribirte en torneos.
+              Sólo las Lukas ganadas en torneos sirven para canjear acá
             </p>
           </div>
-        </div>
+        )}
       </section>
 
       {featured ? (

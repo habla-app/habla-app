@@ -80,13 +80,12 @@ export function WalletBalanceHero({
           className="h-px w-full bg-white/15 sm:h-24 sm:w-px sm:flex-shrink-0"
         />
 
-        {/* Lado derecho — Lukas Premios (subconjunto canjeable, más pequeño) */}
+        {/* Lado derecho — subconjunto canjeable. Sin label/título encima:
+            solo el número (verde) y la nota inferior aclaran que es un
+            subset del balance total, no un saldo separado. */}
         <div className="flex-shrink-0 min-w-0 sm:w-[42%]">
-          <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-brand-green/90">
-            Lukas Premios
-          </div>
           <div
-            className="mt-1.5 font-display text-[36px] font-black leading-none text-brand-green [text-shadow:0_4px_20px_rgba(0,214,143,0.25)] sm:text-[44px]"
+            className="font-display text-[36px] font-black leading-none text-brand-green [text-shadow:0_4px_20px_rgba(0,214,143,0.25)] sm:text-[44px]"
             data-testid="wallet-balance-premios"
           >
             {premios.toLocaleString("es-PE")}{" "}
@@ -94,8 +93,8 @@ export function WalletBalanceHero({
               🪙
             </span>
           </div>
-          <div className="mt-1.5 text-[12px] font-semibold text-white/80">
-            Disponibles para canjear en Premios
+          <div className="mt-1.5 text-[12px] font-semibold text-brand-green/80">
+            De los cuales canjeables
           </div>
         </div>
       </div>

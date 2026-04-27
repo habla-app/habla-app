@@ -95,14 +95,12 @@ describe("/tienda — TiendaContent", () => {
     expect(SRC).toMatch(/PrizeCardV2/);
   });
 
-  it("card combinado de premios (Lote 6C-fix8) explica que solo Premios canjean", () => {
-    // El card combinado fusionó la nota legal anterior. Wording vigente:
-    // "Solo las Lukas Premios (ganadas en torneos) sirven para canjear
-    // acá. Las otras Lukas son para inscribirte en torneos."
+  it("banner de saldo (split dark) explica que solo Lukas ganadas canjean", () => {
+    // Layout split horizontal: izq balance "Lukas para canjear", der nota
+    // "Sólo las Lukas ganadas en torneos sirven para canjear acá".
     expect(SRC).toMatch(/data-testid="tienda-premios-card"/);
-    expect(SRC).toMatch(/Solo\s+las[\s\S]{0,200}Lukas\s+Premios/i);
+    expect(SRC).toMatch(/Lukas\s+para\s+canjear/i);
+    expect(SRC).toMatch(/S[oó]lo\s+las\s+Lukas\s+ganadas\s+en\s+torneos/i);
     expect(SRC).toMatch(/canjear/i);
-    expect(SRC).toMatch(/otras\s+Lukas/i);
-    expect(SRC).toMatch(/inscribirte\s+en\s+torneos/i);
   });
 });

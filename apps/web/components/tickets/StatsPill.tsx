@@ -1,6 +1,11 @@
 // StatsPill — pill de la `.stats-summary` de /mis-combinadas.
 // Mockup `.stat-pill`: barra lateral izquierda de 4px coloreada por tono
 // (played=blue, won=gold, accuracy/net=green, best=mundial).
+//
+// Alineación: padding horizontal uniforme (px-4 a ambos lados) + flex-col
+// items-center para que ícono / valor / label estén centrados horizontalmente
+// dentro del pill. La barra ::before queda como decoración absoluta y no
+// desplaza el contenido.
 
 interface StatsPillProps {
   icon: string;
@@ -32,21 +37,21 @@ export function StatsPill({
   const wonTint = tone === "gold" ? "bg-gradient-to-br from-white to-[#FFFDF5]" : "bg-card";
   return (
     <div
-      className={`relative overflow-hidden rounded-md border border-light px-4 py-4 pl-5 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${wonTint}`}
+      className={`relative flex flex-col items-center overflow-hidden rounded-md border border-light px-4 py-4 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${wonTint}`}
     >
       <span
         aria-hidden
         className={`absolute bottom-0 left-0 top-0 w-1 ${STRIPE_TONE[tone] ?? STRIPE_TONE.neutral}`}
       />
-      <div aria-hidden className="mb-1.5 text-[24px] leading-none">
+      <div aria-hidden className="mb-1.5 text-center text-[24px] leading-none">
         {icon}
       </div>
       <div
-        className={`font-display text-[30px] font-black leading-none ${VALUE_TONE[tone] ?? VALUE_TONE.neutral}`}
+        className={`text-center font-display text-[30px] font-black leading-none ${VALUE_TONE[tone] ?? VALUE_TONE.neutral}`}
       >
         {value}
       </div>
-      <div className="mt-1.5 text-[11px] font-bold uppercase leading-tight tracking-[0.06em] text-muted-d">
+      <div className="mt-1.5 text-center text-[11px] font-bold uppercase leading-tight tracking-[0.06em] text-muted-d">
         {label}
       </div>
     </div>
