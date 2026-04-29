@@ -26,7 +26,7 @@ Plataforma web de torneos de predicciones de futbol orientada al mercado peruano
 | ORM | Prisma |
 | WebSockets | Socket.io |
 | Auth | NextAuth.js v5 |
-| Pagos | Culqi |
+| Pagos | OpenPay (BBVA, integración pendiente Lote 12) |
 | API deportiva | API-Football (RapidAPI) |
 | Hosting | Railway |
 

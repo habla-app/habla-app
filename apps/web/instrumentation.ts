@@ -164,9 +164,8 @@ export async function register() {
   // dispara el backup si (a) hoy no hay backup exitoso aún y (b) la
   // hora local Lima cae en la ventana objetivo (04:00 PET = 09:00 UTC).
   //
-  // Auto-monitoreo: cada intento (éxito o fallo) inserta un row en
-  // `BackupLog`. Si los últimos 2 fallaron consecutivos, el service
-  // dispara email al `ADMIN_ALERT_EMAIL` vía notifyBackupFallo.
+  // Cada intento (éxito o fallo) inserta un row en `BackupLog`, que
+  // alimenta el check de `/api/health` y la página `/admin/backup/historial`.
   // -------------------------------------------------------------------
   const { ejecutarBackupDiario, isR2Configured, ultimoExitoso } = await import(
     "./lib/services/backup-r2.service"
@@ -240,112 +239,10 @@ export async function register() {
   }, 60_000);
 
   // -------------------------------------------------------------------
-  // Job F (vencimiento Lukas) y Job G (auditoría de balances) se
-  // removieron en Lote 2 (Abr 2026) cuando se demolió el sistema de
-  // Lukas. La auditoría contable (Job I) se queda — mismo timing que
-  // antes (primera corrida 120s, tick 1h, skip si <23h).
+  // Jobs F (vencimiento Lukas) y G (auditoría de balances) se removieron
+  // en Lote 2 cuando se demolió el sistema de Lukas. Job I (auditoría
+  // contable) se removió en Lote 4 cuando se demolió el aparato contable.
   // -------------------------------------------------------------------
-
-  const AUDIT_TICK_INTERVAL_MS = 60 * 60 * 1000; // 1h
-
-  // -------------------------------------------------------------------
-  // Job I — Auditoría contable (Lote 8). Persiste resultado en
-  // AuditoriaContableLog. Si los últimos 2 rows muestran hallazgos
-  // `error` consecutivos, dispara email al ADMIN_ALERT_EMAIL.
-  // -------------------------------------------------------------------
-  const { ejecutarAuditoria } = await import(
-    "./lib/services/auditoria-contable.service"
-  );
-  const { notifyAuditoriaContable } = await import(
-    "./lib/services/notificaciones.service"
-  );
-
-  let lastAuditContableAt: Date | null = null;
-  const AUDIT_CONTABLE_MIN_BETWEEN_RUNS_MS = 23 * 60 * 60 * 1000;
-
-  async function tickAuditoriaContable() {
-    try {
-      const now = new Date();
-      if (
-        lastAuditContableAt &&
-        now.getTime() - lastAuditContableAt.getTime() <
-          AUDIT_CONTABLE_MIN_BETWEEN_RUNS_MS
-      ) {
-        return;
-      }
-      const reporte = await ejecutarAuditoria();
-      lastAuditContableAt = now;
-
-      // Persistir en BD para historial.
-      const { prisma } = await import("@habla/db");
-      await prisma.auditoriaContableLog.create({
-        data: {
-          ok: reporte.ok,
-          totalHallazgos: reporte.totalHallazgos,
-          errores: reporte.errores,
-          warns: reporte.warns,
-          resumen: {
-            scaneadoEn: reporte.scaneadoEn,
-            durationMs: reporte.durationMs,
-            hallazgos: reporte.hallazgos.slice(0, 50),
-            totales: reporte.totales,
-          } as unknown as object,
-        },
-      });
-
-      if (reporte.ok && reporte.warns === 0) {
-        logger.info(
-          { durationMs: reporte.durationMs, totales: reporte.totales },
-          "[cron in-process] auditoría contable: ✅ todo OK",
-        );
-        return;
-      }
-
-      logger.warn(
-        {
-          errores: reporte.errores,
-          warns: reporte.warns,
-          totalHallazgos: reporte.totalHallazgos,
-        },
-        "[cron in-process] auditoría contable: hallazgos",
-      );
-
-      // Si hay errors, decidir si emitimos email (regla "2 fallos consecutivos").
-      if (reporte.errores > 0) {
-        const ultimos = await prisma.auditoriaContableLog.findMany({
-          orderBy: { fechaIntento: "desc" },
-          take: 2,
-        });
-        const dosSeguidos = ultimos.length === 2 && ultimos.every((r) => r.errores > 0);
-        if (dosSeguidos) {
-          await notifyAuditoriaContable({
-            scaneadoEn: reporte.scaneadoEn,
-            totalHallazgos: reporte.totalHallazgos,
-            errores: reporte.errores,
-            warns: reporte.warns,
-            hallazgos: reporte.hallazgos.map((h) => ({
-              codigo: h.codigo,
-              severidad: h.severidad,
-              mensaje: h.mensaje,
-            })),
-          });
-        }
-      }
-    } catch (err) {
-      logger.error(
-        { err },
-        "[cron in-process] tick auditoría-contable falló",
-      );
-    }
-  }
-
-  // Mismo timing exacto que Job G — primera corrida 120s tras boot.
-  setTimeout(() => {
-    void tickAuditoriaContable();
-    setInterval(() => {
-      void tickAuditoriaContable();
-    }, AUDIT_TICK_INTERVAL_MS);
-  }, 120_000);
 
   logger.info(
     {
@@ -353,8 +250,7 @@ export async function register() {
       importPartidos: `${INTERVALO_IMPORT_MS / 1000 / 60}min`,
       refreshSeasons: `${INTERVALO_REFRESH_SEASONS_MS / 1000 / 3600}h`,
       pollerPartidos: `${POLLER_INTERVAL_MS / 1000}s`,
-      backupDiario: `${BACKUP_TICK_INTERVAL_MS / 1000 / 60}min (target ${BACKUP_TARGET_LIMA_HOUR}:00 PET, email a ADMIN_ALERT_EMAIL si 2 fallos)`,
-      auditoriaContable: `${AUDIT_TICK_INTERVAL_MS / 1000 / 60}min (skip si <23h)`,
+      backupDiario: `${BACKUP_TICK_INTERVAL_MS / 1000 / 60}min (target ${BACKUP_TARGET_LIMA_HOUR}:00 PET)`,
     },
     "cron in-process registrado",
   );

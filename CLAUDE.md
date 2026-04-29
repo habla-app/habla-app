@@ -1,13 +1,13 @@
 # CLAUDE.md — Habla! App
 
 > Cerebro del proyecto. Cargado en cada sesión: corto y denso. Historial detallado de cambios vive en commits y PRs.
-> Última reescritura: 30 Abr 2026 (Lote 3 — demolición de tienda + canjes + verificaciones + límites).
+> Última reescritura: 1 May 2026 (Lote 4 — demolición de contabilidad + eliminación total de Culqi).
 
 ---
 
 ## Stack
 
-Next.js 14 (App Router) + React 18 + Tailwind 3 · PostgreSQL 16 + Prisma · Redis 7 + Socket.io · Cloudflare R2 (backups) · Resend (email) · api-football.com · Railway (Dockerfile multi-stage) · Cloudflare DNS+proxy. Monorepo pnpm 10 + Turborepo.
+Next.js 14 (App Router) + React 18 + Tailwind 3 · PostgreSQL 16 + Prisma · Redis 7 + Socket.io · Cloudflare R2 (backups) · Resend (email) · api-football.com · OpenPay (BBVA, integración pendiente Lote 12) · Railway (Dockerfile multi-stage) · Cloudflare DNS+proxy. Monorepo pnpm 10 + Turborepo.
 
 ## Modelo actual
 
@@ -19,11 +19,12 @@ URL prod: `https://hablaplay.com` (alias `https://www.hablaplay.com`). El plan c
 
 | Lote | Estado | Qué hace |
 |---|---|---|
-| 0 — Base previa al pivot | ✅ | Auth NextAuth v5 (Google + magic link Resend), torneos+tickets+ranking, contabilidad partida doble, backups R2, infra Railway+Cloudflare. |
+| 0 — Base previa al pivot | ✅ | Auth NextAuth v5 (Google + magic link Resend), torneos+tickets+ranking, backups R2 a Cloudflare, infra Railway+Cloudflare. |
 | 1 — Cleanup servicios externos | ✅ | Quita Sentry, PostHog, Twilio + verificación teléfono/DNI. Cookie banner adaptado. Eventos analytics archivados en `docs/eventos-analytics-pendientes.md` para Lote 6. |
 | 2 — Demolición Lukas + wallet | ✅ | Drop completo del sistema de saldo interno: 4 columnas de balance en Usuario, columnas económicas del Torneo, tabla TransaccionLukas, enums. UI sin balance: NavBar limpio, sidebar de 3 widgets, "Predecir gratis", ranking sin premio. Tienda en mantenimiento. |
 | 3 — Demolición tienda + canjes + verif + límites | ✅ | Drop tablas Premio/Canje/LimitesJuego/VerificacionTelefono/VerificacionDni + 4 enums + columnas Usuario.telefono/telefonoVerif/dniVerif + PreferenciasNotif.notifVencimientos. Borradas pages /tienda y /admin/canjes, endpoints /api/v1/{canjes,premios,admin/canjes,admin/seed/premios,usuarios/limites}, services canjes/premios/premios-seed/limites, JuegoResponsableSection. BottomNav reescrito a 5 items (Inicio · Partidos · Pronósticos · Comunidad · Perfil) con placeholders "Próximamente" en /pronosticos y /comunidad. |
-| 4-5 — Editorial | ⏳ | Branding final + Modelo Articulo/Categoria + CMS interno + render público. |
+| 4 — Demolición contabilidad + eliminación total de Culqi | ✅ | Drop 8 tablas (asientos, asientos_lineas, cuentas_contables, movimientos_banco_{esperados,reales}, cargas_extracto_banco, auditoria_contable_logs, eventos_culqi) + enum TipoCuenta. Borrados services contabilidad/conciliacion-banco/extracto-interbank.parser/auditoria-contable, pages /admin/{contabilidad,conciliacion,ingresos,reportes}, endpoints /api/v1/admin/contabilidad/*, componente PreviewBanner, Job I de instrumentation, alerta backup 2-fallos, templates email auditoría/backup, CulqiAdapter+stubs apps/api/modules/pagos, CSP de *.culqi.com. Pasarela queda como esqueleto neutral (`types.ts` con 2 métodos + `mock-pasarela.ts`). Flag `pagosHabilitados()` se reemplaza por `premiumHabilitado()` + `cursosHabilitado()`. Adapter real OpenPay se construye en Lote 12. |
+| 5 — Editorial | ⏳ | Branding final + Modelo Articulo/Categoria + CMS interno + render público. |
 | 6 — Analytics in-house | ⏳ | Reemplazo de PostHog: eventos a Postgres + dashboard interno. Input: `docs/eventos-analytics-pendientes.md`. |
 | 7 — Comunidad | ⏳ | Comentarios y suscripción a categorías. |
 | 8-10 — Afiliación MINCETUR | ⏳ | Catálogo de operadores autorizados + tracking de conversión. |
@@ -36,17 +37,16 @@ URL prod: `https://hablaplay.com` (alias `https://www.hablaplay.com`). El plan c
 - **Railway** — hosting (Dockerfile, 1 réplica web, Postgres, Redis, backups nativos).
 - **Resend** — emails transaccionales (dominio `hablaplay.com` verificado).
 - **api-football.com** — datos deportivos. Header `x-apisports-key`.
-- **Culqi** — pasarela de pagos (tipos en `lib/services/pasarela-pagos`, sandbox, detrás de flag `PAGOS_HABILITADOS`). Reusable en Lote 11+ para Premium/Cursos.
+- **OpenPay (BBVA)** — pasarela de pagos (pendiente). Esqueleto neutral en `lib/services/pasarela-pagos` (2 métodos: `crearCobroUnico`, `crearSuscripcion`). Adapter real se construye en Lote 12 detrás de flags `PREMIUM_HABILITADO` / `CURSOS_HABILITADO`.
 - **Cloudflare R2** — backups `pg_dump` diarios + mensual.
 - **Google OAuth** — provider de NextAuth.
 - **Google Search Console** — SEO ownership.
 - **Uptime Robot** — monitor `/api/health`.
 
-Eliminados en Lote 1: Sentry, PostHog, Twilio.
+Eliminados en Lote 1: Sentry, PostHog, Twilio. Eliminado en Lote 4: Culqi (reemplazado por OpenPay BBVA, pendiente Lote 12).
 
 ## Feature flags
 
-- `PAGOS_HABILITADOS=false` — pasarela de pagos. OFF actualmente; se reactiva en Lote 11+.
 - `PREMIUM_HABILITADO=false` — capa Premium (Lote 11+).
 - `CURSOS_HABILITADO=false` — capa Cursos (Lote 12+).
 
@@ -73,7 +73,7 @@ Lista de nombres (valores en Railway vault, no acá). Detalle en `.env.example`.
 DATABASE_URL  REDIS_URL
 AUTH_SECRET  NEXTAUTH_URL  GOOGLE_CLIENT_ID  GOOGLE_CLIENT_SECRET
 API_FOOTBALL_KEY  API_FOOTBALL_HOST
-CULQI_PUBLIC_KEY  CULQI_SECRET_KEY  CULQI_WEBHOOK_SECRET  PAGOS_HABILITADOS
+PREMIUM_HABILITADO  CURSOS_HABILITADO
 RESEND_API_KEY
 NEXT_PUBLIC_APP_URL  JWT_SECRET  NODE_ENV
 CRON_SECRET  ADMIN_ALERT_EMAIL

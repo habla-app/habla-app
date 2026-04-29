@@ -1,65 +1,42 @@
-// Contrato de la pasarela. Implementado por CulqiAdapter (real) y
-// MockPasarelaPagos (modo preview).
+// Esqueleto neutral de pasarela de pagos.
 //
-// Lote 2 (Abr 2026): el flujo de compra de Lukas se demolió. Estos tipos
-// quedan en el repo porque Lote 11+ los reusa para Premium / Cursos —
-// `metadata` deja de referenciar packs Lukas y pasa a un map abierto que
-// el caller del flujo nuevo va a redefinir.
+// Lote 4 (Abr 2026): se eliminó la integración Culqi entera (decisión de
+// migrar a OpenPay BBVA por costo). El adapter real OpenPay se construye
+// desde cero en Lote 12. Este contrato queda como punto de extensión:
+// dos métodos cubren ambos flujos previstos (cobro único de un curso,
+// suscripción mensual de Premium).
+//
+// `metadata` queda como map abierto — el caller del flujo nuevo (Premium /
+// Cursos) define qué guarda ahí.
 
-export interface CrearCargoInput {
+export interface CrearCobroUnicoInput {
   /** Monto en soles (entero). */
   monto: number;
   descripcion: string;
-  metadata: {
-    usuarioId: string;
-    /** ID de producto/plan/SKU. Sin namespace fijo hasta Lote 11+. */
-    productoId: string;
-  };
-}
-
-export interface CrearCargoResult {
-  /** ID del cargo en la pasarela (Culqi: chr_xxx). */
-  cargoId: string;
-  /** Estado simbólico ("pending", "captured"). El acreditado real ocurre vía webhook. */
-  estado: "pending" | "captured" | "failed";
-}
-
-export interface ConsultarCargoResult {
-  cargoId: string;
-  estado: "pending" | "captured" | "failed";
-  monto: number;
   metadata: Record<string, string>;
 }
 
-export interface ReembolsarInput {
-  cargoId: string;
-  monto?: number; // si se omite, full refund
-  motivo: string;
+export interface CrearCobroUnicoResult {
+  /** ID del cobro en la pasarela. */
+  cobroId: string;
+  /** Estado simbólico. La acreditación real ocurre vía webhook. */
+  estado: "pending" | "captured" | "failed";
 }
 
-export interface ReembolsarResult {
-  reembolsoId: string;
-  estado: "ok" | "failed";
+export interface CrearSuscripcionInput {
+  /** ID del plan en la pasarela. */
+  plan: string;
+  /** Usuario al que se le cobra. */
+  usuarioId: string;
 }
 
-export interface WebhookPayload {
-  /** ID único del evento (idempotencia). */
-  eventId: string;
-  tipo: string;
-  data: {
-    cargoId: string;
-    monto: number;
-    metadata?: Record<string, string>;
-  };
+export interface CrearSuscripcionResult {
+  /** ID de la suscripción en la pasarela. */
+  suscripcionId: string;
+  estado: "activa" | "pendiente" | "fallida";
 }
 
 export interface PasarelaPagos {
-  crearCargo(input: CrearCargoInput): Promise<CrearCargoResult>;
-  /**
-   * Verifica HMAC del webhook con `CULQI_WEBHOOK_SECRET`. El mock siempre
-   * devuelve true (ya que el cuerpo lo firma él mismo).
-   */
-  verificarWebhook(rawBody: string, signature: string | null): boolean;
-  consultarCargo(cargoId: string): Promise<ConsultarCargoResult>;
-  reembolsar(input: ReembolsarInput): Promise<ReembolsarResult>;
+  crearCobroUnico(input: CrearCobroUnicoInput): Promise<CrearCobroUnicoResult>;
+  crearSuscripcion(input: CrearSuscripcionInput): Promise<CrearSuscripcionResult>;
 }
