@@ -188,6 +188,7 @@ export function AdminTorneosPanel() {
                 <CrearTorneoRow
                   partido={p}
                   onCreated={() => refrescarDisponibles()}
+                  onDescartado={() => refrescarDisponibles()}
                 />
               </li>
             ))}
@@ -205,9 +206,11 @@ export function AdminTorneosPanel() {
 function CrearTorneoRow({
   partido,
   onCreated,
+  onDescartado,
 }: {
   partido: PartidoDisponible;
   onCreated: () => void;
+  onDescartado: () => void;
 }) {
   const toast = useToast();
   const [tipo, setTipo] = useState<
@@ -215,6 +218,36 @@ function CrearTorneoRow({
   >("ESTANDAR");
   const [nombre, setNombre] = useState("");
   const [creando, setCreando] = useState(false);
+  const [descartando, setDescartando] = useState(false);
+
+  async function handleDescartar() {
+    if (
+      !window.confirm(
+        `¿Descartar ${partido.equipoLocal} vs ${partido.equipoVisita}? Lo sacamos del pool y el auto-import no lo va a recrear.`,
+      )
+    ) {
+      return;
+    }
+    setDescartando(true);
+    try {
+      const res = await authedFetch(
+        `/api/v1/admin/partidos/${partido.id}/descartar`,
+        { method: "POST" },
+      );
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(
+          payload?.error?.message ?? "Error al descartar partido.",
+        );
+      }
+      toast.show(`✅ Partido descartado`);
+      onDescartado();
+    } catch (err) {
+      toast.show(`❌ ${(err as Error).message}`);
+    } finally {
+      setDescartando(false);
+    }
+  }
 
   const fechaStr = formatKickoff(partido.fechaInicio);
 
@@ -282,14 +315,25 @@ function CrearTorneoRow({
         />
       </label>
 
-      <Button
-        variant="primary"
-        size="md"
-        onClick={handleCrear}
-        disabled={creando}
-      >
-        {creando ? "Creando…" : "Crear torneo"}
-      </Button>
+      <div className="flex gap-2">
+        <Button
+          variant="primary"
+          size="md"
+          onClick={handleCrear}
+          disabled={creando || descartando}
+        >
+          {creando ? "Creando…" : "Crear torneo"}
+        </Button>
+        <button
+          type="button"
+          onClick={handleDescartar}
+          disabled={creando || descartando}
+          className="rounded-md border-[1.5px] border-light bg-card px-3 py-2 text-[13px] font-bold text-muted-d transition-colors hover:border-urgent-critical hover:text-urgent-critical disabled:opacity-50"
+          title="Sacar el partido del pool de disponibles"
+        >
+          {descartando ? "…" : "🗑️ Descartar"}
+        </button>
+      </div>
     </div>
   );
 }
