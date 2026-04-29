@@ -94,6 +94,39 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return session;
     },
   },
+  events: {
+    // Lote 6 — analytics in-house. Disparamos desde acá los eventos cuyo
+    // momento canónico es "el provider confirmó la identidad":
+    //   - email_verified  → SIEMPRE (cualquier provider que cierra ok el
+    //                       sign-in tiene un email validado por definición).
+    //   - signup_completed (Google) → SÓLO si isNewUser (NextAuth lo marca
+    //                                  cuando el adapter creó el row recién).
+    // Para el flow email/magic link, signup_completed lo dispara el handler
+    // POST /api/v1/auth/signup (cuando creamos al usuario, pre-magic-link).
+    async signIn(message) {
+      try {
+        const { track } = await import("./services/analytics.service");
+        const provider = message.account?.provider ?? "unknown";
+        const userId = message.user?.id;
+
+        void track({
+          evento: "email_verified",
+          props: { method: provider },
+          userId,
+        });
+
+        if (message.isNewUser && provider === "google") {
+          void track({
+            evento: "signup_completed",
+            props: { method: "google" },
+            userId,
+          });
+        }
+      } catch {
+        /* analytics nunca rompe sign-in */
+      }
+    },
+  },
   pages: {
     signIn: "/auth/signin",
     verifyRequest: "/auth/verificar",

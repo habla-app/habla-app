@@ -20,6 +20,7 @@ import {
 import { logger } from "@/lib/services/logger";
 import { recalcularTorneo } from "@/lib/services/puntuacion.service";
 import { emitirRankingUpdate } from "@/lib/realtime/emitters";
+import { track } from "@/lib/services/analytics.service";
 
 export async function POST(req: NextRequest) {
   try {
@@ -65,9 +66,21 @@ export async function POST(req: NextRequest) {
         );
     });
 
+    // Lote 6 — analytics. prediccion_enviada se dispara fire-and-forget.
+    void track({
+      evento: "prediccion_enviada",
+      props: {
+        torneoId: parsed.data.torneoId,
+        ticketId: result.ticket.id,
+        reemplazoPlaceholder: result.reemplazoPlaceholder,
+      },
+      userId: session.user.id,
+      request: req,
+    });
+
     return Response.json({ data: result }, { status: 201 });
   } catch (err) {
-    logger.error({ err }, "POST /api/v1/tickets falló");
+    logger.error({ err, source: "api:tickets" }, "POST /api/v1/tickets falló");
     return toErrorResponse(err);
   }
 }

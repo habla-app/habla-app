@@ -308,6 +308,82 @@ export async function register() {
   }, 90_000);
 
   // -------------------------------------------------------------------
+  // Job M — Alertas de errores críticos (Lote 6). Tick cada 1h. Si en
+  // la última hora hubo > 0 rows en `log_errores` con level='critical',
+  // manda un email a ADMIN_ALERT_EMAIL con resumen (top 5 mensajes +
+  // counts por source).
+  //
+  // Anti-spam: variable en memoria del proceso. Si el proceso reinicia
+  // (deploy), el contador se resetea — peor caso es 1 alerta extra al
+  // restart si justo había críticos. Aceptable para mantener el código
+  // simple (el alternativo era persistir un row "estado-alerta" en BD,
+  // overkill).
+  // -------------------------------------------------------------------
+  const { obtenerResumenCriticosUltimaHora } = await import(
+    "./lib/services/logs.service"
+  );
+  const { notifyCriticosResumen } = await import(
+    "./lib/services/notificaciones.service"
+  );
+
+  const CRITICOS_TICK_INTERVAL_MS = 60 * 60 * 1000; // 1h
+  const CRITICOS_ANTISPAM_MS = 60 * 60 * 1000; // 1h entre alertas
+  const cronStateGlobal = globalThis as unknown as {
+    __hablaUltimaAlertaCriticosAt?: number;
+  };
+
+  async function tickCriticosUltimaHora() {
+    try {
+      if (!process.env.ADMIN_ALERT_EMAIL) return; // sin destinatario, skip
+
+      const ahora = Date.now();
+      const ultima = cronStateGlobal.__hablaUltimaAlertaCriticosAt ?? 0;
+      if (ahora - ultima < CRITICOS_ANTISPAM_MS) return;
+
+      const resumen = await obtenerResumenCriticosUltimaHora();
+      if (resumen.total === 0) return;
+
+      const ventana = `${resumen.desde.toISOString().slice(11, 16)}–${resumen.hasta
+        .toISOString()
+        .slice(11, 16)} UTC`;
+      await notifyCriticosResumen({
+        ventana,
+        total: resumen.total,
+        topMensajes: resumen.topMensajes,
+        porSource: resumen.porSource,
+      });
+      cronStateGlobal.__hablaUltimaAlertaCriticosAt = ahora;
+
+      logger.info(
+        {
+          total: resumen.total,
+          topCount: resumen.topMensajes.length,
+          source: "cron:criticos",
+        },
+        "[cron in-process] alerta de críticos enviada",
+      );
+    } catch (err) {
+      // SOURCE clave: "cron:criticos" — el hook del logger lo persiste
+      // como error en log_errores. NO inicia loop porque sólo sería
+      // crítico si fuera fatal(60); error(50) no entra al funnel.
+      logger.error(
+        { err, source: "cron:criticos" },
+        "[cron in-process] tick de alerta-críticos falló",
+      );
+    }
+  }
+
+  // Primera corrida 120s tras boot — deja al sistema estabilizarse y a
+  // que cualquier crítico que dispare el primer minuto del deploy ya
+  // esté indexado.
+  setTimeout(() => {
+    void tickCriticosUltimaHora();
+    setInterval(() => {
+      void tickCriticosUltimaHora();
+    }, CRITICOS_TICK_INTERVAL_MS);
+  }, 120_000);
+
+  // -------------------------------------------------------------------
   // Jobs F (vencimiento Lukas) y G (auditoría de balances) se removieron
   // en Lote 2 cuando se demolió el sistema de Lukas. Job I (auditoría
   // contable) se removió en Lote 4 cuando se demolió el aparato contable.
@@ -321,6 +397,7 @@ export async function register() {
       pollerPartidos: `${POLLER_INTERVAL_MS / 1000}s`,
       backupDiario: `${BACKUP_TICK_INTERVAL_MS / 1000 / 60}min (target ${BACKUP_TARGET_LIMA_HOUR}:00 PET)`,
       cierreLeaderboardMensual: `${LEADERBOARD_TICK_INTERVAL_MS / 1000 / 60}min (día 1 ≥01:00 PET)`,
+      alertaCriticos: `${CRITICOS_TICK_INTERVAL_MS / 1000 / 60}min (anti-spam ${CRITICOS_ANTISPAM_MS / 1000 / 60}min)`,
     },
     "cron in-process registrado",
   );

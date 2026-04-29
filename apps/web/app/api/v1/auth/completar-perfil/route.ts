@@ -21,6 +21,7 @@ import {
 import { esReservado } from "@/lib/config/usernames-reservados";
 import { esUsernameOfensivo } from "@/lib/utils/username-filter";
 import { logger } from "@/lib/services/logger";
+import { track } from "@/lib/services/analytics.service";
 
 export const dynamic = "force-dynamic";
 
@@ -131,6 +132,16 @@ export async function POST(req: NextRequest) {
       { usuarioId: session.user.id, username },
       "completar-perfil completado",
     );
+
+    // Lote 6 — analytics. profile_completed para el flow Google que pasa
+    // explícitamente por completar-perfil. signup_completed (Google) y
+    // email_verified los dispara events.signIn de NextAuth.
+    void track({
+      evento: "profile_completed",
+      props: { method: "google" },
+      userId: session.user.id,
+      request: req,
+    });
 
     return Response.json({ ok: true, data: actualizado });
   } catch (err) {

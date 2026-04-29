@@ -40,6 +40,8 @@ model Usuario {
   preferenciasNotif PreferenciasNotif?
   solicitudesElim   SolicitudEliminacion[]
   premiosMensuales  PremioMensual[]
+  logErrores        LogError[]
+  eventosAnalitica  EventoAnalitica[]
 
   @@map("usuarios")
 }
@@ -320,4 +322,60 @@ model PremioMensual {
   @@index([userId])
   @@index([estado])
   @@map("premios_mensuales")
+}
+
+// ==========================================
+// Lote 6 (May 2026) — Logs + analytics in-house
+// ==========================================
+//
+// Reemplaza a Sentry + PostHog (eliminados en Lote 1). Dos tablas:
+//
+//   - log_errores       errores y warnings persistidos por el logger Pino
+//                       (level=error|critical) o llamados directos del
+//                       service. Alimenta /admin/logs y el cron M (alertas
+//                       críticas por email cada 1h con anti-spam).
+//   - eventos_analitica eventos de producto/UX. El handler POST /api/v1/
+//                       analytics/track inserta fire-and-forget. Cliente
+//                       respeta el toggle "Analíticas" del cookie banner;
+//                       eventos server-side ignoran el toggle.
+//
+// userId queda opcional en ambas tablas (errores de cron pre-login,
+// eventos $pageview anónimos). Al borrar al usuario se hace SET NULL para
+// preservar las series temporales sin re-crear PII.
+
+model LogError {
+  id        String   @id @default(cuid())
+  level     String   // warn | error | critical
+  source    String   // "api:tickets" | "cron:cierre-leaderboard" | etc.
+  message   String
+  stack     String?
+  userId    String?
+  usuario   Usuario? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  metadata  Json?
+  creadoEn  DateTime @default(now())
+
+  @@index([level, creadoEn(sort: Desc)])
+  @@map("log_errores")
+}
+
+model EventoAnalitica {
+  id        String   @id @default(cuid())
+  evento    String   // "$pageview" | "signup_completed" | etc.
+  userId    String?
+  usuario   Usuario? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sessionId String?  // anónimo, generado en el cliente (Lote 6)
+  props     Json?
+  pais      String?  // ISO 3166-1 alpha-2 (header cf-ipcountry)
+  userAgent String?
+  pagina    String?  // ej. "/torneo/abc123"
+  referrer  String?
+  creadoEn  DateTime @default(now())
+
+  // IP cruda nunca se persiste (la usamos in-memory sólo para rate-limit
+  // del endpoint /api/v1/analytics/track). El country es lo único que
+  // queremos cohort-ar geográficamente.
+
+  @@index([evento, creadoEn(sort: Desc)])
+  @@index([userId, creadoEn(sort: Desc)])
+  @@map("eventos_analitica")
 }
