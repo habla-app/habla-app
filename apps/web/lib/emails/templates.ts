@@ -128,6 +128,78 @@ export function datosDescargadosTemplate(input: DatosDescargadosInput) {
   return { subject, html, text };
 }
 
+export interface PremioMensualGanadoInput {
+  username: string;
+  posicion: number;
+  nombreMes: string;       // "abril 2026"
+  nombreMesSiguiente: string; // "mayo 2026"
+  montoSoles: number;
+  premioPrimerPuestoSoles: number;
+}
+
+export function premioMensualGanadoTemplate(input: PremioMensualGanadoInput) {
+  const subject = `🏆 ¡Felicidades! Quedaste #${input.posicion} en ${input.nombreMes} — S/ ${input.montoSoles}`;
+  const ordinal = ordinalEs(input.posicion);
+  const html = wrapEmail(
+    subject,
+    `<h1 style="margin:0 0 8px;font-size:26px;color:#001050;">🏆 ¡Felicidades, @${escapeHtml(input.username)}!</h1>
+    <p style="margin:0 0 16px;font-size:16px;color:rgba(0,16,80,0.85);line-height:1.55;">
+      Quedaste en el <strong>${escapeHtml(ordinal)} puesto</strong> del leaderboard de Habla! del mes de <strong>${escapeHtml(input.nombreMes)}</strong>.
+    </p>
+    <div style="background:linear-gradient(135deg,#FFF8E1,#FFFDF5);border:1.5px solid #FFB800;border-radius:14px;padding:20px;text-align:center;margin:20px 0;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#8B6200;">Has ganado</div>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:48px;font-weight:900;color:#001050;line-height:1;margin:8px 0;">S/ ${input.montoSoles}</div>
+      <div style="font-size:13px;color:rgba(0,16,80,0.7);">en efectivo</div>
+    </div>
+    <h2 style="margin:24px 0 8px;font-size:18px;color:#001050;">Para coordinar tu pago, respondé este email con:</h2>
+    <ul style="margin:0 0 16px;padding-left:22px;font-size:14px;color:rgba(0,16,80,0.85);line-height:1.7;">
+      <li>Tu <strong>nombre completo</strong></li>
+      <li>Tu <strong>DNI</strong></li>
+      <li>Método preferido: <strong>Yape · Plin · transferencia bancaria</strong></li>
+      <li>Número de celular (Yape/Plin) o cuenta + banco (transferencia)</li>
+    </ul>
+    <div style="background:#F5F7FC;border-left:4px solid #0052CC;padding:14px 16px;border-radius:8px;margin:16px 0;font-size:13px;color:rgba(0,16,80,0.85);line-height:1.5;">
+      Te confirmamos el pago en <strong>máximo 3 días hábiles</strong>.
+    </div>
+    <p style="margin:24px 0 0;font-size:14px;color:rgba(0,16,80,0.7);line-height:1.55;text-align:center;">
+      ¡Seguí compitiendo en <strong>${escapeHtml(input.nombreMesSiguiente)}</strong>! El premio del 1° lugar es <strong>S/ ${input.premioPrimerPuestoSoles}</strong>.
+    </p>`,
+  );
+  const text = `¡Felicidades @${input.username}!
+
+Quedaste en el puesto ${input.posicion} del leaderboard de Habla! del mes de ${input.nombreMes}.
+Has ganado S/ ${input.montoSoles} en efectivo.
+
+Para coordinar tu pago, respondé este email con:
+- Tu nombre completo
+- Tu DNI
+- Método preferido (Yape / Plin / transferencia bancaria)
+- Número o cuenta correspondiente
+
+Te confirmamos el pago en máximo 3 días hábiles.
+
+¡Seguí compitiendo en ${input.nombreMesSiguiente}! El premio del 1° lugar es S/ ${input.premioPrimerPuestoSoles}.`;
+  return { subject, html, text };
+}
+
+function ordinalEs(n: number): string {
+  // Ordinales escritos para los puestos 1-10 (los únicos que pagan en el
+  // modelo). Para n>10 cae al genérico "N°".
+  const map: Record<number, string> = {
+    1: "1°",
+    2: "2°",
+    3: "3°",
+    4: "4°",
+    5: "5°",
+    6: "6°",
+    7: "7°",
+    8: "8°",
+    9: "9°",
+    10: "10°",
+  };
+  return map[n] ?? `${n}°`;
+}
+
 export interface CuentaEliminadaInput {
   nombreUsuario: string;
   modo: "hard" | "soft";

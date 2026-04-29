@@ -9,6 +9,12 @@
 // ranking). Para la UI usamos un comparador estable (creadoEn ASC) que
 // sólo afecta el orden visual dentro del grupo de empate, no la posición
 // asignada.
+//
+// Lote 5 (May 2026): además de `posicionFinal`, `finalizarTorneo` ahora
+// graba `puntosFinales` = snapshot de `puntosTotal` al momento de FT.
+// El leaderboard mensual lee de `puntosFinales` (no de `puntosTotal`,
+// que sigue mutando si el motor reentra en un torneo finalizado por
+// algún recálculo edge-case).
 
 import { prisma, type Prisma } from "@habla/db";
 import { TorneoNoEncontrado } from "./errors";
@@ -236,7 +242,12 @@ export async function finalizarTorneo(
       const posicion = posicionPorTicket.get(t.id)!;
       await tx.ticket.update({
         where: { id: t.id },
-        data: { posicionFinal: posicion },
+        data: {
+          posicionFinal: posicion,
+          // Snapshot inmutable de puntos al FT — alimenta al leaderboard
+          // mensual (Lote 5).
+          puntosFinales: t.puntosTotal,
+        },
       });
       const handle = handleDisplay(t.usuario);
       out.push({

@@ -124,6 +124,110 @@ export function getDayBounds(
 }
 
 /**
+ * Rango UTC del mes calendario identificado por `mesKey` (formato YYYY-MM)
+ * en la tz dada. `desde` = primer día del mes 00:00 en la tz dada;
+ * `hasta` = primer día del mes siguiente 00:00 (exclusivo).
+ *
+ * Se usa para agregar `puntosFinales` por usuario sobre tickets de torneos
+ * cuyo `partido.fechaInicio` cae dentro del mes (Lote 5 — leaderboard
+ * mensual). El intervalo es [desde, hasta) — usar `lt: hasta` en Prisma.
+ */
+export function getMonthBounds(
+  mesKey: string,
+  tz: string = DEFAULT_TZ,
+): { desde: Date; hasta: Date } {
+  const m = /^(\d{4})-(\d{2})$/.exec(mesKey);
+  if (!m) throw new Error(`mesKey inválido: "${mesKey}" (esperado YYYY-MM)`);
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  if (mo < 1 || mo > 12) throw new Error(`mesKey con mes inválido: "${mesKey}"`);
+
+  // Mediodía UTC de los días pivote — evita flips por DST/offset.
+  const pivotInicio = Date.UTC(y, mo - 1, 1, 12);
+  const pivotFin =
+    mo === 12 ? Date.UTC(y + 1, 0, 1, 12) : Date.UTC(y, mo, 1, 12);
+
+  const inicioKey = getDayKey(new Date(pivotInicio), tz);
+  const finKey = getDayKey(new Date(pivotFin), tz);
+
+  const { desde } = getDayBounds(inicioKey, tz);
+  const { desde: hasta } = getDayBounds(finKey, tz);
+  return { desde, hasta };
+}
+
+/**
+ * `mesKey` (YYYY-MM) del mes calendario que contiene `reference` en la tz
+ * dada. Default reference = ahora.
+ */
+export function getMesKey(
+  reference: Date = new Date(),
+  tz: string = DEFAULT_TZ,
+): string {
+  const dayKey = getDayKey(reference, tz); // YYYY-MM-DD
+  return dayKey.slice(0, 7);
+}
+
+/**
+ * `mesKey` del mes calendario inmediatamente anterior al de `reference` en
+ * la tz dada. Usado por el cron J (Lote 5) que cierra el leaderboard del
+ * mes pasado el día 1 a las ≥01:00 hora Lima.
+ */
+export function getMesAnteriorKey(
+  reference: Date = new Date(),
+  tz: string = DEFAULT_TZ,
+): string {
+  const cur = getMesKey(reference, tz);
+  const [y, m] = cur.split("-").map(Number);
+  const prevYear = m === 1 ? y - 1 : y;
+  const prevMonth = m === 1 ? 12 : m - 1;
+  return `${prevYear}-${String(prevMonth).padStart(2, "0")}`;
+}
+
+/**
+ * Hora del día (0-23) en la tz dada para una fecha. Lima es UTC-5 sin DST.
+ * Se usa por el cron J para detectar la ventana "día 1, ≥01:00 Lima".
+ */
+export function horaEnTimezone(d: Date, tz: string = DEFAULT_TZ): number {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hour: "numeric",
+    hour12: false,
+  });
+  return Number(fmt.format(d));
+}
+
+/**
+ * Día del mes (1-31) en la tz dada para una fecha.
+ */
+export function diaDelMesEnTimezone(d: Date, tz: string = DEFAULT_TZ): number {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    day: "numeric",
+  });
+  return Number(fmt.format(d));
+}
+
+/**
+ * Nombre del mes en español + año. Ej. "abril 2026", "mayo 2026".
+ * Usado en titulares de /comunidad y emails.
+ */
+export function formatNombreMes(
+  mesKey: string,
+  tz: string = DEFAULT_TZ,
+): string {
+  const m = /^(\d{4})-(\d{2})$/.exec(mesKey);
+  if (!m) return mesKey;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  // Día 15 del mes a mediodía UTC: estable bajo cualquier offset.
+  const ref = new Date(Date.UTC(y, mo - 1, 15, 12));
+  const nombre = ref
+    .toLocaleDateString("es-PE", { timeZone: tz, month: "long" })
+    .toLowerCase();
+  return `${nombre} ${y}`;
+}
+
+/**
  * Rango UTC de la semana local en curso — lunes 00:00 a domingo 23:59:59.999
  * en la tz dada. Útil para agregados semanales de UI (widgets del sidebar
  * de /matches).

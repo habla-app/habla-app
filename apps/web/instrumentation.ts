@@ -239,6 +239,75 @@ export async function register() {
   }, 60_000);
 
   // -------------------------------------------------------------------
+  // Job J — Cierre del leaderboard mensual (Lote 5). Tick cada 1h. Sólo
+  // corre cuando es día 1 del mes en hora Lima y la hora local es ≥01:00.
+  // La idempotencia real está en el service (`cerrarLeaderboard` chequea
+  // `cerradoEn` antes de tocar nada) — el guard de hora/día sólo evita
+  // queries innecesarias.
+  //
+  // Después del cierre, manda email a cada ganador del top 10 vía
+  // `notifyPremioMensualGanado` (sin throttle — son ≤10 envíos).
+  // -------------------------------------------------------------------
+  const { cerrarLeaderboard } = await import(
+    "./lib/services/leaderboard.service"
+  );
+  const { notifyPremioMensualGanado } = await import(
+    "./lib/services/notificaciones.service"
+  );
+  const { diaDelMesEnTimezone, horaEnTimezone, getMesAnteriorKey } = await import(
+    "./lib/utils/datetime"
+  );
+
+  const LEADERBOARD_TICK_INTERVAL_MS = 60 * 60 * 1000; // 1h
+
+  async function tickCierreLeaderboardMensual() {
+    try {
+      const now = new Date();
+      const dia = diaDelMesEnTimezone(now);
+      const hora = horaEnTimezone(now);
+
+      // Sólo correr el día 1 después de 01:00 hora Lima. El resto del mes
+      // este tick es no-op puro.
+      if (dia !== 1 || hora < 1) return;
+
+      const mesAnterior = getMesAnteriorKey(now);
+      const result = await cerrarLeaderboard({ mes: mesAnterior });
+
+      if (result.alreadyClosed) return;
+
+      logger.info(
+        {
+          mes: mesAnterior,
+          totalUsuarios: result.totalUsuarios,
+          premios: result.premiosCreados.length,
+        },
+        "[cron in-process] leaderboard mensual cerrado",
+      );
+
+      for (const premio of result.premiosCreados) {
+        await notifyPremioMensualGanado(premio);
+      }
+    } catch (err) {
+      logger.error(
+        { err },
+        "[cron in-process] tick de cierre-leaderboard-mensual falló",
+      );
+    }
+  }
+
+  // Primera corrida 90s tras boot — deja al sistema estabilizarse y a los
+  // jobs A/D/H tomar su primer tick. Si el día 1 cae con el container ya
+  // arriba, este 90s es trivial. Si arranca el día 1 a las 00:30 Lima,
+  // la primera corrida cae fuera de la ventana (hora<1) y no hace nada;
+  // el segundo tick (90s + 1h ≈ 01:31) ya entra.
+  setTimeout(() => {
+    void tickCierreLeaderboardMensual();
+    setInterval(() => {
+      void tickCierreLeaderboardMensual();
+    }, LEADERBOARD_TICK_INTERVAL_MS);
+  }, 90_000);
+
+  // -------------------------------------------------------------------
   // Jobs F (vencimiento Lukas) y G (auditoría de balances) se removieron
   // en Lote 2 cuando se demolió el sistema de Lukas. Job I (auditoría
   // contable) se removió en Lote 4 cuando se demolió el aparato contable.
@@ -251,6 +320,7 @@ export async function register() {
       refreshSeasons: `${INTERVALO_REFRESH_SEASONS_MS / 1000 / 3600}h`,
       pollerPartidos: `${POLLER_INTERVAL_MS / 1000}s`,
       backupDiario: `${BACKUP_TICK_INTERVAL_MS / 1000 / 60}min (target ${BACKUP_TARGET_LIMA_HOUR}:00 PET)`,
+      cierreLeaderboardMensual: `${LEADERBOARD_TICK_INTERVAL_MS / 1000 / 60}min (día 1 ≥01:00 PET)`,
     },
     "cron in-process registrado",
   );

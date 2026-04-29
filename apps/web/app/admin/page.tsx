@@ -18,11 +18,18 @@ export default async function AdminPage() {
           ⚙️ Panel admin
         </h1>
         <p className="mt-1 text-sm text-muted-d">
-          Importa partidos de api-football y crea torneos sobre ellos.
+          Importa partidos de api-football, gestiona torneos y operá los
+          premios del leaderboard mensual.
         </p>
         <div className="mt-3 flex flex-wrap gap-3 text-[12px] font-semibold text-brand-blue-main">
           <Link href="/" className="hover:underline">
             ← Volver al home
+          </Link>
+          <Link href="/admin/leaderboard" className="hover:underline">
+            🏆 Leaderboard mensual
+          </Link>
+          <Link href="/admin/premios-mensuales" className="hover:underline">
+            💰 Premios mensuales
           </Link>
         </div>
       </header>

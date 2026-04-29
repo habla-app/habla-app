@@ -34,11 +34,12 @@ model Usuario {
   emailVerified DateTime?
   image         String?
 
-  tickets       Ticket[]
-  cuentas       Account[]
-  sesiones      Session[]
+  tickets           Ticket[]
+  cuentas           Account[]
+  sesiones          Session[]
   preferenciasNotif PreferenciasNotif?
   solicitudesElim   SolicitudEliminacion[]
+  premiosMensuales  PremioMensual[]
 
   @@map("usuarios")
 }
@@ -200,6 +201,12 @@ model Ticket {
   puntosMarcador     Int           @default(0)
   // Posicion final asignada al cerrar el torneo (competition ranking).
   posicionFinal      Int?
+  // Snapshot de puntosTotal en el momento de FT del torneo. Lote 5: el
+  // leaderboard mensual lee de aquí (no de puntosTotal, que sigue mutando
+  // si el motor reentra en un torneo ya finalizado por algún recálculo
+  // raro). Backfill: tickets con posicionFinal NOT NULL recibieron
+  // `puntosFinales = puntosTotal` en la migración.
+  puntosFinales      Int?
   creadoEn           DateTime      @default(now())
 
   // Un usuario no puede tener 2 tickets identicos en el mismo torneo
@@ -260,4 +267,57 @@ model BackupLog {
 
   @@index([fechaIntento])
   @@map("backup_logs")
+}
+
+// ==========================================
+// Lote 5 (May 2026) — Competencia mensual
+// ==========================================
+//
+// Reemplaza al sistema de premios por torneo (demolido junto con Lukas en
+// Lote 2). El nuevo modelo: cada mes calendario forma un leaderboard que
+// agrega `puntosFinales` por usuario sobre los tickets de torneos
+// finalizados del mes en curso. El día 1 del mes siguiente, un cron cierra
+// el leaderboard del mes pasado, snapshotea el top 100 en JSONB y crea
+// los registros de PremioMensual para el top 10 (S/ 1,250 totales).
+
+model Leaderboard {
+  id            String          @id @default(cuid())
+  mes           String          @unique // formato YYYY-MM (ej. "2026-04")
+  cerradoEn     DateTime?
+  // Snapshot del top 100 al cierre. Forma:
+  //   [{ userId: string, username: string, puntos: number, posicion: number }]
+  // null mientras está abierto (para meses pasados; el mes en curso se
+  // calcula on-the-fly y nunca se persiste hasta el cierre).
+  posiciones    Json?
+  totalUsuarios Int             @default(0)
+  creadoEn      DateTime        @default(now())
+
+  premios       PremioMensual[]
+
+  @@map("leaderboards")
+}
+
+model PremioMensual {
+  id            String      @id @default(cuid())
+  leaderboardId String
+  leaderboard   Leaderboard @relation(fields: [leaderboardId], references: [id], onDelete: Cascade)
+  posicion      Int
+  userId        String
+  usuario       Usuario     @relation(fields: [userId], references: [id])
+  montoSoles    Int
+  // Estado del pago. Valores válidos: PENDIENTE | COORDINADO | PAGADO | CANCELADO.
+  // Default PENDIENTE; transiciones manuales desde /admin/premios-mensuales.
+  estado        String      @default("PENDIENTE")
+  // Datos de pago cuando el ganador responde el email. Forma libre por
+  // ahora ({ tipo: "yape"|"plin"|"transferencia", numero?, banco?, cuenta?,
+  // titular?, dni? }). Se formaliza en Lote 12 con Zod si crece.
+  datosPago     Json?
+  pagadoEn      DateTime?
+  notas         String?
+  creadoEn      DateTime    @default(now())
+
+  @@index([leaderboardId])
+  @@index([userId])
+  @@index([estado])
+  @@map("premios_mensuales")
 }

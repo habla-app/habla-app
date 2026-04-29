@@ -1,7 +1,7 @@
 # CLAUDE.md — Habla! App
 
 > Cerebro del proyecto. Cargado en cada sesión: corto y denso. Historial detallado de cambios vive en commits y PRs.
-> Última reescritura: 1 May 2026 (Lote 4 — demolición de contabilidad + eliminación total de Culqi).
+> Última reescritura: 2 May 2026 (Lote 5 — leaderboard mensual + premios en efectivo S/ 1,250).
 
 ---
 
@@ -24,12 +24,13 @@ URL prod: `https://hablaplay.com` (alias `https://www.hablaplay.com`). El plan c
 | 2 — Demolición Lukas + wallet | ✅ | Drop completo del sistema de saldo interno: 4 columnas de balance en Usuario, columnas económicas del Torneo, tabla TransaccionLukas, enums. UI sin balance: NavBar limpio, sidebar de 3 widgets, "Predecir gratis", ranking sin premio. Tienda en mantenimiento. |
 | 3 — Demolición tienda + canjes + verif + límites | ✅ | Drop tablas Premio/Canje/LimitesJuego/VerificacionTelefono/VerificacionDni + 4 enums + columnas Usuario.telefono/telefonoVerif/dniVerif + PreferenciasNotif.notifVencimientos. Borradas pages /tienda y /admin/canjes, endpoints /api/v1/{canjes,premios,admin/canjes,admin/seed/premios,usuarios/limites}, services canjes/premios/premios-seed/limites, JuegoResponsableSection. BottomNav reescrito a 5 items (Inicio · Partidos · Pronósticos · Comunidad · Perfil) con placeholders "Próximamente" en /pronosticos y /comunidad. |
 | 4 — Demolición contabilidad + eliminación total de Culqi | ✅ | Drop 8 tablas (asientos, asientos_lineas, cuentas_contables, movimientos_banco_{esperados,reales}, cargas_extracto_banco, auditoria_contable_logs, eventos_culqi) + enum TipoCuenta. Borrados services contabilidad/conciliacion-banco/extracto-interbank.parser/auditoria-contable, pages /admin/{contabilidad,conciliacion,ingresos,reportes}, endpoints /api/v1/admin/contabilidad/*, componente PreviewBanner, Job I de instrumentation, alerta backup 2-fallos, templates email auditoría/backup, CulqiAdapter+stubs apps/api/modules/pagos, CSP de *.culqi.com. Pasarela queda como esqueleto neutral (`types.ts` con 2 métodos + `mock-pasarela.ts`). Flag `pagosHabilitados()` se reemplaza por `premiumHabilitado()` + `cursosHabilitado()`. Adapter real OpenPay se construye en Lote 12. |
-| 5 — Editorial | ⏳ | Branding final + Modelo Articulo/Categoria + CMS interno + render público. |
+| 5 — Leaderboard mensual + premios en efectivo | ✅ | Nuevas tablas `leaderboards` + `premios_mensuales` + columna `tickets.puntosFinales` (snapshot al FT). Service `leaderboard.service.ts` con `cerrarLeaderboard` idempotente y tabla fija S/ 1,250 (1°S/500 · 2°S/200 · 3°S/200 · 4°-10°S/50 c/u). Job J de instrumentation cierra el mes anterior cada día 1 ≥01:00 PET. Email `premioMensualGanado` + wrapper `notifyPremioMensualGanado`. Pages `/comunidad` (Top 100 mes en curso + Mi posición + reparto + meses cerrados), `/comunidad/mes/[mes]`, `/admin/leaderboard` (forzar cierre), `/admin/premios-mensuales` (CRUD estado + datosPago + notas + copiar template respuesta). Endpoints `POST /api/v1/admin/leaderboard/cerrar` (auth ADMIN o Bearer CRON_SECRET) + `GET/PATCH /api/v1/admin/premios-mensuales`. `/mis-combinadas`: stat pills nuevas (Pos. del mes · Mejor mes) + tab "Mes en curso". `finalizarTorneo` graba `puntosFinales` además de `posicionFinal`. |
 | 6 — Analytics in-house | ⏳ | Reemplazo de PostHog: eventos a Postgres + dashboard interno. Input: `docs/eventos-analytics-pendientes.md`. |
-| 7 — Comunidad | ⏳ | Comentarios y suscripción a categorías. |
+| 7 — Comunidad (comentarios) | ⏳ | Comentarios sobre torneos/artículos + suscripción a categorías. |
 | 8-10 — Afiliación MINCETUR | ⏳ | Catálogo de operadores autorizados + tracking de conversión. |
 | 11-13 — Premium + Cursos | ⏳ | Paywalls (flag `PREMIUM_HABILITADO`, `CURSOS_HABILITADO`). |
 | 14-16 — QA, beta, lanzamiento | ⏳ | Smoke, k6, soft-launch, lanzamiento 8 jun. |
+| Editorial | ⏳ | Branding final + Modelo Articulo/Categoria + CMS interno + render público. Sin número asignado — se intercala según prioridad post-Lote 5. |
 
 ## Servicios externos vigentes
 
@@ -53,7 +54,8 @@ Eliminados en Lote 1: Sentry, PostHog, Twilio. Eliminado en Lote 4: Culqi (reemp
 ## Reglas duras
 
 1. **Prod-first, no local.** No correr `pnpm dev`/`next build`/migrar BD/levantar Postgres en local. Validación pre-push: solo `pnpm tsc --noEmit` + `pnpm lint`. Validación funcional la hace Gustavo en `hablaplay.com` post-deploy.
-2. **Migraciones con `--create-only`.** Generar el SQL pero no aplicar local. Aplicación pasa por `prisma migrate deploy` en el `CMD` del Dockerfile al arrancar. Migraciones destructivas requieren backup manual a R2 antes del deploy.
+2. **Migraciones con `--create-only`.** Generar el SQL pero no aplicar local. Aplicación pasa por `prisma migrate deploy` en el `CMD` del Dockerfile al arrancar.
+   - **Backup manual pre-deploy sólo si la migración compromete integridad de Postgres**: renombres de columna, cambios de tipo, conversiones JSONB↔relacional, FKs movidas, drops de tabla con data productiva. `CREATE TABLE` / `ALTER TABLE ADD COLUMN` / `UPDATE` de backfill puro **no** requieren backup. Regla establecida en Lote 5 (May 2026), válida desde entonces.
 3. **Branch por lote.** `feat/lote-N-<slug>`. Merge a `main` al cerrar — sólo con OK explícito de Gustavo (incluye OK del SQL de la migración).
 4. **Commits Conventional.** `feat:`, `fix:`, `chore:`, `docs:`.
 5. **Cero servicios externos nuevos** sin discutir antes. La política del pivot es minimizar dependencias externas y pagos recurrentes.

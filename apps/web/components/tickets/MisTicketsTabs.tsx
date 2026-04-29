@@ -1,20 +1,25 @@
 "use client";
-// Tabs del /mis-combinadas con navegación por URL (?tab=activas|ganadas|historial).
-// Replica `.mc-tabs` del mockup.
+// Tabs del /mis-combinadas con navegación por URL
+// (?tab=activas|mes-actual|historico). Replica `.mc-tabs` del mockup.
+//
+// Lote 5 (May 2026): se agregó el tab "Mes en curso" — tickets de torneos
+// finalizados del mes calendario en curso, con sus `puntosFinales`
+// congelados. Reemplaza al tab "Ganadas" que filtraba por top 10 (esa
+// info ahora está en la stat pill "Aciertos" + en /comunidad).
 
 import { useRouter, useSearchParams } from "next/navigation";
 
-export type TicketsTab = "activas" | "ganadas" | "historial";
+export type TicketsTab = "activas" | "mes-actual" | "historico";
 
 interface MisTicketsTabsProps {
   active: TicketsTab;
-  counts: { activas: number; ganadas: number; historial: number };
+  counts: { activas: number; mesActual: number; historico: number };
 }
 
 const TABS: Array<{ value: TicketsTab; label: string; icon: string }> = [
   { value: "activas", label: "Activas", icon: "live" },
-  { value: "ganadas", label: "Ganadas", icon: "🏆" },
-  { value: "historial", label: "Historial", icon: "📜" },
+  { value: "mes-actual", label: "Mes en curso", icon: "📅" },
+  { value: "historico", label: "Histórico", icon: "📜" },
 ];
 
 export function MisTicketsTabs({ active, counts }: MisTicketsTabsProps) {
@@ -28,6 +33,12 @@ export function MisTicketsTabs({ active, counts }: MisTicketsTabsProps) {
     router.replace(`/mis-combinadas${params.toString() ? `?${params.toString()}` : ""}`);
   }
 
+  const countByValue: Record<TicketsTab, number> = {
+    activas: counts.activas,
+    "mes-actual": counts.mesActual,
+    historico: counts.historico,
+  };
+
   return (
     <div
       role="tablist"
@@ -36,7 +47,7 @@ export function MisTicketsTabs({ active, counts }: MisTicketsTabsProps) {
     >
       {TABS.map((t) => {
         const selected = active === t.value;
-        const count = counts[t.value];
+        const count = countByValue[t.value];
         return (
           <button
             role="tab"
