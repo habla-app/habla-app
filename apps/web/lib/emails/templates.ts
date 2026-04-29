@@ -56,81 +56,6 @@ function ctaButton(label: string, href: string): string {
 // Templates
 // ============================================================================
 
-export interface PremioGanadoInput {
-  nombreGanador: string;
-  torneoNombre: string;
-  posicion: number;
-  partido: string;
-}
-
-export function premioGanadoTemplate(input: PremioGanadoInput) {
-  const emojiPuesto =
-    input.posicion === 1 ? "🥇" : input.posicion === 2 ? "🥈" : input.posicion === 3 ? "🥉" : "🏆";
-  const subject = `${emojiPuesto} Quedaste ${input.posicion}° en ${input.partido}`;
-  const html = wrapEmail(
-    subject,
-    `<h1 style="margin:0 0 8px;font-size:28px;color:#001050;">${emojiPuesto} ¡Felicidades, ${escapeHtml(input.nombreGanador)}!</h1>
-    <p style="margin:0 0 16px;font-size:16px;color:rgba(0,16,80,0.85);line-height:1.5;">
-      Terminaste <strong>${input.posicion}° lugar</strong> en el torneo <strong>${escapeHtml(input.torneoNombre)}</strong>
-      (${escapeHtml(input.partido)}).
-    </p>
-    <p style="margin:16px 0;font-size:14px;color:rgba(0,16,80,0.58);">
-      Sigue prediciendo gratis los próximos partidos para subir en el ranking.
-    </p>
-    ${ctaButton("🎯 Ver torneos abiertos", `${BASE_URL}/matches`)}`,
-  );
-  const text = `${emojiPuesto} ¡Felicidades!\n\n${input.nombreGanador}, terminaste ${input.posicion}° lugar en ${input.torneoNombre} (${input.partido}).\n\nSeguí prediciendo: ${BASE_URL}/matches`;
-  return { subject, html, text };
-}
-
-export interface CanjeEnviadoInput {
-  nombreUsuario: string;
-  nombrePremio: string;
-  metodo: string;
-  codigoSeguimiento?: string;
-}
-
-export function canjeEnviadoTemplate(input: CanjeEnviadoInput) {
-  const subject = `📦 Tu canje "${input.nombrePremio}" está en camino`;
-  const html = wrapEmail(
-    subject,
-    `<h1 style="margin:0 0 8px;font-size:24px;color:#001050;">📦 En camino</h1>
-    <p style="margin:0 0 16px;font-size:15px;color:rgba(0,16,80,0.85);line-height:1.5;">
-      ${escapeHtml(input.nombreUsuario)}, acabamos de despachar tu canje.
-    </p>
-    <div style="background:#F5F7FC;border-radius:12px;padding:20px;margin:16px 0;">
-      <div style="font-size:18px;font-weight:700;color:#001050;margin-bottom:8px;">${escapeHtml(input.nombrePremio)}</div>
-      <div style="font-size:14px;color:rgba(0,16,80,0.85);">Método: ${escapeHtml(input.metodo)}</div>
-      ${input.codigoSeguimiento ? `<div style="font-size:14px;color:rgba(0,16,80,0.85);margin-top:4px;">Seguimiento: <code>${escapeHtml(input.codigoSeguimiento)}</code></div>` : ""}
-    </div>
-    ${ctaButton("Ver detalle", `${BASE_URL}/perfil`)}`,
-  );
-  const text = `Tu canje "${input.nombrePremio}" está en camino. Método: ${input.metodo}${input.codigoSeguimiento ? ` · Seguimiento: ${input.codigoSeguimiento}` : ""}`;
-  return { subject, html, text };
-}
-
-export interface CanjeEntregadoInput {
-  nombreUsuario: string;
-  nombrePremio: string;
-}
-
-export function canjeEntregadoTemplate(input: CanjeEntregadoInput) {
-  const subject = `✅ "${input.nombrePremio}" entregado`;
-  const html = wrapEmail(
-    subject,
-    `<h1 style="margin:0 0 8px;font-size:24px;color:#001050;">✅ ¡Entregado!</h1>
-    <p style="margin:0 0 16px;font-size:15px;color:rgba(0,16,80,0.85);line-height:1.5;">
-      ${escapeHtml(input.nombreUsuario)}, registramos la entrega de tu premio <strong>${escapeHtml(input.nombrePremio)}</strong>.
-    </p>
-    <p style="margin:16px 0;font-size:14px;color:rgba(0,16,80,0.85);line-height:1.5;">
-      Si no lo recibiste o hay algún problema, respondenos directamente este correo.
-    </p>
-    ${ctaButton("Seguir prediciendo", `${BASE_URL}/matches`)}`,
-  );
-  const text = `"${input.nombrePremio}" entregado. ¿Algún problema? Respondé este correo.`;
-  return { subject, html, text };
-}
-
 export interface TorneoCanceladoInput {
   nombreUsuario: string;
   torneoNombre: string;
@@ -192,7 +117,7 @@ export function datosDescargadosTemplate(input: DatosDescargadosInput) {
       ${escapeHtml(input.nombreUsuario)}, tu archivo con todos los datos personales está disponible.
     </p>
     <p style="margin:16px 0;font-size:14px;color:rgba(0,16,80,0.85);line-height:1.5;">
-      Incluye: perfil, tickets, canjes, preferencias.
+      Incluye: perfil, tickets, preferencias.
     </p>
     ${ctaButton("📦 Descargar ZIP", input.urlDescarga)}
     <p style="margin:24px 0 0;font-size:13px;color:rgba(0,16,80,0.58);text-align:center;">

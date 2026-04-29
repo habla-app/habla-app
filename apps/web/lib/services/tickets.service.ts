@@ -3,12 +3,14 @@
 // Lote 2 (Abr 2026): demolido el sistema de Lukas. La inscripción a un
 // torneo es gratuita; este service sólo gestiona la creación / actualización
 // de Tickets con sus predicciones.
+// Lote 3 (Abr 2026): demolido el sistema de límites de juego responsable
+// (LimitesJuego, auto-exclusión). Ya no aplica en el modelo editorial /
+// comunidad / afiliación MINCETUR — el operador final maneja sus propios
+// límites bajo regulación. Sólo queda el cap de 10 tickets por torneo.
 //
 // Reglas:
 //  - Torneo en estado ABIERTO y cierreAt > now para aceptar ticket.
 //  - Máximo 10 tickets del mismo usuario en el mismo torneo.
-//  - Respetar LimitesJuego.limiteDiarioTickets (sólo cuando el ticket es
-//    nuevo, no en updates de placeholder).
 //  - Ticket idéntico a uno previo del mismo usuario en el mismo torneo
 //    → 409 (la unique constraint compuesta del schema ataja el caso).
 //  - Ticket placeholder del flujo de inscripción (predicciones default
@@ -31,18 +33,12 @@ import {
 } from "./errors";
 import { logger } from "./logger";
 import type { CrearTicketBody } from "./tickets.schema";
-import {
-  verificarLimiteInscripcion,
-  bloquearSiAutoExcluido,
-} from "./limites.service";
 
 // ---------------------------------------------------------------------------
 // Constantes
 // ---------------------------------------------------------------------------
 
 export const MAX_TICKETS_POR_TORNEO = 10;
-/** Default de LimitesJuego.limiteDiarioTickets. */
-export const DEFAULT_LIMITE_DIARIO_TICKETS = 10;
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -172,16 +168,6 @@ export async function crear(
         `Máximo ${MAX_TICKETS_POR_TORNEO} tickets por torneo.`,
         { actual: conPredicciones.length, max: MAX_TICKETS_POR_TORNEO },
       );
-    }
-
-    // Auto-exclusión SIEMPRE bloquea (aplica a placeholder update también).
-    // Límite diario sólo cuenta cuando se crea uno NUEVO; un placeholder
-    // update no suma al contador (misma "inscripción" lógica).
-    const creamosNuevo = placeholders.length === 0;
-    if (creamosNuevo) {
-      await verificarLimiteInscripcion({ tx, usuarioId });
-    } else {
-      await bloquearSiAutoExcluido(usuarioId, tx);
     }
 
     let ticket: Ticket;

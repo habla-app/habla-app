@@ -1,7 +1,7 @@
 # CLAUDE.md — Habla! App
 
 > Cerebro del proyecto. Cargado en cada sesión: corto y denso. Historial detallado de cambios vive en commits y PRs.
-> Última reescritura: 29 Abr 2026 (Lote 2 — demolición del aparato monetario Lukas + wallet).
+> Última reescritura: 30 Abr 2026 (Lote 3 — demolición de tienda + canjes + verificaciones + límites).
 
 ---
 
@@ -22,7 +22,7 @@ URL prod: `https://hablaplay.com` (alias `https://www.hablaplay.com`). El plan c
 | 0 — Base previa al pivot | ✅ | Auth NextAuth v5 (Google + magic link Resend), torneos+tickets+ranking, contabilidad partida doble, backups R2, infra Railway+Cloudflare. |
 | 1 — Cleanup servicios externos | ✅ | Quita Sentry, PostHog, Twilio + verificación teléfono/DNI. Cookie banner adaptado. Eventos analytics archivados en `docs/eventos-analytics-pendientes.md` para Lote 6. |
 | 2 — Demolición Lukas + wallet | ✅ | Drop completo del sistema de saldo interno: 4 columnas de balance en Usuario, columnas económicas del Torneo, tabla TransaccionLukas, enums. UI sin balance: NavBar limpio, sidebar de 3 widgets, "Predecir gratis", ranking sin premio. Tienda en mantenimiento. |
-| 3 — Limpieza schema BD | ⏳ | Drop de tablas restantes (canjes/verificación/notifVencimientos). Migración Prisma. |
+| 3 — Demolición tienda + canjes + verif + límites | ✅ | Drop tablas Premio/Canje/LimitesJuego/VerificacionTelefono/VerificacionDni + 4 enums + columnas Usuario.telefono/telefonoVerif/dniVerif + PreferenciasNotif.notifVencimientos. Borradas pages /tienda y /admin/canjes, endpoints /api/v1/{canjes,premios,admin/canjes,admin/seed/premios,usuarios/limites}, services canjes/premios/premios-seed/limites, JuegoResponsableSection. BottomNav reescrito a 5 items (Inicio · Partidos · Pronósticos · Comunidad · Perfil) con placeholders "Próximamente" en /pronosticos y /comunidad. |
 | 4-5 — Editorial | ⏳ | Branding final + Modelo Articulo/Categoria + CMS interno + render público. |
 | 6 — Analytics in-house | ⏳ | Reemplazo de PostHog: eventos a Postgres + dashboard interno. Input: `docs/eventos-analytics-pendientes.md`. |
 | 7 — Comunidad | ⏳ | Comentarios y suscripción a categorías. |

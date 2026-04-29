@@ -5,7 +5,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { AdminTorneosPanel } from "@/components/admin/AdminTorneosPanel";
-import { AdminSeedPremiosPanel } from "@/components/admin/AdminSeedPremiosPanel";
 
 export default async function AdminPage() {
   const session = await auth();
@@ -25,9 +24,6 @@ export default async function AdminPage() {
           <Link href="/" className="hover:underline">
             ← Volver al home
           </Link>
-          <Link href="/admin/canjes" className="hover:underline">
-            🎁 Gestionar canjes →
-          </Link>
           <Link href="/admin/contabilidad" className="hover:underline">
             📒 Contabilidad →
           </Link>
@@ -41,7 +37,6 @@ export default async function AdminPage() {
       </header>
 
       <AdminTorneosPanel />
-      <AdminSeedPremiosPanel />
     </div>
   );
 }

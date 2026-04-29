@@ -5,9 +5,9 @@
 // entre requests. Sin esto el widget "🔴 En vivo ahora" del sidebar
 // quedaba pegado con datos del primer render (partido finalizado
 // mostrado como live, partido recién entrado en vivo invisible).
-// Mismo motivo que el Hotfix #2 Bug #3 aplicó a /mis-combinadas y
-// /wallet: los RSC que dependen de estado en vivo (lista de torneos,
-// partidos live) deben renderizarse en cada request.
+// Mismo motivo que el Hotfix #2 Bug #3 aplicó a /mis-combinadas: los RSC
+// que dependen de estado en vivo (lista de torneos, partidos live) deben
+// renderizarse en cada request.
 import { MatchesPageContent } from "@/components/matches/MatchesPageContent";
 
 interface Props {

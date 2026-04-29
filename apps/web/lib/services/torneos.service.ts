@@ -32,7 +32,6 @@ import {
   DomainError,
 } from "./errors";
 import { logger } from "./logger";
-import { verificarLimiteInscripcion } from "./limites.service";
 
 // ---------------------------------------------------------------------------
 // Constantes
@@ -385,8 +384,6 @@ export async function inscribir(
     if (torneo.cierreAt.getTime() <= Date.now()) {
       throw new TorneoCerrado(torneoId);
     }
-
-    await verificarLimiteInscripcion({ tx, usuarioId });
 
     let ticket: Ticket;
     try {

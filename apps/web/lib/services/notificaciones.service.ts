@@ -5,25 +5,22 @@
 //  - Helper `debeNotificar(usuarioId, tipo)` que SIEMPRE se consulta antes
 //    de despachar un email. Si no existen preferencias para el usuario,
 //    devuelve TRUE (default opt-in vía schema).
-//  - Wrappers específicos (`notifyPremioGanado`, `notifyCanjeSolicitado`,
-//    etc.) fire-and-forget para que el caller (transacción atómica) no
-//    bloquee su commit esperando el email.
+//  - Wrappers específicos (`notifyTorneoCancelado`,
+//    `notifySolicitudEliminar`, etc.) fire-and-forget para que el caller
+//    (transacción atómica) no bloquee su commit esperando el email.
 //
-// Lote 2 (Abr 2026): se quitaron los wrappers de vencimiento de Lukas
-// (`notifyLukasVencidos`, `notifyLukasPorVencer`). La columna
-// `PreferenciasNotif.notifVencimientos` se mantiene en el schema porque
-// Lote 3 la dropea junto con el resto de la limpieza.
+// Lote 3 (Abr 2026): se quitaron los wrappers de canje (`notifyCanjeEnviado`,
+// `notifyCanjeEntregado`) y el `notifyPremioGanado` (será reemplazado por
+// `notifyPremioMensualGanado` en Lote 5). La columna
+// `PreferenciasNotif.notifVencimientos` se dropeó del schema.
 
 import { prisma } from "@habla/db";
 import { enviarEmail } from "./email.service";
 import {
   auditoriaContableAlertaTemplate,
   backupFalloTemplate,
-  canjeEnviadoTemplate,
-  canjeEntregadoTemplate,
   cuentaEliminadaTemplate,
   datosDescargadosTemplate,
-  premioGanadoTemplate,
   solicitudEliminarTemplate,
   torneoCanceladoTemplate,
   type AuditoriaContableAlertaInput,
@@ -43,9 +40,6 @@ export const PREFERENCIAS_DEFAULT = {
   notifCierreTorneo: true,
   notifPromos: false,
   emailSemanal: false,
-  // Lote 2: la columna sigue en el schema (Lote 3 la dropea), pero ya no
-  // hay flujo que la lea. Mantenemos default true por compat de upsert.
-  notifVencimientos: true,
 } as const;
 
 export type PreferenciasKey = keyof typeof PREFERENCIAS_DEFAULT;
@@ -59,7 +53,6 @@ export interface PreferenciasNotificaciones {
   notifCierreTorneo: boolean;
   notifPromos: boolean;
   emailSemanal: boolean;
-  notifVencimientos: boolean;
 }
 
 export async function obtenerPreferencias(
@@ -113,7 +106,6 @@ export async function debeNotificar(
       notifCierreTorneo: true,
       notifPromos: true,
       emailSemanal: true,
-      notifVencimientos: true,
     },
   });
   const valor = prefs
@@ -138,68 +130,6 @@ async function obtenerDestinatario(
 // ---------------------------------------------------------------------------
 // Wrappers por evento — fire-and-forget
 // ---------------------------------------------------------------------------
-
-export async function notifyPremioGanado(input: {
-  usuarioId: string;
-  torneoNombre: string;
-  posicion: number;
-  partido: string;
-}): Promise<void> {
-  try {
-    if (!(await debeNotificar(input.usuarioId, "notifPremios"))) return;
-    const destinatario = await obtenerDestinatario(input.usuarioId);
-    if (!destinatario) return;
-    const tpl = premioGanadoTemplate({
-      nombreGanador: destinatario.nombre,
-      torneoNombre: input.torneoNombre,
-      posicion: input.posicion,
-      partido: input.partido,
-    });
-    await enviarEmail({ to: destinatario.email, ...tpl });
-  } catch (err) {
-    logger.error({ err, usuarioId: input.usuarioId }, "notifyPremioGanado: error");
-  }
-}
-
-export async function notifyCanjeEnviado(input: {
-  usuarioId: string;
-  nombrePremio: string;
-  metodo: string;
-  codigoSeguimiento?: string;
-}): Promise<void> {
-  try {
-    if (!(await debeNotificar(input.usuarioId, "notifResultados"))) return;
-    const destinatario = await obtenerDestinatario(input.usuarioId);
-    if (!destinatario) return;
-    const tpl = canjeEnviadoTemplate({
-      nombreUsuario: destinatario.nombre,
-      nombrePremio: input.nombrePremio,
-      metodo: input.metodo,
-      codigoSeguimiento: input.codigoSeguimiento,
-    });
-    await enviarEmail({ to: destinatario.email, ...tpl });
-  } catch (err) {
-    logger.error({ err, usuarioId: input.usuarioId }, "notifyCanjeEnviado: error");
-  }
-}
-
-export async function notifyCanjeEntregado(input: {
-  usuarioId: string;
-  nombrePremio: string;
-}): Promise<void> {
-  try {
-    if (!(await debeNotificar(input.usuarioId, "notifResultados"))) return;
-    const destinatario = await obtenerDestinatario(input.usuarioId);
-    if (!destinatario) return;
-    const tpl = canjeEntregadoTemplate({
-      nombreUsuario: destinatario.nombre,
-      nombrePremio: input.nombrePremio,
-    });
-    await enviarEmail({ to: destinatario.email, ...tpl });
-  } catch (err) {
-    logger.error({ err, usuarioId: input.usuarioId }, "notifyCanjeEntregado: error");
-  }
-}
 
 export async function notifyTorneoCancelado(input: {
   usuarioId: string;

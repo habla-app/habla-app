@@ -1,10 +1,14 @@
-// Tests del Hotfix #5 Bug #12: el badge "🔴 En vivo" del NavBar/BottomNav
-// antes mostraba "2" hardcoded aunque no hubiera partidos en vivo. Ahora:
+// Tests del Hotfix #5 Bug #12: el badge "🔴 En vivo" del NavBar antes
+// mostraba "2" hardcoded aunque no hubiera partidos en vivo. Ahora:
 //
-//   - NavBar pasa `initialLiveCount` SSR-derivado a NavLinks + BottomNav.
+//   - NavBar pasa `initialLiveCount` SSR-derivado a NavLinks.
 //   - LiveCountBadge lee de useLiveMatchesCount(initialCount) y devuelve
 //     null cuando count === 0 — sin dot, sin "0", nada.
 //   - useLiveMatchesCount polea `/api/v1/live/count` cada 30s (refresh).
+//
+// Lote 3 (Abr 2026): el BottomNav dejó de mostrar el badge (los items
+// son Inicio/Partidos/Pronósticos/Comunidad/Perfil). El badge sigue vivo
+// sólo en el NavBar desktop.
 //
 // Los tests son AST-level — vitest corre en environment `node` y no
 // podemos renderizar. Escaneamos el source para asegurar que el contrato
@@ -45,10 +49,6 @@ describe("LiveCountBadge.tsx — rendering condicional (Bug #12)", () => {
 
   it("variant='desktop' lleva data-testid='live-count-badge'", () => {
     expect(SRC).toMatch(/data-testid=["']live-count-badge["']/);
-  });
-
-  it("variant='mobile' lleva data-testid='live-count-badge-mobile'", () => {
-    expect(SRC).toMatch(/data-testid=["']live-count-badge-mobile["']/);
   });
 
   it("usa tokens del design system (bg-urgent-critical, text-white)", () => {
@@ -134,14 +134,13 @@ describe("live-matches.service.ts — contarLiveMatches (Bug #12)", () => {
   });
 });
 
-describe("NavBar + NavLinks + BottomNav — wiring de initialLiveCount", () => {
-  it("Layout (main) llama contarLiveMatches() y pasa initialLiveCount a ambas navs", () => {
+describe("NavBar + NavLinks — wiring de initialLiveCount", () => {
+  it("Layout (main) llama contarLiveMatches() y pasa initialLiveCount al NavBar", () => {
     const SRC = readSrc("app/(main)/layout.tsx");
     expect(SRC).toMatch(
       /import\s*\{\s*contarLiveMatches\s*\}\s*from\s*["']@\/lib\/services\/live-matches\.service["']/,
     );
     expect(SRC).toMatch(/<NavBar\s+initialLiveCount=\{liveCount\}/);
-    expect(SRC).toMatch(/<BottomNav\s+initialLiveCount=\{liveCount\}/);
   });
 
   it("NavBar NO hardcodea LIVE_COUNT_PLACEHOLDER — Bug #12 REPRO", () => {
@@ -167,15 +166,5 @@ describe("NavBar + NavLinks + BottomNav — wiring de initialLiveCount", () => {
     // vivía dentro de NavLinks. Se movió a LiveCountBadge — esta línea
     // ya no debe existir porque duplicaba el número sin guard.
     expect(SRC).not.toMatch(/\{\s*liveCount\s*>\s*0\s*&&[\s\S]*?\{\s*liveCount\s*\}/);
-  });
-
-  it("BottomNav usa LiveCountBadge variant='mobile' para el item 'En vivo'", () => {
-    const SRC = readSrc("components/layout/BottomNav.tsx");
-    expect(SRC).toMatch(
-      /import\s*\{\s*LiveCountBadge\s*\}\s*from\s*["']@\/components\/layout\/LiveCountBadge["']/,
-    );
-    expect(SRC).toMatch(/variant=["']mobile["']/);
-    // El item con hasLiveIndicator debe ser el que linkea a /live-match.
-    expect(SRC).toMatch(/href:\s*["']\/live-match["'][\s\S]*?hasLiveIndicator:\s*true/);
   });
 });

@@ -3,16 +3,16 @@
 //
 // DOS RESPONSABILIDADES:
 //   1) Rate limiting para rutas /api/* (con tiers por endpoint).
-//   2) Protección de rutas autenticadas: /wallet, /perfil, /mis-combinadas,
-//      /admin. Más el redirect a /auth/completar-perfil si el usuario
-//      está logueado pero sin @handle definitivo (Abr 2026).
+//   2) Protección de rutas autenticadas: /perfil, /mis-combinadas, /admin.
+//      Más el redirect a /auth/completar-perfil si el usuario está
+//      logueado pero sin @handle definitivo (Abr 2026).
 //
 // La rama de rate-limit retorna antes de entrar a la lógica de auth, por
 // lo que las rutas /api/* nunca ejecutan `auth()` aquí — los route
 // handlers llaman `auth()` ellos mismos cuando necesitan sesión.
 //
-// Rutas públicas (sin login): /, /torneos, /torneo/[id], /tienda, /matches,
-// /live-match. NO se listan en el matcher.
+// Rutas públicas (sin login): /, /torneos, /torneo/[id], /matches,
+// /live-match, /pronosticos, /comunidad. NO se listan en el matcher.
 //
 // Registro formal (Abr 2026): si el usuario está logueado pero con
 // `usernameLocked=false` (OAuth primera vez), redirect a
@@ -29,7 +29,6 @@ import { checkLimit } from "@/lib/rate-limit";
 // se duplica literal en `config.matcher` abajo — el test valida que no
 // driften entre sí.
 export const PROTECTED_MATCHERS = [
-  "/wallet/:path*",
   "/perfil/:path*",
   "/mis-combinadas/:path*",
   "/admin",
@@ -198,7 +197,7 @@ export default auth(async (req) => {
     return;
   }
 
-  // /wallet, /perfil, /mis-combinadas: requieren login + username definitivo.
+  // /perfil, /mis-combinadas: requieren login + username definitivo.
   if (!isLoggedIn) {
     const loginUrl = new URL("/auth/signin", req.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
@@ -218,7 +217,6 @@ export const config = {
   // Lote 1: agregamos /api/:path* para rate limiting (auth gating skippea
   // /api/* en el handler arriba).
   matcher: [
-    "/wallet/:path*",
     "/perfil/:path*",
     "/mis-combinadas/:path*",
     "/admin",

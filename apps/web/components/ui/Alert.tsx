@@ -1,8 +1,7 @@
 // Alert — traducido de `.alert` / `.alert-info` / `.alert-success` del mockup.
 // Banner inline con icono a la izquierda + contenido. Se monta en forms y
 // pantallas donde se quiere comunicar info contextual (no intrusiva).
-// Lote 6B: variantes `warning` (dorado) y `error` (rojo) para banners de
-// vencimiento próximo en /wallet.
+// Variantes: info, success, `warning` (dorado) y `error` (rojo).
 import type { ReactNode } from "react";
 
 type AlertVariant = "info" | "success" | "warning" | "error";

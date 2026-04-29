@@ -3,15 +3,14 @@
 // Lote 2 — SEO. Se sirve en /sitemap.xml.
 //
 // Incluye:
-//  - Páginas estáticas públicas (home, matches, tienda, /live-match,
-//    /ayuda/faq).
+//  - Páginas estáticas públicas (home, matches, /live-match, /ayuda/faq).
 //  - Rutas /legal/* (Lote 3): terminos, privacidad, cookies,
 //    juego-responsable, canjes, aviso. `lastModified` apunta a la fecha
 //    de vigencia del documento (2026-04-24).
 //  - Torneos públicos (ABIERTO o EN_VIVO) con `lastModified` del torneo.
 //
-// Excluye rutas privadas (/wallet, /perfil, /mis-combinadas, /admin, /auth)
-// y endpoints API — esos van en robots.ts como Disallow.
+// Excluye rutas privadas (/perfil, /mis-combinadas, /admin, /auth) y
+// endpoints API — esos van en robots.ts como Disallow.
 
 import type { MetadataRoute } from "next";
 import { prisma } from "@habla/db";
@@ -42,12 +41,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: now,
       changeFrequency: "hourly",
       priority: 0.8,
-    },
-    {
-      url: `${BASE_URL}/tienda`,
-      lastModified: now,
-      changeFrequency: "weekly",
-      priority: 0.7,
     },
     {
       url: `${BASE_URL}/ayuda/faq`,
