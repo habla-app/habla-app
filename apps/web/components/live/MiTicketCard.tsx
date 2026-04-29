@@ -9,7 +9,6 @@ interface MiTicketCardProps {
     posicion: number;
     ticketId: string;
     puntosTotal: number;
-    premioEstimado: number;
   } | null;
   totalInscritos: number;
   row: RankingRowPayload | null;
@@ -38,8 +37,8 @@ export function MiTicketCard({
 
   const subtitulo = inTop10
     ? partidoEstado === "FINALIZADO"
-      ? "Ganaste premio, los Lukas ya están en tu wallet."
-      : "Estás en zona de premio — seguí así."
+      ? "Quedaste en el top 10 — ¡crack!"
+      : "Estás en el top 10 — seguí así."
     : partidoEstado === "FINALIZADO"
       ? "Quedaste fuera del top 10 en este torneo."
       : "Fuera del top 10 por ahora, todavía podés remontar.";
@@ -76,11 +75,7 @@ export function MiTicketCard({
                 : "bg-subtle text-muted-d"
             }`}
           >
-            {inTop10 ? (
-              <>+{miPosicion.premioEstimado.toLocaleString("es-PE")} 🪙</>
-            ) : (
-              "Fuera de premios"
-            )}
+            {inTop10 ? `Top 10 · ${miPosicion.posicion}°` : "Fuera del top 10"}
           </div>
         </div>
       </div>

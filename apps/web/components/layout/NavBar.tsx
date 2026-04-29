@@ -1,32 +1,21 @@
 // NavBar — réplica de `.header` del mockup (docs/habla-mockup-completo.html
-// líneas 122-186, 1663-1682). Altura 68px, fondo dark-surface, logo a la
-// izquierda con nav-links, lukas-badge + avatar (o "Entrar") a la derecha.
+// líneas 1663-1682). Altura 68px, fondo dark-surface, logo a la izquierda
+// con nav-links, avatar (o "Entrar") a la derecha.
 //
-// Server Component que lee la sesión. Para el estado activo de los links
-// delega a NavLinks (client) porque necesita usePathname. Para el chip
-// de Lukas delega a BalanceBadge (client) porque necesita re-renderizar
-// cuando el balance cambia en el store tras una inscripción (Bug #7).
+// Lote 2 (Abr 2026): se removió el chip de Lukas — el sistema de saldo
+// se demolió. El header queda más limpio.
 //
-// Bug #12 (Hotfix #5): el contador del link "🔴 En vivo" antes era un
-// hardcode `LIVE_COUNT_PLACEHOLDER = 2`. Ahora el layout (main) hace una
-// sola llamada a `contarLiveMatches()` y nos pasa `initialLiveCount`
-// como prop — lo propagamos al NavLinks que a su vez lo pasa al
-// LiveCountBadge (client, con polling cada 30s).
-//
-// Registro formal (Abr 2026): pasa `@username` + `usernameLocked` al
-// UserMenu. Iniciales se derivan del username (primeras 2 letras) o del
-// email si el username aún es temporal `new_<hex>`.
+// Bug #12 (Hotfix #5): el contador del link "🔴 En vivo" lo provee el
+// layout (main) vía `contarLiveMatches()`. Lo propagamos al NavLinks que
+// a su vez lo pasa al LiveCountBadge (client, con polling cada 30s).
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { NavLinks } from "@/components/layout/NavLinks";
 import { UserMenu } from "@/components/layout/UserMenu";
-import { BalanceBadge } from "@/components/layout/BalanceBadge";
 
 interface Props {
   /** Count del SSR (del layout, via contarLiveMatches). 0 default. */
   initialLiveCount?: number;
-  /** Lukas Premios (ganadas) del SSR — para mostrar el subconjunto en el badge. Lote 6C. */
-  initialBalanceGanadas?: number;
 }
 
 function iniciales(username: string, email: string): string {
@@ -35,7 +24,7 @@ function iniciales(username: string, email: string): string {
   return base.trim().slice(0, 2).toUpperCase();
 }
 
-export async function NavBar({ initialLiveCount = 0, initialBalanceGanadas = 0 }: Props = {}) {
+export async function NavBar({ initialLiveCount = 0 }: Props = {}) {
   const session = await auth();
   const usuario = session?.user ?? null;
 
@@ -60,25 +49,19 @@ export async function NavBar({ initialLiveCount = 0, initialBalanceGanadas = 0 }
           <NavLinks initialLiveCount={initialLiveCount} />
         </div>
 
-        {/* RIGHT: balance + avatar o "Entrar" */}
+        {/* RIGHT: avatar o "Entrar" */}
         <div className="flex items-center gap-3">
           {usuario ? (
-            <>
-              <BalanceBadge
-                initialBalance={usuario.balanceLukas ?? 0}
-                initialBalanceGanadas={initialBalanceGanadas}
-              />
-              <UserMenu
-                iniciales={iniciales(
-                  usuario.username ?? "",
-                  usuario.email ?? "",
-                )}
-                username={usuario.username ?? ""}
-                usernameLocked={usuario.usernameLocked ?? false}
-                email={usuario.email ?? ""}
-                esAdmin={usuario.rol === "ADMIN"}
-              />
-            </>
+            <UserMenu
+              iniciales={iniciales(
+                usuario.username ?? "",
+                usuario.email ?? "",
+              )}
+              username={usuario.username ?? ""}
+              usernameLocked={usuario.usernameLocked ?? false}
+              email={usuario.email ?? ""}
+              esAdmin={usuario.rol === "ADMIN"}
+            />
           ) : (
             <Link
               href="/auth/signin"

@@ -101,16 +101,13 @@ export async function emitirRankingUpdate(
         puntosTotal: row.puntosTotal,
         puntosDetalle: row.puntosDetalle,
         predicciones: row.predicciones,
-        premioEstimado: row.premioEstimado,
       })),
       totalInscritos: r.totalInscritos,
-      pozoNeto: r.pozoNeto,
       minutoPartido,
       minutoLabel,
       minutoExtra,
       statusShort,
       elapsedAgeMs,
-      pagados: r.pagados,
       timestamp: emitAt,
     };
     io.to(roomTorneo(torneoId)).emit("ranking:update", payload);

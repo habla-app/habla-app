@@ -30,8 +30,6 @@ interface LiveHeroProps {
    *  no tenía datos — el hook muestra "—". */
   elapsedAgeMs: number | null;
   totalInscritos: number;
-  pozoNeto: number;
-  primerPremio: number;
   ultimosEventos: Array<{
     tipo: string;
     minuto: number;
@@ -53,8 +51,6 @@ export function LiveHero({
   extra,
   elapsedAgeMs,
   totalInscritos,
-  pozoNeto,
-  primerPremio,
   ultimosEventos,
 }: LiveHeroProps) {
   const isLive = estado === "EN_VIVO";
@@ -100,17 +96,12 @@ export function LiveHero({
         <TeamSide name={equipoVisita} align="right" />
       </div>
 
-      <div className="mb-5 grid grid-cols-2 gap-4 md:grid-cols-4">
-        <HeroStat value={totalInscritos.toLocaleString("es-PE")} label="Jugadores" />
+      <div className="mb-5 grid grid-cols-2 gap-4 md:grid-cols-2">
         <HeroStat
-          value={`${pozoNeto.toLocaleString("es-PE")} 🪙`}
-          label="Pozo neto"
+          value={totalInscritos.toLocaleString("es-PE")}
+          label={totalInscritos === 1 ? "Tipster compitiendo" : "Tipsters compitiendo"}
         />
-        <HeroStat
-          value={`${primerPremio.toLocaleString("es-PE")} 🪙`}
-          label="1er premio"
-        />
-        <HeroStat value="21 pts" label="Máximo" />
+        <HeroStat value="21 pts" label="Puntaje máximo" />
       </div>
 
       {ultimosEventos.length > 0 && (

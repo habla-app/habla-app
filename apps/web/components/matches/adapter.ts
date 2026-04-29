@@ -20,8 +20,6 @@ export function torneoToCardData(
     venue: torneo.partido.venue,
     equipoLocal: torneo.partido.equipoLocal,
     equipoVisita: torneo.partido.equipoVisita,
-    pozoBruto: torneo.pozoBruto,
-    entradaLukas: torneo.entradaLukas,
     totalInscritos: torneo.totalInscritos,
     fechaInicio: torneo.partido.fechaInicio,
     cierreAt: torneo.cierreAt,

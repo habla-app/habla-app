@@ -1,38 +1,31 @@
-// Servicio de notificaciones + preferencias — Sub-Sprint 7 + integración SS6.
+// Servicio de notificaciones + preferencias.
 //
 // Responsabilidades:
 //  - Obtener / actualizar PreferenciasNotif del usuario (con defaults).
-//  - Helper `debeNotificar(usuarioId, tipo)` que SIEMPRE se consulta antes de
-//    despachar un email (convención §14). Si no existen preferencias para el
-//    usuario, devuelve TRUE (default de opt-out: el registro se crea con los
-//    booleans por defecto del schema).
-//  - Wrappers específicos (`notifyPremioGanado`, `notifyCanjeSolicitado`, etc.)
-//    que encadenan: obtener user + email → chequear preferencia → renderizar
-//    template → enviar. Cada wrapper acepta los inputs mínimos y resuelve
-//    internamente los datos necesarios (nombre de usuario).
+//  - Helper `debeNotificar(usuarioId, tipo)` que SIEMPRE se consulta antes
+//    de despachar un email. Si no existen preferencias para el usuario,
+//    devuelve TRUE (default opt-in vía schema).
+//  - Wrappers específicos (`notifyPremioGanado`, `notifyCanjeSolicitado`,
+//    etc.) fire-and-forget para que el caller (transacción atómica) no
+//    bloquee su commit esperando el email.
 //
-// Diseño: los wrappers son fire-and-forget para que el caller (transacción
-// atómica) no bloquee su commit esperando el email. Si el email falla, logger
-// emite error pero la transacción principal sigue OK.
+// Lote 2 (Abr 2026): se quitaron los wrappers de vencimiento de Lukas
+// (`notifyLukasVencidos`, `notifyLukasPorVencer`). La columna
+// `PreferenciasNotif.notifVencimientos` se mantiene en el schema porque
+// Lote 3 la dropea junto con el resto de la limpieza.
 
 import { prisma } from "@habla/db";
 import { enviarEmail } from "./email.service";
 import {
-  auditoriaAlertaTemplate,
   auditoriaContableAlertaTemplate,
   backupFalloTemplate,
   canjeEnviadoTemplate,
   canjeEntregadoTemplate,
-  canjeSolicitadoTemplate,
   cuentaEliminadaTemplate,
   datosDescargadosTemplate,
-  lukasVencidosTemplate,
-  lukasPorVencer30dTemplate,
-  lukasPorVencer7dTemplate,
   premioGanadoTemplate,
   solicitudEliminarTemplate,
   torneoCanceladoTemplate,
-  type AuditoriaAlertaInput,
   type AuditoriaContableAlertaInput,
   type BackupFalloInput,
 } from "../emails/templates";
@@ -50,7 +43,9 @@ export const PREFERENCIAS_DEFAULT = {
   notifCierreTorneo: true,
   notifPromos: false,
   emailSemanal: false,
-  notifVencimientos: true, // Lote 6A: avisos de vencimiento de Lukas comprados
+  // Lote 2: la columna sigue en el schema (Lote 3 la dropea), pero ya no
+  // hay flujo que la lea. Mantenemos default true por compat de upsert.
+  notifVencimientos: true,
 } as const;
 
 export type PreferenciasKey = keyof typeof PREFERENCIAS_DEFAULT;
@@ -64,10 +59,9 @@ export interface PreferenciasNotificaciones {
   notifCierreTorneo: boolean;
   notifPromos: boolean;
   emailSemanal: boolean;
-  notifVencimientos: boolean; // Lote 6A
+  notifVencimientos: boolean;
 }
 
-/** Lee las preferencias de un usuario. Si no existe registro, crea uno con defaults. */
 export async function obtenerPreferencias(
   usuarioId: string,
 ): Promise<PreferenciasNotificaciones> {
@@ -77,7 +71,6 @@ export async function obtenerPreferencias(
   if (existente) {
     return { ...existente };
   }
-  // Upsert-like: crea con defaults y devuelve.
   const creada = await prisma.preferenciasNotif.create({
     data: { usuarioId, ...PREFERENCIAS_DEFAULT },
   });
@@ -106,11 +99,6 @@ export async function actualizarPreferencias(
   return { ...actualizada };
 }
 
-/**
- * Decide si un usuario debe recibir una notificación de cierto tipo.
- * Si no tiene preferencias en BD, usa los defaults. Opcionalmente skippea
- * usuarios sin email o soft-deleted.
- */
 export async function debeNotificar(
   usuarioId: string,
   tipo: PreferenciasKey,
@@ -155,7 +143,6 @@ export async function notifyPremioGanado(input: {
   usuarioId: string;
   torneoNombre: string;
   posicion: number;
-  premioLukas: number;
   partido: string;
 }): Promise<void> {
   try {
@@ -166,36 +153,11 @@ export async function notifyPremioGanado(input: {
       nombreGanador: destinatario.nombre,
       torneoNombre: input.torneoNombre,
       posicion: input.posicion,
-      premioLukas: input.premioLukas,
       partido: input.partido,
     });
     await enviarEmail({ to: destinatario.email, ...tpl });
   } catch (err) {
     logger.error({ err, usuarioId: input.usuarioId }, "notifyPremioGanado: error");
-  }
-}
-
-export async function notifyCanjeSolicitado(input: {
-  usuarioId: string;
-  nombrePremio: string;
-  lukasUsados: number;
-  requiereDireccion: boolean;
-}): Promise<void> {
-  try {
-    // Canjes se notifican siempre — son transacciones del usuario,
-    // no promos. Respetamos notifResultados (categoría más cercana).
-    if (!(await debeNotificar(input.usuarioId, "notifResultados"))) return;
-    const destinatario = await obtenerDestinatario(input.usuarioId);
-    if (!destinatario) return;
-    const tpl = canjeSolicitadoTemplate({
-      nombreUsuario: destinatario.nombre,
-      nombrePremio: input.nombrePremio,
-      lukasUsados: input.lukasUsados,
-      requiereDireccion: input.requiereDireccion,
-    });
-    await enviarEmail({ to: destinatario.email, ...tpl });
-  } catch (err) {
-    logger.error({ err, usuarioId: input.usuarioId }, "notifyCanjeSolicitado: error");
   }
 }
 
@@ -243,7 +205,6 @@ export async function notifyTorneoCancelado(input: {
   usuarioId: string;
   torneoNombre: string;
   partido: string;
-  entradaReembolsada: number;
 }): Promise<void> {
   try {
     if (!(await debeNotificar(input.usuarioId, "notifResultados"))) return;
@@ -253,7 +214,6 @@ export async function notifyTorneoCancelado(input: {
       nombreUsuario: destinatario.nombre,
       torneoNombre: input.torneoNombre,
       partido: input.partido,
-      entradaReembolsada: input.entradaReembolsada,
     });
     await enviarEmail({ to: destinatario.email, ...tpl });
   } catch (err) {
@@ -264,7 +224,6 @@ export async function notifyTorneoCancelado(input: {
 export async function notifySolicitudEliminar(input: {
   usuarioId: string;
   tokenUrl: string;
-  balanceLukas: number;
 }): Promise<void> {
   try {
     const destinatario = await obtenerDestinatario(input.usuarioId);
@@ -272,7 +231,6 @@ export async function notifySolicitudEliminar(input: {
     const tpl = solicitudEliminarTemplate({
       nombreUsuario: destinatario.nombre,
       tokenUrl: input.tokenUrl,
-      balanceLukas: input.balanceLukas,
     });
     await enviarEmail({ to: destinatario.email, ...tpl });
   } catch (err) {
@@ -300,13 +258,8 @@ export async function notifyDatosDescargados(input: {
 }
 
 /**
- * Confirmación post-eliminación de cuenta (Mini-lote 7.6). A diferencia
- * de los otros wrappers, recibe email + nombre EXPLÍCITOS porque al
- * llamarse el usuario puede estar ya anonimizado (soft delete) o borrado
- * (hard delete) — no podemos resolverlo desde la BD por usuarioId.
- *
- * El caller (`eliminarCuentaInmediato`) lee email + nombre antes de la
- * transacción y los pasa acá como fire-and-forget.
+ * Confirmación post-eliminación de cuenta. Recibe email + nombre EXPLÍCITOS
+ * porque al llamarse el usuario puede estar ya anonimizado/borrado.
  */
 export async function notifyCuentaEliminada(input: {
   email: string;
@@ -326,108 +279,9 @@ export async function notifyCuentaEliminada(input: {
 }
 
 // ---------------------------------------------------------------------------
-// Wrappers de vencimiento de Lukas — Lote 6A
+// Backups — alerta interna al admin
 // ---------------------------------------------------------------------------
 
-/** Avisa que una compra de Lukas ya venció y el saldo se descontó. */
-export async function notifyLukasVencidos(input: {
-  usuarioId: string;
-  monto: number;
-  fechaCompra: Date;
-}): Promise<void> {
-  try {
-    if (!(await debeNotificar(input.usuarioId, "notifVencimientos"))) return;
-    const destinatario = await obtenerDestinatario(input.usuarioId);
-    if (!destinatario) return;
-    const tpl = lukasVencidosTemplate({
-      nombreUsuario: destinatario.nombre,
-      monto: input.monto,
-      fechaCompra: input.fechaCompra,
-    });
-    await enviarEmail({ to: destinatario.email, ...tpl });
-  } catch (err) {
-    logger.error({ err, usuarioId: input.usuarioId }, "notifyLukasVencidos: error");
-  }
-}
-
-/** Avisa que una compra de Lukas está próxima a vencer (30d o 7d). */
-export async function notifyLukasPorVencer(input: {
-  usuarioId: string;
-  monto: number;
-  venceEn: Date;
-  dias: 7 | 30;
-}): Promise<void> {
-  try {
-    if (!(await debeNotificar(input.usuarioId, "notifVencimientos"))) return;
-    const destinatario = await obtenerDestinatario(input.usuarioId);
-    if (!destinatario) return;
-    const templateFn =
-      input.dias === 7 ? lukasPorVencer7dTemplate : lukasPorVencer30dTemplate;
-    const tpl = templateFn({
-      nombreUsuario: destinatario.nombre,
-      monto: input.monto,
-      venceEn: input.venceEn,
-      diasRestantes: input.dias,
-    });
-    await enviarEmail({ to: destinatario.email, ...tpl });
-  } catch (err) {
-    logger.error({ err, usuarioId: input.usuarioId }, "notifyLukasPorVencer: error");
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Auditoría de balances — alerta interna al admin (Lote 6C-fix3)
-// ---------------------------------------------------------------------------
-
-/**
- * Envía una alerta por email al admin cuando la auditoría diaria detecta
- * hallazgos. Destinatario configurable vía env var `ADMIN_ALERT_EMAIL`. Si
- * no está seteada, loggea warn y NO envía (no rompe el cron).
- *
- * NO consulta `PreferenciasNotif` — es una notificación interna del sistema,
- * no del usuario.
- */
-export async function enviarAlertaAuditoria(
-  input: AuditoriaAlertaInput,
-): Promise<void> {
-  const to = process.env.ADMIN_ALERT_EMAIL;
-  if (!to) {
-    logger.warn(
-      {
-        totalHallazgos: input.totalHallazgos,
-        usuariosConProblemas: input.usuariosConProblemas,
-      },
-      "auditoria: ADMIN_ALERT_EMAIL no configurado, alerta NO enviada",
-    );
-    return;
-  }
-  try {
-    const tpl = auditoriaAlertaTemplate(input);
-    await enviarEmail({ to, ...tpl });
-    logger.info(
-      {
-        to,
-        totalHallazgos: input.totalHallazgos,
-        usuariosConProblemas: input.usuariosConProblemas,
-      },
-      "auditoria: alerta enviada por email",
-    );
-  } catch (err) {
-    logger.error({ err }, "enviarAlertaAuditoria: error");
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Backups — alerta interna al admin (Lote 7)
-// ---------------------------------------------------------------------------
-
-/**
- * Envía email al admin cuando el job de backup falla 2 veces consecutivas.
- * Destinatario configurable vía env var `ADMIN_ALERT_EMAIL`. Si no está
- * seteada, loggea warn y NO envía (no rompe el cron).
- *
- * NO consulta `PreferenciasNotif` — es alerta de operación, no del usuario.
- */
 export async function notifyBackupFallo(
   input: BackupFalloInput,
 ): Promise<void> {
@@ -452,13 +306,9 @@ export async function notifyBackupFallo(
 }
 
 // ---------------------------------------------------------------------------
-// Auditoría contable (Lote 8 §2.D) — alerta interna
+// Auditoría contable — alerta interna
 // ---------------------------------------------------------------------------
 
-/**
- * Envía email al admin cuando Job I detecta hallazgos `error` 2 veces
- * seguidas. NO consulta `PreferenciasNotif` — operación interna del sistema.
- */
 export async function notifyAuditoriaContable(
   input: AuditoriaContableAlertaInput,
 ): Promise<void> {

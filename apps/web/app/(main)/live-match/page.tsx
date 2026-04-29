@@ -96,7 +96,6 @@ export default async function LiveMatchPage({ searchParams }: Props) {
             ganador = {
               nombre: top.nombre,
               puntos: top.puntosTotal,
-              premioLukas: top.premioEstimado,
               chips: buildFinalizedWinnerChips(
                 top,
                 p.equipoLocal,
@@ -120,7 +119,6 @@ export default async function LiveMatchPage({ searchParams }: Props) {
         golesVisita: p.golesVisita ?? 0,
         fechaInicio: p.fechaInicio,
         totalInscritos: main?.totalInscritos ?? 0,
-        pozoBruto: main?.pozoBruto ?? 0,
         ganador,
       };
     }),
@@ -184,8 +182,6 @@ export default async function LiveMatchPage({ searchParams }: Props) {
 
   const initialSnapshot = {
     totalInscritos: rankingInicial.totalInscritos,
-    pozoNeto: rankingInicial.pozoNeto,
-    pagados: rankingInicial.pagados,
     ranking: rankingInicial.ranking.map((r) => ({
       rank: r.rank,
       ticketId: r.ticketId,
@@ -194,7 +190,6 @@ export default async function LiveMatchPage({ searchParams }: Props) {
       puntosTotal: r.puntosTotal,
       puntosDetalle: r.puntosDetalle,
       predicciones: r.predicciones,
-      premioEstimado: r.premioEstimado,
       username: r.username,
     })),
     miPosicion: rankingInicial.miPosicion
@@ -202,7 +197,6 @@ export default async function LiveMatchPage({ searchParams }: Props) {
           posicion: rankingInicial.miPosicion.posicion,
           ticketId: rankingInicial.miPosicion.ticketId,
           puntosTotal: rankingInicial.miPosicion.puntosTotal,
-          premioEstimado: rankingInicial.miPosicion.premioEstimado,
         }
       : null,
   };
@@ -249,8 +243,6 @@ async function buildLiveTabs(partidos: PartidoLive[]): Promise<LiveMatchTab[]> {
         | "EN_JUEGO"
         | "FINALIZADO"
         | "CERRADO",
-      pozoBruto: main.pozoBruto,
-      pozoNeto: main.pozoNeto,
       totalInscritos: main.totalInscritos,
       minutoLabel: snap?.label ?? null,
       fechaInicio: p.fechaInicio.toISOString(),
@@ -294,8 +286,6 @@ async function tryBuildFinalizedTab(
         | "EN_JUEGO"
         | "FINALIZADO"
         | "CERRADO",
-      pozoBruto: match.pozoBruto,
-      pozoNeto: match.pozoNeto,
       totalInscritos: match.totalInscritos,
       minutoLabel: snap?.label ?? "Final",
       // Hotfix #8 Bug #22: partido FINALIZADO — el hook `useMinutoEnVivo`
@@ -373,8 +363,6 @@ function EmptyLiveWithFinalized({
       torneoIdActivo={null}
       rankingInicial={{
         totalInscritos: 0,
-        pozoNeto: 0,
-        pagados: 0,
         ranking: [],
         miPosicion: null,
       }}

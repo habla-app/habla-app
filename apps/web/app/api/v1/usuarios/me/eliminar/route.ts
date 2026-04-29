@@ -20,11 +20,7 @@ export async function POST(req: NextRequest) {
     const result = await solicitarEliminarCuenta(session.user.id, baseUrl);
     // No revelamos el tokenUrl en la respuesta por seguridad — se envía por email.
     return Response.json({
-      data: {
-        ok: true,
-        expiraEn: result.expiraEn,
-        balanceAdvertido: result.balanceAdvertido,
-      },
+      data: { ok: true, expiraEn: result.expiraEn },
     });
   } catch (err) {
     logger.error({ err }, "POST /usuarios/me/eliminar falló");

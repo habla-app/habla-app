@@ -19,7 +19,6 @@ import { useToast } from "@/components/ui";
 import { Button } from "@/components/ui";
 import { formatKickoff } from "@/lib/utils/datetime";
 import { authedFetch } from "@/lib/api-client";
-import { ENTRADA_LUKAS } from "@/lib/config/economia";
 
 interface PartidoDisponible {
   id: string;
@@ -228,9 +227,6 @@ function CrearTorneoRow({
         body: JSON.stringify({
           partidoId: partido.id,
           tipo,
-          // Plan v6: la entrada es uniforme; el backend ignora el campo
-          // pero lo enviamos por explicitud del request.
-          entradaLukas: ENTRADA_LUKAS,
           nombre: nombre.trim() || undefined,
         }),
       });
@@ -272,18 +268,6 @@ function CrearTorneoRow({
           <option value="PREMIUM">Premium</option>
           <option value="GRAN_TORNEO">Gran Torneo</option>
         </select>
-      </label>
-
-      <label className="flex flex-col gap-1 text-[11px] font-bold uppercase tracking-[0.06em] text-muted-d">
-        Entrada (Lukas)
-        <div
-          aria-readonly
-          className="flex w-32 items-center gap-1 rounded-sm border-[1.5px] border-light bg-subtle px-3 py-2 font-body text-[13px] font-bold text-dark"
-          title="Plan v6: entrada uniforme para todos los torneos."
-        >
-          <span aria-hidden>🪙</span>
-          <span>{ENTRADA_LUKAS}</span>
-        </div>
       </label>
 
       <label className="flex min-w-0 flex-col gap-1 text-[11px] font-bold uppercase tracking-[0.06em] text-muted-d">

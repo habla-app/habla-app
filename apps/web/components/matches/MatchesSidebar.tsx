@@ -1,39 +1,28 @@
-// Sidebar sticky — réplica del mockup + rediseño Abr 2026.
+// Sidebar sticky — réplica del mockup (docs/habla-mockup-completo.html
+// líneas 1902-1991).
 //
-// Orden (top→bottom):
+// Lote 2 (Abr 2026): se demolió el sistema de Lukas. Pasamos de 5 widgets
+// a 3:
 //   1. 🔴 En vivo ahora
-//   2. 🏆 Los Pozos más grandes de la semana (torneos de la semana calendario
-//      ordenados por pozoBruto DESC, top 5)
-//   3. 🪙 Tu balance (rediseñado, tipografía grande + CTA /wallet)
-//   4. 📐 Cómo se pagan los premios (PrizeRulesCard)
-//   5. 🏅 Los más pagados de la semana (suma de premios de torneo por
-//      usuario en la semana calendario, top 10)
+//   2. 🏅 Top tipsters de la semana (puntos acumulados)
+//   3. ⚡ Próximos partidos top (torneos abiertos con cierre próximo)
 //
-// Se comparte entre `/` (landing) y `/matches`. Los widgets de en vivo,
-// pozos y más pagados son iguales con o sin sesión; el de balance muta:
-// con sesión muestra hero + CTAs, sin sesión muestra un mensaje con CTA
-// a /auth/signin.
-//
-// Server Component — llama a auth() y a los services de ranking +
-// live-matches + stats-semana. El widget de balance delega a
-// `SidebarBalanceWidget` (client) para mantener el store de Lukas
-// sincronizado (Hotfix #5 Bug #14).
+// Server Component. Usa los services de ranking + live-matches +
+// stats-semana. No depende de la sesión.
+
 import Link from "next/link";
-import { auth } from "@/lib/auth";
 import { listarRanking } from "@/lib/services/ranking.service";
 import {
   elegirTorneoPrincipal,
   obtenerLiveMatches,
 } from "@/lib/services/live-matches.service";
 import {
-  listarMasPagadosSemana,
-  listarPozosMasGrandesSemana,
-  type MasPagadoSemanaRow,
-  type PozoSemanaRow,
+  listarTopTipstersSemana,
+  listarProximosTopTorneos,
+  type TopTipsterSemanaRow,
+  type ProximoTorneoTopRow,
 } from "@/lib/services/stats-semana.service";
 import { getTeamColor } from "@/lib/utils/team-colors";
-import { SidebarBalanceWidget } from "@/components/matches/SidebarBalanceWidget";
-import { PrizeRulesCard } from "@/components/matches/PrizeRulesCard";
 
 // ---------------------------------------------------------------------------
 // Live matches
@@ -50,7 +39,7 @@ interface LiveMini {
   equipoVisita: string;
   equipoVisitaBg: string;
   equipoVisitaFg: string;
-  marcador: string; /* "1—2" */
+  marcador: string;
   lead?: {
     nombre: string;
     puntos: number;
@@ -80,7 +69,7 @@ async function fetchLiveMatches(): Promise<LiveMini[]> {
           };
         }
       } catch {
-        // Ignorar: el widget se muestra sin líder
+        /* widget se muestra sin líder */
       }
     }
     const localColor = getTeamColor(p.equipoLocal);
@@ -114,22 +103,17 @@ function cortoNombre(nombre: string): string {
 // ---------------------------------------------------------------------------
 
 export async function MatchesSidebar() {
-  const session = await auth();
-  const balance = session?.user?.balanceLukas ?? null;
-
-  const [liveMatches, pozosSemana, masPagadosSemana] = await Promise.all([
+  const [liveMatches, topTipsters, proximosTop] = await Promise.all([
     fetchLiveMatches(),
-    listarPozosMasGrandesSemana({ limit: 5 }),
-    listarMasPagadosSemana({ limit: 10 }),
+    listarTopTipstersSemana({ limit: 5 }),
+    listarProximosTopTorneos({ limit: 5 }),
   ]);
 
   return (
     <aside className="flex flex-col gap-3.5">
       <LiveAhoraWidget matches={liveMatches} />
-      <PozosSemanaWidget rows={pozosSemana} />
-      <SidebarBalanceWidget initialBalance={balance} />
-      <PrizeRulesCard />
-      <MasPagadosSemanaWidget rows={masPagadosSemana} />
+      <TopTipstersWidget rows={topTipsters} />
+      <ProximosTopWidget rows={proximosTop} />
     </aside>
   );
 }
@@ -141,7 +125,6 @@ export async function MatchesSidebar() {
 function LiveAhoraWidget({ matches }: { matches: LiveMini[] }) {
   return (
     <section className="overflow-hidden rounded-md border border-light bg-card shadow-sm">
-      {/* widget-head.live — dark gradient */}
       <div className="flex items-center gap-2 border-b border-dark-border bg-widget-live-head px-3.5 py-3 text-white">
         <span aria-hidden className="text-[15px]">
           🔴
@@ -287,56 +270,10 @@ function TeamMini({
 }
 
 // ---------------------------------------------------------------------------
-// Widget 2: 🏆 Los Pozos más grandes de la semana
+// Widget 2: 🏅 Top tipsters de la semana
 // ---------------------------------------------------------------------------
 
-function PozosSemanaWidget({ rows }: { rows: PozoSemanaRow[] }) {
-  return (
-    <section className="overflow-hidden rounded-md border border-light bg-card shadow-sm">
-      <div className="flex items-center gap-2 border-b border-light bg-section-finalized px-3.5 py-3">
-        <span aria-hidden className="text-[15px]">
-          🏆
-        </span>
-        <span className="font-display text-[13px] font-extrabold uppercase tracking-[0.06em] text-dark">
-          Los Pozos más grandes de la semana
-        </span>
-      </div>
-
-      {rows.length === 0 ? (
-        <div className="px-4 py-6 text-center text-[12px] text-muted-d">
-          Aún no hay torneos grandes esta semana.
-        </div>
-      ) : (
-        <ul>
-          {rows.map((row, idx) => (
-            <li
-              key={row.torneoId}
-              className={`flex items-center justify-between gap-2 px-3.5 py-2.5 ${idx < rows.length - 1 ? "border-b border-light" : ""}`}
-            >
-              <div className="min-w-0">
-                <div className="truncate text-[10px] font-bold uppercase tracking-[0.06em] text-muted-d">
-                  {row.liga}
-                </div>
-                <div className="truncate font-display text-[13px] font-extrabold uppercase text-dark">
-                  {row.resumenPartido}
-                </div>
-              </div>
-              <div className="flex-shrink-0 rounded-sm bg-brand-gold-dim px-2.5 py-1 font-display text-[12px] font-black text-brand-gold-dark">
-                {row.pozoBruto.toLocaleString("es-PE")} 🪙
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Widget 5: 🏅 Los más pagados de la semana
-// ---------------------------------------------------------------------------
-
-function MasPagadosSemanaWidget({ rows }: { rows: MasPagadoSemanaRow[] }) {
+function TopTipstersWidget({ rows }: { rows: TopTipsterSemanaRow[] }) {
   const posColor = (pos: number) => {
     if (pos === 1) return "text-medal-gold";
     if (pos === 2) return "text-medal-silver";
@@ -351,13 +288,13 @@ function MasPagadosSemanaWidget({ rows }: { rows: MasPagadoSemanaRow[] }) {
           🏅
         </span>
         <span className="font-display text-[13px] font-extrabold uppercase tracking-[0.06em] text-dark">
-          Los más pagados de la semana
+          Top tipsters de la semana
         </span>
       </div>
 
       {rows.length === 0 ? (
         <div className="px-4 py-6 text-center text-[12px] text-muted-d">
-          Aún no hay premios pagados esta semana.
+          Aún no hay tipsters destacados esta semana.
         </div>
       ) : (
         rows.map((row, idx) => (
@@ -376,7 +313,7 @@ function MasPagadosSemanaWidget({ rows }: { rows: MasPagadoSemanaRow[] }) {
               </div>
             </div>
             <span className="flex-shrink-0 font-display text-[14px] font-black text-brand-gold-dark">
-              {row.totalGanado.toLocaleString("es-PE")} 🪙
+              {row.puntosTotal} pts
             </span>
           </div>
         ))
@@ -385,6 +322,53 @@ function MasPagadosSemanaWidget({ rows }: { rows: MasPagadoSemanaRow[] }) {
   );
 }
 
-// Widget 3 (🪙 Tu balance) vive en SidebarBalanceWidget.tsx — Client
-// Component que consume `useLukasStore` (Bug #14). Sidebar server pasa
-// `initialBalance={session?.user?.balanceLukas ?? null}`.
+// ---------------------------------------------------------------------------
+// Widget 3: ⚡ Próximos partidos top
+// ---------------------------------------------------------------------------
+
+function ProximosTopWidget({ rows }: { rows: ProximoTorneoTopRow[] }) {
+  return (
+    <section className="overflow-hidden rounded-md border border-light bg-card shadow-sm">
+      <div className="flex items-center gap-2 border-b border-light bg-section-finalized px-3.5 py-3">
+        <span aria-hidden className="text-[15px]">
+          ⚡
+        </span>
+        <span className="font-display text-[13px] font-extrabold uppercase tracking-[0.06em] text-dark">
+          Próximos partidos top
+        </span>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="px-4 py-6 text-center text-[12px] text-muted-d">
+          No hay torneos próximos por cerrar.
+        </div>
+      ) : (
+        <ul>
+          {rows.map((row, idx) => (
+            <li
+              key={row.torneoId}
+              className={idx < rows.length - 1 ? "border-b border-light" : ""}
+            >
+              <Link
+                href={`/torneo/${row.torneoId}`}
+                className="flex items-center justify-between gap-2 px-3.5 py-2.5 transition-colors hover:bg-subtle"
+              >
+                <div className="min-w-0">
+                  <div className="truncate text-[10px] font-bold uppercase tracking-[0.06em] text-muted-d">
+                    {row.liga}
+                  </div>
+                  <div className="truncate font-display text-[13px] font-extrabold uppercase text-dark">
+                    {row.resumenPartido}
+                  </div>
+                </div>
+                <div className="flex-shrink-0 rounded-sm bg-subtle px-2.5 py-1 font-display text-[12px] font-black text-brand-blue-main">
+                  {row.totalInscritos} tipsters
+                </div>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}

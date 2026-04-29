@@ -25,14 +25,12 @@ export interface MiPosicion {
   posicion: number;
   ticketId: string;
   puntosTotal: number;
-  premioEstimado: number;
 }
 
 export interface RankingSnapshot {
   torneoId: string;
   ranking: RankingRowPayload[];
   totalInscritos: number;
-  pozoNeto: number;
   minutoPartido: number | null;
   /** Minutos de descuento/añadido (1H/2H). Null/0 fuera de injury time. */
   minutoExtra: number | null;
@@ -50,8 +48,6 @@ export interface RankingSnapshot {
    *  anclar el reloj al momento REAL de captura del server — evita el
    *  desfase que aparecía al abrir la pestaña con cache stale. */
   elapsedAgeMs: number | null;
-  /** Hotfix #6: posiciones pagadas. 0 hasta que llegue el primer fetch. */
-  pagados: number;
   miPosicion: MiPosicion | null;
   isLoading: boolean;
   isConnected: boolean;
@@ -66,13 +62,11 @@ export function useRankingEnVivo(
     torneoId: torneoId ?? "",
     ranking: [],
     totalInscritos: 0,
-    pozoNeto: 0,
     minutoPartido: null,
     minutoExtra: null,
     minutoLabel: null,
     statusShort: null,
     elapsedAgeMs: null,
-    pagados: 0,
     miPosicion: null,
     isLoading: true,
     isConnected: false,
@@ -91,8 +85,6 @@ export function useRankingEnVivo(
     const applySnapshot = (d: {
       ranking: RankingRowPayload[];
       totalInscritos: number;
-      pozoNeto: number;
-      pagados?: number;
       minutoLabel?: string | null;
       minutoPartido?: number | null;
       minutoExtra?: number | null;
@@ -102,7 +94,6 @@ export function useRankingEnVivo(
         posicion: number;
         ticketId: string;
         puntosTotal: number;
-        premioEstimado: number;
       } | null;
     }) => {
       const now = Date.now();
@@ -112,23 +103,10 @@ export function useRankingEnVivo(
         torneoId,
         ranking: d.ranking,
         totalInscritos: d.totalInscritos,
-        pozoNeto: d.pozoNeto,
-        pagados: d.pagados ?? s.pagados,
-        // Hotfix #6 Ítem 3: el endpoint REST ahora devuelve minutoLabel.
-        // Si viene null (cache stale o torneo sin live status) preserva
-        // el valor previo — no queremos que una sola respuesta tardía
-        // borre el label que ya tenemos.
         minutoLabel: d.minutoLabel ?? s.minutoLabel,
         minutoPartido: d.minutoPartido ?? s.minutoPartido,
         minutoExtra: d.minutoExtra ?? s.minutoExtra,
-        // Hotfix #8 Bug #22: preservar statusShort si llega null del REST
-        // (cache stale) — un WS previo o SSR nos dio el valor real, no
-        // queremos borrarlo por una respuesta tardía.
         statusShort: d.statusShort ?? s.statusShort,
-        // Hotfix #8 Ítem 4: el server envía edad del snapshot. Cada
-        // respuesta lo refresca (es crítico para que el reloj re-ancle
-        // correctamente). Si llega null/undefined preservamos el valor
-        // previo (misma política que statusShort).
         elapsedAgeMs:
           d.elapsedAgeMs !== undefined ? d.elapsedAgeMs : s.elapsedAgeMs,
         miPosicion: d.miPosicion
@@ -136,7 +114,6 @@ export function useRankingEnVivo(
               posicion: d.miPosicion.posicion,
               ticketId: d.miPosicion.ticketId,
               puntosTotal: d.miPosicion.puntosTotal,
-              premioEstimado: d.miPosicion.premioEstimado,
             }
           : null,
         isLoading: false,
@@ -185,20 +162,11 @@ export function useRankingEnVivo(
           ...s,
           ranking: payload.ranking,
           totalInscritos: payload.totalInscritos,
-          pozoNeto: payload.pozoNeto,
           minutoPartido: payload.minutoPartido,
           minutoExtra: payload.minutoExtra,
           minutoLabel: payload.minutoLabel,
-          // Hotfix #8 Bug #22: statusShort del WS pisa el valor previo
-          // (no-preserve) — el WS siempre trae un snapshot fresco del
-          // poller. El hook `useMinutoEnVivo` re-ancla el reloj cuando
-          // cambia `elapsed`/`statusShort`.
           statusShort: payload.statusShort,
-          // Hotfix #8 Ítem 4: edad del snapshot calculada por el server
-          // al momento del emit. Pisa siempre — cada WS trae el valor
-          // "al momento del emit", el cliente re-ancla.
           elapsedAgeMs: payload.elapsedAgeMs,
-          pagados: payload.pagados ?? s.pagados,
           lastUpdate: payload.timestamp,
         }));
       };

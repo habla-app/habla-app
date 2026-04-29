@@ -1,15 +1,9 @@
 "use client";
 
-// Botón "Inscribirme" del detalle de torneo. Client Component porque:
-//   - Maneja loading / error / success state localmente.
-//   - Muestra toasts via useToast.
-//   - Redirige con router.push tras éxito.
-//
-// Flujo por estado:
-//   - Sin sesión        → Link a /auth/signin?callbackUrl=/torneo/{id}
-//   - Con sesión + OK   → POST /api/v1/torneos/:id/inscribir → toast +
-//                         router.refresh (para re-fetch del page server)
-//   - Balance insuficiente → toast con CTA a /wallet (no dispara POST)
+// Botón "Predecir gratis" del detalle de torneo. Lote 2 (Abr 2026): la
+// inscripción ya no descuenta saldo — el botón sólo crea el ticket
+// placeholder y refresca el detalle. Sin sesión redirige a /auth/signin.
+
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -19,18 +13,15 @@ import { authedFetch } from "@/lib/api-client";
 
 interface InscribirButtonProps {
   torneoId: string;
-  entradaLukas: number;
   hasSession: boolean;
-  balance: number | null; /* null cuando no hay sesión */
-  urgent: boolean; /* estilo critical rojo si true */
-  label?: string; /* default: "🎯 Inscribirme por X 🪙" */
+  /** estilo critical rojo si true (queda <15 min al cierre). */
+  urgent: boolean;
+  label?: string; /* default: "🎯 Predecir gratis" */
 }
 
 export function InscribirButton({
   torneoId,
-  entradaLukas,
   hasSession,
-  balance,
   urgent,
   label,
 }: InscribirButtonProps) {
@@ -39,12 +30,8 @@ export function InscribirButton({
   const [loading, setLoading] = useState(false);
 
   const texto =
-    label ??
-    (urgent
-      ? `🔥 Inscribirme por ${entradaLukas} 🪙`
-      : `🎯 Inscribirme por ${entradaLukas} 🪙`);
+    label ?? (urgent ? "🔥 Predecir gratis" : "🎯 Predecir gratis");
 
-  // Sin sesión — render como Link directo
   if (!hasSession) {
     return (
       <Link
@@ -60,18 +47,7 @@ export function InscribirButton({
     );
   }
 
-  // Con sesión pero balance insuficiente
-  const balanceInsuficiente =
-    balance !== null && balance < entradaLukas;
-
   async function handleClick() {
-    if (balanceInsuficiente) {
-      toast.show(
-        `No te alcanzan los Lukas · Te faltan ${entradaLukas - (balance ?? 0)}. Compra más en /wallet.`,
-      );
-      return;
-    }
-
     setLoading(true);
     try {
       const res = await authedFetch(
@@ -87,10 +63,8 @@ export function InscribirButton({
         return;
       }
       toast.show("✅ Inscripción exitosa. Armá tu combinada en breve.");
-      // router.refresh re-ejecuta el server component del detalle (actualiza
-      // balance mostrado, totalInscritos, etc.).
       router.refresh();
-    } catch (err) {
+    } catch {
       toast.show(
         "❌ Error de red al inscribirte. Intenta de nuevo en un momento.",
       );
@@ -100,7 +74,7 @@ export function InscribirButton({
 
   return (
     <Button
-      variant={urgent ? "primary" : "primary"}
+      variant="primary"
       size="xl"
       onClick={handleClick}
       disabled={loading}

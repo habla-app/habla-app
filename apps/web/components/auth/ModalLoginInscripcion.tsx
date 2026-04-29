@@ -1,21 +1,17 @@
 "use client";
 
 // Modal contextual que se dispara cuando un usuario sin sesión intenta
-// inscribirse a un torneo. Muestra info del torneo (motivacional) y
-// redirige a /auth/signin con callbackUrl al torneo.
-//
-// Se conecta con el flujo de inscripción en el Sub-Sprint 3 (match cards
-// + `/torneo/:id`). Usa el Modal primitive con header dorado + body light.
+// inscribirse a un torneo. Lote 2 (Abr 2026): se demolió el sistema de
+// Lukas — sin pozo, sin entrada, sin bonus. El modal queda como CTA puro
+// "Únete a Habla!" + redirección a /auth/signin con callbackUrl al torneo.
+
 import { useRouter } from "next/navigation";
 import { Modal, ModalHeader, ModalBody, Button } from "@/components/ui";
-import { BONUS_BIENVENIDA_LUKAS } from "@/lib/config/economia";
 
 interface Torneo {
   id?: string;
   nombre: string;
   partido: { equipoLocal: string; equipoVisita: string };
-  entradaLukas: number;
-  pozoBruto: number;
 }
 
 interface ModalLoginInscripcionProps {
@@ -48,36 +44,13 @@ export function ModalLoginInscripcion({
       </ModalHeader>
       <ModalBody className="text-center">
         <p className="mb-5 text-sm leading-relaxed text-body">
-          Regístrate y recibe{" "}
-          <span className="font-bold text-brand-gold-dark">
-            {BONUS_BIENVENIDA_LUKAS} Lukas
-          </span>{" "}
-          de regalo para tu primera combinada.
+          Registrate gratis y armá tu predicción para subir en el ranking.
         </p>
 
         {torneo && (
-          <div className="mb-5 rounded-md border border-light bg-card p-4 text-left shadow-sm">
-            <div className="mb-2 font-display text-base font-extrabold uppercase text-dark">
+          <div className="mb-5 rounded-md border border-light bg-card p-4 text-center shadow-sm">
+            <div className="font-display text-base font-extrabold uppercase text-dark">
               {torneo.partido.equipoLocal} vs {torneo.partido.equipoVisita}
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-muted-d">
-                  Pozo
-                </div>
-                <div className="font-display text-lg font-black leading-none text-brand-gold-dark">
-                  {torneo.pozoBruto.toLocaleString("es-PE")}{" "}
-                  <span aria-hidden>🪙</span>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-muted-d">
-                  Entrada
-                </div>
-                <div className="font-display text-lg font-black leading-none text-dark">
-                  {torneo.entradaLukas} <span aria-hidden>🪙</span>
-                </div>
-              </div>
             </div>
           </div>
         )}

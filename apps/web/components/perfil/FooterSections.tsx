@@ -28,11 +28,10 @@ import {
 import { SectionShell, MenuItem } from "./SectionShell";
 
 interface Props {
-  balanceLukas: number;
   email: string;
 }
 
-export function FooterSections({ balanceLukas, email }: Props) {
+export function FooterSections({ email }: Props) {
   const [openEliminar, setOpenEliminar] = useState(false);
   const [descargaMsg, setDescargaMsg] = useState<
     { tipo: "ok" | "error"; texto: string } | null
@@ -194,10 +193,7 @@ export function FooterSections({ balanceLukas, email }: Props) {
       </footer>
 
       {openEliminar ? (
-        <EliminarCuentaModal
-          balanceLukas={balanceLukas}
-          onClose={() => setOpenEliminar(false)}
-        />
+        <EliminarCuentaModal onClose={() => setOpenEliminar(false)} />
       ) : null}
     </>
   );
@@ -210,10 +206,8 @@ export function FooterSections({ balanceLukas, email }: Props) {
 const TEXTO_CONFIRMACION = "ELIMINAR";
 
 function EliminarCuentaModal({
-  balanceLukas,
   onClose,
 }: {
-  balanceLukas: number;
   onClose: () => void;
 }) {
   const [confirmacion, setConfirmacion] = useState("");
@@ -284,7 +278,7 @@ function EliminarCuentaModal({
             <p className="mt-2 text-[13px] text-body">
               {modoAplicado === "hard"
                 ? "Borramos todos tus datos. Te enviamos un correo de confirmación."
-                : "Anonimizamos tu información personal y borramos tus sesiones. Conservamos solo registros de tickets y transacciones por integridad histórica. Te enviamos un correo de confirmación."}
+                : "Anonimizamos tu información personal y borramos tus sesiones. Conservamos solo registros de tickets por integridad histórica. Te enviamos un correo de confirmación."}
             </p>
             <p className="mt-3 text-[12px] text-muted-d">
               Cerrando sesión en un instante…
@@ -292,16 +286,6 @@ function EliminarCuentaModal({
           </div>
         ) : (
           <>
-            {balanceLukas > 0 ? (
-              <div className="rounded-md border border-urgent-high bg-urgent-high-bg px-3 py-2 text-[13px] text-urgent-high-dark">
-                ⚠️ Perderás{" "}
-                <strong>
-                  {balanceLukas.toLocaleString("es-PE")} Lukas canjeables
-                </strong>
-                . Si querés canjearlos antes, cerrá este diálogo y visitá la
-                tienda.
-              </div>
-            ) : null}
             <p className="mt-3 text-sm text-body">
               Al confirmar:
             </p>

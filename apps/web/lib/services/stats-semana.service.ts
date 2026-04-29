@@ -1,119 +1,81 @@
-// Stats agregados de la semana.
-// Alimenta el sidebar de /matches (widgets "Los Pozos más grandes de la
-// semana" y "Los más pagados de la semana", Abr 2026).
+// Stats agregados de la semana — alimenta los widgets del sidebar de
+// /matches.
 //
-// Ventana por default: semana calendario actual (lunes 00:00 → domingo
-// 23:59 en America/Lima). Ver `lib/utils/datetime.ts:getWeekBounds`.
+// Lote 2 (Abr 2026): demolido el sistema de Lukas. Los widgets de "pozos"
+// y "más pagados" se removieron. Los widgets vigentes que usan este
+// service son:
+//   - Top tipsters de la semana — top usuarios por puntos acumulados en
+//     tickets creados durante la semana en curso.
+//   - Próximos partidos top — torneos ABIERTOS con cierre próximo,
+//     ordenados por mayor cantidad de inscritos.
 
 import { prisma } from "@habla/db";
 import { getWeekBounds } from "../utils/datetime";
 
-export interface PozoSemanaRow {
+export interface TopTipsterSemanaRow {
+  /** ID del usuario — clave para React. */
+  usuarioId: string;
+  /** @handle del usuario (sin @). */
+  username: string;
+  /** Puntos acumulados en la semana. */
+  puntosTotal: number;
+}
+
+export interface ProximoTorneoTopRow {
   /** ID del torneo. */
   torneoId: string;
-  /** Lukas en el pozo bruto (ordenación). */
-  pozoBruto: number;
   /** Liga del partido. */
   liga: string;
-  /** "Alianza 2-1 Cristal" — línea corta lista para pintar. */
+  /** "Alianza vs Cristal" — línea corta. */
   resumenPartido: string;
   /** Fecha del partido. */
   fechaPartido: Date;
+  /** Inscritos al momento (orden). */
+  totalInscritos: number;
 }
 
-export interface MasPagadoSemanaRow {
-  /** ID del usuario — clave para React. */
-  usuarioId: string;
-  /** @handle del ganador (sin @). */
-  username: string;
-  /** Lukas acumulados en premios de torneo en la semana (bruto). */
-  totalGanado: number;
-}
-
-export interface PozosSemanaInput {
+export interface TopTipstersInput {
   /** Límite de filas. Default 5, máx 20. */
   limit?: number;
 }
 
-export interface MasPagadosSemanaInput {
-  /** Límite de filas. Default 10, máx 50. */
+export interface ProximosTopInput {
+  /** Límite de filas. Default 5, máx 20. */
   limit?: number;
 }
 
 function resumenPartido(p: {
   equipoLocal: string;
   equipoVisita: string;
-  golesLocal: number | null;
-  golesVisita: number | null;
-  estado: string;
 }): string {
-  if (
-    p.estado === "FINALIZADO" &&
-    p.golesLocal !== null &&
-    p.golesVisita !== null
-  ) {
-    return `${p.equipoLocal} ${p.golesLocal}-${p.golesVisita} ${p.equipoVisita}`;
-  }
   return `${p.equipoLocal} vs ${p.equipoVisita}`;
 }
 
 /**
- * Pozos más grandes de la semana: torneos cuyo partido cae en la semana
- * calendario actual (lunes 00:00 → domingo 23:59 en America/Lima)
- * ordenados por `pozoBruto` DESC. Incluye torneos ABIERTO / EN_JUEGO /
- * FINALIZADO — cualquier estado excepto CANCELADO.
+ * Top tipsters de la semana — usuarios ordenados por suma de
+ * `Ticket.puntosTotal` para tickets creados en la semana calendario en
+ * curso. Excluye usuarios soft-deleted.
  */
-export async function listarPozosMasGrandesSemana(
-  input: PozosSemanaInput = {},
-): Promise<PozoSemanaRow[]> {
+export async function listarTopTipstersSemana(
+  input: TopTipstersInput = {},
+): Promise<TopTipsterSemanaRow[]> {
   const limit = Math.min(20, Math.max(1, input.limit ?? 5));
   const { desde, hasta } = getWeekBounds();
 
-  const torneos = await prisma.torneo.findMany({
-    where: {
-      pozoBruto: { gt: 0 },
-      estado: { not: "CANCELADO" },
-      partido: { fechaInicio: { gte: desde, lte: hasta } },
-    },
-    include: { partido: true },
-    orderBy: { pozoBruto: "desc" },
-    take: limit,
-  });
-
-  return torneos.map((t) => ({
-    torneoId: t.id,
-    pozoBruto: t.pozoBruto,
-    liga: t.partido.liga,
-    resumenPartido: resumenPartido(t.partido),
-    fechaPartido: t.partido.fechaInicio,
-  }));
-}
-
-/**
- * Usuarios más pagados de la semana: suma de `TransaccionLukas.monto`
- * con `tipo = PREMIO_TORNEO` dentro de la semana calendario en curso
- * (bruto, sin netear la entrada del torneo). Ordenado DESC, top N.
- */
-export async function listarMasPagadosSemana(
-  input: MasPagadosSemanaInput = {},
-): Promise<MasPagadoSemanaRow[]> {
-  const limit = Math.min(50, Math.max(1, input.limit ?? 10));
-  const { desde, hasta } = getWeekBounds();
-
-  const grouped = await prisma.transaccionLukas.groupBy({
+  const grouped = await prisma.ticket.groupBy({
     by: ["usuarioId"],
     where: {
-      tipo: "PREMIO_TORNEO",
       creadoEn: { gte: desde, lte: hasta },
+      usuario: { deletedAt: null },
     },
-    _sum: { monto: true },
-    orderBy: { _sum: { monto: "desc" } },
+    _sum: { puntosTotal: true },
+    orderBy: { _sum: { puntosTotal: "desc" } },
     take: limit,
   });
 
   const rows = grouped
-    .map((g) => ({ usuarioId: g.usuarioId, total: g._sum?.monto ?? 0 }))
-    .filter((g) => g.total > 0);
+    .map((g) => ({ usuarioId: g.usuarioId, puntos: g._sum?.puntosTotal ?? 0 }))
+    .filter((g) => g.puntos > 0);
   if (rows.length === 0) return [];
 
   const usuarios = await prisma.usuario.findMany({
@@ -125,6 +87,36 @@ export async function listarMasPagadosSemana(
   return rows.map((r) => ({
     usuarioId: r.usuarioId,
     username: usernameByUserId.get(r.usuarioId) ?? "",
-    totalGanado: r.total,
+    puntosTotal: r.puntos,
+  }));
+}
+
+/**
+ * Próximos partidos top — torneos ABIERTOS con cierre próximo (next 48h),
+ * ordenados por inscritos DESC.
+ */
+export async function listarProximosTopTorneos(
+  input: ProximosTopInput = {},
+): Promise<ProximoTorneoTopRow[]> {
+  const limit = Math.min(20, Math.max(1, input.limit ?? 5));
+  const ahora = new Date();
+  const en48h = new Date(ahora.getTime() + 48 * 60 * 60 * 1000);
+
+  const torneos = await prisma.torneo.findMany({
+    where: {
+      estado: "ABIERTO",
+      cierreAt: { gte: ahora, lte: en48h },
+    },
+    include: { partido: true },
+    orderBy: [{ totalInscritos: "desc" }, { cierreAt: "asc" }],
+    take: limit,
+  });
+
+  return torneos.map((t) => ({
+    torneoId: t.id,
+    liga: t.partido.liga,
+    resumenPartido: resumenPartido(t.partido),
+    fechaPartido: t.partido.fechaInicio,
+    totalInscritos: t.totalInscritos,
   }));
 }

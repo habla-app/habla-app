@@ -1,21 +1,19 @@
-// Servicio de tickets — Sub-Sprint 4.
+// Servicio de tickets.
 //
-// Reglas de negocio (CLAUDE.md §6):
+// Lote 2 (Abr 2026): demolido el sistema de Lukas. La inscripción a un
+// torneo es gratuita; este service sólo gestiona la creación / actualización
+// de Tickets con sus predicciones.
+//
+// Reglas:
 //  - Torneo en estado ABIERTO y cierreAt > now para aceptar ticket.
-//  - Balance suficiente para la entrada.
 //  - Máximo 10 tickets del mismo usuario en el mismo torneo.
-//  - Respetar LimitesJuego.limiteDiarioTickets sobre la suma de tickets
-//    del usuario en las últimas 24h.
+//  - Respetar LimitesJuego.limiteDiarioTickets (sólo cuando el ticket es
+//    nuevo, no en updates de placeholder).
 //  - Ticket idéntico a uno previo del mismo usuario en el mismo torneo
 //    → 409 (la unique constraint compuesta del schema ataja el caso).
-//  - Todo en una transacción Prisma: descuento Lukas + crear/actualizar
-//    Ticket + crear TransaccionLukas ENTRADA_TORNEO. Rollback total
-//    si algún paso falla.
-//  - Ticket placeholder del Sub-Sprint 3 (predicciones default LOCAL /
-//    0-0 / todo false): si existe y el usuario manda predicciones
+//  - Ticket placeholder del flujo de inscripción (predicciones default
+//    LOCAL / 0-0 / todo false): si existe y el usuario manda predicciones
 //    distintas → el placeholder se ACTUALIZA en vez de crear nuevo.
-//    Esta es la única vez que un ticket es mutable; después queda
-//    inmutable como exige la regla.
 
 import {
   prisma,
@@ -33,16 +31,17 @@ import {
 } from "./errors";
 import { logger } from "./logger";
 import type { CrearTicketBody } from "./tickets.schema";
-import { verificarLimiteInscripcion, bloquearSiAutoExcluido } from "./limites.service";
-import { descontarEntrada } from "./torneos.service";
-import { getBalanceTotal } from "../lukas-display";
+import {
+  verificarLimiteInscripcion,
+  bloquearSiAutoExcluido,
+} from "./limites.service";
 
 // ---------------------------------------------------------------------------
 // Constantes
 // ---------------------------------------------------------------------------
 
 export const MAX_TICKETS_POR_TORNEO = 10;
-/** Default de LimitesJuego.limiteDiarioTickets — Sub-Sprint 7 lo editará. */
+/** Default de LimitesJuego.limiteDiarioTickets. */
 export const DEFAULT_LIMITE_DIARIO_TICKETS = 10;
 
 // ---------------------------------------------------------------------------
@@ -56,19 +55,14 @@ export type TicketConTorneo = Ticket & {
 export interface TorneoCountersSnapshot {
   id: string;
   totalInscritos: number;
-  pozoBruto: number;
-  pozoNeto: number;
-  entradaLukas: number;
   cierreAt: Date;
 }
 
 export interface CrearTicketResult {
   ticket: Ticket;
-  nuevoBalance: number;
   reemplazoPlaceholder: boolean;
-  /** Snapshot del torneo POST-create. Permite a la UI repintar pozos /
-   *  contadores en el modal de éxito sin un GET adicional. Bug A del
-   *  Mini-lote 7.6: el modal mostraba datos pre-mutación. */
+  /** Snapshot del torneo POST-create. Permite a la UI repintar contadores
+   *  en el modal de éxito sin un GET adicional. */
   torneo: TorneoCountersSnapshot;
 }
 
@@ -84,7 +78,6 @@ export interface TicketsStats {
   jugadas: number;
   ganadas: number;
   aciertoPct: number;
-  neto: number;
   mejorPuesto: number | null;
 }
 
@@ -140,7 +133,6 @@ export async function crear(
   input: CrearTicketBody,
 ): Promise<CrearTicketResult> {
   return prisma.$transaction(async (tx) => {
-    // 1. Torneo ABIERTO y cierreAt > now
     const torneo = await tx.torneo.findUnique({
       where: { id: input.torneoId },
     });
@@ -150,22 +142,12 @@ export async function crear(
       throw new TorneoCerrado(input.torneoId);
     }
 
-    // 2. Usuario existe — leemos las 3 bolsas (no balanceLukas) porque
-    //    `getBalanceTotal` es la fuente única para el balance visible
-    //    al cliente. Si balanceLukas estuviera desincronizado pre-fix
-    //    (Lote 6C-fix2), prefiero el valor consistente.
     const usuario = await tx.usuario.findUnique({
       where: { id: usuarioId },
-      select: {
-        balanceCompradas: true,
-        balanceBonus: true,
-        balanceGanadas: true,
-      },
+      select: { id: true, deletedAt: true },
     });
-    if (!usuario) throw new NoAutenticado();
+    if (!usuario || usuario.deletedAt) throw new NoAutenticado();
 
-    // 3. Tickets previos de este usuario en este torneo (para validar
-    //    límite de 10, detectar placeholder, detectar duplicado lógico).
     const previos = await tx.ticket.findMany({
       where: { usuarioId, torneoId: input.torneoId },
       orderBy: { creadoEn: "asc" },
@@ -174,7 +156,6 @@ export async function crear(
     const placeholders = previos.filter((p) => esPlaceholder(p));
     const conPredicciones = previos.filter((p) => !esPlaceholder(p));
 
-    // Duplicado entre los tickets ya con predicciones reales
     const dup = conPredicciones.find((p) => prediccionesIguales(p, input));
     if (dup) {
       throw new DomainError(
@@ -185,13 +166,7 @@ export async function crear(
       );
     }
 
-    // Cuenta efectiva: placeholders se sobrescriben en la primera
-    // inscripción real, así que no cuentan para el límite. Pero sí
-    // cuenta el ticket que estamos por crear (o el que vamos a actualizar).
-    const ticketsEfectivos = placeholders.length > 0
-      ? conPredicciones.length + 1
-      : conPredicciones.length + 1;
-
+    const ticketsEfectivos = conPredicciones.length + 1;
     if (ticketsEfectivos > MAX_TICKETS_POR_TORNEO) {
       throw new LimiteExcedido(
         `Máximo ${MAX_TICKETS_POR_TORNEO} tickets por torneo.`,
@@ -199,30 +174,20 @@ export async function crear(
       );
     }
 
-    // 4. Enforcement de límites (Sub-Sprint 7).
-    //    - Auto-exclusión SIEMPRE bloquea (aplica a placeholder update también).
-    //    - Límite diario de tickets solo cuenta cuando se crea uno NUEVO; un
-    //      placeholder update no suma al contador (misma "inscripción" lógica).
+    // Auto-exclusión SIEMPRE bloquea (aplica a placeholder update también).
+    // Límite diario sólo cuenta cuando se crea uno NUEVO; un placeholder
+    // update no suma al contador (misma "inscripción" lógica).
     const creamosNuevo = placeholders.length === 0;
     if (creamosNuevo) {
-      await verificarLimiteInscripcion({
-        tx,
-        usuarioId,
-        entradaLukas: torneo.entradaLukas,
-      });
+      await verificarLimiteInscripcion({ tx, usuarioId });
     } else {
       await bloquearSiAutoExcluido(usuarioId, tx);
     }
 
-    // 5. Reemplazo de placeholder si existe
     let ticket: Ticket;
     let reemplazoPlaceholder = false;
 
     if (placeholders.length > 0) {
-      // Hay un placeholder — lo actualizamos con las predicciones reales.
-      // No se descuenta entrada de nuevo: la entrada ya se cobró al
-      // inscribirse (Sub-Sprint 3). Capturamos P2002 por si el usuario
-      // actualiza a predicciones idénticas a otro ticket ya real.
       const placeholder = placeholders[0]!;
       try {
         ticket = await tx.ticket.update({
@@ -256,31 +221,16 @@ export async function crear(
         "placeholder actualizado con predicciones reales",
       );
 
-      // Snapshot del torneo (sin cambios de contadores: el placeholder
-      // ya había sumado al inscribirse al torneo). Devolvemos los valores
-      // del read inicial para uniformidad del shape de respuesta.
       return {
         ticket,
-        nuevoBalance: getBalanceTotal(usuario),
         reemplazoPlaceholder,
         torneo: {
           id: torneo.id,
           totalInscritos: torneo.totalInscritos,
-          pozoBruto: torneo.pozoBruto,
-          pozoNeto: torneo.pozoNeto,
-          entradaLukas: torneo.entradaLukas,
           cierreAt: torneo.cierreAt,
         },
       };
     }
-
-    // 6. Ticket nuevo — requiere descuento de entrada.
-    // Lote 6C-fix2: usamos `descontarEntrada` (compartido con torneos.service)
-    // para mantener `balanceLukas + balanceCompradas/Bonus/Ganadas + saldoVivo`
-    // en sync. Antes este flujo solo decrementaba `balanceLukas` y omitía las
-    // bolsas → divergencia visible en /wallet (header alto, transacciones bajas).
-    // descontarEntrada lanza BalanceInsuficiente si no alcanza el total.
-    const descuento = await descontarEntrada(tx, usuarioId, torneo.entradaLukas);
 
     try {
       ticket = await tx.ticket.create({
@@ -309,71 +259,28 @@ export async function crear(
       throw err;
     }
 
-    // La bolsa principal de la TransaccionLukas es la de mayor monto (para
-    // agrupado en /wallet). El detalle real vive en metadata.composicion.
-    const bolsaPrincipal = descuento.composicion.reduce((max, item) =>
-      item.monto > max.monto ? item : max,
-    ).bolsa;
-
-    await tx.transaccionLukas.create({
-      data: {
-        usuarioId,
-        tipo: "ENTRADA_TORNEO",
-        bolsa: bolsaPrincipal,
-        monto: -torneo.entradaLukas,
-        descripcion: `Inscripción a ${torneo.nombre}`,
-        refId: input.torneoId,
-        metadata: {
-          ticketId: ticket.id,
-          composicion: descuento.composicion,
-        } as object,
-      },
-    });
-
     const torneoActualizado = await tx.torneo.update({
       where: { id: input.torneoId },
-      data: {
-        totalInscritos: { increment: 1 },
-        pozoBruto: { increment: torneo.entradaLukas },
-      },
+      data: { totalInscritos: { increment: 1 } },
       select: {
         id: true,
         totalInscritos: true,
-        pozoBruto: true,
-        pozoNeto: true,
-        entradaLukas: true,
         cierreAt: true,
       },
     });
 
-    const nuevoBalance =
-      descuento.nuevoBalanceCompradas +
-      descuento.nuevoBalanceBonus +
-      descuento.nuevoBalanceGanadas;
-
     logger.info(
-      {
-        torneoId: input.torneoId,
-        usuarioId,
-        ticketId: ticket.id,
-        entradaLukas: torneo.entradaLukas,
-        nuevoBalance,
-      },
+      { torneoId: input.torneoId, usuarioId, ticketId: ticket.id },
       "ticket creado",
     );
 
     return {
       ticket,
-      nuevoBalance,
       reemplazoPlaceholder,
       torneo: torneoActualizado,
     };
   });
 }
-
-// `obtenerLimiteDiario` fue reemplazado por `verificarLimiteInscripcion` del
-// nuevo `limites.service` (Sub-Sprint 7) que ahora consulta `LimitesJuego`
-// real + chequea auto-exclusión.
 
 // ---------------------------------------------------------------------------
 // listarMisTickets
@@ -405,7 +312,12 @@ export async function listarMisTickets(
   if (input.estado === "ACTIVOS") {
     where.torneo = { estado: { in: ESTADOS_ACTIVOS } };
   } else if (input.estado === "GANADOS") {
-    where.premioLukas = { gt: 0 };
+    // "Ganados" pasa a significar tickets en torneos finalizados con
+    // posicionFinal > 0 (entre los inscritos).
+    where.AND = [
+      { torneo: { estado: "FINALIZADO" } },
+      { posicionFinal: { not: null } },
+    ];
   } else if (input.estado === "HISTORIAL") {
     where.torneo = { estado: { in: ESTADOS_HISTORIAL } };
   }
@@ -431,42 +343,38 @@ export async function listarMisTickets(
 }
 
 // ---------------------------------------------------------------------------
-// stats
+// stats — Lote 2: 4 métricas (Predicciones · Aciertos · % Acierto · Mejor puesto).
 // ---------------------------------------------------------------------------
 
 export async function calcularStats(usuarioId: string): Promise<TicketsStats> {
   const todos = await prisma.ticket.findMany({
     where: { usuarioId },
-    include: { torneo: { select: { entradaLukas: true, estado: true } } },
+    include: { torneo: { select: { estado: true } } },
   });
 
   const jugadas = todos.length;
-  const ganadas = todos.filter((t) => t.premioLukas > 0).length;
   const finalizados = todos.filter((t) => t.torneo.estado === "FINALIZADO");
+  // Un ticket "ganado" en Lote 2+ = quedó dentro del top 10 del ranking
+  // final del torneo. La distribución de premios en Lukas se eliminó; sólo
+  // la posición importa.
+  const TOP = 10;
+  const ganadas = finalizados.filter(
+    (t) => t.posicionFinal != null && t.posicionFinal <= TOP,
+  ).length;
   const aciertoPct = finalizados.length > 0
-    ? Math.round(
-        (finalizados.filter((t) => t.premioLukas > 0).length /
-          finalizados.length) *
-          100,
-      )
+    ? Math.round((ganadas / finalizados.length) * 100)
     : 0;
-
-  const neto = todos.reduce((acc, t) => {
-    // Torneos CANCELADOS reembolsaron la entrada → no resta
-    if (t.torneo.estado === "CANCELADO") return acc;
-    return acc + t.premioLukas - t.torneo.entradaLukas;
-  }, 0);
 
   const posiciones = todos
     .map((t) => t.posicionFinal)
     .filter((p): p is number => p !== null && p > 0);
   const mejorPuesto = posiciones.length > 0 ? Math.min(...posiciones) : null;
 
-  return { jugadas, ganadas, aciertoPct, neto, mejorPuesto };
+  return { jugadas, ganadas, aciertoPct, mejorPuesto };
 }
 
 // ---------------------------------------------------------------------------
-// Helpers exportados para otros servicios y tests
+// Helpers exportados
 // ---------------------------------------------------------------------------
 
 export { esPlaceholder, prediccionesIguales };

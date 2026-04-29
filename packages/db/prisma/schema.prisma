@@ -31,14 +31,6 @@ model Usuario {
   ubicacion    String? // Ciudad / Región libre
   verificado   Boolean   @default(false)
   rol          Rol       @default(JUGADOR)
-  // Lote 6A: balance total legacy (deprecated — suma de las 3 bolsas de abajo).
-  // Se mantiene por compatibilidad transicional con session.user.balanceLukas y
-  // useLukasStore hasta que Lote 6B re-renderice la UI con los 3 bloques.
-  // Será removido post-6B.
-  balanceLukas     Int   @default(0)
-  balanceCompradas Int   @default(0) // Lote 6A: Lukas comprados con Culqi/Yape
-  balanceBonus     Int   @default(0) // Lote 6A: bonus bienvenida + extras de packs
-  balanceGanadas   Int   @default(0) // Lote 6A: premios de torneos — únicos canjeables
   creadoEn     DateTime  @default(now())
   deletedAt    DateTime? // Sub-Sprint 7: soft delete (anonimiza PII)
   // Campos requeridos por NextAuth Prisma Adapter
@@ -46,7 +38,6 @@ model Usuario {
   image         String?
 
   tickets       Ticket[]
-  transacciones TransaccionLukas[]
   canjes        Canje[]
   cuentas       Account[]
   sesiones      Session[]
@@ -107,14 +98,6 @@ enum Rol {
   ADMIN
 }
 
-// Lote 6A: 3 bolsas de Lukas con reglas distintas.
-// COMPRADAS: vencen a 36 meses. BONUS: sin vencimiento. GANADAS: sin vencimiento, únicas canjeables.
-enum BolsaLukas {
-  COMPRADAS
-  BONUS
-  GANADAS
-}
-
 model Partido {
   id              String        @id @default(cuid())
   externalId      String        @unique // ID de API-Football
@@ -172,17 +155,12 @@ enum EstadoPartido {
 model Torneo {
   id             String       @id @default(cuid())
   nombre         String
-  tipo           TipoTorneo // Plan v6: etiqueta informativa, no afecta reglas economicas
-  entradaLukas   Int // Plan v6: uniforme = ENTRADA_LUKAS (lib/config/economia.ts). Torneos viejos pueden tener otros valores.
+  tipo           TipoTorneo // Lote 2: etiqueta informativa (no afecta reglas)
   partidoId      String
   partido        Partido      @relation(fields: [partidoId], references: [id])
   estado         EstadoTorneo @default(ABIERTO)
   totalInscritos Int          @default(0)
-  pozoBruto      Int          @default(0) // Suma de todas las entradas
-  pozoNeto       Int          @default(0) // Pozo bruto - rake
-  rake           Int          @default(0) // 12% del pozo bruto
-  cierreAt       DateTime // Plan v6: al kickoff (= partido.fechaInicio)
-  distribPremios Json? // Snapshot de distribucion al cerrar
+  cierreAt       DateTime // Al kickoff (= partido.fechaInicio)
   creadoEn       DateTime     @default(now())
 
   tickets Ticket[]
@@ -227,9 +205,8 @@ model Ticket {
   puntosMas25        Int           @default(0)
   puntosTarjeta      Int           @default(0)
   puntosMarcador     Int           @default(0)
-  // Premio
+  // Posicion final asignada al cerrar el torneo (competition ranking).
   posicionFinal      Int?
-  premioLukas        Int           @default(0)
   creadoEn           DateTime      @default(now())
 
   // Un usuario no puede tener 2 tickets identicos en el mismo torneo
@@ -241,41 +218,6 @@ enum ResultadoPred {
   LOCAL
   EMPATE
   VISITA
-}
-
-model TransaccionLukas {
-  id          String          @id @default(cuid())
-  usuarioId   String
-  usuario     Usuario         @relation(fields: [usuarioId], references: [id])
-  tipo        TipoTransaccion
-  monto       Int // Positivo = ingreso, Negativo = egreso
-  descripcion String
-  refId       String? // ID de torneo, pago, canje, etc.
-  venceEn     DateTime? // Para Lukas comprados (36 meses, MESES_VENCIMIENTO_COMPRA en lib/config/economia.ts)
-  // Lote 6A: bolsa a la que pertenece la transacción. Nullable hasta completar backfill.
-  bolsa       BolsaLukas?
-  // Lote 6A: composición de descuento (ENTRADA_TORNEO), ticketId, etc.
-  metadata    Json?
-  // Lote 6A: solo para tipo=COMPRA. Cuántos Lukas quedan vivos de esta compra.
-  // Se decrementa conforme se van usando (FIFO). NULL para otros tipos.
-  saldoVivo   Int?
-  // Lote 6A: flags de aviso de vencimiento (solo para tipo=COMPRA).
-  vencAvisado30d Boolean @default(false)
-  vencAvisado7d  Boolean @default(false)
-  creadoEn    DateTime        @default(now())
-
-  @@map("transacciones_lukas")
-}
-
-enum TipoTransaccion {
-  COMPRA // Usuario compra Lukas con soles
-  ENTRADA_TORNEO // Usuario paga entrada
-  PREMIO_TORNEO // Usuario recibe premio
-  CANJE // Usuario canjea en tienda
-  BONUS // Lukas gratis (referidos, promociones)
-  VENCIMIENTO // Lukas expirados
-  REEMBOLSO // Torneo cancelado por falta de inscritos, admin refund
-  AJUSTE // Corrección administrativa de balance (auditoría)
 }
 
 model Premio {

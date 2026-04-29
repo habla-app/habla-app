@@ -1,32 +1,19 @@
 "use client";
 // ComboModal — modal centrado donde el usuario arma sus 5 predicciones.
-// Sub-Sprint 4. Replica `.combo-panel` / `.combo-panel-head` / `.combo-body`
-// / `.combo-foot` del mockup (docs/habla-mockup-completo.html §combo).
 //
-// Hotfix #2 post-Sub-Sprint 5: la lógica de "Balance después" + decisión
-// CTA submit/comprar vive en `computeComboFooterState` (mapper puro),
-// para que el modal nunca renderice "-5".
-//
-// Hotfix #4 post-Sub-Sprint 5 (Bug #6): el modal ahora tiene 6 estados
-// discriminados (`ComboModalStatus`) — idle, submitting, success,
-// insufficient-balance, tournament-closed, error. Los estados
-// distinto de `idle` reemplazan el body con un panel de feedback (icono
-// + título + copy + CTAs). El estado `success` muestra los detalles del
-// ticket creado (id, predicciones, entrada pagada, puntos máximos).
+// Lote 2 (Abr 2026): se demolió el sistema de Lukas. El modal pierde la
+// info económica del header (entrada / pozo / 1er premio), el footer de
+// "Balance después" y el flujo de "comprar Lukas". El header de éxito
+// ahora dice "Tu predicción está lista. ¡Sigue el ranking!".
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/Modal";
-import { useLukasStore } from "@/stores/lukas.store";
 import { authedFetch } from "@/lib/api-client";
 import { PUNTOS } from "@habla/shared";
 import { PredCard } from "./PredCard";
 import { ScorePicker } from "./ScorePicker";
-import {
-  computeComboFooterState,
-  derivePozosDisplay,
-} from "./combo-info.mapper";
 import {
   computeComboModalUIState,
   statusFromBackendError,
@@ -39,11 +26,9 @@ export interface ComboTorneoInfo {
   partidoNombre: string;
   equipoLocal: string;
   equipoVisita: string;
-  entradaLukas: number;
-  pozoBruto: number;
-  primerPremioEstimado: number;
   cierreAt: Date | string;
-  /** Si existe placeholder del Sub-Sprint 3, no se descuenta entrada de nuevo. */
+  /** Si existe placeholder de la inscripción, no se crea ticket nuevo —
+   *  se actualiza el placeholder con las predicciones del usuario. */
   tienePlaceholder: boolean;
 }
 
@@ -53,7 +38,7 @@ interface ComboModalProps {
   /** Info del torneo pre-cargada desde el caller. */
   torneo: ComboTorneoInfo | null;
   /** Callback tras crear el ticket exitosamente. */
-  onCreated?: (result: { ticketId: string; nuevoBalance: number }) => void;
+  onCreated?: (result: { ticketId: string }) => void;
 }
 
 type Resultado = "LOCAL" | "EMPATE" | "VISITA";
@@ -71,10 +56,6 @@ const PREDICCIONES_INICIAL: Predicciones = {
   predMarcadorLocal: 1,
   predMarcadorVisita: 1,
 };
-
-function formatoMiles(n: number): string {
-  return n.toLocaleString("es-PE");
-}
 
 function formatoCountdown(cierre: Date | string): string {
   const diff = new Date(cierre).getTime() - Date.now();
@@ -99,34 +80,18 @@ export function ComboModal({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successInfo, setSuccessInfo] = useState<ComboSuccessInfo | null>(null);
   const [countdown, setCountdown] = useState<string>("--:--");
-  // Bug A del Mini-lote 7.6: el header del modal debe reflejar el pozo y
-  // el primer premio POST-mutación (la combinada recién enviada ya sumó
-  // entrada al pozo y +1 inscrito). El endpoint /api/v1/tickets devuelve
-  // un snapshot del torneo en `data.torneo`; lo guardamos aquí para
-  // sobreescribir los valores derivados del prop `torneo` (que se cargan
-  // ANTES del envío y quedan congelados).
-  const [liveCounters, setLiveCounters] = useState<{
-    pozoBruto: number;
-    primerPremioEstimado: number;
-    totalInscritos: number | null;
-  } | null>(null);
 
   const router = useRouter();
-  const balance = useLukasStore((s) => s.balance);
-  const setBalance = useLukasStore((s) => s.setBalance);
 
-  // Reset al abrir
   useEffect(() => {
     if (isOpen) {
       setPreds(PREDICCIONES_INICIAL);
       setStatus("idle");
       setErrorMessage(null);
       setSuccessInfo(null);
-      setLiveCounters(null);
     }
   }, [isOpen]);
 
-  // Tick countdown cada segundo
   useEffect(() => {
     if (!isOpen || !torneo) return;
     setCountdown(formatoCountdown(torneo.cierreAt));
@@ -155,28 +120,11 @@ export function ComboModal({
     );
   }, [preds]);
 
-  const footer = useMemo(() => {
-    if (!torneo) return null;
-    return computeComboFooterState({
-      balance,
-      entradaLukas: torneo.entradaLukas,
-      tienePlaceholder: torneo.tienePlaceholder,
-    });
-  }, [balance, torneo]);
-  const displayBalanceDespues = footer?.displayBalanceDespues ?? 0;
-  const balanceInsuficiente = footer?.balanceInsuficiente ?? false;
-
   const handleSubmit = useCallback(async () => {
     if (!torneo) return;
     if (!listo) {
       setStatus("error");
       setErrorMessage("Completá las 5 predicciones antes de enviar.");
-      return;
-    }
-    // Defensa redundante: el render ya muestra el status `insufficient-balance`
-    // cuando faltan Lukas. Si por race se llama igual, no avanzamos.
-    if (balanceInsuficiente) {
-      setStatus("insufficient-balance");
       return;
     }
     setStatus("submitting");
@@ -199,16 +147,7 @@ export function ComboModal({
       const json = (await res.json()) as {
         data?: {
           ticket: { id: string };
-          nuevoBalance: number;
           reemplazoPlaceholder: boolean;
-          torneo?: {
-            id: string;
-            totalInscritos: number;
-            pozoBruto: number;
-            pozoNeto: number;
-            entradaLukas: number;
-            cierreAt: string;
-          };
         };
         error?: { code: string; message: string };
       };
@@ -218,31 +157,9 @@ export function ComboModal({
         setErrorMessage(json.error?.message ?? "No se pudo enviar la combinada.");
         return;
       }
-      // Éxito: sincroniza balance global y pinta el panel de confirmación.
-      setBalance(json.data.nuevoBalance);
-      // Bug A del Mini-lote 7.6: si el endpoint devolvió el snapshot del
-      // torneo POST-create, repintamos el header con esos valores en
-      // lugar del prop original (cargado pre-envío y por ende stale).
-      if (json.data.torneo) {
-        const derived = derivePozosDisplay({
-          pozoBruto: json.data.torneo.pozoBruto,
-          pozoNeto: json.data.torneo.pozoNeto,
-        });
-        setLiveCounters({
-          pozoBruto: derived.pozoBruto,
-          primerPremioEstimado: derived.primerPremioEstimado,
-          totalInscritos: json.data.torneo.totalInscritos,
-        });
-      }
-      // Invalidar el Router Cache para que el detalle del torneo y la
-      // lista de matches releen los contadores actualizados (jugadores,
-      // pozo) cuando el usuario cierre el modal o navegue. El endpoint
-      // ya llamó revalidatePath; router.refresh fuerza el re-fetch
-      // client-side sin perder el modal abierto.
       router.refresh();
       setSuccessInfo({
         ticketId: json.data.ticket.id,
-        entradaPagada: json.data.reemplazoPlaceholder ? 0 : torneo.entradaLukas,
         puntosMaximos: puntosMax,
         predResumen: {
           resultado: preds.predResultado!,
@@ -252,28 +169,15 @@ export function ComboModal({
           marcadorLocal: preds.predMarcadorLocal,
           marcadorVisita: preds.predMarcadorVisita,
         },
-        nuevoBalance: json.data.nuevoBalance,
         reemplazoPlaceholder: json.data.reemplazoPlaceholder,
       });
       setStatus("success");
-      onCreated?.({
-        ticketId: json.data.ticket.id,
-        nuevoBalance: json.data.nuevoBalance,
-      });
+      onCreated?.({ ticketId: json.data.ticket.id });
     } catch (err) {
       setStatus("error");
       setErrorMessage((err as Error).message ?? "Error de red.");
     }
-  }, [
-    torneo,
-    listo,
-    balanceInsuficiente,
-    preds,
-    puntosMax,
-    setBalance,
-    router,
-    onCreated,
-  ]);
+  }, [torneo, listo, preds, puntosMax, router, onCreated]);
 
   const handleReset = useCallback(() => {
     setPreds(PREDICCIONES_INICIAL);
@@ -282,41 +186,15 @@ export function ComboModal({
     setSuccessInfo(null);
   }, []);
 
-  // Si el balance baja en medio de la sesión a insuficiente, reflejarlo.
-  useEffect(() => {
-    if (!torneo) return;
-    if (status !== "idle") return;
-    if (balanceInsuficiente) {
-      // No reseteamos el status a insufficient-balance automáticamente
-      // para no atrapar al usuario: el CTA del footer ya cambia a
-      // "Comprar Lukas". Pero dejamos el gate para que handleSubmit no
-      // avance si el balance cambió entre idle y submit.
-    }
-  }, [balanceInsuficiente, status, torneo]);
-
   if (!torneo) return null;
 
-  // Valores efectivos del header: prefiero el snapshot post-mutación
-  // cuando lo tengo (Bug A), si no, vuelvo al prop original.
-  const headerPozoBruto = liveCounters?.pozoBruto ?? torneo.pozoBruto;
-  const headerPrimerPremio =
-    liveCounters?.primerPremioEstimado ?? torneo.primerPremioEstimado;
-
-  const faltanLukas = Math.max(0, torneo.entradaLukas - balance);
   const ui = computeComboModalUIState({
     status,
     tienePlaceholder: torneo.tienePlaceholder,
-    entradaLukas: torneo.entradaLukas,
     errorMessage,
-    faltanLukas,
   });
 
-  const isFeedback =
-    status === "success" ||
-    status === "error" ||
-    status === "tournament-closed" ||
-    status === "submitting" ||
-    (status === "insufficient-balance");
+  const isFeedback = status !== "idle";
 
   return (
     <Modal
@@ -345,21 +223,8 @@ export function ComboModal({
         <div className="mb-3.5 font-display text-[28px] font-black leading-tight text-white">
           {torneo.partidoNombre}
         </div>
-        <div className="grid grid-cols-4 gap-4">
-          <MetaBox
-            label="Entrada"
-            value={
-              torneo.tienePlaceholder
-                ? "Ya pagada"
-                : `${formatoMiles(torneo.entradaLukas)} 🪙`
-            }
-          />
-          <MetaBox label="Pozo" value={`${formatoMiles(headerPozoBruto)} 🪙`} />
-          <MetaBox
-            label="1er premio"
-            value={`${formatoMiles(headerPrimerPremio)}`}
-          />
-          <MetaBox label="Cierre" value={countdown} />
+        <div className="text-[12px] font-bold uppercase tracking-[0.06em] text-white/65">
+          Cierra en <span className="text-white">{countdown}</span>
         </div>
       </div>
 
@@ -457,12 +322,9 @@ export function ComboModal({
       <FooterSection
         status={status}
         ui={ui}
-        torneo={torneo}
         puntosMax={puntosMax}
-        displayBalanceDespues={displayBalanceDespues}
-        balanceInsuficiente={balanceInsuficiente}
-        balance={balance}
         listo={listo}
+        tienePlaceholder={torneo.tienePlaceholder}
         onSubmit={handleSubmit}
         onReset={handleReset}
         onClose={onClose}
@@ -535,10 +397,7 @@ function SuccessDetails({
     },
     { key: "btts", label: `Ambos ${info.predResumen.btts ? "Sí" : "No"}` },
     { key: "mas25", label: `+2.5 ${info.predResumen.mas25 ? "Sí" : "No"}` },
-    {
-      key: "roja",
-      label: `Roja ${info.predResumen.tarjetaRoja ? "Sí" : "No"}`,
-    },
+    { key: "roja", label: `Roja ${info.predResumen.tarjetaRoja ? "Sí" : "No"}` },
     {
       key: "marcador",
       label: `${info.predResumen.marcadorLocal}-${info.predResumen.marcadorVisita}`,
@@ -551,7 +410,7 @@ function SuccessDetails({
       data-testid="combo-success-details"
     >
       <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.08em] text-muted-d">
-        Detalles de tu ticket
+        Tu combinada
       </div>
       <div className="mb-3 flex flex-wrap gap-1.5">
         {chips.map((c) => (
@@ -564,15 +423,7 @@ function SuccessDetails({
         ))}
       </div>
       <dl className="grid grid-cols-2 gap-2 text-[12px]">
-        <Meta label="Entrada pagada">
-          {info.entradaPagada > 0
-            ? `${info.entradaPagada.toLocaleString("es-PE")} 🪙`
-            : "Ya cobrada antes"}
-        </Meta>
         <Meta label="Puntos máx posibles">{info.puntosMaximos} pts</Meta>
-        <Meta label="Balance después">
-          {info.nuevoBalance.toLocaleString("es-PE")} 🪙
-        </Meta>
         <Meta label="ID ticket">
           <span className="font-mono text-[11px]">
             {info.ticketId.slice(0, 10)}…
@@ -605,31 +456,22 @@ function Meta({
 function FooterSection({
   status,
   ui,
-  torneo,
   puntosMax,
-  displayBalanceDespues,
-  balanceInsuficiente,
-  balance,
   listo,
+  tienePlaceholder,
   onSubmit,
   onReset,
   onClose,
 }: {
   status: ComboModalStatus;
   ui: ReturnType<typeof computeComboModalUIState>;
-  torneo: ComboTorneoInfo;
   puntosMax: number;
-  displayBalanceDespues: number;
-  balanceInsuficiente: boolean;
-  balance: number;
   listo: boolean;
+  tienePlaceholder: boolean;
   onSubmit: () => void;
   onReset: () => void;
   onClose: () => void;
 }) {
-  // En estados de feedback (success/error/etc.) mostramos solo los CTAs
-  // del ui state, sin el resumen de puntos/balance. El modo `idle`
-  // mantiene el layout original del mockup (2 cajas + botón).
   if (status !== "idle") {
     return (
       <div
@@ -660,35 +502,27 @@ function FooterSection({
     );
   }
 
-  // idle: layout normal con resumen + submit/comprar
+  // idle: muestra puntos máx + CTA submit
   return (
     <div className="border-t border-light bg-card px-7 py-4 shadow-[0_-4px_12px_rgba(0,16,80,.06)]">
-      <div className="mb-3 grid grid-cols-2 gap-3">
-        <SummaryBox label="Puntos máx" value={`${puntosMax} pts`} gold />
-        <SummaryBox
-          label="Balance después"
-          value={`${formatoMiles(displayBalanceDespues)} 🪙`}
-        />
+      <div className="mb-3 flex items-center justify-center gap-2 rounded-sm border border-brand-gold/40 bg-brand-gold/10 px-3 py-2">
+        <span className="text-[10px] font-bold uppercase tracking-[0.06em] text-muted-d">
+          Puntos máx
+        </span>
+        <span className="font-display text-[20px] font-black leading-none text-brand-gold-dark">
+          {puntosMax} pts
+        </span>
       </div>
-      {balanceInsuficiente ? (
-        <BuyLukasCTA
-          entradaLukas={torneo.entradaLukas}
-          balanceActual={balance}
-        />
-      ) : (
-        <button
-          type="button"
-          onClick={onSubmit}
-          disabled={!listo}
-          data-testid="combo-submit"
-          className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-brand-gold px-4 py-4 font-display text-[16px] font-extrabold uppercase tracking-[0.04em] text-black shadow-gold-cta transition-all duration-150 hover:bg-brand-gold-light hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
-        >
-          <span aria-hidden>🎯</span>
-          {torneo.tienePlaceholder
-            ? "Confirmar mi combinada"
-            : `Inscribir por ${formatoMiles(torneo.entradaLukas)} 🪙`}
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={onSubmit}
+        disabled={!listo}
+        data-testid="combo-submit"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-brand-gold px-4 py-4 font-display text-[16px] font-extrabold uppercase tracking-[0.04em] text-black shadow-gold-cta transition-all duration-150 hover:bg-brand-gold-light hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+      >
+        <span aria-hidden>🎯</span>
+        {tienePlaceholder ? "Confirmar mi combinada" : "Predecir gratis"}
+      </button>
     </div>
   );
 }
@@ -743,78 +577,6 @@ function CtaButton({
     >
       {cta.label}
     </button>
-  );
-}
-
-function BuyLukasCTA({
-  entradaLukas,
-  balanceActual,
-}: {
-  entradaLukas: number;
-  balanceActual: number;
-}) {
-  const faltan = Math.max(0, entradaLukas - balanceActual);
-  return (
-    <div className="flex flex-col gap-2">
-      <p
-        role="alert"
-        className="rounded-sm border border-urgent-critical/30 bg-urgent-critical/10 px-3 py-2 text-center text-[13px] font-semibold text-danger"
-      >
-        Te faltan {formatoMiles(faltan)} 🪙 para inscribirte en este torneo.
-      </p>
-      <Link
-        href="/wallet"
-        data-testid="combo-buy-lukas"
-        className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-brand-gold px-4 py-4 font-display text-[16px] font-extrabold uppercase tracking-[0.04em] text-black shadow-gold-cta transition-all duration-150 hover:bg-brand-gold-light hover:-translate-y-px"
-      >
-        <span aria-hidden>🪙</span>
-        Comprar Lukas
-      </Link>
-    </div>
-  );
-}
-
-function MetaBox({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col">
-      <div className="font-display text-[20px] font-black leading-none text-brand-gold">
-        {value}
-      </div>
-      <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-white/65">
-        {label}
-      </div>
-    </div>
-  );
-}
-
-function SummaryBox({
-  label,
-  value,
-  gold,
-}: {
-  label: string;
-  value: string;
-  gold?: boolean;
-}) {
-  return (
-    <div
-      className={`flex flex-col items-center justify-center rounded-sm border ${
-        gold
-          ? "border-brand-gold/40 bg-brand-gold/10"
-          : "border-light bg-subtle"
-      } px-2 py-2.5`}
-    >
-      <div className="text-[10px] font-bold uppercase tracking-[0.06em] text-muted-d">
-        {label}
-      </div>
-      <div
-        className={`font-display text-[22px] font-black leading-none ${
-          gold ? "text-brand-gold-dark" : "text-dark"
-        }`}
-      >
-        {value}
-      </div>
-    </div>
   );
 }
 

@@ -41,23 +41,20 @@ function HistoryRow({ tickets }: { tickets: TicketConContexto[] }) {
   const { partido } = first.torneo;
   const golesLocal = partido.golesLocal ?? 0;
   const golesVisita = partido.golesVisita ?? 0;
-  const anyWinner = tickets.some((t) => t.premioLukas > 0);
-  const sumaPremio = tickets.reduce((s, t) => s + t.premioLukas, 0);
-  const sumaEntrada = tickets.reduce(
-    (s, t) => s + t.torneo.entradaLukas,
-    0,
+  // Lote 2: "winner" pasa a significar quedar dentro del top 10 final.
+  const anyTopTen = tickets.some(
+    (t) => t.posicionFinal !== null && t.posicionFinal <= 10,
   );
-  const net = sumaPremio - sumaEntrada;
   const mejor = [...tickets].sort((a, b) => {
     const pa = a.posicionFinal ?? Number.POSITIVE_INFINITY;
     const pb = b.posicionFinal ?? Number.POSITIVE_INFINITY;
     return pa - pb;
   })[0]!;
-  const resumen = anyWinner
-    ? `${tickets.length} ticket${tickets.length > 1 ? "s" : ""} · Mejor: ${formatOrdinal(mejor.posicionFinal)} ganador · ${mejor.puntosTotal} pts`
+  const resumen = anyTopTen
+    ? `${tickets.length} ticket${tickets.length > 1 ? "s" : ""} · Mejor: ${formatOrdinal(mejor.posicionFinal)} en top 10 · ${mejor.puntosTotal} pts`
     : `${tickets.length} ticket${tickets.length > 1 ? "s" : ""} · Mejor: ${formatOrdinal(mejor.posicionFinal)} · ${mejor.puntosTotal} pts`;
 
-  const rowTint = anyWinner
+  const rowTint = anyTopTen
     ? "bg-gradient-to-r from-brand-gold/[0.05] via-transparent to-transparent"
     : "";
 
@@ -67,17 +64,17 @@ function HistoryRow({ tickets }: { tickets: TicketConContexto[] }) {
         type="button"
         aria-expanded={expanded}
         onClick={() => setExpanded((v) => !v)}
-        className="grid w-full grid-cols-[auto_1fr_auto_auto] items-center gap-3.5 px-4 py-3.5 text-left transition hover:bg-subtle"
+        className="grid w-full grid-cols-[auto_1fr_auto] items-center gap-3.5 px-4 py-3.5 text-left transition hover:bg-subtle"
       >
         <div
           aria-hidden
           className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-sm text-lg ${
-            anyWinner
+            anyTopTen
               ? "border border-brand-gold bg-brand-gold-dim"
               : "border border-light bg-subtle opacity-70"
           }`}
         >
-          {anyWinner ? (mejor.posicionFinal === 1 ? "🏆" : mejor.posicionFinal === 3 ? "🥉" : "🏅") : "⚽"}
+          {anyTopTen ? (mejor.posicionFinal === 1 ? "🏆" : mejor.posicionFinal === 3 ? "🥉" : "🏅") : "⚽"}
         </div>
         <div className="min-w-0">
           <div className="truncate text-[11px] font-bold uppercase leading-none tracking-[0.06em] text-muted-d">
@@ -91,14 +88,6 @@ function HistoryRow({ tickets }: { tickets: TicketConContexto[] }) {
           <div className="mt-1 text-[13px] font-semibold text-dark">
             {resumen}
           </div>
-        </div>
-        <div
-          className={`font-display text-xl font-black leading-none ${
-            net > 0 ? "text-alert-success-text" : "text-accent-clasico-dark/75"
-          }`}
-        >
-          {net > 0 ? "+" : ""}
-          {net.toLocaleString("es-PE")} 🪙
         </div>
         <span
           aria-hidden
@@ -139,9 +128,10 @@ function HistoryTicket({
   equipoLocal: string;
   equipoVisita: string;
 }) {
-  const isWinner = ticket.premioLukas > 0;
+  const inTopTen =
+    ticket.posicionFinal !== null && ticket.posicionFinal <= 10;
   const chips = resolvePrediccionesChips(ticket, equipoLocal, equipoVisita);
-  const borderCls = isWinner
+  const borderCls = inTopTen
     ? "border border-brand-gold bg-gradient-to-br from-white to-[#FFFDF5]"
     : "border border-light bg-card";
   return (
@@ -149,17 +139,17 @@ function HistoryTicket({
       <div className="mb-2 flex items-center justify-between gap-3">
         <div
           className={`text-[12px] font-bold ${
-            isWinner ? "text-brand-gold-dark" : "text-muted-d"
+            inTopTen ? "text-brand-gold-dark" : "text-muted-d"
           }`}
         >
           Ticket {numero}
           {ticket.posicionFinal !== null
-            ? ` · ${formatOrdinal(ticket.posicionFinal)} ${isWinner ? "ganador" : "puesto"}`
+            ? ` · ${formatOrdinal(ticket.posicionFinal)}${inTopTen ? " · Top 10" : ""}`
             : ""}
         </div>
         <div
           className={`inline-flex items-center gap-1.5 rounded-sm border px-2.5 py-1 text-[11px] font-bold ${
-            isWinner
+            inTopTen
               ? "border-brand-gold/40 bg-brand-gold-dim text-brand-gold-dark"
               : "border-light bg-subtle text-dark"
           }`}
@@ -167,25 +157,12 @@ function HistoryTicket({
           <span>{ticket.puntosTotal} pts</span>
         </div>
       </div>
-      <div className="mb-2 flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-1.5">
         {chips.map((c, i) => (
           <PredChip key={i} estado={c.estado}>
             {c.label}
           </PredChip>
         ))}
-      </div>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-light pt-2 text-[12px]">
-        <span className="text-muted-d">
-          Entrada{" "}
-          <strong className="text-dark">{ticket.torneo.entradaLukas} 🪙</strong>
-        </span>
-        {isWinner ? (
-          <span className="font-semibold text-brand-gold-dark">
-            +{ticket.premioLukas.toLocaleString("es-PE")} 🪙
-          </span>
-        ) : (
-          <span className="text-accent-clasico-dark/75">Sin premio</span>
-        )}
       </div>
     </div>
   );

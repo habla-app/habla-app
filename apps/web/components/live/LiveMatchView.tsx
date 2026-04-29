@@ -29,7 +29,6 @@ import { EventsView } from "./EventsView";
 import { useRankingEnVivo } from "@/hooks/useRankingEnVivo";
 import { useEventosPartido } from "@/hooks/useEventosPartido";
 import type { RankingRowPayload } from "@/lib/realtime/events";
-import { premioEstimadoSinEmpate } from "@/lib/utils/premios-distribucion";
 
 export interface LiveMatchTab {
   torneoId: string;
@@ -43,8 +42,6 @@ export interface LiveMatchTab {
   venue: string | null;
   estado: "EN_VIVO" | "FINALIZADO";
   torneoEstado: "ABIERTO" | "EN_JUEGO" | "FINALIZADO" | "CERRADO";
-  pozoBruto: number;
-  pozoNeto: number;
   totalInscritos: number;
   /** Label del minuto listo para renderizar ("23'", "Medio tiempo",
    *  "Final", "—"). SSR lo setea desde el cache del poller; WS lo
@@ -74,15 +71,11 @@ export interface LiveMatchTab {
 
 interface InitialSnapshot {
   totalInscritos: number;
-  pozoNeto: number;
-  /** Hotfix #6: posiciones pagadas (M). */
-  pagados: number;
   ranking: RankingRowPayload[];
   miPosicion: {
     posicion: number;
     ticketId: string;
     puntosTotal: number;
-    premioEstimado: number;
   } | null;
 }
 
@@ -142,7 +135,6 @@ export function LiveMatchView({
   const totalInscritos = live.ranking.length > 0
     ? live.totalInscritos
     : rankingInicial.totalInscritos;
-  const pozoNeto = live.pozoNeto > 0 ? live.pozoNeto : rankingInicial.pozoNeto;
 
   const eventos = useEventosPartido(
     active?.torneoId ?? null,
@@ -163,7 +155,6 @@ export function LiveMatchView({
         posicion: miFila.rank,
         ticketId: miFila.ticketId,
         puntosTotal: miFila.puntosTotal,
-        premioEstimado: miFila.premioEstimado,
       });
     } else if (
       rankingInicial.miPosicion &&
@@ -247,8 +238,6 @@ export function LiveMatchView({
             extra={live.minutoExtra ?? active.extra}
             elapsedAgeMs={live.elapsedAgeMs ?? active.elapsedAgeMs}
             totalInscritos={totalInscritos}
-            pozoNeto={pozoNeto}
-            primerPremio={premioEstimadoSinEmpate(1, totalInscritos, pozoNeto)}
             ultimosEventos={eventos.eventos.slice(-5).reverse()}
           />
 
@@ -292,7 +281,6 @@ export function LiveMatchView({
               equipoLocal={active.equipoLocal}
               equipoVisita={active.equipoVisita}
               totalInscritos={totalInscritos}
-              pagados={live.pagados > 0 ? live.pagados : rankingInicial.pagados}
             />
           )}
           {activeTab === "stats" && (

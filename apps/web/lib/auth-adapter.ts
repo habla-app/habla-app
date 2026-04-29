@@ -16,8 +16,6 @@
 // de Next en edge — Web Crypto está disponible en ambos runtimes.
 import type { Adapter, AdapterUser } from "next-auth/adapters";
 import { prisma, type Usuario } from "@habla/db";
-import { BONUS_BIENVENIDA_LUKAS } from "./config/economia";
-import { registrarBonusEmitido } from "./services/contabilidad/contabilidad.service";
 
 function toAdapterUser(u: Usuario): AdapterUser {
   return {
@@ -59,8 +57,8 @@ export function HablaPrismaAdapter(): Adapter {
   return {
     async createUser(data) {
       // Flujo OAuth (o magic-link sin signup previo): el usuario no tiene
-      // @handle aún — asignamos temporal + bonus de bienvenida en una
-      // transacción atómica. El middleware lo ruteará a `/auth/completar-perfil`.
+      // @handle aún — asignamos temporal. El middleware lo ruteará a
+      // `/auth/completar-perfil`.
       const email = data.email.toLowerCase();
       // Abr 2026: si el proveedor no da nombre real, dejamos `nombre`
       // vacío — la UI de /perfil muestra "Por completar" hasta que el
@@ -72,41 +70,15 @@ export function HablaPrismaAdapter(): Adapter {
 
       const usernameTemporal = await generarUsernameTemporal();
 
-      const usuario = await prisma.$transaction(async (tx) => {
-        const creado = await tx.usuario.create({
-          data: {
-            email,
-            nombre,
-            username: usernameTemporal,
-            usernameLocked: false,
-            // Lote 6A: el bonus de bienvenida va a balanceBonus.
-            balanceLukas: BONUS_BIENVENIDA_LUKAS,
-            balanceBonus: BONUS_BIENVENIDA_LUKAS,
-            emailVerified: data.emailVerified,
-            image: data.image,
-          },
-        });
-
-        await tx.transaccionLukas.create({
-          data: {
-            usuarioId: creado.id,
-            tipo: "BONUS",
-            bolsa: "BONUS",
-            monto: BONUS_BIENVENIDA_LUKAS,
-            descripcion: "Bonus de bienvenida",
-            venceEn: null,
-          },
-        });
-
-        // Lote 8: asiento contable del bonus de bienvenida (OAuth primera vez).
-        await registrarBonusEmitido(
-          creado.id,
-          BONUS_BIENVENIDA_LUKAS,
-          "bienvenida",
-          tx,
-        );
-
-        return creado;
+      const usuario = await prisma.usuario.create({
+        data: {
+          email,
+          nombre,
+          username: usernameTemporal,
+          usernameLocked: false,
+          emailVerified: data.emailVerified,
+          image: data.image,
+        },
       });
 
       return toAdapterUser(usuario);

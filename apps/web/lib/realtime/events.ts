@@ -49,14 +49,12 @@ export interface RankingRowPayload {
     predMarcadorLocal: number;
     predMarcadorVisita: number;
   };
-  premioEstimado: number;
 }
 
 export interface RankingUpdatePayload {
   torneoId: string;
   ranking: RankingRowPayload[];
   totalInscritos: number;
-  pozoNeto: number;
   minutoPartido: number | null;
   /** Label renderizable del minuto (p.ej. "23'", "45+3'", "Medio tiempo",
    *  "Final"). Si es null, la UI debe mostrar "—". */
@@ -78,9 +76,6 @@ export interface RankingUpdatePayload {
    *  que llegue el primer WS con datos frescos. Null si el server no
    *  tiene snap. */
   elapsedAgeMs: number | null;
-  /** Hotfix #6: cantidad de posiciones pagadas (M). UI lo usa para
-   *  calcular el badge "En el dinero" + copy motivacional. */
-  pagados: number;
   timestamp: number;
 }
 
@@ -112,7 +107,7 @@ export interface TorneoCerradoPayload {
 
 export interface TorneoFinalizadoPayload {
   torneoId: string;
-  ganadores: Array<{
+  posicionados: Array<{
     rank: number;
     ticketId: string;
     usuarioId: string;
@@ -120,7 +115,6 @@ export interface TorneoFinalizadoPayload {
     nombre: string;
     username: string;
     puntosTotal: number;
-    premioLukas: number;
   }>;
 }
 

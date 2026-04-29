@@ -1,15 +1,19 @@
 // Contrato de la pasarela. Implementado por CulqiAdapter (real) y
 // MockPasarelaPagos (modo preview).
-
-import type { PackLukasId } from "../../constants/packs-lukas";
+//
+// Lote 2 (Abr 2026): el flujo de compra de Lukas se demolió. Estos tipos
+// quedan en el repo porque Lote 11+ los reusa para Premium / Cursos —
+// `metadata` deja de referenciar packs Lukas y pasa a un map abierto que
+// el caller del flujo nuevo va a redefinir.
 
 export interface CrearCargoInput {
-  /** Monto en soles (entero, 1 Luka = S/1). */
+  /** Monto en soles (entero). */
   monto: number;
   descripcion: string;
   metadata: {
     usuarioId: string;
-    packId: PackLukasId;
+    /** ID de producto/plan/SKU. Sin namespace fijo hasta Lote 11+. */
+    productoId: string;
   };
 }
 
