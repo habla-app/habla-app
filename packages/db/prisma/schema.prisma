@@ -34,14 +34,16 @@ model Usuario {
   emailVerified DateTime?
   image         String?
 
-  tickets           Ticket[]
-  cuentas           Account[]
-  sesiones          Session[]
-  preferenciasNotif PreferenciasNotif?
-  solicitudesElim   SolicitudEliminacion[]
-  premiosMensuales  PremioMensual[]
-  logErrores        LogError[]
-  eventosAnalitica  EventoAnalitica[]
+  tickets               Ticket[]
+  cuentas               Account[]
+  sesiones              Session[]
+  preferenciasNotif     PreferenciasNotif?
+  solicitudesElim       SolicitudEliminacion[]
+  premiosMensuales      PremioMensual[]
+  logErrores            LogError[]
+  eventosAnalitica      EventoAnalitica[]
+  clicksAfiliados       ClickAfiliado[]
+  conversionesAfiliados ConversionAfiliado[]
 
   @@map("usuarios")
 }
@@ -378,4 +380,95 @@ model EventoAnalitica {
   @@index([evento, creadoEn(sort: Desc)])
   @@index([userId, creadoEn(sort: Desc)])
   @@map("eventos_analitica")
+}
+
+// ==========================================
+// Lote 7 (May 2026) — Afiliación MINCETUR
+// ==========================================
+//
+// Infraestructura de monetización por afiliación a casas de apuestas
+// autorizadas por MINCETUR. Tres tablas:
+//
+//   - afiliados             catálogo de operadores (slug, urlBase, modelo
+//                           de comisión, bono actual, rating, métodos de
+//                           pago, pros/contras como JSONB).
+//   - clicks_afiliados      1 fila por GET /go/[slug]; ipHash con SHA-256
+//                           (IP cruda nunca se persiste), país de
+//                           cf-ipcountry, userAgent, utm en JSONB.
+//   - conversiones_afiliados registro manual de REGISTRO o FTD reportados
+//                            por la casa (offline; carga manual desde
+//                            /admin/conversiones).
+//
+// El redirect tracker `/go/[slug]` registra el click fire-and-forget y
+// retorna 302 a `urlBase`. Si el slug no existe o `activo=false`, 404 con
+// mensaje "Casa no disponible". Antes del redirect, el handler dispara
+// `analyticsService.track('casa_click_afiliado', { afiliado, pagina_origen })`
+// — ese evento es uno de los pasos del funnel del dashboard (Lote 6).
+
+model Afiliado {
+  id                          String   @id @default(cuid())
+  slug                        String   @unique // "te-apuesto", "betsson"
+  nombre                      String
+  logoUrl                     String?
+  autorizadoMincetur          Boolean  @default(true)
+  urlBase                     String   // URL afiliada con tracking pixel
+  // CPA | REVSHARE | HIBRIDO. String libre para que ampliar el set no
+  // requiera migración (modelos de afiliación cambian seguido).
+  modeloComision              String
+  montoCpa                    Int?     // en S/, opcional
+  porcentajeRevshare          Decimal? @db.Decimal(5, 2)
+  bonoActual                  String?  // "100% hasta S/ 500"
+  metodosPago                 String[] // ["Visa", "Yape", "Plin"]
+  // pros / contras: array JSONB de strings cortos. Forma esperada:
+  //   ["App muy estable", "Buen soporte 24/7"]
+  pros                        Json?
+  contras                     Json?
+  rating                      Decimal? @db.Decimal(3, 2) // 4.50 sobre 5
+  activo                      Boolean  @default(true)
+  ordenDestacado              Int      @default(100) // menor = más arriba
+  ultimaVerificacionMincetur  DateTime?
+  creadoEn                    DateTime @default(now())
+  actualizadoEn               DateTime @default(now()) @updatedAt
+
+  clicks       ClickAfiliado[]
+  conversiones ConversionAfiliado[]
+
+  @@map("afiliados")
+}
+
+model ClickAfiliado {
+  id         String   @id @default(cuid())
+  afiliadoId String
+  afiliado   Afiliado @relation(fields: [afiliadoId], references: [id], onDelete: Cascade)
+  userId     String?
+  usuario    Usuario? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  pagina     String   // referer (la page de Habla! desde donde se hizo click)
+  utm        Json?    // { utm_source, utm_medium, utm_campaign, ... } parseado de query
+  // SHA-256 del cf-connecting-ip / x-forwarded-for. Hash + sal por
+  // proceso (sal in-memory, ver afiliacion.service). Sirve para
+  // dedupe in-process sin re-identificar al usuario fuera del proceso.
+  ipHash     String
+  userAgent  String?
+  pais       String?  // ISO 3166-1 alpha-2 (cf-ipcountry)
+  creadoEn   DateTime @default(now())
+
+  @@index([afiliadoId, creadoEn(sort: Desc)])
+  @@map("clicks_afiliados")
+}
+
+model ConversionAfiliado {
+  id            String   @id @default(cuid())
+  afiliadoId    String
+  afiliado      Afiliado @relation(fields: [afiliadoId], references: [id])
+  userId        String?
+  usuario       Usuario? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  // REGISTRO | FTD. String libre para sumar más tipos sin migración.
+  tipo          String
+  montoComision Decimal? @db.Decimal(10, 2)
+  reportadoEn   DateTime
+  notas         String?
+  creadoEn      DateTime @default(now())
+
+  @@index([afiliadoId, reportadoEn(sort: Desc)])
+  @@map("conversiones_afiliados")
 }

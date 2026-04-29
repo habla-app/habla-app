@@ -23,6 +23,8 @@ const NAV_ITEMS: ReadonlyArray<NavItem> = [
   { href: "/admin", label: "Dashboard", icon: "🏠" },
   { href: "/admin/leaderboard", label: "Leaderboard", icon: "🏆" },
   { href: "/admin/premios-mensuales", label: "Premios", icon: "💰" },
+  { href: "/admin/afiliados", label: "Afiliados", icon: "🤝" },
+  { href: "/admin/conversiones", label: "Conversiones", icon: "💵" },
   { href: "/admin/dashboard", label: "Métricas", icon: "📊" },
   { href: "/admin/logs", label: "Logs", icon: "🐛" },
 ];
