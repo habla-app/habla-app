@@ -24,15 +24,6 @@ export default async function AdminPage() {
           <Link href="/" className="hover:underline">
             ← Volver al home
           </Link>
-          <Link href="/admin/contabilidad" className="hover:underline">
-            📒 Contabilidad →
-          </Link>
-          <Link href="/admin/conciliacion" className="hover:underline">
-            🏦 Conciliación →
-          </Link>
-          <Link href="/admin/ingresos" className="hover:underline">
-            💰 Ingresos →
-          </Link>
         </div>
       </header>
 

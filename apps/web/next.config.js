@@ -70,13 +70,13 @@ const nextConfig = {
     // `static.cloudflareinsights.com` y postea a `cloudflareinsights.com`.
     const csp = [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://apis.google.com https://*.culqi.com https://static.cloudflareinsights.com",
-      "connect-src 'self' https://*.api-sports.io https://api.resend.com https://*.culqi.com https://static.cloudflareinsights.com https://cloudflareinsights.com wss://hablaplay.com wss://www.hablaplay.com",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://apis.google.com https://static.cloudflareinsights.com",
+      "connect-src 'self' https://*.api-sports.io https://api.resend.com https://static.cloudflareinsights.com https://cloudflareinsights.com wss://hablaplay.com wss://www.hablaplay.com",
       "worker-src 'self' blob:",
       "img-src 'self' data: https:",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' data: https://fonts.gstatic.com",
-      "frame-src 'self' https://*.culqi.com https://accounts.google.com",
+      "frame-src 'self' https://accounts.google.com",
       "frame-ancestors 'none'",
       "object-src 'none'",
       "base-uri 'self'",

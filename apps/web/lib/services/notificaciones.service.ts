@@ -13,18 +13,19 @@
 // `notifyCanjeEntregado`) y el `notifyPremioGanado` (será reemplazado por
 // `notifyPremioMensualGanado` en Lote 5). La columna
 // `PreferenciasNotif.notifVencimientos` se dropeó del schema.
+//
+// Lote 4 (Abr 2026): se quitaron `notifyAuditoriaContable` y
+// `notifyBackupFallo` junto con la demolición de la auditoría contable.
+// Si volvemos a querer alertas internas, se recrean en Lote 6 con el
+// sistema de eventos in-house.
 
 import { prisma } from "@habla/db";
 import { enviarEmail } from "./email.service";
 import {
-  auditoriaContableAlertaTemplate,
-  backupFalloTemplate,
   cuentaEliminadaTemplate,
   datosDescargadosTemplate,
   solicitudEliminarTemplate,
   torneoCanceladoTemplate,
-  type AuditoriaContableAlertaInput,
-  type BackupFalloInput,
 } from "../emails/templates";
 import { logger } from "./logger";
 
@@ -208,56 +209,3 @@ export async function notifyCuentaEliminada(input: {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Backups — alerta interna al admin
-// ---------------------------------------------------------------------------
-
-export async function notifyBackupFallo(
-  input: BackupFalloInput,
-): Promise<void> {
-  const to = process.env.ADMIN_ALERT_EMAIL;
-  if (!to) {
-    logger.warn(
-      { intentos: input.intentos.length },
-      "backup: ADMIN_ALERT_EMAIL no configurado, alerta NO enviada",
-    );
-    return;
-  }
-  try {
-    const tpl = backupFalloTemplate(input);
-    await enviarEmail({ to, ...tpl });
-    logger.info(
-      { to, intentos: input.intentos.length },
-      "backup: alerta de fallos consecutivos enviada por email",
-    );
-  } catch (err) {
-    logger.error({ err }, "notifyBackupFallo: error");
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Auditoría contable — alerta interna
-// ---------------------------------------------------------------------------
-
-export async function notifyAuditoriaContable(
-  input: AuditoriaContableAlertaInput,
-): Promise<void> {
-  const to = process.env.ADMIN_ALERT_EMAIL;
-  if (!to) {
-    logger.warn(
-      { errores: input.errores, warns: input.warns },
-      "auditoria-contable: ADMIN_ALERT_EMAIL no configurado, alerta NO enviada",
-    );
-    return;
-  }
-  try {
-    const tpl = auditoriaContableAlertaTemplate(input);
-    await enviarEmail({ to, ...tpl });
-    logger.info(
-      { to, errores: input.errores, warns: input.warns },
-      "auditoria-contable: alerta enviada por email",
-    );
-  } catch (err) {
-    logger.error({ err }, "notifyAuditoriaContable: error");
-  }
-}

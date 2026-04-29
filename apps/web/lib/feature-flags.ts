@@ -1,29 +1,19 @@
-// Feature flags del Lote 8.
+// Feature flags.
 //
-// `pagosHabilitados()` gobierna la pasarela Culqi Y el sistema contable
-// como una unidad: con flag OFF estamos en modo PREVIEW (datos descartables,
-// banner visual, endpoint reset-preview habilitado), con flag ON estamos
-// en PRODUCCIÓN (irreversible, endpoint reset-preview bloqueado).
+// Lote 4 (Abr 2026): se eliminó el flag `pagosHabilitados()` (gobernaba
+// Culqi + sistema contable, ambos demolidos). Quedan dos flags
+// independientes para las capas que vendrán detrás de paywall:
+//   - `premiumHabilitado()` — capa Premium (Lote 11+).
+//   - `cursosHabilitado()`  — capa Cursos (Lote 12+).
 //
-// Boot guard: si el flag está en `true` pero faltan creds Culqi, fuerza
-// `false` y loggea error — evitamos abrir el endpoint de compra contra una
-// pasarela rota. La razón vive en CLAUDE.md §"Gotchas".
+// Ambos defaultean a `false`. La integración OpenPay (BBVA) que va a
+// alimentar los cobros se construye en Lote 12 — recién ahí se agregan
+// boot guards de `OPENPAY_*` creds.
 
-import { logger } from "./services/logger";
+export function premiumHabilitado(): boolean {
+  return process.env.PREMIUM_HABILITADO === "true";
+}
 
-export function pagosHabilitados(): boolean {
-  if (process.env.PAGOS_HABILITADOS !== "true") return false;
-
-  const creds =
-    !!process.env.CULQI_PUBLIC_KEY &&
-    !!process.env.CULQI_SECRET_KEY &&
-    !!process.env.CULQI_WEBHOOK_SECRET;
-
-  if (!creds) {
-    logger.error(
-      "[boot] PAGOS_HABILITADOS=true pero faltan creds Culqi — flag forzado a false",
-    );
-    return false;
-  }
-  return true;
+export function cursosHabilitado(): boolean {
+  return process.env.CURSOS_HABILITADO === "true";
 }

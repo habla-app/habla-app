@@ -1,7 +1,4 @@
-// Lote 7 — Backups automatizados de Postgres a Cloudflare R2 con
-// auto-monitoreo por email. El estado vive en la tabla `BackupLog`, y si
-// los últimos 2 intentos fallaron consecutivamente se envía email al
-// `ADMIN_ALERT_EMAIL`.
+// Lote 7 — Backups automatizados de Postgres a Cloudflare R2.
 //
 // Flujo:
 //   1. Spawn `pg_dump -Fc` (formato custom, comprimido) sobre DATABASE_URL.
@@ -10,10 +7,15 @@
 //   3. Upload a R2 con key `daily/habla-YYYY-MM-DD.dump`.
 //   4. El día 1 del mes (UTC) se sube además `monthly/habla-YYYY-MM.dump`.
 //   5. Aplica retención: borra dailies con > 30 días. Mensuales: indefinido.
-//   6. Inserta row en `BackupLog`. Si los últimos 2 fallaron → email.
+//   6. Inserta row en `BackupLog` (alimenta `/api/health`).
+//
+// Lote 4 (Abr 2026) eliminó la alerta de email tras 2 fallos consecutivos
+// junto con el resto de la maquinaria contable. El monitoreo activo se
+// re-introduce en Lote 6 con el sistema de eventos in-house.
 //
 // Pre-requisito: el binario `pg_dump` versión >= 16 tiene que estar en
-// el PATH. El Dockerfile instala `postgresql16-client`.
+// el PATH. El Dockerfile instala `postgresql18-client` (Railway corre
+// Postgres 18.3 desde Abr 2026).
 //
 // CAVEAT: si en el futuro escalamos web a >1 réplica, cada réplica
 // haría su propio backup. Soluciones cuando llegue ese punto: leader-lock
@@ -27,7 +29,6 @@ import {
   PutObjectCommand,
   S3Client,
   type ListObjectsV2CommandOutput,
-  type _Object,
 } from "@aws-sdk/client-s3";
 import { prisma } from "@habla/db";
 // Sin prefix `node:` — Webpack 5 no lo maneja nativamente y rompe el
@@ -35,7 +36,6 @@ import { prisma } from "@habla/db";
 // quedan externos en el server bundle.
 import { spawn } from "child_process";
 import { logger } from "./logger";
-import { notifyBackupFallo } from "./notificaciones.service";
 
 // ---------------------------------------------------------------------------
 // Constantes
@@ -264,7 +264,7 @@ export async function aplicarRetencion(): Promise<{
 }
 
 // ---------------------------------------------------------------------------
-// Persistencia de intentos + alerta de fallos consecutivos
+// Persistencia de intentos
 // ---------------------------------------------------------------------------
 
 async function registrarIntento(input: {
@@ -285,35 +285,14 @@ async function registrarIntento(input: {
   });
 }
 
-/**
- * Lee los últimos 2 intentos. Si AMBOS fallaron, envía email al admin
- * con el detalle. Un solo fallo puntual no genera ruido.
- */
-async function alertarSiHayFallosSeguidos(): Promise<void> {
-  const ultimos = await prisma.backupLog.findMany({
-    orderBy: { fechaIntento: "desc" },
-    take: 2,
-  });
-  if (ultimos.length < 2) return;
-  const [a, b] = ultimos;
-  if (a.ok || b.ok) return; // alguno OK: no escalar
-  await notifyBackupFallo({
-    intentos: ultimos.map((l) => ({
-      fechaIntento: l.fechaIntento,
-      errorMsg: l.errorMsg ?? "sin detalle",
-      durationMs: l.durationMs,
-    })),
-  });
-}
-
 // ---------------------------------------------------------------------------
 // Entry point: backup diario completo
 // ---------------------------------------------------------------------------
 
 /**
  * Flujo completo: dump → upload daily (+ monthly si día 1) → retención.
- * Independientemente del resultado, registra el intento en `BackupLog` y,
- * si los últimos 2 fallaron, dispara email al admin.
+ * Independientemente del resultado, registra el intento en `BackupLog`
+ * (lo lee `/api/health` y la página `/admin/backup/historial`).
  */
 export async function ejecutarBackupDiario(): Promise<BackupResult> {
   const started = Date.now();
@@ -328,7 +307,6 @@ export async function ejecutarBackupDiario(): Promise<BackupResult> {
       durationMs: 0,
       errorMsg: error,
     });
-    await alertarSiHayFallosSeguidos();
     return { ok: false, error };
   }
 
@@ -342,7 +320,6 @@ export async function ejecutarBackupDiario(): Promise<BackupResult> {
       durationMs: 0,
       errorMsg: error,
     });
-    await alertarSiHayFallosSeguidos();
     return { ok: false, error };
   }
 
@@ -407,7 +384,6 @@ export async function ejecutarBackupDiario(): Promise<BackupResult> {
       durationMs,
       errorMsg: null,
     });
-    // No alertamos en éxito — solo en 2 fallos seguidos.
 
     return {
       ok: true,
@@ -428,7 +404,6 @@ export async function ejecutarBackupDiario(): Promise<BackupResult> {
       durationMs,
       errorMsg,
     });
-    await alertarSiHayFallosSeguidos();
     return { ok: false, error: errorMsg, durationMs };
   }
 }
