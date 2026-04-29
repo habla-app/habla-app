@@ -44,9 +44,15 @@ export default async function ComunidadPage() {
 
   return (
     <div className="mx-auto w-full max-w-[1100px] px-4 pb-24 pt-6 md:px-6 md:pt-8">
-      {/* HERO */}
-      <section className="relative mb-6 overflow-hidden rounded-md border border-strong bg-gradient-to-br from-dark to-[#000530] px-5 py-7 text-white shadow-md md:px-8 md:py-10">
-        <div className="absolute right-[-30px] top-[-30px] text-[180px] leading-none opacity-[0.07]">
+      {/* HERO — replica `.balance-hero-v2` del mockup: gradient
+          azul vivo + franja gold animada arriba + emoji decorativo
+          gigante a la derecha. */}
+      <section className="relative mb-6 overflow-hidden rounded-lg bg-gradient-to-br from-brand-blue-main to-brand-blue-dark px-5 py-7 text-white shadow-lg md:px-8 md:py-10">
+        <span
+          aria-hidden
+          className="absolute left-0 right-0 top-0 block h-[5px] animate-shimmer bg-gold-shimmer bg-[length:400px_100%]"
+        />
+        <div className="pointer-events-none absolute right-[-30px] top-[-30px] -rotate-[15deg] select-none text-[220px] leading-none opacity-[0.06]">
           🏆
         </div>
         <div className="relative">
