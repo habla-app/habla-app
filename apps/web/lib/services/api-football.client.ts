@@ -11,6 +11,9 @@
 // Endpoints que llegan en Sub-Sprint 5 (motor de puntuación):
 //   - GET /fixtures/events?fixture={id} — eventos en vivo (goles, tarjetas)
 //   - GET /fixtures?id={id}&live=all — estado en vivo
+//
+// Endpoints agregados en Lote 9 (comparador de cuotas):
+//   - GET /odds?fixture={id}&bet={1|5|8} — odds 1X2 / Over-Under / BTTS
 
 import { ApiFootballError } from "./errors";
 import { logger } from "./logger";
@@ -237,6 +240,63 @@ export async function fetchFixtureStats(
   return apiFetch<ApiFootballTeamStats>(
     `/fixtures/statistics?${qs.toString()}`,
   );
+}
+
+// ---------------------------------------------------------------------------
+// Lote 9 — Odds (comparador de cuotas)
+// ---------------------------------------------------------------------------
+//
+// api-football devuelve odds en una shape anidada estable:
+//   response[].bookmakers[].bets[].values[]
+// donde `bet.id` identifica el mercado:
+//   - 1 = Match Winner (1X2): values con `value` ∈ {"Home","Draw","Away"}
+//   - 5 = Goals Over/Under: values con `value` ∈ {"Over 2.5","Under 2.5", ...}
+//   - 8 = Both Teams Score: values con `value` ∈ {"Yes","No"}
+//
+// Cada `value.odd` es un string con coma o punto decimal; el caller lo parsea
+// a número en odds-cache.service.ts.
+
+/** Mercado en api-football (cada bet.id). */
+export const APIFOOTBALL_BET_ID_1X2 = 1;
+export const APIFOOTBALL_BET_ID_OU = 5;
+export const APIFOOTBALL_BET_ID_BTTS = 8;
+
+export interface ApiFootballOddsValue {
+  value: string; /* e.g. "Home" | "Draw" | "Away" | "Over 2.5" | "Yes" */
+  odd: string; /* e.g. "1.85" — viene como string, parsear con Number */
+}
+
+export interface ApiFootballOddsBet {
+  id: number;
+  name: string;
+  values: ApiFootballOddsValue[];
+}
+
+export interface ApiFootballOddsBookmaker {
+  id: number;
+  name: string; /* e.g. "Bet365", "Betsson" — clave de BOOKMAKER_MAPPING */
+  bets: ApiFootballOddsBet[];
+}
+
+export interface ApiFootballOddsResponse {
+  league: { id: number; name: string; country: string; season: number };
+  fixture: { id: number; timezone: string; date: string; timestamp: number };
+  update: string;
+  bookmakers: ApiFootballOddsBookmaker[];
+}
+
+/**
+ * Fetch de odds para un fixture, filtrado por bet (mercado). Si `bet` se omite,
+ * devuelve todos los mercados que el plan de api-football permita.
+ *
+ * Lote 9: el caller pide los 3 mercados juntos (sin filtro `bet=`) para
+ * ahorrar requests, y filtra in-memory por bet.id antes de cachear.
+ */
+export async function fetchOddsByFixture(
+  fixtureId: number | string,
+): Promise<ApiFootballOddsResponse[]> {
+  const qs = new URLSearchParams({ fixture: String(fixtureId) });
+  return apiFetch<ApiFootballOddsResponse>(`/odds?${qs.toString()}`);
 }
 
 /**

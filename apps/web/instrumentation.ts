@@ -384,6 +384,56 @@ export async function register() {
   }, 120_000);
 
   // -------------------------------------------------------------------
+  // Job N — Refresh de odds cache (Lote 9). Tick cada 30min. Recorre los
+  // próximos 20 partidos en ligas top con kickoff dentro de las próximas
+  // 24h y refresca el cache Redis (`odds:partido:{id}`). El service
+  // `ejecutarCronOdds` loggea level=critical si fallan >50% de los
+  // partidos en la corrida (alimenta el Job M de alertas).
+  //
+  // Si REDIS_URL no está configurada, el service degradea graciosamente:
+  // los fetches a api-football siguen pasando, pero no se persiste nada
+  // (el endpoint público de cuotas siempre responderá 'updating').
+  // -------------------------------------------------------------------
+  const { ejecutarCronOdds } = await import(
+    "./lib/services/odds-cache.service"
+  );
+
+  const ODDS_TICK_INTERVAL_MS = 30 * 60 * 1000; // 30min
+
+  async function tickRefreshOdds() {
+    try {
+      const r = await ejecutarCronOdds();
+      if (r.procesados > 0) {
+        logger.info(
+          {
+            procesados: r.procesados,
+            ok: r.ok,
+            fallidos: r.fallidos,
+            sinOdds: r.sinOdds,
+            sinBookmakersValidos: r.sinBookmakersValidos,
+          },
+          "[cron in-process] ciclo refresh-odds",
+        );
+      }
+    } catch (err) {
+      logger.error(
+        { err, source: "cron:odds-cache" },
+        "[cron in-process] tick de refresh-odds falló",
+      );
+    }
+  }
+
+  // Primera corrida 45s tras boot — deja al sistema estabilizarse y al
+  // import de partidos (Job C, 30s) tomar al menos un tick para que haya
+  // partidos en BD.
+  setTimeout(() => {
+    void tickRefreshOdds();
+    setInterval(() => {
+      void tickRefreshOdds();
+    }, ODDS_TICK_INTERVAL_MS);
+  }, 45_000);
+
+  // -------------------------------------------------------------------
   // Jobs F (vencimiento Lukas) y G (auditoría de balances) se removieron
   // en Lote 2 cuando se demolió el sistema de Lukas. Job I (auditoría
   // contable) se removió en Lote 4 cuando se demolió el aparato contable.
@@ -398,6 +448,7 @@ export async function register() {
       backupDiario: `${BACKUP_TICK_INTERVAL_MS / 1000 / 60}min (target ${BACKUP_TARGET_LIMA_HOUR}:00 PET)`,
       cierreLeaderboardMensual: `${LEADERBOARD_TICK_INTERVAL_MS / 1000 / 60}min (día 1 ≥01:00 PET)`,
       alertaCriticos: `${CRITICOS_TICK_INTERVAL_MS / 1000 / 60}min (anti-spam ${CRITICOS_ANTISPAM_MS / 1000 / 60}min)`,
+      refreshOdds: `${ODDS_TICK_INTERVAL_MS / 1000 / 60}min`,
     },
     "cron in-process registrado",
   );

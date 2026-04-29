@@ -28,6 +28,14 @@ interface RedisLike {
   ): Promise<string[]>;
   ping(): Promise<string>;
   on(event: string, listener: (...args: unknown[]) => void): unknown;
+  // Lote 9 — odds cache (key/value con TTL).
+  set(
+    key: string,
+    value: string,
+    mode?: "EX",
+    ttl?: number,
+  ): Promise<unknown>;
+  get(key: string): Promise<string | null>;
 }
 
 let instance: RedisLike | null | undefined;
