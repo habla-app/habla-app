@@ -1,37 +1,29 @@
-// Servicio de límites de juego responsable — Sub-Sprint 7.
+// Servicio de límites de juego responsable.
 //
-// Reglas (CLAUDE.md §6):
-//  - Límite mensual de compra: bloqueante en el flujo de compra de Lukas
-//    (Sub-Sprint 2 cuando se implemente). Por defecto S/ 300/mes (1:1 con Lukas).
-//  - Límite diario de tickets: bloqueante en inscripción/creación de ticket.
-//    Por defecto 10/día.
-//  - Auto-exclusión temporal (7/30/90 días): bloqueante en login + en toda
-//    acción que mueva Lukas (inscripción, canje). No aplicable a lectura.
-//
-// Centralización: este módulo es el único punto de enforcement. Los consumers
-// (tickets, canjes, lukas-compra) llaman a los helpers específicos antes de
-// ejecutar la mutación. Si el chequeo falla, lanza `LimiteExcedido` con meta.
+// Lote 2 (Abr 2026): el sistema de Lukas se demolió. Quedan dos límites:
+//  - Límite diario de tickets: bloqueante en inscripción/creación de
+//    ticket. Por defecto 10/día (configurable desde /perfil).
+//  - Auto-exclusión temporal (7/30/90 días): bloqueante en login + en
+//    cualquier acción del usuario.
+// El antiguo límite mensual de compra y `verificarLimiteCompra` se
+// removieron junto con el flujo de compra de Lukas.
 
 import { prisma, type Prisma } from "@habla/db";
 import { LimiteExcedido } from "./errors";
-import {
-  LIMITE_MENSUAL_DEFAULT,
-  LIMITE_MENSUAL_MAX,
-  LIMITE_DIARIO_TICKETS_DEFAULT,
-} from "../config/economia";
 
 // ---------------------------------------------------------------------------
 // Constantes
 // ---------------------------------------------------------------------------
 
 /**
- * Default y tope superior del límite mensual de compra. Plan v6: el
- * usuario puede subirlo hasta `LIMITE_MENSUAL_MAX` desde /perfil; bajarlo
- * a 0 = sin límite.
+ * Default del límite diario de tickets (matchea schema.prisma).
  */
-export const DEFAULT_LIMITE_MENSUAL_COMPRA = LIMITE_MENSUAL_DEFAULT;
-export const MAX_LIMITE_MENSUAL_COMPRA = LIMITE_MENSUAL_MAX;
-export const DEFAULT_LIMITE_DIARIO_TICKETS = LIMITE_DIARIO_TICKETS_DEFAULT;
+export const DEFAULT_LIMITE_DIARIO_TICKETS = 10;
+
+/** Compatibilidad con la UI de /perfil que aún muestra el campo.
+ *  El uso real del campo se removió cuando se demolió el flujo de compra. */
+export const DEFAULT_LIMITE_MENSUAL_COMPRA = 300;
+export const MAX_LIMITE_MENSUAL_COMPRA = 2000;
 
 export const AUTOEXCLUSION_DIAS_VALIDOS = [7, 30, 90] as const;
 export type DiasAutoExclusion = (typeof AUTOEXCLUSION_DIAS_VALIDOS)[number];
@@ -45,9 +37,9 @@ export interface LimitesUsuario {
   limiteMensualCompra: number;
   limiteDiarioTickets: number;
   autoExclusionHasta: Date | null;
-  /** Estadísticas en vivo — uso actual. */
   uso: {
-    comprasMesActual: number; // Lukas comprados este mes (sólo tipo COMPRA)
+    /** Lukas comprados este mes — siempre 0 desde Lote 2 (no hay flujo de compra). */
+    comprasMesActual: number;
     ticketsUltimas24h: number;
   };
 }
@@ -59,7 +51,6 @@ export interface LimitesUsuario {
 export async function obtenerLimites(usuarioId: string): Promise<LimitesUsuario> {
   const existente = await prisma.limitesJuego.findUnique({ where: { usuarioId } });
   if (!existente) {
-    // Crear defaults al leer por primera vez.
     await prisma.limitesJuego.create({
       data: {
         usuarioId,
@@ -76,26 +67,10 @@ export async function obtenerLimites(usuarioId: string): Promise<LimitesUsuario>
     autoExclusionHasta: null,
   };
 
-  // Estadísticas de uso
-  const inicioMes = new Date();
-  inicioMes.setDate(1);
-  inicioMes.setHours(0, 0, 0, 0);
-
   const hace24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
-
-  const [comprasMesAgg, ticketsUltimas24h] = await Promise.all([
-    prisma.transaccionLukas.aggregate({
-      where: {
-        usuarioId,
-        tipo: "COMPRA",
-        creadoEn: { gte: inicioMes },
-      },
-      _sum: { monto: true },
-    }),
-    prisma.ticket.count({
-      where: { usuarioId, creadoEn: { gte: hace24h } },
-    }),
-  ]);
+  const ticketsUltimas24h = await prisma.ticket.count({
+    where: { usuarioId, creadoEn: { gte: hace24h } },
+  });
 
   return {
     usuarioId,
@@ -103,7 +78,7 @@ export async function obtenerLimites(usuarioId: string): Promise<LimitesUsuario>
     limiteDiarioTickets: limites.limiteDiarioTickets,
     autoExclusionHasta: limites.autoExclusionHasta,
     uso: {
-      comprasMesActual: comprasMesAgg._sum.monto ?? 0,
+      comprasMesActual: 0,
       ticketsUltimas24h,
     },
   };
@@ -118,7 +93,6 @@ export async function actualizarLimites(
   usuarioId: string,
   patch: ActualizarLimitesInput,
 ): Promise<LimitesUsuario> {
-  // Validación defensiva: los límites no pueden ser negativos.
   if (
     (patch.limiteMensualCompra !== undefined && patch.limiteMensualCompra < 0) ||
     (patch.limiteDiarioTickets !== undefined && patch.limiteDiarioTickets < 0)
@@ -177,7 +151,7 @@ export async function bloquearSiAutoExcluido(
     where: { usuarioId },
     select: { autoExclusionHasta: true },
   });
-  if (!l) return; // Sin límites aún = sin auto-exclusión
+  if (!l) return;
   if (l.autoExclusionHasta && l.autoExclusionHasta.getTime() > Date.now()) {
     throw new LimiteExcedido(
       `Tu cuenta está en auto-exclusión hasta ${l.autoExclusionHasta.toISOString()}.`,
@@ -189,10 +163,9 @@ export async function bloquearSiAutoExcluido(
 export interface ChequeoInscripcionInput {
   tx?: Prisma.TransactionClient;
   usuarioId: string;
-  entradaLukas: number;
 }
 
-/** Llamado desde tickets.service antes de descontar Lukas. */
+/** Llamado desde tickets/torneos antes de crear el ticket. */
 export async function verificarLimiteInscripcion(
   input: ChequeoInscripcionInput,
 ): Promise<void> {
@@ -206,14 +179,13 @@ export async function verificarLimiteInscripcion(
   const limiteDiario =
     limites?.limiteDiarioTickets ?? DEFAULT_LIMITE_DIARIO_TICKETS;
 
-  if (limiteDiario === 0) return; // 0 = sin límite
+  if (limiteDiario === 0) return;
 
   const hace24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const cuenta = await client.ticket.count({
     where: { usuarioId: input.usuarioId, creadoEn: { gte: hace24h } },
   });
 
-  // El ticket que se está por crear agrega 1 a la cuenta.
   if (cuenta + 1 > limiteDiario) {
     throw new LimiteExcedido(
       `Máximo ${limiteDiario} tickets por día. Llevas ${cuenta}.`,
@@ -228,49 +200,4 @@ export async function verificarLimiteCanje(input: {
   tx?: Prisma.TransactionClient;
 }): Promise<void> {
   await bloquearSiAutoExcluido(input.usuarioId, input.tx);
-}
-
-export interface ChequeoCompraInput {
-  tx?: Prisma.TransactionClient;
-  usuarioId: string;
-  montoLukas: number; // Lukas a comprar (1:1 soles)
-}
-
-/**
- * Stub listo para Sub-Sprint 2. Chequea auto-exclusión + límite mensual de
- * compra (comparando `montoLukas + comprasDelMes <= limiteMensualCompra`).
- */
-export async function verificarLimiteCompra(
-  input: ChequeoCompraInput,
-): Promise<void> {
-  await bloquearSiAutoExcluido(input.usuarioId, input.tx);
-
-  const client = input.tx ?? prisma;
-  const limites = await client.limitesJuego.findUnique({
-    where: { usuarioId: input.usuarioId },
-    select: { limiteMensualCompra: true },
-  });
-  const limite = limites?.limiteMensualCompra ?? DEFAULT_LIMITE_MENSUAL_COMPRA;
-  if (limite === 0) return; // 0 = sin límite
-
-  const inicioMes = new Date();
-  inicioMes.setDate(1);
-  inicioMes.setHours(0, 0, 0, 0);
-
-  const agg = await client.transaccionLukas.aggregate({
-    where: {
-      usuarioId: input.usuarioId,
-      tipo: "COMPRA",
-      creadoEn: { gte: inicioMes },
-    },
-    _sum: { monto: true },
-  });
-  const yaComprado = agg._sum.monto ?? 0;
-
-  if (yaComprado + input.montoLukas > limite) {
-    throw new LimiteExcedido(
-      `Excede tu límite de S/ ${limite}/mes. Este mes llevas S/ ${yaComprado}.`,
-      { actual: yaComprado, intentado: input.montoLukas, max: limite },
-    );
-  }
 }

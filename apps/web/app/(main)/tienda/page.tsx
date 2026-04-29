@@ -1,62 +1,31 @@
-// /tienda — catálogo de premios. Sub-Sprint 6.
-// Pública: usuarios anónimos ven el catálogo; solo al clickear "canjear"
-// se pide sesión.
+// /tienda — Lote 2 (Abr 2026): página en mantenimiento.
+//
+// El sistema de Lukas y los canjes se demolieron. Lote 3 elimina la tabla
+// Canje + esta ruta. Mientras tanto, la página muestra un cartel.
 
-import { auth } from "@/lib/auth";
-import { prisma } from "@habla/db";
-import {
-  CATEGORIAS_VALIDAS,
-  listarPremios,
-  type CategoriaPremio,
-} from "@/lib/services/premios.service";
-import { TiendaContent } from "@/components/tienda/TiendaContent";
+import Link from "next/link";
 
-export const dynamic = "force-dynamic";
+export const dynamic = "force-static";
 
-interface PageProps {
-  searchParams: { categoria?: string };
-}
-
-export default async function TiendaPage({ searchParams }: PageProps) {
-  const catRaw = searchParams.categoria;
-  const categoria =
-    catRaw && (CATEGORIAS_VALIDAS as readonly string[]).includes(catRaw)
-      ? (catRaw as CategoriaPremio)
-      : null;
-
-  const [session, premiosResult] = await Promise.all([
-    auth(),
-    listarPremios({ categoria: categoria ?? undefined }),
-  ]);
-
-  let totalCanjeados = 0;
-  let balanceGanadas = 0;
-  if (session?.user?.id) {
-    const [canjesCount, usuarioData] = await Promise.all([
-      prisma.canje.count({
-        where: {
-          usuarioId: session.user.id,
-          estado: { in: ["ENTREGADO", "ENVIADO", "PROCESANDO"] },
-        },
-      }),
-      prisma.usuario.findUnique({
-        where: { id: session.user.id },
-        select: { balanceGanadas: true },
-      }),
-    ]);
-    totalCanjeados = canjesCount;
-    balanceGanadas = usuarioData?.balanceGanadas ?? 0;
-  }
-
+export default function TiendaPage() {
   return (
-    <TiendaContent
-      premios={premiosResult.premios}
-      featured={premiosResult.featured}
-      categoriaActiva={categoria}
-      initialBalance={session?.user?.balanceLukas ?? null}
-      initialBalanceGanadas={balanceGanadas}
-      totalCanjeados={totalCanjeados}
-      isLoggedIn={Boolean(session?.user?.id)}
-    />
+    <div className="mx-auto w-full max-w-[640px] px-4 py-16 text-center md:py-24">
+      <div aria-hidden className="mb-4 text-5xl">
+        🔧
+      </div>
+      <h1 className="mb-3 font-display text-[28px] font-black uppercase tracking-[0.02em] text-dark md:text-[36px]">
+        Tienda en mantenimiento
+      </h1>
+      <p className="mx-auto mb-6 max-w-[420px] text-[14px] leading-relaxed text-body">
+        Estamos rediseñando el sistema de premios. Volvé pronto — mientras
+        tanto, seguí prediciendo gratis los partidos y subiendo en el ranking.
+      </p>
+      <Link
+        href="/matches"
+        className="inline-flex items-center justify-center gap-2 rounded-md bg-brand-gold px-5 py-3 font-display text-[14px] font-extrabold uppercase tracking-[0.04em] text-black shadow-gold-btn transition-all hover:bg-brand-gold-light"
+      >
+        🎯 Ir a partidos
+      </Link>
+    </div>
   );
 }

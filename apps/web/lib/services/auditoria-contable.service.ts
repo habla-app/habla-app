@@ -1,13 +1,15 @@
 // Auditoría continua del sistema contable — Lote 8 §2.D.
 //
-// Verifica 6 invariantes (C1-C6). C1-C4 disparan hallazgo `error` si no
+// Verifica las invariantes contables. C1-C3 disparan hallazgo `error` si no
 // cuadran; C5-C6 son `warn` (informativo). El Job I del cron in-process
 // llama `ejecutarAuditoria()` cada 23h, persiste el resultado en
 // `AuditoriaContableLog` y, si los últimos 2 fallos son consecutivos,
 // dispara email al ADMIN_ALERT_EMAIL.
+//
+// Lote 2 (Abr 2026): la invariante C4 (pasivos Lukas == suma balances
+// usuarios) se removió porque el sistema de Lukas ya no existe.
 
 import { prisma, Prisma } from "@habla/db";
-import { COD } from "./contabilidad/plan-de-cuentas";
 
 export type Severidad = "error" | "warn";
 
@@ -155,57 +157,6 @@ export async function ejecutarAuditoria(): Promise<AuditoriaContableResult> {
         totalGasto,
       },
     });
-  }
-
-  // --- C4: pasivos Lukas == suma balances usuarios ------------------------
-  const usuarios = await prisma.usuario.aggregate({
-    where: { deletedAt: null },
-    _sum: {
-      balanceCompradas: true,
-      balanceBonus: true,
-      balanceGanadas: true,
-    },
-  });
-  const sumCompradas = usuarios._sum.balanceCompradas ?? 0;
-  const sumBonus = usuarios._sum.balanceBonus ?? 0;
-  const sumGanadas = usuarios._sum.balanceGanadas ?? 0;
-
-  const cuentaCompradas = cuentas.find((c) => c.codigo === COD.PASIVO_COMPRADAS);
-  const cuentaBonus = cuentas.find((c) => c.codigo === COD.PASIVO_BONUS);
-  const cuentaGanadas = cuentas.find((c) => c.codigo === COD.PASIVO_GANADAS);
-
-  if (cuentaCompradas) {
-    const saldo = dec(cuentaCompradas.saldoActual);
-    if (!eq(saldo, sumCompradas)) {
-      hallazgos.push({
-        codigo: "C4",
-        severidad: "error",
-        mensaje: `Pasivo Compradas (${saldo}) ≠ suma usuarios.balanceCompradas (${sumCompradas})`,
-        detalle: { saldo, sumUsuarios: sumCompradas },
-      });
-    }
-  }
-  if (cuentaBonus) {
-    const saldo = dec(cuentaBonus.saldoActual);
-    if (!eq(saldo, sumBonus)) {
-      hallazgos.push({
-        codigo: "C4",
-        severidad: "error",
-        mensaje: `Pasivo Bonus (${saldo}) ≠ suma usuarios.balanceBonus (${sumBonus})`,
-        detalle: { saldo, sumUsuarios: sumBonus },
-      });
-    }
-  }
-  if (cuentaGanadas) {
-    const saldo = dec(cuentaGanadas.saldoActual);
-    if (!eq(saldo, sumGanadas)) {
-      hallazgos.push({
-        codigo: "C4",
-        severidad: "error",
-        mensaje: `Pasivo Ganadas (${saldo}) ≠ suma usuarios.balanceGanadas (${sumGanadas})`,
-        detalle: { saldo, sumUsuarios: sumGanadas },
-      });
-    }
   }
 
   // --- C5: conciliación bancaria del último mes (warn) -------------------

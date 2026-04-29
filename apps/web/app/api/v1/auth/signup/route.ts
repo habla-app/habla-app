@@ -1,10 +1,9 @@
 // POST /api/v1/auth/signup
 //
 // Registro formal email (Abr 2026). Crea usuario en BD con username
-// definitivo + `usernameLocked=true` + `tycAceptadosAt=now` + bonus de
-// bienvenida (BONUS_BIENVENIDA_LUKAS, sin vencimiento) en una transacción
-// atómica. No dispara el magic link — eso lo hace el cliente con
-// `signIn("resend")` tras recibir `ok: true`.
+// definitivo + `usernameLocked=true` + `tycAceptadosAt=now`. No dispara el
+// magic link — eso lo hace el cliente con `signIn("resend")` tras recibir
+// `ok: true`.
 //
 // Body: { email, username, aceptaTyc }
 // Respuesta OK: { ok: true, data: { email } }
@@ -20,10 +19,8 @@ import {
   ValidacionFallida,
 } from "@/lib/services/errors";
 import { esReservado } from "@/lib/config/usernames-reservados";
-import { BONUS_BIENVENIDA_LUKAS } from "@/lib/config/economia";
 import { esUsernameOfensivo } from "@/lib/utils/username-filter";
 import { logger } from "@/lib/services/logger";
-import { registrarBonusEmitido } from "@/lib/services/contabilidad/contabilidad.service";
 
 export const dynamic = "force-dynamic";
 // Abr 2026: case-sensitive para display (Gustavo ≠ gustavo en UI), pero
@@ -113,39 +110,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Crear usuario + transacción BONUS atómica.
-    await prisma.$transaction(async (tx) => {
-      const usuario = await tx.usuario.create({
-        data: {
-          email,
-          // Nombre vacío hasta que el usuario lo complete en /perfil.
-          nombre: "",
-          username,
-          usernameLocked: true,
-          tycAceptadosAt: new Date(),
-          // Lote 6A: el bonus de bienvenida va a balanceBonus (no compradas).
-          balanceLukas: BONUS_BIENVENIDA_LUKAS,
-          balanceBonus: BONUS_BIENVENIDA_LUKAS,
-        },
-      });
-      await tx.transaccionLukas.create({
-        data: {
-          usuarioId: usuario.id,
-          tipo: "BONUS",
-          bolsa: "BONUS",
-          monto: BONUS_BIENVENIDA_LUKAS,
-          descripcion: "Bonus de bienvenida",
-          venceEn: null,
-        },
-      });
-
-      // Lote 8: asiento contable del bonus de bienvenida.
-      await registrarBonusEmitido(
-        usuario.id,
-        BONUS_BIENVENIDA_LUKAS,
-        "bienvenida",
-        tx,
-      );
+    await prisma.usuario.create({
+      data: {
+        email,
+        // Nombre vacío hasta que el usuario lo complete en /perfil.
+        nombre: "",
+        username,
+        usernameLocked: true,
+        tycAceptadosAt: new Date(),
+      },
     });
 
     logger.info({ email, username }, "signup email completado");

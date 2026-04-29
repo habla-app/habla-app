@@ -68,7 +68,7 @@ export async function obtenerLiveMatches(
         // ya los ignoraba, pero excluirlos del include evita exponer
         // torneos que no son navegables.
         where: { estado: { not: "CANCELADO" } },
-        orderBy: { pozoBruto: "desc" },
+        orderBy: { totalInscritos: "desc" },
       },
     },
     orderBy: { fechaInicio: "desc" },
@@ -134,7 +134,7 @@ export async function obtenerFinalizedMatches(
     include: {
       torneos: {
         where: { estado: { not: "CANCELADO" } },
-        orderBy: { pozoBruto: "desc" },
+        orderBy: { totalInscritos: "desc" },
       },
     },
     orderBy: { fechaInicio: "desc" },
@@ -157,12 +157,7 @@ const ORDEN_PRIORIDAD: Record<EstadoTorneo, number> = {
 /**
  * Elige el torneo "principal" de un partido para mostrar en /live-match.
  * Prioridad por estado (EN_JUEGO > CERRADO > FINALIZADO > ABIERTO) y dentro
- * del mismo estado por mayor pozoBruto. CANCELADO nunca se elige.
- *
- * Tras Bug #8, `obtenerLiveMatches` garantiza que la lista de torneos
- * del partido ya excluye CANCELADO. Este filtro defensivo sigue aquí
- * por si otro caller pasa un array crudo (ej. tests). Devuelve null
- * solo si el array llega vacío.
+ * del mismo estado por mayor `totalInscritos`. CANCELADO nunca se elige.
  */
 export function elegirTorneoPrincipal(torneos: Torneo[]): Torneo | null {
   const candidatos = torneos.filter((t) => t.estado !== "CANCELADO");
@@ -171,7 +166,7 @@ export function elegirTorneoPrincipal(torneos: Torneo[]): Torneo | null {
     const pa = ORDEN_PRIORIDAD[a.estado];
     const pb = ORDEN_PRIORIDAD[b.estado];
     if (pa !== pb) return pa - pb;
-    return b.pozoBruto - a.pozoBruto;
+    return b.totalInscritos - a.totalInscritos;
   });
   return ordenados[0] ?? null;
 }

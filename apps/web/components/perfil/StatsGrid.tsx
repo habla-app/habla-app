@@ -1,22 +1,16 @@
-"use client";
-// StatsGrid — 6 pstat cards del mockup `.profile-stats-grid` (línea 3897).
-// Balance hidratado desde useLukasStore con mounted-guard para reflejar
-// cambios sin refresh (post-inscripción, post-canje).
+// StatsGrid — pstat cards del mockup `.profile-stats-grid`.
+//
+// Lote 2 (Abr 2026): se demolió el sistema de Lukas. Pasa de 6 stats a 4
+// (Torneos · Ganados · % Acierto · Mejor puesto). Sin balance ni "neto".
 
-import { useEffect, useState } from "react";
 import type { PerfilCompleto } from "@/lib/services/usuarios.service";
-import { useLukasStore } from "@/stores/lukas.store";
 
 interface StatsGridProps {
   perfil: PerfilCompleto;
 }
 
 export function StatsGrid({ perfil }: StatsGridProps) {
-  const { stats, nivel, balanceLukas } = perfil;
-  const storeBalance = useLukasStore((s) => s.balance);
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  const balance = mounted ? storeBalance : balanceLukas;
+  const { stats, nivel } = perfil;
 
   const pills: Array<{
     icon: string;
@@ -33,7 +27,7 @@ export function StatsGrid({ perfil }: StatsGridProps) {
     {
       icon: "🏆",
       value: stats.ganadas.toString(),
-      label: "Ganados",
+      label: "En top 10",
       tone: "gold",
     },
     {
@@ -41,18 +35,6 @@ export function StatsGrid({ perfil }: StatsGridProps) {
       value: `${stats.aciertoPct}%`,
       label: "Tasa acierto",
       tone: "green",
-    },
-    {
-      icon: "🪙",
-      value: balance.toLocaleString("es-PE"),
-      label: "Balance",
-      tone: "gold",
-    },
-    {
-      icon: "💰",
-      value: `${stats.neto >= 0 ? "+" : ""}${stats.neto.toLocaleString("es-PE")}`,
-      label: "Total ganado",
-      tone: stats.neto >= 0 ? "green" : "neutral",
     },
     {
       icon: "⭐",
@@ -63,7 +45,7 @@ export function StatsGrid({ perfil }: StatsGridProps) {
   ];
 
   return (
-    <section className="mb-6 grid grid-cols-3 gap-2.5 md:grid-cols-6">
+    <section className="mb-6 grid grid-cols-2 gap-2.5 md:grid-cols-4">
       {pills.map((p) => (
         <PStat key={p.label} {...p} />
       ))}

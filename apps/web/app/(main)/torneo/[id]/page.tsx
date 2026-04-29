@@ -1,21 +1,9 @@
-// /torneo/:id — detalle del torneo. Hotfix #5 Bug #13 rediseñó la
-// vista como pantalla motivacional para entrar al torneo:
+// /torneo/:id — detalle del torneo.
 //
-//   1. Back button arriba-izquierda (router.back() con fallback).
-//   2. Hero del partido (equipos con colores, score VS, liga, venue,
-//      kickoff en hora Lima, estado del torneo).
-//   3. Hero del "Pozo" (un solo número grande) — NUNCA se expone
-//      "pozo neto", "pozo bruto" ni "rake" al jugador.
-//   4. Distribución del pozo en Lukas absolutos (35/20/12/33%).
-//   5. Pills de stats motivacionales (jugadores, tickets, cierre).
-//   6. Lista de inscritos: @handle + nivel + cantidad de tickets.
-//      - ABIERTO: sin predicciones (privacidad competitiva).
-//      - CERRADO/EN_JUEGO/FINALIZADO: con 5 chips por ticket + puntos.
-//   7. CTA estelar — delega a ComboLauncher (hook useComboOpener) para
-//      abrir el modal. Sticky al bottom en mobile, inline en desktop.
-//
-// Público: cualquiera puede ver el detalle. El CTA cambia a /auth/signin
-// con callbackUrl si no hay sesión (lo maneja ComboLauncher).
+// Lote 2 (Abr 2026): se demolió el sistema de Lukas. La página ya no
+// muestra pozo, entrada ni distribución de premios. Pasa a ser una vista
+// puramente de competencia: hero del partido + "X tipsters compitiendo"
+// + lista de inscritos + reglas de puntaje + CTA "Hacer mi predicción".
 
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
@@ -53,8 +41,6 @@ export default async function TorneoDetallePage({ params, searchParams }: Props)
   const { partido } = torneo;
   const now = new Date();
 
-  // Detectar placeholder default del Sub-Sprint 3 para cambiar el CTA
-  // a "Editar mi combinada".
   const tienePlaceholder =
     miTicket !== null &&
     miTicket.predResultado === "LOCAL" &&
@@ -64,11 +50,6 @@ export default async function TorneoDetallePage({ params, searchParams }: Props)
     miTicket.predMarcadorLocal === 0 &&
     miTicket.predMarcadorVisita === 0;
 
-  // Cantidad de tickets que tiene el usuario en este torneo (límite 10).
-  // El service `obtener` solo devuelve 1 (findFirst) — para el count
-  // exacto no disparamos otra query: no aportamos los 10 tickets del
-  // usuario a la UI, solo el booleano "¿ya 10?". Reusamos el inscritos
-  // listing de abajo.
   const showingAll = searchParams?.inscritosPage === "all";
   const inscritosResult = await listarInscritos(torneo.id, {
     limit: showingAll ? 500 : 20,
@@ -76,9 +57,6 @@ export default async function TorneoDetallePage({ params, searchParams }: Props)
   const miInscrito = session?.user?.id
     ? inscritosResult.inscritos.find((i) => i.usuarioId === session.user!.id)
     : null;
-  // `miInscrito` puede estar fuera del slice paginado; si no está en la
-  // primera página, igual sabemos que el user tiene miTicket !== null.
-  // Fallback: si hay miTicket y no se encontró en el slice, asumimos 1.
   const ticketsUsuario = miInscrito
     ? miInscrito.tickets.length
     : miTicket
@@ -87,10 +65,7 @@ export default async function TorneoDetallePage({ params, searchParams }: Props)
 
   const vm = buildTorneoDetailViewModel({
     estado: torneo.estado as EstadoTorneoView,
-    pozoBruto: torneo.pozoBruto,
-    pozoNeto: torneo.pozoNeto,
     totalInscritos: torneo.totalInscritos,
-    entradaLukas: torneo.entradaLukas,
     cierreAt: torneo.cierreAt,
     ticketsUsuario,
     tienePlaceholder,
@@ -99,6 +74,10 @@ export default async function TorneoDetallePage({ params, searchParams }: Props)
 
   const localColor = getTeamColor(partido.equipoLocal);
   const visitaColor = getTeamColor(partido.equipoVisita);
+  const totalTickets = inscritosResult.inscritos.reduce(
+    (acc, i) => acc + i.tickets.length,
+    0,
+  );
 
   return (
     <div
@@ -112,7 +91,6 @@ export default async function TorneoDetallePage({ params, searchParams }: Props)
         liga={partido.liga}
         fechaInicio={partido.fechaInicio}
         venue={partido.venue ?? null}
-        entradaLukas={torneo.entradaLukas}
       />
       <div className="mb-4">
         <BackButton fallbackHref="/matches" />
@@ -157,29 +135,33 @@ export default async function TorneoDetallePage({ params, searchParams }: Props)
         )}
       </section>
 
-      {/* POZO HERO + DISTRIBUCIÓN + STATS (layout en 2 cols desktop) */}
+      {/* INSCRITOS HERO + STATS + LISTA */}
       <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-5">
-          {/* POZO HERO */}
+          {/* COMPITEN HERO */}
           <section
             className="rounded-lg border-2 border-brand-gold/40 bg-gradient-to-br from-brand-gold-dim to-transparent p-6 text-center shadow-md"
-            data-testid="torneo-pozo-hero"
+            data-testid="torneo-compiten-hero"
           >
             <div className="text-[12px] font-bold uppercase tracking-[0.08em] text-muted-d">
-              Pozo del torneo
+              {totalTickets === 1
+                ? "Predicción enviada"
+                : "Predicciones enviadas"}
             </div>
             <div className="mt-2 font-display text-[56px] font-black leading-none text-brand-gold-dark md:text-[72px]">
-              {vm.pozoMostrado.toLocaleString("es-PE")}{" "}
-              <span aria-hidden>🪙</span>
+              {torneo.totalInscritos.toLocaleString("es-PE")}
             </div>
-            <div className="mt-2 text-[12px] text-muted-d">
-              Entrada {torneo.entradaLukas} 🪙 · Top 10 se lleva premio
+            <div className="mt-2 text-[14px] font-bold text-dark">
+              {torneo.totalInscritos === 1 ? "tipster" : "tipsters"} compitiendo
+            </div>
+            <div className="mt-1 text-[11px] text-muted-d">
+              Suben en el ranking según los puntos que sume su combinada.
             </div>
           </section>
 
           {/* STATS PILLS MOTIVACIONALES */}
           <div
-            className="grid grid-cols-2 gap-3 md:grid-cols-4"
+            className="grid grid-cols-2 gap-3 md:grid-cols-3"
             data-testid="torneo-stats-pills"
           >
             <Pill
@@ -187,16 +169,14 @@ export default async function TorneoDetallePage({ params, searchParams }: Props)
               value={torneo.totalInscritos.toLocaleString("es-PE")}
               label={
                 torneo.totalInscritos === 1
-                  ? "Jugador inscrito"
-                  : "Jugadores inscritos"
+                  ? "Tipster compitiendo"
+                  : "Tipsters compitiendo"
               }
             />
             <Pill
               icon="🎯"
-              value={inscritosResult.inscritos
-                .reduce((acc, i) => acc + i.tickets.length, 0)
-                .toLocaleString("es-PE")}
-              label="Tickets enviados"
+              value={totalTickets.toLocaleString("es-PE")}
+              label="Combinadas enviadas"
             />
             <Pill
               icon={vm.estadoResuelto === "EN_JUEGO" ? "🔴" : "⏱"}
@@ -212,42 +192,7 @@ export default async function TorneoDetallePage({ params, searchParams }: Props)
                     : "muted"
               }
             />
-            <Pill
-              icon="🏆"
-              value={`${(vm.premios[0]?.lukas ?? 0).toLocaleString("es-PE")} 🪙`}
-              label="1er premio"
-              tone="gold"
-            />
           </div>
-
-          {/* DISTRIBUCIÓN DEL POZO (en Lukas absolutos, sin mostrar %).
-              Hotfix #6: la curva depende de totalInscritos — mostramos
-              top 10 + indicador si hay más pagados. */}
-          <section
-            className="rounded-md border border-light bg-card p-5 shadow-sm"
-            data-testid="torneo-distribucion"
-          >
-            <h2 className="mb-4 font-display text-[18px] font-black uppercase tracking-[0.02em] text-dark">
-              Cómo se reparte el pozo
-            </h2>
-            <ul className="divide-y divide-light text-[14px]">
-              {vm.premios.slice(0, 10).map((p) => (
-                <PremioRow
-                  key={p.posicion}
-                  pos={posIcon(p.posicion)}
-                  lukas={p.lukas}
-                  highlight={p.posicion === 1}
-                />
-              ))}
-            </ul>
-            <p className="mt-3 text-[11px] text-muted-d">
-              {vm.pagados === 0
-                ? "Aún no se definen pagados — el torneo necesita al menos 2 inscritos."
-                : vm.pagados > 10
-                  ? `Pagan los primeros ${vm.pagados} puestos — se muestran los 10 mejores. El pozo puede crecer hasta el cierre.`
-                  : `Pagan los primeros ${vm.pagados} puestos. El pozo puede crecer hasta el cierre.`}
-            </p>
-          </section>
 
           {/* INSCRITOS */}
           <InscritosList
@@ -260,15 +205,12 @@ export default async function TorneoDetallePage({ params, searchParams }: Props)
             showingAll={showingAll}
           />
 
-          {/* RULES CARD MOBILE — en desktop vive en la sidebar. */}
           <div className="lg:hidden">
             <RulesCard />
           </div>
         </div>
 
-        {/* SIDEBAR STICKY DESKTOP — CTA estelar arriba + Reglas de
-            puntaje abajo. En mobile, el CTA aparece sticky al bottom y
-            las reglas bajan inline dentro de la columna principal. */}
+        {/* SIDEBAR DESKTOP — CTA estelar arriba + Reglas abajo. */}
         <div className="hidden flex-col gap-4 lg:sticky lg:top-[88px] lg:flex lg:self-start">
           <TorneoStickyCTA
             torneoId={torneo.id}
@@ -280,8 +222,7 @@ export default async function TorneoDetallePage({ params, searchParams }: Props)
         </div>
       </div>
 
-      {/* CTA MOBILE (sticky al bottom; hidden en desktop porque vive en
-          la sidebar derecha). */}
+      {/* CTA MOBILE sticky al bottom. */}
       <div className="lg:hidden">
         <TorneoStickyCTA
           torneoId={torneo.id}
@@ -374,24 +315,16 @@ function Pill({
   icon: string;
   value: string;
   label: string;
-  tone?: "normal" | "gold" | "live" | "muted";
+  tone?: "normal" | "live" | "muted";
 }) {
   const valueCls =
-    tone === "gold"
-      ? "text-brand-gold-dark"
-      : tone === "live"
-        ? "text-urgent-critical"
-        : tone === "muted"
-          ? "text-muted-d"
-          : "text-dark";
-  const borderCls =
-    tone === "gold"
-      ? "border-brand-gold/40 bg-brand-gold-dim"
-      : "border-light bg-card";
+    tone === "live"
+      ? "text-urgent-critical"
+      : tone === "muted"
+        ? "text-muted-d"
+        : "text-dark";
   return (
-    <div
-      className={`rounded-md border px-3 py-3 text-center shadow-sm ${borderCls}`}
-    >
+    <div className="rounded-md border border-light bg-card px-3 py-3 text-center shadow-sm">
       <div aria-hidden className="text-[16px] leading-none">
         {icon}
       </div>
@@ -405,42 +338,6 @@ function Pill({
       </div>
     </div>
   );
-}
-
-function PremioRow({
-  pos,
-  lukas,
-  highlight = false,
-}: {
-  pos: string;
-  lukas: number;
-  highlight?: boolean;
-}) {
-  return (
-    <li className="flex items-center justify-between py-2.5">
-      <span
-        className={`font-display text-[14px] font-extrabold ${
-          highlight ? "text-brand-gold-dark" : "text-dark"
-        }`}
-      >
-        {pos}
-      </span>
-      <span
-        className={`font-display text-[16px] font-black ${
-          highlight ? "text-brand-gold-dark" : "text-dark"
-        }`}
-      >
-        {lukas.toLocaleString("es-PE")} 🪙
-      </span>
-    </li>
-  );
-}
-
-function posIcon(p: number): string {
-  if (p === 1) return "🥇 1°";
-  if (p === 2) return "🥈 2°";
-  if (p === 3) return "🥉 3°";
-  return `${p}°`;
 }
 
 function RulesCard() {
@@ -504,7 +401,6 @@ function TorneoJsonLd({
   liga,
   fechaInicio,
   venue,
-  entradaLukas,
 }: {
   torneoId: string;
   equipoLocal: string;
@@ -512,11 +408,7 @@ function TorneoJsonLd({
   liga: string;
   fechaInicio: Date;
   venue: string | null;
-  entradaLukas: number;
 }) {
-  // SportsEvent (schema.org) — ayuda a rich snippets en Google. El
-  // "Offer" representa la entrada al torneo; precio en PEN sobre la
-  // convención 1 Luka = S/ 1.
   const baseUrl =
     process.env.NEXT_PUBLIC_APP_URL ?? "https://hablaplay.com";
   const data = {
@@ -529,41 +421,16 @@ function TorneoJsonLd({
     eventAttendanceMode: "https://schema.org/OnlineEventAttendanceMode",
     sport: "Football",
     url: `${baseUrl}/torneo/${torneoId}`,
-    homeTeam: {
-      "@type": "SportsTeam",
-      name: equipoLocal,
-    },
-    awayTeam: {
-      "@type": "SportsTeam",
-      name: equipoVisita,
-    },
+    homeTeam: { "@type": "SportsTeam", name: equipoLocal },
+    awayTeam: { "@type": "SportsTeam", name: equipoVisita },
     location: venue
-      ? {
-          "@type": "Place",
-          name: venue,
-        }
-      : {
-          "@type": "VirtualLocation",
-          url: `${baseUrl}/torneo/${torneoId}`,
-        },
-    offers: {
-      "@type": "Offer",
-      name: "Entrada al torneo",
-      price: entradaLukas,
-      priceCurrency: "PEN",
-      availability: "https://schema.org/InStock",
-      url: `${baseUrl}/torneo/${torneoId}`,
-    },
-    organizer: {
-      "@type": "Organization",
-      name: "Habla!",
-      url: baseUrl,
-    },
+      ? { "@type": "Place", name: venue }
+      : { "@type": "VirtualLocation", url: `${baseUrl}/torneo/${torneoId}` },
+    organizer: { "@type": "Organization", name: "Habla!", url: baseUrl },
   };
   return (
     <script
       type="application/ld+json"
-      // JSON.stringify + anti-XSS para el carácter `<`.
       dangerouslySetInnerHTML={{
         __html: JSON.stringify(data).replace(/</g, "\\u003c"),
       }}
@@ -583,9 +450,6 @@ function estadoCopy(
   if (estado === "CERRADO") return "Esperando inicio";
   if (estado === "FINALIZADO") return "Finalizado";
   if (estado === "CANCELADO") return "Cancelado";
-  // guard — `now` unused si no caímos en ABIERTO; lo forzamos a leer
-  // para evitar warning de lint en algunas configs.
   void now;
   return "—";
 }
-

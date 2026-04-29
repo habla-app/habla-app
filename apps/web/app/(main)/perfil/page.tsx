@@ -65,10 +65,7 @@ export default async function PerfilPage() {
       <DatosSection perfil={perfil} />
       <NotificacionesSection inicial={preferencias} />
       <JuegoResponsableSection inicial={limites} />
-      <FooterSections
-        balanceLukas={perfil.balanceLukas}
-        email={perfil.email}
-      />
+      <FooterSections email={perfil.email} />
     </div>
   );
 }

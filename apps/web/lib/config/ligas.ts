@@ -14,9 +14,9 @@
 // recoge en la siguiente corrida, y el admin puede forzar con
 // POST /api/v1/admin/partidos/importar.
 //
-// Plan v6 (Lote 4): el campo `tipoTorneo` queda como etiqueta informativa
-// (afecta sólo el badge visual). La entrada es uniforme `ENTRADA_LUKAS`
-// (lib/config/economia.ts) para todos los torneos.
+// Lote 2 (Abr 2026): el campo `tipoTorneo` queda como etiqueta informativa
+// (afecta sólo el badge visual). El sistema de Lukas se demolió y las
+// inscripciones a torneos son gratuitas.
 //
 // Lote 5 (Plan v6 §4.4): ampliación a 19 ligas. Campos nuevos:
 //   - slug: identificador URL (?liga=premier).

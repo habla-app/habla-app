@@ -30,11 +30,7 @@ import {
 } from "./api-football.client";
 import { fixtureToPartidoInput } from "./partidos.mapper";
 import { getSeasonForLeague } from "./seasons.cache";
-import {
-  CIERRE_MIN_BEFORE,
-  DISTRIB_PREMIOS_DESCRIPTOR,
-} from "./torneos.service";
-import { ENTRADA_LUKAS } from "../config/economia";
+import { CIERRE_MIN_BEFORE } from "./torneos.service";
 import { logger } from "./logger";
 
 export interface ImportLigaResult {
@@ -180,13 +176,10 @@ async function procesarFixtures(
     await prisma.torneo.create({
       data: {
         nombre: `${partido.equipoLocal} vs ${partido.equipoVisita}`,
+        // Lote 2: `liga.tipoTorneo` se conserva sólo como badge visual.
         tipo: liga.tipoTorneo,
-        // Plan v6: entrada uniforme. `liga.tipoTorneo` se conserva
-        // sólo como badge visual.
-        entradaLukas: ENTRADA_LUKAS,
         partidoId: partido.id,
         cierreAt,
-        distribPremios: DISTRIB_PREMIOS_DESCRIPTOR,
       },
     });
     torneosCreados += 1;

@@ -1,30 +1,19 @@
-// Servicio de ranking en vivo — Sub-Sprint 5 + Hotfix #6.
+// Servicio de ranking en vivo.
 //
-// Fuente de verdad: la base de datos (Ticket.puntosTotal). Redis se usa
-// como cache del sorted set para lecturas <1ms; si Redis no responde
-// degradamos a BD.
+// Lote 2 (Abr 2026): demolido el sistema de Lukas. El ranking ya no
+// distribuye premios — sólo posiciona a los tickets por puntos totales.
+// `finalizarTorneo` se limita a asignar `posicionFinal` y a marcar el
+// torneo FINALIZADO. Sin transacciones, sin créditos, sin pozos.
 //
-// Hotfix #6 — Nueva distribución de premios (§6):
-//   - Pagan el 10% de inscritos, brackets especiales para N<100.
-//   - Curva top-heavy: 45% al 1°, 55% restante en decaimiento geométrico.
-//   - Empates: tickets con puntaje idéntico reparten equitativamente
-//     los premios de las posiciones que ocupan como grupo.
-//   - Desempates adicionales ELIMINADOS. Mismos puntos = mismo premio.
-//     El orden de inscripción queda como tiebreaker cosmético estable
-//     para que la UI no salte entre refreshes, pero no afecta premios.
+// Empates: tickets con mismos puntos comparten posicionFinal (competition
+// ranking). Para la UI usamos un comparador estable (creadoEn ASC) que
+// sólo afecta el orden visual dentro del grupo de empate, no la posición
+// asignada.
 
 import { prisma, type Prisma } from "@habla/db";
 import { TorneoNoEncontrado } from "./errors";
 import { logger } from "./logger";
-import {
-  distribuirPremios,
-  premioEstimadoSinEmpate,
-  type TicketParaDistribuir,
-} from "../utils/premios-distribucion";
 import { recalcularTorneo } from "./puntuacion.service";
-import { notifyPremioGanado } from "./notificaciones.service";
-import { verificarConsistenciaBalance } from "./balance-consistency.helper";
-import { registrarCierreTorneo } from "./contabilidad/contabilidad.service";
 
 // ---------------------------------------------------------------------------
 // Tipos públicos
@@ -34,14 +23,10 @@ export interface RankingRow {
   rank: number;
   ticketId: string;
   usuarioId: string;
-  /** Display del jugador. Registro formal (Abr 2026): es `@username` (sin
-   *  el prefijo @ — la UI lo añade al renderizar). Mantenemos el nombre
-   *  `nombre` por compat con el contrato de emisión WS, pero el contenido
-   *  es ahora el handle público. */
+  /** Display del jugador. Es `@username` (sin el prefijo @ — la UI lo
+   *  añade al renderizar). */
   nombre: string;
-  /** @handle del usuario. Mismo valor que `nombre` pero explícito. Nuevo
-   *  en el registro formal — los consumidores deben preferirlo sobre
-   *  `nombre` a futuro. */
+  /** @handle del usuario. Mismo valor que `nombre`. */
   username: string;
   puntosTotal: number;
   puntosDetalle: {
@@ -59,20 +44,14 @@ export interface RankingRow {
     predMarcadorLocal: number;
     predMarcadorVisita: number;
   };
-  premioEstimado: number;
   creadoEn: Date;
 }
 
 export interface RankingResult {
   torneoId: string;
   totalInscritos: number;
-  pozoNeto: number;
-  pozoBruto: number;
   ranking: RankingRow[];
   miPosicion: (RankingRow & { posicion: number }) | null;
-  /** Posiciones pagadas (M) según `calcularPagados(totalInscritos)`.
-   *  UI lo usa para el badge "En el dinero" y el copy motivacional. */
-  pagados: number;
 }
 
 export interface ListarRankingInput {
@@ -107,23 +86,9 @@ export async function listarRanking(
 
   const torneo = await prisma.torneo.findUnique({
     where: { id: torneoId },
-    select: {
-      id: true,
-      pozoBruto: true,
-      pozoNeto: true,
-      totalInscritos: true,
-      estado: true,
-    },
+    select: { id: true, totalInscritos: true, estado: true },
   });
   if (!torneo) throw new TorneoNoEncontrado(torneoId);
-
-  // Si el torneo está ABIERTO, pozoNeto aún es 0 — estimamos con 88%
-  // del pozoBruto actual para que los premios estimados sean útiles
-  // mientras la gente se sigue inscribiendo.
-  const pozoNetoEstimado =
-    torneo.pozoNeto > 0
-      ? torneo.pozoNeto
-      : Math.floor(torneo.pozoBruto * 0.88);
 
   const tickets = await prisma.ticket.findMany({
     where: { torneoId },
@@ -134,39 +99,12 @@ export async function listarRanking(
     },
   });
 
-  // Ordenamiento: puntosTotal DESC, creadoEn ASC. El segundo criterio
-  // es SÓLO cosmético — jugadores con mismos puntos reciben el mismo
-  // premio (split por empate).
   const ordenados = [...tickets].sort(comparadorCosmetico);
 
-  // Distribución de premios: pasamos los tickets al helper puro. El
-  // resultado nos da `posicionFinal` + `premioLukas` para cada uno,
-  // respetando los empates.
-  const ticketsParaDistribuir: TicketParaDistribuir[] = ordenados.map((t) => ({
-    id: t.id,
-    puntosTotal: t.puntosTotal,
-    creadoEn: t.creadoEn,
-  }));
-  const asignaciones = distribuirPremios(
-    ticketsParaDistribuir,
-    torneo.totalInscritos,
-    pozoNetoEstimado,
-  );
-  const premioPorTicketId = new Map(
-    asignaciones.map((a) => [a.ticketId, a]),
-  );
-
-  // `rank` visual: el índice del array ordenado + 1. Para empates, el
-  // primer ticket del grupo tiene rank == posicionFinal y los demás
-  // tienen rank > posicionFinal (para UI sigan visualmente abajo del
-  // primero, aunque compartan premio). En el futuro podríamos
-  // colapsar visualmente los empates, pero el MVP conserva el orden.
   const rows: RankingRow[] = ordenados.map((t, idx) => {
-    const rank = idx + 1;
-    const asig = premioPorTicketId.get(t.id);
     const handle = handleDisplay(t.usuario);
     return {
-      rank,
+      rank: idx + 1,
       ticketId: t.id,
       usuarioId: t.usuarioId,
       nombre: handle,
@@ -187,17 +125,13 @@ export async function listarRanking(
         predMarcadorLocal: t.predMarcadorLocal,
         predMarcadorVisita: t.predMarcadorVisita,
       },
-      premioEstimado: asig?.premioLukas ?? 0,
       creadoEn: t.creadoEn,
     };
   });
 
-  // Slice paginado
   const start = (page - 1) * limit;
   const slice = rows.slice(start, start + limit);
 
-  // miPosicion: si el caller pasó usuarioId, buscamos su mejor ticket
-  // (el de mayor puntosTotal / mejor rank).
   let miPosicion: RankingResult["miPosicion"] = null;
   if (input.usuarioId) {
     const propios = rows.filter((r) => r.usuarioId === input.usuarioId);
@@ -207,19 +141,11 @@ export async function listarRanking(
     }
   }
 
-  // pagados: lo exponemos para que la UI del badge "En el dinero" y el
-  // copy motivacional del Ítem 1.6 del Hotfix #6 calculen posicionamiento.
-  const { calcularPagados } = await import("../utils/premios-distribucion");
-  const pagados = calcularPagados(torneo.totalInscritos);
-
   return {
     torneoId,
     totalInscritos: torneo.totalInscritos,
-    pozoNeto: pozoNetoEstimado,
-    pozoBruto: torneo.pozoBruto,
     ranking: slice,
     miPosicion,
-    pagados,
   };
 }
 
@@ -228,13 +154,6 @@ function comparadorCosmetico(a: TicketConUsuario, b: TicketConUsuario): number {
   return a.creadoEn.getTime() - b.creadoEn.getTime();
 }
 
-/**
- * Registro formal (Abr 2026): el display del jugador en rankings/inscritos
- * es `@username`. El caller recibe el handle desnudo (sin `@`) y lo
- * prefija en el render. Si por alguna razón el username está vacío o es
- * un temporal `new_<hex>` (usuario OAuth que no completó), caemos al
- * prefijo del email para evitar mostrar `@new_abcd12` o cadenas vacías.
- */
 function handleDisplay(u: {
   username: string;
   nombre: string;
@@ -245,52 +164,26 @@ function handleDisplay(u: {
   if (u.nombre && !u.nombre.includes("@") && !u.nombre.startsWith("new_")) {
     return u.nombre;
   }
-  const prefix = u.email.split("@")[0] ?? u.id.slice(0, 8);
-  return prefix;
+  return u.email.split("@")[0] ?? u.id.slice(0, 8);
 }
 
 // ---------------------------------------------------------------------------
-// calcularPremioEstimado — helper público (compat con callers que no
-// necesitan el full ranking). Útil para notificaciones pre-finalización
-// o tooltips del mockup. Proyecta SIN empates.
-// ---------------------------------------------------------------------------
-
-export function calcularPremioEstimado(
-  pozoNeto: number,
-  posicion: number,
-  totalInscritos: number,
-): number {
-  return premioEstimadoSinEmpate(posicion, totalInscritos, pozoNeto);
-}
-
-// ---------------------------------------------------------------------------
-// finalizarTorneo — llamado por el poller cuando el partido llega a
-// FIN_PARTIDO. Asigna posiciones finales + premios definitivos usando
-// la nueva distribución con empates. Marca el torneo FINALIZADO.
-//
-// Hotfix #7 Bug #18/#19: antes solo actualizaba `posicionFinal` +
-// `premioLukas` en el Ticket. AHORA:
-//   1. Recalcula puntos con el snapshot FINAL del partido antes de
-//      distribuir — defensa contra tickets con puntos pre-FT stale
-//      (ej. btts=null durante EN_VIVO que se resuelve solo al FT).
-//   2. Acredita los Lukas a cada ganador en una transacción atómica
-//      que también crea `TransaccionLukas { tipo: PREMIO_TORNEO }`.
-//      Idempotente: si el torneo ya estaba FINALIZADO NO hace nada
-//      (protege contra doble crédito si el poller re-dispara).
+// finalizarTorneo — asigna posicionFinal a cada ticket usando competition
+// ranking (empates comparten posición). Marca el torneo FINALIZADO.
+// Idempotente: si ya está FINALIZADO no hace nada.
 // ---------------------------------------------------------------------------
 
 export interface FinalizarTorneoResult {
   torneoId: string;
-  ganadores: Array<{
+  posicionados: Array<{
     rank: number;
     ticketId: string;
     usuarioId: string;
     nombre: string;
     username: string;
     puntosTotal: number;
-    premioLukas: number;
   }>;
-  /** Hotfix #7: true si ya estaba FINALIZADO y no se hizo nada (idempotencia). */
+  /** true si ya estaba FINALIZADO y no se hizo nada (idempotencia). */
   alreadyFinalized: boolean;
 }
 
@@ -303,76 +196,15 @@ export async function finalizarTorneo(
   });
   if (!preTorneo) throw new TorneoNoEncontrado(torneoId);
 
-  // Idempotencia: si ya está FINALIZADO, no re-acreditamos. Esta es la
-  // barrera dura contra doble crédito si el poller dispara
-  // `finalizarTorneo` dos veces por reconexión o re-entrega de eventos.
-  //
-  // Hotfix #8 Bug #23: antes el early-return era incondicional. Resultado:
-  // si un torneo llegó a FINALIZADO sin crédito (ej. finalizó en prod
-  // antes del deploy del Hotfix #7, o el poller marcó FINALIZADO pero la
-  // transacción del credit falló silenciosamente), la próxima corrida
-  // del poller veía `alreadyFinalized=true` y nunca reparaba el estado.
-  // Ahora el guard verifica antes de retornar: si hay tickets con
-  // `premioLukas > 0` Y no hay TransaccionLukas PREMIO_TORNEO, el
-  // crédito está incompleto — disparamos `reconciliarTorneoFinalizado`
-  // automáticamente. Es idempotente y sólo acredita deltas > 0.
   if (preTorneo.estado === "FINALIZADO") {
-    const incompleto = await detectarCreditoIncompleto(torneoId);
-    if (incompleto) {
-      logger.warn(
-        { torneoId, ...incompleto.stats },
-        "finalizarTorneo: torneo FINALIZADO sin crédito completo — auto-reconciliando (Hotfix #8 Bug #23)",
-      );
-      try {
-        const rec = await reconciliarTorneoFinalizado(torneoId);
-        logger.info(
-          {
-            torneoId,
-            ticketsAjustados: rec.ajustes.length,
-            totalDeltaAcreditado: rec.totalDeltaAcreditado,
-          },
-          "finalizarTorneo: auto-reconcile completado",
-        );
-      } catch (err) {
-        // No propagamos el error: el caller (poller) no debe fallar el
-        // tick por un guard defensivo. El admin puede correr el endpoint
-        // /api/v1/admin/torneos/:id/reconciliar manualmente.
-        logger.error(
-          { err, torneoId },
-          "finalizarTorneo: auto-reconcile falló",
-        );
-      }
-    } else {
-      logger.info(
-        { torneoId },
-        "finalizarTorneo: torneo ya está FINALIZADO — skip (idempotencia)",
-      );
-    }
-    return { torneoId, ganadores: [], alreadyFinalized: true };
+    logger.info({ torneoId }, "finalizarTorneo: ya FINALIZADO — skip");
+    return { torneoId, posicionados: [], alreadyFinalized: true };
   }
 
-  // Bug #19: recalcular puntos ANTES de distribuir premios. El poller
-  // recalcula tras cada evento pero el snapshot final del partido puede
-  // haber llegado en el mismo tick que la transición a FINALIZADO; si
-  // el poller recalcula y finaliza back-to-back NO hay problema, pero
-  // si `finalizarTorneo` se llama desde un admin endpoint o retry,
-  // garantizamos los puntos correctos del snapshot actual.
+  // Recalcular puntos con el snapshot final del partido antes de
+  // posicionar. Defensa contra puntos pre-FT stale.
   await recalcularTorneo(torneoId);
 
-  const torneo = await prisma.torneo.findUnique({
-    where: { id: torneoId },
-    select: { pozoNeto: true, pozoBruto: true, estado: true, totalInscritos: true },
-  });
-  if (!torneo) throw new TorneoNoEncontrado(torneoId);
-
-  // pozoNeto debería estar seteado por el cierre automático. Si no lo
-  // está (torneo que estaba EN_JUEGO sin pasar por CERRADO), calculamos.
-  const pozoNeto =
-    torneo.pozoNeto > 0
-      ? torneo.pozoNeto
-      : Math.floor(torneo.pozoBruto * 0.88);
-
-  // Traer todos los tickets con el usuario (para el display name).
   const tickets = await prisma.ticket.findMany({
     where: { torneoId },
     include: {
@@ -382,384 +214,51 @@ export async function finalizarTorneo(
     },
   });
 
-  // Distribuir premios con la nueva regla (split por empate).
-  const asignaciones = distribuirPremios(
-    tickets.map((t) => ({
-      id: t.id,
-      puntosTotal: t.puntosTotal,
-      creadoEn: t.creadoEn,
-    })),
-    torneo.totalInscritos,
-    pozoNeto,
-  );
-  const porTicketId = new Map(asignaciones.map((a) => [a.ticketId, a]));
+  const ordenados = [...tickets].sort(comparadorCosmetico);
 
-  // Bug #18: todo lo siguiente en una transacción atómica. Si algo
-  // falla, NI los premios se acreditan NI el torneo se marca como
-  // FINALIZADO — la próxima corrida del poller reintenta todo.
-  const resultado = await prisma.$transaction(async (tx) => {
-    const ganadores: FinalizarTorneoResult["ganadores"] = [];
+  // Competition ranking: empates comparten posición; el siguiente grupo
+  // salta tantas posiciones como tickets había en el grupo previo.
+  // Ej: 10pts, 8pts, 8pts, 5pts → posiciones 1, 2, 2, 4.
+  const posicionPorTicket = new Map<string, number>();
+  let posicionActual = 0;
+  let puntosPrevio = Number.NaN;
+  ordenados.forEach((t, idx) => {
+    if (t.puntosTotal !== puntosPrevio) {
+      posicionActual = idx + 1;
+      puntosPrevio = t.puntosTotal;
+    }
+    posicionPorTicket.set(t.id, posicionActual);
+  });
 
-    for (const t of tickets) {
-      const asig = porTicketId.get(t.id);
-      if (!asig) continue;
-
+  const posicionados = await prisma.$transaction(async (tx) => {
+    const out: FinalizarTorneoResult["posicionados"] = [];
+    for (const t of ordenados) {
+      const posicion = posicionPorTicket.get(t.id)!;
       await tx.ticket.update({
         where: { id: t.id },
-        data: {
-          posicionFinal: asig.posicionFinal,
-          premioLukas: asig.premioLukas,
-        },
+        data: { posicionFinal: posicion },
       });
-
-      if (asig.premioLukas > 0) {
-        // Lote 6A: los premios van a balanceGanadas (únicos canjeables).
-        // También se suma a balanceLukas por compatibilidad transicional.
-        await tx.usuario.update({
-          where: { id: t.usuarioId },
-          data: {
-            balanceGanadas: { increment: asig.premioLukas },
-            balanceLukas: { increment: asig.premioLukas },
-          },
-        });
-        await tx.transaccionLukas.create({
-          data: {
-            usuarioId: t.usuarioId,
-            tipo: "PREMIO_TORNEO",
-            bolsa: "GANADAS",
-            monto: asig.premioLukas,
-            descripcion: `Premio ${asig.posicionFinal}° puesto · torneo ${torneoId}`,
-            refId: torneoId,
-          },
-        });
-        // Lote 6C-fix3: guard de consistencia post-mutación.
-        await verificarConsistenciaBalance(tx, t.usuarioId, "ranking.finalizarTorneo");
-        const handle = handleDisplay(t.usuario);
-        ganadores.push({
-          rank: asig.posicionFinal,
-          ticketId: t.id,
-          usuarioId: t.usuarioId,
-          nombre: handle,
-          username: handle,
-          puntosTotal: t.puntosTotal,
-          premioLukas: asig.premioLukas,
-        });
-      }
+      const handle = handleDisplay(t.usuario);
+      out.push({
+        rank: posicion,
+        ticketId: t.id,
+        usuarioId: t.usuarioId,
+        nombre: handle,
+        username: handle,
+        puntosTotal: t.puntosTotal,
+      });
     }
-
     await tx.torneo.update({
       where: { id: torneoId },
       data: { estado: "FINALIZADO" },
     });
-
-    // Lote 8: asiento contable de cierre (rake → ingreso neto + IGV).
-    // Idempotente — si ya existe, hace no-op.
-    try {
-      await registrarCierreTorneo(torneoId, tx);
-    } catch (err) {
-      logger.error(
-        { err, torneoId },
-        "registrarCierreTorneo falló dentro de finalizarTorneo",
-      );
-      throw err;
-    }
-
-    return ganadores;
+    return out;
   });
 
   logger.info(
-    {
-      torneoId,
-      totalTickets: tickets.length,
-      ganadores: resultado.length,
-      totalAcreditado: resultado.reduce((a, g) => a + g.premioLukas, 0),
-    },
-    "torneo finalizado + saldos acreditados",
+    { torneoId, totalTickets: tickets.length, posicionados: posicionados.length },
+    "torneo finalizado + posiciones asignadas",
   );
 
-  // Sub-Sprint 6: fire-and-forget emails a ganadores. `notifyPremioGanado`
-  // respeta `PreferenciasNotif.notifPremios` internamente.
-  try {
-    const torneoMeta = await prisma.torneo.findUnique({
-      where: { id: torneoId },
-      select: {
-        nombre: true,
-        partido: { select: { equipoLocal: true, equipoVisita: true } },
-      },
-    });
-    if (torneoMeta) {
-      const partidoStr = `${torneoMeta.partido.equipoLocal} vs ${torneoMeta.partido.equipoVisita}`;
-      for (const g of resultado) {
-        void notifyPremioGanado({
-          usuarioId: g.usuarioId,
-          torneoNombre: torneoMeta.nombre,
-          posicion: g.rank,
-          premioLukas: g.premioLukas,
-          partido: partidoStr,
-        });
-      }
-    }
-  } catch (err) {
-    logger.error({ err, torneoId }, "finalizarTorneo: error preparando emails");
-  }
-
-  return { torneoId, ganadores: resultado, alreadyFinalized: false };
-}
-
-// ---------------------------------------------------------------------------
-// reconciliarTorneoFinalizado — Hotfix #7 Bug #20.
-//
-// Admin-only. Para torneos FINALIZADOS que quedaron mal: puntos
-// calculados con el motor viejo (pre-Hotfix #6) o sin crédito de Lukas
-// (pre-Hotfix #7 Bug #18).
-//
-// Procedimiento:
-//   1. Recalcula puntos con el snapshot actual del partido (motor nuevo).
-//   2. Recomputa distribución con la regla vigente.
-//   3. Para cada usuario, compara expected vs ya acreditado (sumando
-//      TransaccionLukas { tipo: PREMIO_TORNEO, refId: torneoId }).
-//   4. Acredita el delta (puede ser positivo = pagar más, negativo =
-//      reintegro — aunque en MVP no esperamos deltas negativos porque
-//      la regla nueva premia más).
-//   5. Actualiza `Ticket.posicionFinal` y `Ticket.premioLukas` al
-//      valor expected.
-//
-// Idempotente: si los valores ya coinciden, no hace nada. Correrlo
-// dos veces seguidas solo genera logs, no doble-acredita.
-// ---------------------------------------------------------------------------
-
-export interface ReconciliarResult {
-  torneoId: string;
-  ajustes: Array<{
-    ticketId: string;
-    usuarioId: string;
-    nombre: string;
-    posicionFinalAnterior: number | null;
-    posicionFinalNueva: number;
-    premioLukasAnterior: number;
-    premioLukasNuevo: number;
-    yaAcreditado: number;
-    deltaAcreditado: number;
-  }>;
-  totalDeltaAcreditado: number;
-  puntosRecalculados: boolean;
-}
-
-export async function reconciliarTorneoFinalizado(
-  torneoId: string,
-): Promise<ReconciliarResult> {
-  const torneo = await prisma.torneo.findUnique({
-    where: { id: torneoId },
-    select: {
-      id: true,
-      estado: true,
-      pozoNeto: true,
-      pozoBruto: true,
-      totalInscritos: true,
-    },
-  });
-  if (!torneo) throw new TorneoNoEncontrado(torneoId);
-  if (torneo.estado !== "FINALIZADO") {
-    throw new Error(
-      `Torneo ${torneoId} no está FINALIZADO (estado=${torneo.estado}); use finalizarTorneo en su lugar.`,
-    );
-  }
-
-  // 1. Recalcula puntos con el motor actual.
-  await recalcularTorneo(torneoId);
-
-  const pozoNeto =
-    torneo.pozoNeto > 0
-      ? torneo.pozoNeto
-      : Math.floor(torneo.pozoBruto * 0.88);
-
-  const tickets = await prisma.ticket.findMany({
-    where: { torneoId },
-    include: {
-      usuario: {
-        select: { id: true, nombre: true, username: true, email: true },
-      },
-    },
-  });
-
-  // 2. Recomputa distribución con la regla vigente (Hotfix #6).
-  const asignaciones = distribuirPremios(
-    tickets.map((t) => ({
-      id: t.id,
-      puntosTotal: t.puntosTotal,
-      creadoEn: t.creadoEn,
-    })),
-    torneo.totalInscritos,
-    pozoNeto,
-  );
-  const porTicketId = new Map(asignaciones.map((a) => [a.ticketId, a]));
-
-  // 3. Traer todas las TransaccionLukas PREMIO_TORNEO ya creadas para
-  //    este torneo (puede haber de corridas previas o de manual fixes).
-  const yaAcreditadas = await prisma.transaccionLukas.findMany({
-    where: { tipo: "PREMIO_TORNEO", refId: torneoId },
-    select: { usuarioId: true, monto: true },
-  });
-  const acreditadoPorUsuario = new Map<string, number>();
-  for (const t of yaAcreditadas) {
-    acreditadoPorUsuario.set(
-      t.usuarioId,
-      (acreditadoPorUsuario.get(t.usuarioId) ?? 0) + t.monto,
-    );
-  }
-
-  // 4. Aplicar deltas en transacción atómica.
-  const result = await prisma.$transaction(async (tx) => {
-    const ajustes: ReconciliarResult["ajustes"] = [];
-
-    for (const t of tickets) {
-      const asig = porTicketId.get(t.id);
-      if (!asig) continue;
-
-      const yaAcreditado = acreditadoPorUsuario.get(t.usuarioId) ?? 0;
-      // Nota: si el usuario tiene múltiples tickets en el mismo torneo,
-      // `yaAcreditado` es la suma total ya acreditada POR USUARIO, no
-      // por ticket. Pero `expected` es por ticket. Para simplificar, en
-      // MVP asumimos 1 ticket por usuario ganador (típico) — si hay
-      // múltiples, el primer ticket del usuario consume el acreditado
-      // ya registrado y los demás reciben el delta completo. El split
-      // por empate del helper `distribuirPremios` ya maneja correctamente
-      // el caso multi-ticket.
-      const previo = acreditadoPorUsuario.get(t.usuarioId) ?? 0;
-      const delta = asig.premioLukas - (previo > 0 ? previo : 0);
-
-      // Actualiza ticket con los valores correctos independientemente.
-      await tx.ticket.update({
-        where: { id: t.id },
-        data: {
-          posicionFinal: asig.posicionFinal,
-          premioLukas: asig.premioLukas,
-        },
-      });
-
-      if (delta > 0) {
-        // Lote 6A: delta también va a balanceGanadas.
-        await tx.usuario.update({
-          where: { id: t.usuarioId },
-          data: {
-            balanceGanadas: { increment: delta },
-            balanceLukas: { increment: delta },
-          },
-        });
-        await tx.transaccionLukas.create({
-          data: {
-            usuarioId: t.usuarioId,
-            tipo: "PREMIO_TORNEO",
-            bolsa: "GANADAS",
-            monto: delta,
-            descripcion: `Ajuste premio ${asig.posicionFinal}° puesto · torneo ${torneoId}`,
-            refId: torneoId,
-          },
-        });
-        // Lote 6C-fix3: guard de consistencia post-mutación.
-        await verificarConsistenciaBalance(tx, t.usuarioId, "ranking.reconciliar");
-        // Actualizamos el map para evitar re-acreditar si el mismo
-        // usuario aparece de nuevo (multi-ticket).
-        acreditadoPorUsuario.set(t.usuarioId, (previo > 0 ? previo : 0) + delta);
-      }
-
-      ajustes.push({
-        ticketId: t.id,
-        usuarioId: t.usuarioId,
-        nombre: handleDisplay(t.usuario),
-        posicionFinalAnterior: t.posicionFinal,
-        posicionFinalNueva: asig.posicionFinal,
-        premioLukasAnterior: t.premioLukas,
-        premioLukasNuevo: asig.premioLukas,
-        yaAcreditado,
-        deltaAcreditado: delta > 0 ? delta : 0,
-      });
-    }
-
-    return ajustes;
-  });
-
-  const totalDeltaAcreditado = result.reduce(
-    (a, b) => a + b.deltaAcreditado,
-    0,
-  );
-
-  logger.info(
-    {
-      torneoId,
-      ticketsAjustados: result.length,
-      totalDeltaAcreditado,
-    },
-    "torneo reconciliado (Hotfix #7 Bug #20)",
-  );
-
-  return {
-    torneoId,
-    ajustes: result,
-    totalDeltaAcreditado,
-    puntosRecalculados: true,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// detectarCreditoIncompleto — Hotfix #8 Bug #23.
-//
-// Helper defensivo que `finalizarTorneo` llama al detectar un torneo ya
-// FINALIZADO. Compara lo que "debería haber" (tickets con premioLukas>0)
-// contra lo que "hay acreditado" (TransaccionLukas PREMIO_TORNEO con
-// refId=torneoId). Si la suma acreditada es estrictamente menor a la
-// suma esperada, el crédito está incompleto y disparamos reconciliación.
-//
-// Devuelve null si el crédito está completo (o si el torneo no tiene
-// ganadores — p.ej. no había pozo a distribuir). Devuelve `{ stats }`
-// con los totales calculados para que el log de WARN tenga contexto.
-//
-// Se expone como función pura que consulta BD. No corre dentro de una
-// transacción — no necesitamos atomicidad acá, solo la lectura.
-// ---------------------------------------------------------------------------
-
-export interface CreditoIncompletoStats {
-  stats: {
-    ticketsPremiados: number;
-    totalPremiosEsperado: number;
-    totalPremiosAcreditado: number;
-    deltaPendiente: number;
-  };
-}
-
-export async function detectarCreditoIncompleto(
-  torneoId: string,
-): Promise<CreditoIncompletoStats | null> {
-  const [ticketsPremiados, transacciones] = await Promise.all([
-    prisma.ticket.findMany({
-      where: { torneoId, premioLukas: { gt: 0 } },
-      select: { id: true, premioLukas: true },
-    }),
-    prisma.transaccionLukas.findMany({
-      where: { tipo: "PREMIO_TORNEO", refId: torneoId },
-      select: { monto: true },
-    }),
-  ]);
-
-  const totalPremiosEsperado = ticketsPremiados.reduce(
-    (a, t) => a + t.premioLukas,
-    0,
-  );
-  const totalPremiosAcreditado = transacciones.reduce(
-    (a, t) => a + t.monto,
-    0,
-  );
-  const deltaPendiente = totalPremiosEsperado - totalPremiosAcreditado;
-
-  if (ticketsPremiados.length === 0) return null;
-  if (deltaPendiente <= 0) return null;
-
-  return {
-    stats: {
-      ticketsPremiados: ticketsPremiados.length,
-      totalPremiosEsperado,
-      totalPremiosAcreditado,
-      deltaPendiente,
-    },
-  };
+  return { torneoId, posicionados, alreadyFinalized: false };
 }

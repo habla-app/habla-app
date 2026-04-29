@@ -1,5 +1,5 @@
 // Extensiones de tipos de NextAuth v5 para los campos custom de Habla!
-// Se agregan: id, rol, balanceLukas, username, usernameLocked en session.user.
+// Se agregan: id, rol, username, usernameLocked en session.user.
 
 import type { DefaultSession } from "next-auth";
 
@@ -8,7 +8,6 @@ declare module "next-auth" {
     user: {
       id: string;
       email: string;
-      balanceLukas: number;
       rol: "JUGADOR" | "ADMIN";
       /** @handle público único (3-20 chars, lowercase, [a-z0-9_]). NOT NULL
        *  en BD desde Abr 2026. Si `usernameLocked=false`, es temporal

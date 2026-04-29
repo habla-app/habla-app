@@ -13,7 +13,6 @@ import Link from "next/link";
 import { TicketCard } from "./TicketCard";
 import { ComboLauncher } from "@/components/combo/ComboLauncher";
 import type { TicketConContexto } from "./adapter";
-import { premioEstimadoSinEmpate } from "@/lib/utils/premios-distribucion";
 
 interface MatchGroupProps {
   tickets: TicketConContexto[];
@@ -41,11 +40,16 @@ export function MatchGroup({
 
   const isLive = estado === "EN_JUEGO";
   const isScheduled = estado === "ABIERTO" || estado === "CERRADO";
-  const anyWinner = tickets.some((t) => t.premioLukas > 0);
-  const isFinalized = estado === "FINALIZADO" || estado === "CANCELADO";
+  // Lote 2: "won" deja de existir como variante económica. Marcamos como
+  // "won" si algún ticket terminó dentro del top 10 (pos final ≤ 10).
+  const anyTopTen = tickets.some(
+    (t) => t.posicionFinal !== null && t.posicionFinal <= 10,
+  );
+  const isFinalizedTop = estado === "FINALIZADO" && anyTopTen;
+  void (estado === "FINALIZADO" || estado === "CANCELADO");
 
   let variant: "live" | "scheduled" | "won" | "neutral" = "neutral";
-  if (anyWinner) variant = "won";
+  if (isFinalizedTop) variant = "won";
   else if (isLive) variant = "live";
   else if (isScheduled) variant = "scheduled";
 
@@ -154,10 +158,12 @@ export function MatchGroup({
           const inTop = posicion !== null && posicion !== undefined && posicion <= 10;
           const pending =
             t.torneo.estado === "ABIERTO" || t.torneo.estado === "CERRADO";
-          const isWinner = t.premioLukas > 0;
-          const premioEstimado = inTop
-            ? estimarPremio(t.torneo.pozoBruto, posicion ?? 0, t.torneo.totalInscritos)
-            : 0;
+          // Lote 2: "winner" pasa a significar quedar dentro del top 10
+          // del torneo finalizado, sin asociar premio en Lukas.
+          const isWinner =
+            t.torneo.estado === "FINALIZADO" &&
+            t.posicionFinal !== null &&
+            t.posicionFinal <= 10;
           return (
             <TicketCard
               key={t.id}
@@ -166,8 +172,6 @@ export function MatchGroup({
               total={tickets.length}
               posicion={posicion ?? null}
               puntos={puntos}
-              premioEstimado={premioEstimado}
-              premioFinal={t.premioLukas}
               isWinner={isWinner}
               inTop={inTop}
               pending={pending}
@@ -222,19 +226,6 @@ function StatusPill({
       {estado === "CANCELADO" ? "Cancelado" : "Finalizado"}
     </span>
   );
-}
-
-function estimarPremio(
-  pozoBruto: number,
-  posicion: number,
-  totalInscritos: number,
-): number {
-  // Hotfix #6: usa la curva top-heavy del helper puro. El "SinEmpate"
-  // asume que el jugador es único en la posición — para mostrar un
-  // estimado optimista en /mis-combinadas. El valor real con empates se
-  // calcula en /live-match via listarRanking.
-  const pozoNeto = Math.floor(pozoBruto * 0.88);
-  return premioEstimadoSinEmpate(posicion, totalInscritos, pozoNeto);
 }
 
 function formatKickoff(d: Date | string): string {

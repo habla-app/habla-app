@@ -1,22 +1,19 @@
 // TicketCard — una card por ticket dentro de un MatchGroup.
-// Replica `.ticket-card` del mockup. Variantes:
-//   - in-top: zona de premio (borde dorado sutil + valor estimado)
-//   - out: fuera de premio
-//   - pending-card: torneo no empezó (borde izquierdo azul)
-//   - winner-card: ganó el premio (borde dorado + trofeo)
+//
+// Lote 2 (Abr 2026): se demolió el sistema de Lukas. El footer ya no
+// muestra entrada en Lukas ni premio estimado — sólo la posición/puntos
+// y el copy "Top 10" cuando aplica.
 
 import { PredChip } from "./PredChip";
 import { resolvePrediccionesChips, type TicketConContexto } from "./adapter";
 
 interface TicketCardProps {
   ticket: TicketConContexto;
-  numero: number; /* 1 de N, 2 de N, etc. */
+  numero: number;
   total: number;
   /** Posición actual (live) o final. null si torneo no empezó. */
   posicion: number | null;
   puntos: number;
-  premioEstimado: number;
-  premioFinal: number;
   isWinner: boolean;
   inTop: boolean;
   pending: boolean;
@@ -30,8 +27,6 @@ export function TicketCard({
   total,
   posicion,
   puntos,
-  premioEstimado,
-  premioFinal,
   isWinner,
   inTop,
   pending,
@@ -58,7 +53,7 @@ export function TicketCard({
         >
           {isWinner ? (
             <>
-              Ticket ganador <span aria-hidden>🏆</span>
+              Ticket en top 10 <span aria-hidden>🏆</span>
             </>
           ) : inTop ? (
             <>Ticket {numero} de {total} · en zona de premio ⭐</>
@@ -99,35 +94,28 @@ export function TicketCard({
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-light pt-2.5 text-[12px]">
         <span className="text-muted-d">
-          Entrada{" "}
-          <strong className="text-dark">
-            {ticket.torneo.entradaLukas} 🪙
-          </strong>
-          {pending && (
+          {pending ? (
             <>
-              {" · "}
               Máx posible <strong className="text-dark">21 pts</strong>
             </>
+          ) : (
+            <>Predicción gratis</>
           )}
         </span>
         {isWinner ? (
-          <span className="font-semibold text-brand-green">
-            🎉 Premio:{" "}
-            <strong className="text-brand-gold-dark">
-              +{premioFinal.toLocaleString("es-PE")} 🪙
-            </strong>
+          <span className="font-semibold text-brand-gold-dark">
+            🏆 Top 10 final
           </span>
         ) : inTop ? (
           <span className="font-semibold text-brand-gold-dark">
-            ⭐ Top 10 · Premio estimado{" "}
-            <strong>+{premioEstimado.toLocaleString("es-PE")} 🪙</strong>
+            ⭐ En top 10
           </span>
         ) : pending ? (
           <span className="text-muted-d">
             Empieza cuando arranque el partido
           </span>
         ) : (
-          <span className="text-muted-d">Sin premio · Necesitas top 10</span>
+          <span className="text-muted-d">Fuera de top 10</span>
         )}
       </div>
     </div>

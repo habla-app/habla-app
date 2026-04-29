@@ -9,7 +9,6 @@
 import Link from "next/link";
 import { SignupForm } from "@/components/auth/SignupForm";
 import { GoogleButton } from "@/components/auth/GoogleButton";
-import { BONUS_BIENVENIDA_LUKAS } from "@/lib/config/economia";
 
 interface PageProps {
   searchParams: { callbackUrl?: string; email?: string };
@@ -31,11 +30,8 @@ export default function SignUpPage({ searchParams }: PageProps) {
           Creá tu cuenta
         </h1>
         <p className="mt-2 text-center text-sm leading-relaxed text-muted-d">
-          Registrate y recibí{" "}
-          <strong className="text-brand-gold-dark">
-            {BONUS_BIENVENIDA_LUKAS} Lukas
-          </strong>{" "}
-          de bienvenida.
+          Registrate gratis y armá tu primera predicción para subir en el
+          ranking.
         </p>
 
         <div className="mt-6 flex flex-col gap-3">

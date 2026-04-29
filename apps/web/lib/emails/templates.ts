@@ -1,15 +1,14 @@
-// Templates de email para Sub-Sprint 6 y 7.
+// Templates de email.
 //
-// Por qué HTML strings y no React Email: evitamos agregar deps (`@react-email/*`)
-// al package.json y mantenemos el build simple. Cada template es una función
-// pura que recibe un payload tipado y devuelve `{ subject, html, text }`.
-// Los helpers de formato (Lukas, fechas) viven en `datetime.ts` o inline.
+// Por qué HTML strings y no React Email: evitamos agregar deps al package.json
+// y mantenemos el build simple. Cada template es una función pura que recibe
+// un payload tipado y devuelve `{ subject, html, text }`.
 //
-// Convenciones visuales (para que los emails "se sientan Habla!"):
+// Convenciones visuales:
 //   - Fondo navy (#001050) sobre contenido con card blanca y borde dorado.
 //   - CTA principal dorado (#FFB800) con texto navy.
 //   - Footer con link a hablaplay.com + dirección legal.
-// Hex hardcodeados permitidos AQUÍ — CLAUDE.md §14 la regla es para JSX/TSX,
+// Hex hardcodeados permitidos AQUÍ — la regla de no-hex es para JSX/TSX,
 // no para emails que se renderean en clientes sin Tailwind.
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://habla-app-production.up.railway.app";
@@ -61,14 +60,13 @@ export interface PremioGanadoInput {
   nombreGanador: string;
   torneoNombre: string;
   posicion: number;
-  premioLukas: number;
-  partido: string; // "Liverpool vs Arsenal"
+  partido: string;
 }
 
 export function premioGanadoTemplate(input: PremioGanadoInput) {
   const emojiPuesto =
     input.posicion === 1 ? "🥇" : input.posicion === 2 ? "🥈" : input.posicion === 3 ? "🥉" : "🏆";
-  const subject = `${emojiPuesto} Ganaste ${input.premioLukas} Lukas en ${input.partido}`;
+  const subject = `${emojiPuesto} Quedaste ${input.posicion}° en ${input.partido}`;
   const html = wrapEmail(
     subject,
     `<h1 style="margin:0 0 8px;font-size:28px;color:#001050;">${emojiPuesto} ¡Felicidades, ${escapeHtml(input.nombreGanador)}!</h1>
@@ -76,49 +74,12 @@ export function premioGanadoTemplate(input: PremioGanadoInput) {
       Terminaste <strong>${input.posicion}° lugar</strong> en el torneo <strong>${escapeHtml(input.torneoNombre)}</strong>
       (${escapeHtml(input.partido)}).
     </p>
-    <div style="background:linear-gradient(135deg,#FFB800,#FF7A00);border-radius:12px;padding:24px;text-align:center;color:#001050;margin:20px 0;">
-      <div style="font-size:14px;font-weight:600;opacity:0.7;">Ganaste</div>
-      <div style="font-size:48px;font-weight:900;margin:8px 0;">${input.premioLukas} 🪙</div>
-      <div style="font-size:14px;opacity:0.8;">Acreditados en tu balance</div>
-    </div>
     <p style="margin:16px 0;font-size:14px;color:rgba(0,16,80,0.58);">
-      Canjea tus Lukas por premios reales — entradas, camisetas, gift cards y más.
+      Sigue prediciendo gratis los próximos partidos para subir en el ranking.
     </p>
-    ${ctaButton("🎁 Ir a la tienda", `${BASE_URL}/tienda`)}`,
+    ${ctaButton("🎯 Ver torneos abiertos", `${BASE_URL}/matches`)}`,
   );
-  const text = `${emojiPuesto} ¡Ganaste!\n\n${input.nombreGanador}, terminaste ${input.posicion}° lugar en ${input.torneoNombre} (${input.partido}) y ganaste ${input.premioLukas} Lukas.\n\nCanjéalos aquí: ${BASE_URL}/tienda`;
-  return { subject, html, text };
-}
-
-export interface CanjeSolicitadoInput {
-  nombreUsuario: string;
-  nombrePremio: string;
-  lukasUsados: number;
-  requiereDireccion: boolean;
-}
-
-export function canjeSolicitadoTemplate(input: CanjeSolicitadoInput) {
-  const subject = `🛍️ Canje solicitado: ${input.nombrePremio}`;
-  const html = wrapEmail(
-    subject,
-    `<h1 style="margin:0 0 8px;font-size:24px;color:#001050;">🛍️ Canje recibido</h1>
-    <p style="margin:0 0 16px;font-size:15px;color:rgba(0,16,80,0.85);line-height:1.5;">
-      ${escapeHtml(input.nombreUsuario)}, recibimos tu solicitud de canje.
-    </p>
-    <div style="background:#F5F7FC;border-radius:12px;padding:20px;margin:16px 0;">
-      <div style="font-size:13px;color:rgba(0,16,80,0.58);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Premio</div>
-      <div style="font-size:18px;font-weight:700;color:#001050;margin-bottom:12px;">${escapeHtml(input.nombrePremio)}</div>
-      <div style="font-size:13px;color:rgba(0,16,80,0.58);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Lukas usados</div>
-      <div style="font-size:18px;font-weight:700;color:#001050;">${input.lukasUsados} 🪙</div>
-    </div>
-    <p style="margin:16px 0;font-size:14px;color:rgba(0,16,80,0.85);line-height:1.5;">
-      ${input.requiereDireccion
-        ? "Nuestro equipo se comunicará contigo en las próximas 24 horas para coordinar la entrega."
-        : "Tu premio se procesará digitalmente y te llegará en las próximas 48 horas por este mismo correo."}
-    </p>
-    ${ctaButton("Ver mis canjes", `${BASE_URL}/perfil`)}`,
-  );
-  const text = `Canje solicitado: ${input.nombrePremio} · ${input.lukasUsados} Lukas. Seguimiento: ${BASE_URL}/perfil`;
+  const text = `${emojiPuesto} ¡Felicidades!\n\n${input.nombreGanador}, terminaste ${input.posicion}° lugar en ${input.torneoNombre} (${input.partido}).\n\nSeguí prediciendo: ${BASE_URL}/matches`;
   return { subject, html, text };
 }
 
@@ -164,7 +125,7 @@ export function canjeEntregadoTemplate(input: CanjeEntregadoInput) {
     <p style="margin:16px 0;font-size:14px;color:rgba(0,16,80,0.85);line-height:1.5;">
       Si no lo recibiste o hay algún problema, respondenos directamente este correo.
     </p>
-    ${ctaButton("Seguir jugando", `${BASE_URL}/matches`)}`,
+    ${ctaButton("Seguir prediciendo", `${BASE_URL}/matches`)}`,
   );
   const text = `"${input.nombrePremio}" entregado. ¿Algún problema? Respondé este correo.`;
   return { subject, html, text };
@@ -174,11 +135,10 @@ export interface TorneoCanceladoInput {
   nombreUsuario: string;
   torneoNombre: string;
   partido: string;
-  entradaReembolsada: number;
 }
 
 export function torneoCanceladoTemplate(input: TorneoCanceladoInput) {
-  const subject = `↩️ Torneo cancelado — ${input.entradaReembolsada} Lukas devueltos`;
+  const subject = `↩️ Torneo cancelado — ${input.torneoNombre}`;
   const html = wrapEmail(
     subject,
     `<h1 style="margin:0 0 8px;font-size:24px;color:#001050;">↩️ Torneo cancelado</h1>
@@ -186,36 +146,25 @@ export function torneoCanceladoTemplate(input: TorneoCanceladoInput) {
       ${escapeHtml(input.nombreUsuario)}, el torneo <strong>${escapeHtml(input.torneoNombre)}</strong>
       (${escapeHtml(input.partido)}) se canceló por no alcanzar el mínimo de inscritos.
     </p>
-    <div style="background:#F5F7FC;border-radius:12px;padding:20px;margin:16px 0;">
-      <div style="font-size:13px;color:rgba(0,16,80,0.58);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Reembolso</div>
-      <div style="font-size:28px;font-weight:800;color:#00D68F;">+${input.entradaReembolsada} 🪙</div>
-      <div style="font-size:13px;color:rgba(0,16,80,0.58);margin-top:4px;">Acreditados en tu balance</div>
-    </div>
     ${ctaButton("🎯 Ver otros torneos", `${BASE_URL}/matches`)}`,
   );
-  const text = `Torneo cancelado: ${input.torneoNombre}. Se te devolvieron ${input.entradaReembolsada} Lukas. Ver otros torneos: ${BASE_URL}/matches`;
+  const text = `Torneo cancelado: ${input.torneoNombre}. Ver otros torneos: ${BASE_URL}/matches`;
   return { subject, html, text };
 }
 
 export interface SolicitudEliminarInput {
   nombreUsuario: string;
   tokenUrl: string;
-  balanceLukas: number;
 }
 
 export function solicitudEliminarTemplate(input: SolicitudEliminarInput) {
   const subject = `Confirma la eliminación de tu cuenta`;
-  const tieneSaldo = input.balanceLukas > 0;
   const html = wrapEmail(
     subject,
     `<h1 style="margin:0 0 8px;font-size:24px;color:#001050;">Eliminar tu cuenta</h1>
     <p style="margin:0 0 16px;font-size:15px;color:rgba(0,16,80,0.85);line-height:1.5;">
       ${escapeHtml(input.nombreUsuario)}, recibimos tu solicitud para eliminar tu cuenta de Habla!.
     </p>
-    ${tieneSaldo ? `<div style="background:#FFEDD5;border-left:4px solid #FF7A00;padding:16px;border-radius:8px;margin:16px 0;">
-      <strong>⚠️ Perderás ${input.balanceLukas} Lukas canjeables.</strong><br/>
-      <span style="font-size:13px;color:rgba(0,16,80,0.85);">Si querés canjearlos antes, ignora este correo y visita la tienda.</span>
-    </div>` : ""}
     <p style="margin:16px 0;font-size:14px;color:rgba(0,16,80,0.85);line-height:1.5;">
       Este enlace es válido por <strong>48 horas</strong>. Si no lo pediste, ignora este correo y tu cuenta seguirá activa.
     </p>
@@ -224,7 +173,7 @@ export function solicitudEliminarTemplate(input: SolicitudEliminarInput) {
       Si el botón no funciona, copia este link: ${input.tokenUrl}
     </p>`,
   );
-  const text = `Confirma la eliminación de tu cuenta: ${input.tokenUrl} (válido 48h). ${tieneSaldo ? `Perderás ${input.balanceLukas} Lukas canjeables.` : ""}`;
+  const text = `Confirma la eliminación de tu cuenta: ${input.tokenUrl} (válido 48h).`;
   return { subject, html, text };
 }
 
@@ -243,7 +192,7 @@ export function datosDescargadosTemplate(input: DatosDescargadosInput) {
       ${escapeHtml(input.nombreUsuario)}, tu archivo con todos los datos personales está disponible.
     </p>
     <p style="margin:16px 0;font-size:14px;color:rgba(0,16,80,0.85);line-height:1.5;">
-      Incluye: perfil, transacciones, tickets, canjes, preferencias.
+      Incluye: perfil, tickets, canjes, preferencias.
     </p>
     ${ctaButton("📦 Descargar ZIP", input.urlDescarga)}
     <p style="margin:24px 0 0;font-size:13px;color:rgba(0,16,80,0.58);text-align:center;">
@@ -254,114 +203,17 @@ export function datosDescargadosTemplate(input: DatosDescargadosInput) {
   return { subject, html, text };
 }
 
-// ============================================================================
-// Templates de vencimiento de Lukas — Lote 6A
-// ============================================================================
-
-export interface LukasVencidosInput {
-  nombreUsuario: string;
-  monto: number;
-  fechaCompra: Date;
-}
-
-export function lukasVencidosTemplate(input: LukasVencidosInput) {
-  const subject = `⚠️ ${input.monto} Lukas expirados de tu cuenta`;
-  const fechaStr = input.fechaCompra.toLocaleDateString("es-PE", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-    timeZone: "America/Lima",
-  });
-  const html = wrapEmail(
-    subject,
-    `<h1 style="margin:0 0 8px;font-size:24px;color:#001050;">⚠️ Lukas expirados</h1>
-    <p style="margin:0 0 16px;font-size:15px;color:rgba(0,16,80,0.85);line-height:1.5;">
-      ${escapeHtml(input.nombreUsuario)}, ${input.monto} Lukas comprados el ${fechaStr} expiraron hoy
-      por los 36 meses de vigencia.
-    </p>
-    <div style="background:#FFF3CD;border-left:4px solid #FFB800;padding:16px;border-radius:8px;margin:16px 0;">
-      <strong>💡 Tip para la próxima:</strong> usa tus Lukas antes de que venzan inscribiéndote en torneos.
-    </div>
-    <p style="margin:16px 0;font-size:14px;color:rgba(0,16,80,0.85);line-height:1.5;">
-      ¿Tienes Lukas ganados? Los Lukas de premio no vencen nunca. Canjéalos en la tienda.
-    </p>
-    ${ctaButton("🎯 Ver torneos", `${BASE_URL}/matches`)}`,
-  );
-  const text = `${input.monto} Lukas expirados. Comprados el ${fechaStr}. Tus Lukas ganados en torneos no vencen. Ver torneos: ${BASE_URL}/matches`;
-  return { subject, html, text };
-}
-
-export interface LukasPorVencerInput {
-  nombreUsuario: string;
-  monto: number;
-  venceEn: Date;
-  diasRestantes: number;
-}
-
-export function lukasPorVencer30dTemplate(input: LukasPorVencerInput) {
-  const fechaStr = input.venceEn.toLocaleDateString("es-PE", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-    timeZone: "America/Lima",
-  });
-  const subject = `📅 ${input.monto} Lukas vencen en 30 días (${fechaStr})`;
-  const html = wrapEmail(
-    subject,
-    `<h1 style="margin:0 0 8px;font-size:24px;color:#001050;">📅 Lukas por vencer</h1>
-    <p style="margin:0 0 16px;font-size:15px;color:rgba(0,16,80,0.85);line-height:1.5;">
-      ${escapeHtml(input.nombreUsuario)}, tienes <strong>${input.monto} Lukas comprados</strong>
-      que vencen el ${fechaStr} — en 30 días.
-    </p>
-    <p style="margin:16px 0;font-size:14px;color:rgba(0,16,80,0.85);line-height:1.5;">
-      Úsalos antes de esa fecha inscribiéndote en torneos. Si ganas, los Lukas de premio no vencen nunca.
-    </p>
-    ${ctaButton("🎯 Ver torneos disponibles", `${BASE_URL}/matches`)}`,
-  );
-  const text = `${input.monto} Lukas vencen el ${fechaStr} (en 30 días). Úsalos en torneos: ${BASE_URL}/matches`;
-  return { subject, html, text };
-}
-
-export function lukasPorVencer7dTemplate(input: LukasPorVencerInput) {
-  const fechaStr = input.venceEn.toLocaleDateString("es-PE", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-    timeZone: "America/Lima",
-  });
-  const subject = `🚨 ${input.monto} Lukas vencen en 7 días — ¡úsalos ya!`;
-  const html = wrapEmail(
-    subject,
-    `<h1 style="margin:0 0 8px;font-size:24px;color:#FF3D3D;">🚨 Último aviso de vencimiento</h1>
-    <p style="margin:0 0 16px;font-size:15px;color:rgba(0,16,80,0.85);line-height:1.5;">
-      ${escapeHtml(input.nombreUsuario)}, tus <strong>${input.monto} Lukas comprados</strong>
-      vencen el <strong>${fechaStr}</strong> — solo quedan <strong>7 días</strong>.
-    </p>
-    <div style="background:#FFEDD5;border-left:4px solid #FF3D3D;padding:16px;border-radius:8px;margin:16px 0;">
-      <strong>⏰ ¡Actúa ahora!</strong> Inscríbete en un torneo y ponlos a trabajar antes de que expiren.
-    </div>
-    ${ctaButton("🎯 Ver torneos ahora", `${BASE_URL}/matches`)}`,
-  );
-  const text = `URGENTE: ${input.monto} Lukas vencen el ${fechaStr} (en 7 días). Úsalos en torneos: ${BASE_URL}/matches`;
-  return { subject, html, text };
-}
-
 export interface CuentaEliminadaInput {
   nombreUsuario: string;
   modo: "hard" | "soft";
 }
 
-/**
- * Confirmación post-eliminación. Se envía AL EMAIL ORIGINAL antes de la
- * anonimización (caller debe leer el email y luego ejecutar la
- * eliminación). Mini-lote 7.6.
- */
 export function cuentaEliminadaTemplate(input: CuentaEliminadaInput) {
   const subject = `Tu cuenta de Habla! fue eliminada`;
   const detalleModo =
     input.modo === "hard"
       ? "Tu cuenta y todos los datos asociados se borraron por completo."
-      : "Tu cuenta se anonimizó: borramos tus datos personales (nombre, email, teléfono, imagen). Conservamos solo los registros de tickets y transacciones por motivos de auditoría e integridad de los torneos en los que participaste, sin asociación a tu identidad.";
+      : "Tu cuenta se anonimizó: borramos tus datos personales (nombre, email, teléfono, imagen). Conservamos solo los registros de tickets por motivos de auditoría e integridad de los torneos en los que participaste, sin asociación a tu identidad.";
   const html = wrapEmail(
     subject,
     `<h1 style="margin:0 0 8px;font-size:24px;color:#001050;">Cuenta eliminada</h1>
@@ -383,120 +235,7 @@ export function cuentaEliminadaTemplate(input: CuentaEliminadaInput) {
 }
 
 // ============================================================================
-// Auditoría de balances — alerta interna al admin (Lote 6C-fix3)
-// ============================================================================
-
-export interface AuditoriaAlertaInput {
-  scaneadoEn: string;
-  totalHallazgos: number;
-  hallazgosError: number;
-  hallazgosWarn: number;
-  usuariosConProblemas: number;
-  torneosConProblemas: number;
-  /** Top hallazgos a mostrar inline en el email. */
-  topHallazgos: Array<{
-    invariante: string;
-    severidad: "error" | "warn";
-    username?: string;
-    torneoId?: string;
-    mensaje: string;
-  }>;
-  /** Resumen por invariante. */
-  invariantes: Array<{
-    codigo: string;
-    nombre: string;
-    ok: number;
-    fallidos: number;
-  }>;
-}
-
-/**
- * Email interno al admin cuando la auditoría diaria detecta hallazgos.
- * Subject prefijado con [Habla! AUDIT] para filtrar fácilmente.
- */
-export function auditoriaAlertaTemplate(input: AuditoriaAlertaInput) {
-  const subject = `[Habla! AUDIT] ${input.hallazgosError} errores · ${input.hallazgosWarn} warnings · ${input.usuariosConProblemas} usuarios afectados`;
-
-  const filasInvariantesFallidas = input.invariantes
-    .filter((i) => i.fallidos > 0)
-    .map(
-      (i) =>
-        `<tr><td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-family:monospace;font-weight:700;color:#001050;">${i.codigo}</td><td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:13px;color:rgba(0,16,80,0.85);">${escapeHtml(i.nombre)}</td><td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#FF3D3D;font-weight:700;text-align:right;">${i.fallidos}</td><td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:13px;color:rgba(0,16,80,0.58);text-align:right;">${i.ok}</td></tr>`,
-    )
-    .join("");
-
-  const filasTop = input.topHallazgos
-    .slice(0, 20)
-    .map((h) => {
-      const sevColor = h.severidad === "error" ? "#FF3D3D" : "#FF7A00";
-      const target = h.username
-        ? `@${escapeHtml(h.username)}`
-        : h.torneoId
-          ? `torneo ${escapeHtml(h.torneoId.slice(0, 12))}…`
-          : "—";
-      return `<tr><td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-family:monospace;color:${sevColor};font-weight:700;">${h.invariante}</td><td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;color:rgba(0,16,80,0.85);">${target}</td><td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;color:rgba(0,16,80,0.85);">${escapeHtml(h.mensaje)}</td></tr>`;
-    })
-    .join("");
-
-  const fechaStr = new Date(input.scaneadoEn).toLocaleString("es-PE", {
-    timeZone: "America/Lima",
-    dateStyle: "short",
-    timeStyle: "short",
-  });
-
-  const html = wrapEmail(
-    subject,
-    `<h1 style="margin:0 0 8px;font-size:22px;color:#FF3D3D;">⚠️ Auditoría diaria: hallazgos detectados</h1>
-    <p style="margin:0 0 16px;font-size:14px;color:rgba(0,16,80,0.85);line-height:1.5;">
-      Scan automático del ${escapeHtml(fechaStr)} (hora Lima).
-    </p>
-    <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
-      <tr><td style="padding:8px;background:#F5F7FC;font-weight:700;">Total hallazgos</td><td style="padding:8px;text-align:right;">${input.totalHallazgos}</td></tr>
-      <tr><td style="padding:8px;background:#F5F7FC;font-weight:700;color:#FF3D3D;">Errores</td><td style="padding:8px;text-align:right;color:#FF3D3D;font-weight:700;">${input.hallazgosError}</td></tr>
-      <tr><td style="padding:8px;background:#F5F7FC;font-weight:700;color:#FF7A00;">Warnings</td><td style="padding:8px;text-align:right;color:#FF7A00;">${input.hallazgosWarn}</td></tr>
-      <tr><td style="padding:8px;background:#F5F7FC;font-weight:700;">Usuarios afectados</td><td style="padding:8px;text-align:right;">${input.usuariosConProblemas}</td></tr>
-      <tr><td style="padding:8px;background:#F5F7FC;font-weight:700;">Torneos afectados</td><td style="padding:8px;text-align:right;">${input.torneosConProblemas}</td></tr>
-    </table>
-    ${
-      filasInvariantesFallidas
-        ? `<h2 style="margin:24px 0 8px;font-size:16px;color:#001050;">Invariantes con fallas</h2><table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#001050;color:#FFFFFF;"><th style="padding:8px;text-align:left;">#</th><th style="padding:8px;text-align:left;">Invariante</th><th style="padding:8px;text-align:right;">Falla</th><th style="padding:8px;text-align:right;">OK</th></tr></thead><tbody>${filasInvariantesFallidas}</tbody></table>`
-        : ""
-    }
-    ${
-      filasTop
-        ? `<h2 style="margin:24px 0 8px;font-size:16px;color:#001050;">Top hallazgos (máx 20)</h2><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:#001050;color:#FFFFFF;"><th style="padding:8px;text-align:left;">Inv</th><th style="padding:8px;text-align:left;">Target</th><th style="padding:8px;text-align:left;">Mensaje</th></tr></thead><tbody>${filasTop}</tbody></table>`
-        : ""
-    }
-    <p style="margin:24px 0 0;font-size:13px;color:rgba(0,16,80,0.85);line-height:1.5;">
-      Para investigar usuarios específicos, abrí la consola del navegador en hablaplay.com y corré:
-      <br/><code style="background:#F5F7FC;padding:4px 8px;border-radius:4px;font-size:12px;">GET /api/v1/admin/auditoria/usuario/&lt;userId&gt;</code>
-    </p>`,
-  );
-
-  const text = [
-    `Auditoría diaria — ${fechaStr}`,
-    `Hallazgos: ${input.totalHallazgos} (errores: ${input.hallazgosError}, warnings: ${input.hallazgosWarn})`,
-    `Usuarios afectados: ${input.usuariosConProblemas} · Torneos: ${input.torneosConProblemas}`,
-    "",
-    "Invariantes con fallas:",
-    ...input.invariantes
-      .filter((i) => i.fallidos > 0)
-      .map((i) => `  · ${i.codigo} ${i.nombre}: ${i.fallidos} falla(s) · ${i.ok} ok`),
-    "",
-    "Top hallazgos:",
-    ...input.topHallazgos
-      .slice(0, 20)
-      .map(
-        (h) =>
-          `  · [${h.severidad}] ${h.invariante} ${h.username ? `@${h.username}` : h.torneoId ?? "—"}: ${h.mensaje}`,
-      ),
-  ].join("\n");
-
-  return { subject, html, text };
-}
-
-// ============================================================================
-// Backups — alerta interna al admin (Lote 7)
+// Backups — alerta interna al admin
 // ============================================================================
 
 export interface BackupFalloInput {
@@ -508,10 +247,6 @@ export interface BackupFalloInput {
   }>;
 }
 
-/**
- * Email interno al admin cuando el job de backup falla 2 veces seguidas.
- * Subject prefijado con [Habla! BACKUP] para filtrar en el inbox.
- */
 export function backupFalloTemplate(input: BackupFalloInput) {
   const subject = `[Habla! BACKUP] 2 fallos consecutivos del backup diario`;
 
@@ -578,7 +313,7 @@ export function backupFalloTemplate(input: BackupFalloInput) {
 }
 
 // ---------------------------------------------------------------------------
-// Auditoría contable — alerta interna (Lote 8 §2.D)
+// Auditoría contable — alerta interna
 // ---------------------------------------------------------------------------
 
 export interface AuditoriaContableAlertaInput {
@@ -593,10 +328,6 @@ export interface AuditoriaContableAlertaInput {
   }>;
 }
 
-/**
- * Email interno al admin cuando Job I detecta hallazgos `error` 2 veces
- * seguidas. Patrón idéntico al de backup. Subject prefijado con [Habla! AUDIT].
- */
 export function auditoriaContableAlertaTemplate(
   input: AuditoriaContableAlertaInput,
 ) {
@@ -617,7 +348,6 @@ export function auditoriaContableAlertaTemplate(
     `<h1 style="margin:0 0 8px;font-size:22px;color:#FF3D3D;">⚠️ Auditoría contable: ${input.errores} hallazgos error</h1>
     <p style="margin:0 0 16px;font-size:14px;color:rgba(0,16,80,0.85);line-height:1.5;">
       Job I detectó <strong>${input.errores} hallazgos error</strong> y ${input.warns} warns en el último scan.
-      Revisar el balance general y los asientos antes de que el problema escale.
     </p>
     <p style="margin:0 0 16px;font-size:13px;color:rgba(0,16,80,0.58);">
       Scaneado: ${escapeHtml(input.scaneadoEn)}
@@ -629,14 +359,7 @@ export function auditoriaContableAlertaTemplate(
         <th style="padding:8px;text-align:left;">Mensaje</th>
       </tr></thead>
       <tbody>${filas}</tbody>
-    </table>
-    <h2 style="margin:24px 0 8px;font-size:16px;color:#001050;">Acciones sugeridas</h2>
-    <ul style="margin:0;padding-left:20px;font-size:13px;color:rgba(0,16,80,0.85);line-height:1.6;">
-      <li>Drill-down: <code>POST /api/v1/admin/contabilidad/auditoria/ejecutar</code> con <code>Bearer CRON_SECRET</code>.</li>
-      <li>Revisar el balance general: <code>GET /api/v1/admin/contabilidad/balance-general</code>.</li>
-      <li>Si C1 falla (Activo ≠ Pasivo+Patrimonio+Resultado): hay un asiento desbalanceado o un hook contable que omitió alguna cuenta.</li>
-      <li>Si C4 falla (pasivos Lukas ≠ usuarios): cruzar con la auditoría de balances Job G — probablemente hay correlación.</li>
-    </ul>`,
+    </table>`,
   );
 
   const text = [
@@ -649,4 +372,3 @@ export function auditoriaContableAlertaTemplate(
 
   return { subject, html, text };
 }
-

@@ -7,9 +7,9 @@ import { useState } from "react";
 import { authedFetch } from "@/lib/api-client";
 import type { LimitesUsuario } from "@/lib/services/limites.service";
 import {
-  LIMITE_MENSUAL_DEFAULT,
-  LIMITE_MENSUAL_MAX,
-} from "@/lib/config/economia";
+  DEFAULT_LIMITE_MENSUAL_COMPRA as LIMITE_MENSUAL_DEFAULT,
+  MAX_LIMITE_MENSUAL_COMPRA as LIMITE_MENSUAL_MAX,
+} from "@/lib/services/limites.service";
 import {
   Modal,
   ModalHeader,

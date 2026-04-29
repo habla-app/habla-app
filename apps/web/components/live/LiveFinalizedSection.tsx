@@ -18,8 +18,7 @@ export type EstadoChipFinalizado = "correct" | "wrong" | "pending";
 export interface GanadorPreview {
   nombre: string;
   puntos: number;
-  premioLukas: number;
-  /** 5 mini-chips con la predicción + resultado final. Bug #16. */
+  /** 5 mini-chips con la predicción + resultado final. */
   chips: Array<{ label: string; estado: EstadoChipFinalizado }>;
 }
 
@@ -34,11 +33,8 @@ export interface FinalizedMatchCard {
   golesVisita: number;
   fechaInicio: Date;
   totalInscritos: number;
-  pozoBruto: number;
   /**
-   * Ganador del torneo (top 1). Puede ser null si no hubo tickets
-   * (edge case: torneo finalizado con 0 inscritos — improbable tras
-   * el cierre automático que cancela <2, pero defensivo).
+   * Ganador del torneo (top 1). Null si no hubo tickets.
    */
   ganador: GanadorPreview | null;
 }
@@ -136,9 +132,11 @@ function FinalizedCard({ match }: { match: FinalizedMatchCard }) {
         />
       </div>
 
-      <div className="mb-3 grid grid-cols-2 gap-2 text-[11px]">
-        <Meta label="Jugadores" value={match.totalInscritos.toLocaleString("es-PE")} />
-        <Meta label="Pozo" value={`${match.pozoBruto.toLocaleString("es-PE")} 🪙`} />
+      <div className="mb-3 grid grid-cols-1 gap-2 text-[11px]">
+        <Meta
+          label="Tipsters"
+          value={match.totalInscritos.toLocaleString("es-PE")}
+        />
       </div>
 
       {match.ganador ? (
@@ -169,7 +167,7 @@ function WinnerPreview({ ganador }: { ganador: GanadorPreview }) {
         <span className="font-bold text-brand-gold-dark">1°</span>
         <span className="truncate font-semibold text-dark">{ganador.nombre}</span>
         <span className="ml-auto flex-shrink-0 font-display text-[13px] font-black text-brand-gold-dark">
-          +{ganador.premioLukas.toLocaleString("es-PE")} 🪙
+          {ganador.puntos} pts
         </span>
       </div>
       <div className="flex flex-wrap gap-1">

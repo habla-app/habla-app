@@ -29,7 +29,7 @@ interface ComboLauncherProps {
   /** Styling variant. */
   variant?: "primary" | "ghost" | "urgent";
   /** Callback tras crear el ticket exitosamente. */
-  onCreated?: (result: { ticketId: string; nuevoBalance: number }) => void;
+  onCreated?: (result: { ticketId: string }) => void;
 }
 
 export function ComboLauncher({

@@ -48,7 +48,6 @@ export interface PerfilCompleto {
   fechaNac: Date | null;
   ubicacion: string | null;
   rol: "JUGADOR" | "ADMIN";
-  balanceLukas: number;
   creadoEn: Date;
   image: string | null;
   emailVerified: Date | null;
@@ -77,7 +76,6 @@ export async function obtenerMiPerfil(usuarioId: string): Promise<PerfilCompleto
       fechaNac: true,
       ubicacion: true,
       rol: true,
-      balanceLukas: true,
       creadoEn: true,
       image: true,
       emailVerified: true,
@@ -110,7 +108,6 @@ export async function obtenerMiPerfil(usuarioId: string): Promise<PerfilCompleto
     fechaNac: usuario.fechaNac,
     ubicacion: usuario.ubicacion,
     rol: usuario.rol,
-    balanceLukas: usuario.balanceLukas,
     creadoEn: usuario.creadoEn,
     image: usuario.image,
     emailVerified: usuario.emailVerified,
@@ -174,10 +171,10 @@ const ELIMINAR_TOKEN_TTL_MS = 48 * 60 * 60 * 1000; // 48h
 export async function solicitarEliminarCuenta(
   usuarioId: string,
   baseUrl: string,
-): Promise<{ tokenUrl: string; expiraEn: Date; balanceAdvertido: number }> {
+): Promise<{ tokenUrl: string; expiraEn: Date }> {
   const usuario = await prisma.usuario.findUnique({
     where: { id: usuarioId },
-    select: { balanceLukas: true, email: true, deletedAt: true },
+    select: { email: true, deletedAt: true },
   });
   if (!usuario || usuario.deletedAt) throw new NoAutenticado();
 
@@ -185,24 +182,16 @@ export async function solicitarEliminarCuenta(
   const expiraEn = new Date(Date.now() + ELIMINAR_TOKEN_TTL_MS);
 
   await prisma.solicitudEliminacion.create({
-    data: {
-      usuarioId,
-      token,
-      expiraEn,
-    },
+    data: { usuarioId, token, expiraEn },
   });
 
   const tokenUrl = `${baseUrl.replace(/\/$/, "")}/perfil/eliminar/confirmar?token=${token}`;
 
-  void notifySolicitudEliminar({
-    usuarioId,
-    tokenUrl,
-    balanceLukas: usuario.balanceLukas,
-  });
+  void notifySolicitudEliminar({ usuarioId, tokenUrl });
 
   logger.info({ usuarioId, expiraEn }, "solicitud eliminar cuenta creada");
 
-  return { tokenUrl, expiraEn, balanceAdvertido: usuario.balanceLukas };
+  return { tokenUrl, expiraEn };
 }
 
 export async function confirmarEliminarCuenta(
@@ -416,13 +405,6 @@ export async function eliminarCuentaInmediato(
 
 export interface DatosExportados {
   perfil: Omit<PerfilCompleto, "nivel" | "stats">;
-  transacciones: Array<{
-    id: string;
-    tipo: string;
-    monto: number;
-    descripcion: string;
-    creadoEn: Date;
-  }>;
   tickets: Array<{
     id: string;
     torneoId: string;
@@ -435,7 +417,6 @@ export interface DatosExportados {
     predMarcadorVisita: number;
     puntosTotal: number;
     posicionFinal: number | null;
-    premioLukas: number;
     creadoEn: Date;
   }>;
   canjes: Array<{
@@ -452,18 +433,7 @@ export async function generarExportDatos(
   usuarioId: string,
 ): Promise<DatosExportados> {
   const perfil = await obtenerMiPerfil(usuarioId);
-  const [transacciones, tickets, canjes] = await Promise.all([
-    prisma.transaccionLukas.findMany({
-      where: { usuarioId },
-      orderBy: { creadoEn: "desc" },
-      select: {
-        id: true,
-        tipo: true,
-        monto: true,
-        descripcion: true,
-        creadoEn: true,
-      },
-    }),
+  const [tickets, canjes] = await Promise.all([
     prisma.ticket.findMany({
       where: { usuarioId },
       include: { torneo: { select: { nombre: true } } },
@@ -479,7 +449,6 @@ export async function generarExportDatos(
   const { nivel: _nivel, stats: _stats, ...perfilCore } = perfil;
   return {
     perfil: perfilCore,
-    transacciones,
     tickets: tickets.map((t) => ({
       id: t.id,
       torneoId: t.torneoId,
@@ -492,7 +461,6 @@ export async function generarExportDatos(
       predMarcadorVisita: t.predMarcadorVisita,
       puntosTotal: t.puntosTotal,
       posicionFinal: t.posicionFinal,
-      premioLukas: t.premioLukas,
       creadoEn: t.creadoEn,
     })),
     canjes: canjes.map((c) => ({

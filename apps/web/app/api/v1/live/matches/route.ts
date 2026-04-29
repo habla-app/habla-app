@@ -1,8 +1,7 @@
 // GET /api/v1/live/matches
 //
 // Público. Devuelve los partidos actualmente en vivo junto con el
-// torneo principal (priorizado por estado y pozoBruto) y un preview del
-// top 3 del ranking. Sub-Sprint 5.
+// torneo principal y un preview del top 3 del ranking.
 //
 // Hotfix post-Sub-Sprint 5 (Bug #2): comparte el helper
 // `obtenerLiveMatches` con la página `/live-match` para que ambas vistas
@@ -75,7 +74,6 @@ export async function GET() {
           torneos: p.torneos.map((t) => ({
             id: t.id,
             nombre: t.nombre,
-            pozoBruto: t.pozoBruto,
             totalInscritos: t.totalInscritos,
             estado: t.estado,
           })),

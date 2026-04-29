@@ -144,23 +144,9 @@ export async function MatchesPageContent({
             <EmptyFilteredState ligaSlug={ligaSlug} dia={dia} />
           ) : (
             <div className="mb-10 flex flex-col gap-3.5">
-              {cards.map((torneo) => {
-                // callbackUrl preserva los filtros actuales (liga/dia) +
-                // inyecta openCombo=<id> para el auto-disparo post-login.
-                const qs = new URLSearchParams();
-                if (ligaSlug) qs.set("liga", ligaSlug);
-                if (dia) qs.set("dia", dia);
-                qs.set("openCombo", torneo.id);
-                const ctaCallbackUrl = `${basePath}?${qs.toString()}`;
-                return (
-                  <MatchCard
-                    key={torneo.id}
-                    torneo={torneo}
-                    hasSession={hasSession}
-                    ctaCallbackUrl={ctaCallbackUrl}
-                  />
-                );
-              })}
+              {cards.map((torneo) => (
+                <MatchCard key={torneo.id} torneo={torneo} />
+              ))}
             </div>
           )}
         </div>

@@ -26,10 +26,14 @@ interface RankingTableProps {
   equipoLocal: string;
   equipoVisita: string;
   totalInscritos: number;
-  pagados: number;
 }
 
+// Lote 2: el "top de la zona destacada" pasa de variable a fijo en 10.
+// Antes salía de `calcularPagados(totalInscritos)` (curva top-heavy con
+// mínimo 2 cuando había 100+ inscritos). Ya no hay distribución de
+// premio; el top 10 es puramente cosmético / motivacional.
 const TOP = 10;
+const TOP_DESTACADO = TOP;
 
 type Delta = { dir: "up" | "down" | "flat"; n: number } | null;
 
@@ -39,8 +43,8 @@ export function RankingTable({
   equipoLocal,
   equipoVisita,
   totalInscritos,
-  pagados,
 }: RankingTableProps) {
+  const pagados = TOP_DESTACADO;
   const [expanded, setExpanded] = useState(false);
   const prevRanks = useRef<Map<string, number> | null>(null);
   const [deltas, setDeltas] = useState<Map<string, Delta>>(new Map());
@@ -85,7 +89,7 @@ export function RankingTable({
         <div>Jugador</div>
         <div className="hidden md:block">1X2 · Ambos · +2.5 · Roja · Marcador</div>
         <div className="text-center">Puntos</div>
-        <div className="text-right">Premio</div>
+        <div className="text-right">Top 10</div>
       </div>
 
       <ul>
@@ -175,30 +179,20 @@ export function RankingTable({
               <div
                 className={`text-right ${afterCut ? "opacity-40" : ""}`}
               >
-                {row.premioEstimado > 0 ? (
-                  <>
-                    <div className="font-display text-base font-black leading-none text-alert-success-text">
-                      +{row.premioEstimado.toLocaleString("es-PE")} 🪙
-                    </div>
-                    <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.05em] text-muted-d">
-                      {row.rank === 1
-                        ? "Premio 1°"
-                        : row.rank === 2
-                          ? "Premio 2°"
-                          : row.rank === 3
-                            ? "Premio 3°"
-                            : `Top ${pagados}`}
-                    </div>
-                  </>
+                {row.rank <= pagados ? (
+                  <div className="font-display text-[13px] font-black uppercase tracking-[0.04em] text-brand-gold-dark">
+                    {row.rank === 1
+                      ? "🥇 1°"
+                      : row.rank === 2
+                        ? "🥈 2°"
+                        : row.rank === 3
+                          ? "🥉 3°"
+                          : `Top 10 · ${row.rank}°`}
+                  </div>
                 ) : (
-                  <>
-                    <div className="font-display text-[13px] font-black text-muted-d">
-                      Sin premio
-                    </div>
-                    <div className="mt-0.5 text-[10px] uppercase tracking-[0.05em] text-muted-d">
-                      {isMe ? `Necesitas top ${pagados}` : "—"}
-                    </div>
-                  </>
+                  <div className="font-display text-[13px] font-black text-muted-d">
+                    {isMe ? `Necesitas top ${pagados}` : "—"}
+                  </div>
                 )}
                 {motivational ? (
                   <div

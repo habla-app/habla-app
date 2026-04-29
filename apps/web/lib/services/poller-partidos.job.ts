@@ -349,7 +349,7 @@ async function pollearPartido(partido: {
       for (const torneoId of torneoIds) {
         try {
           const r = await finalizarTorneo(torneoId);
-          emitirTorneoFinalizado({ torneoId, ganadores: r.ganadores });
+          emitirTorneoFinalizado({ torneoId, posicionados: r.posicionados });
           result.torneosFinalizados += 1;
         } catch (err) {
           logger.error({ err, torneoId }, "[poller] finalizar torneo falló");

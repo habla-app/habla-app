@@ -8,16 +8,14 @@
 //    sign-up pasa primero por POST /api/v1/auth/signup que crea el usuario
 //    con username definitivo antes de disparar el magic link.
 //
-// Session strategy: JWT. Exponemos en session.user: id, rol, balanceLukas
-// (fresh en cada session callback), username, usernameLocked.
+// Session strategy: JWT. Exponemos en session.user: id, rol, username,
+// usernameLocked.
 
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import Resend from "next-auth/providers/resend";
 import { HablaPrismaAdapter } from "@/lib/auth-adapter";
-import { obtenerBalance } from "@/lib/usuarios";
 import { prisma } from "@habla/db";
-import { logger } from "@/lib/services/logger";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   // Railway corre la app detrás de un proxy; sin esto NextAuth rechaza
@@ -86,26 +84,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return token;
     },
     async session({ session, token }) {
-      // Inyectar id, rol, balance fresh, username y usernameLocked en la
-      // sesión visible al frontend. Bug #3: si `obtenerBalance` falla, no
-      // rompemos la sesión — defaulteamos a 0 + log.
       if (token.usuarioId && session.user) {
         session.user.id = token.usuarioId as string;
         session.user.rol = (token.rol as "JUGADOR" | "ADMIN") ?? "JUGADOR";
         session.user.username = (token.username as string) ?? "";
         session.user.usernameLocked =
           (token.usernameLocked as boolean) ?? false;
-        try {
-          session.user.balanceLukas = await obtenerBalance(
-            token.usuarioId as string
-          );
-        } catch (err) {
-          logger.error(
-            { err, usuarioId: token.usuarioId },
-            "session callback: obtenerBalance falló, default 0"
-          );
-          session.user.balanceLukas = 0;
-        }
       }
       return session;
     },
