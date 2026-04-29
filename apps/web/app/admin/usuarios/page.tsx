@@ -1,5 +1,8 @@
-// Admin: Gestion de usuarios
-// TODO: Sprint 7 - Lista de usuarios, bloquear, verificar
+// /admin/usuarios — stub. La gestión de usuarios todavía no existe como
+// vista dedicada (queda para un lote futuro). Redirijo al dashboard para
+// que cualquier link guardado no devuelva 404.
+import { redirect } from "next/navigation";
+
 export default function AdminUsuariosPage() {
-  return <h1>Admin - Usuarios</h1>;
+  redirect("/admin");
 }

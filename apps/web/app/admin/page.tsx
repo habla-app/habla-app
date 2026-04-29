@@ -1,40 +1,19 @@
-// /admin — panel interno. Middleware ya bloquea usuarios no-ADMIN pero
-// validamos también en el server component por defensa en profundidad.
-// UI funcional (no replica mockup; es herramienta interna).
-import Link from "next/link";
-import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+// /admin — dashboard del panel admin (Lote 5.1).
+//
+// Auth check ya lo hace el layout (admin/layout.tsx). Acá sólo presentación:
+// header consistente + AdminTorneosPanel (gestión de torneos + auto-import).
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminTorneosPanel } from "@/components/admin/AdminTorneosPanel";
 
-export default async function AdminPage() {
-  const session = await auth();
-  if (!session?.user) redirect("/auth/signin?callbackUrl=/admin");
-  if (session.user.rol !== "ADMIN") redirect("/");
-
+export default function AdminPage() {
   return (
-    <div className="mx-auto w-full max-w-4xl px-4 pt-6 md:px-6 md:pt-8 lg:pt-10">
-      <header className="mb-5">
-        <h1 className="font-display text-[32px] font-black uppercase tracking-[0.02em] text-dark md:text-[40px]">
-          ⚙️ Panel admin
-        </h1>
-        <p className="mt-1 text-sm text-muted-d">
-          Importa partidos de api-football, gestiona torneos y operá los
-          premios del leaderboard mensual.
-        </p>
-        <div className="mt-3 flex flex-wrap gap-3 text-[12px] font-semibold text-brand-blue-main">
-          <Link href="/" className="hover:underline">
-            ← Volver al home
-          </Link>
-          <Link href="/admin/leaderboard" className="hover:underline">
-            🏆 Leaderboard mensual
-          </Link>
-          <Link href="/admin/premios-mensuales" className="hover:underline">
-            💰 Premios mensuales
-          </Link>
-        </div>
-      </header>
-
+    <>
+      <AdminPageHeader
+        icon="🏠"
+        title="Dashboard"
+        description="Importá partidos de api-football y creá torneos sobre los que estén disponibles. El leaderboard mensual y los premios viven en sus propias secciones."
+      />
       <AdminTorneosPanel />
-    </div>
+    </>
   );
 }

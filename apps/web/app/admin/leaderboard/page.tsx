@@ -7,47 +7,33 @@
 // El cierre del mes en curso se dispara desde acá (POST /api/v1/admin/
 // leaderboard/cerrar) — útil para forzar manualmente un cierre antes de
 // la fecha o para crear un dummy de inspección post-deploy.
+//
+// Lote 5.1: auth y shell visual viven en admin/layout.tsx; esta page sólo
+// renderiza header + secciones específicas.
 
-import Link from "next/link";
-import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
 import {
   listarLeaderboardsCerrados,
   obtenerLeaderboardMesActual,
 } from "@/lib/services/leaderboard.service";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { CerrarLeaderboardPanel } from "@/components/admin/CerrarLeaderboardPanel";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminLeaderboardPage() {
-  const session = await auth();
-  if (!session?.user) redirect("/auth/signin?callbackUrl=/admin/leaderboard");
-  if (session.user.rol !== "ADMIN") redirect("/");
-
   const [vistaActual, cerrados] = await Promise.all([
     obtenerLeaderboardMesActual({}),
     listarLeaderboardsCerrados(),
   ]);
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-4 pt-6 md:px-6 md:pt-8 lg:pt-10">
-      <header className="mb-5">
-        <h1 className="font-display text-[32px] font-black uppercase tracking-[0.02em] text-dark md:text-[40px]">
-          🏆 Leaderboards mensuales
-        </h1>
-        <p className="mt-1 text-sm text-muted-d">
-          Cada mes calendario forma un leaderboard. Cierre automático el día
-          1 ≥01:00 PET; podés forzarlo manualmente desde acá.
-        </p>
-        <div className="mt-3 flex flex-wrap gap-3 text-[12px] font-semibold text-brand-blue-main">
-          <Link href="/admin" className="hover:underline">
-            ← Volver a Admin
-          </Link>
-          <Link href="/admin/premios-mensuales" className="hover:underline">
-            Ir a premios-mensuales →
-          </Link>
-        </div>
-      </header>
+    <>
+      <AdminPageHeader
+        icon="🏆"
+        title="Leaderboards mensuales"
+        description="Cada mes calendario forma un leaderboard. Cierre automático el día 1 ≥01:00 PET; podés forzarlo manualmente desde acá."
+      />
 
       {/* MES EN CURSO */}
       <section className="mb-6 rounded-md border border-light bg-card p-5 shadow-sm">
@@ -79,7 +65,7 @@ export default async function AdminLeaderboardPage() {
           Meses cerrados
         </h2>
         {cerrados.length === 0 ? (
-          <p className="text-[13px] text-muted-d">
+          <p className="rounded-sm border border-dashed border-light bg-subtle px-4 py-8 text-center text-[13px] text-muted-d">
             Todavía no hay meses cerrados. El cron mensual cerrará el primer
             mes el día 1 a las 01:00 PET (o usá el panel de arriba para
             forzarlo).
@@ -99,7 +85,7 @@ export default async function AdminLeaderboardPage() {
               </thead>
               <tbody className="divide-y divide-light">
                 {cerrados.map((c) => (
-                  <tr key={c.mes} className="text-dark">
+                  <tr key={c.mes} className="text-dark hover:bg-subtle/60">
                     <td className="px-3 py-2 font-semibold">
                       {capitalize(c.nombreMes)}
                     </td>
@@ -141,7 +127,7 @@ export default async function AdminLeaderboardPage() {
           </div>
         )}
       </section>
-    </div>
+    </>
   );
 }
 
