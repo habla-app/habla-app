@@ -197,32 +197,6 @@ export function torneoCanceladoTemplate(input: TorneoCanceladoInput) {
   return { subject, html, text };
 }
 
-export interface VerifCodigoSmsInput {
-  nombreUsuario: string;
-  codigo: string;
-  expiraEnMin: number;
-}
-
-export function verifCodigoSmsEmailTemplate(input: VerifCodigoSmsInput) {
-  // Fallback por email si el SMS no se puede enviar (modo dev sin Twilio).
-  const subject = `Tu código de verificación: ${input.codigo}`;
-  const html = wrapEmail(
-    subject,
-    `<h1 style="margin:0 0 8px;font-size:24px;color:#001050;">Código de verificación</h1>
-    <p style="margin:0 0 16px;font-size:15px;color:rgba(0,16,80,0.85);line-height:1.5;">
-      ${escapeHtml(input.nombreUsuario)}, tu código para verificar tu teléfono:
-    </p>
-    <div style="background:#001050;color:#FFB800;border-radius:12px;padding:24px;text-align:center;margin:20px 0;font-size:36px;font-weight:900;letter-spacing:8px;">
-      ${escapeHtml(input.codigo)}
-    </div>
-    <p style="margin:16px 0;font-size:13px;color:rgba(0,16,80,0.58);text-align:center;">
-      Expira en ${input.expiraEnMin} minutos. Si no lo solicitaste, ignora este correo.
-    </p>`,
-  );
-  const text = `Tu código: ${input.codigo} (expira en ${input.expiraEnMin} min).`;
-  return { subject, html, text };
-}
-
 export interface SolicitudEliminarInput {
   nombreUsuario: string;
   tokenUrl: string;

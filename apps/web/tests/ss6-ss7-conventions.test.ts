@@ -14,9 +14,9 @@ describe("§14 — authedFetch en nuevos hooks/components", () => {
   // Registro formal + rediseño `/perfil` (Abr 2026): los componentes fueron
   // renombrados con nombres explícitos; la lista refleja los archivos
   // vigentes tras la reescritura.
+  // Lote 1: VerificacionSection ya no usa authedFetch (sólo email read-only).
   const files = [
     "components/tienda/CanjearModal.tsx",
-    "components/perfil/VerificacionSection.tsx",
     "components/perfil/DatosSection.tsx",
     "components/perfil/NotificacionesSection.tsx",
     "components/perfil/JuegoResponsableSection.tsx",
@@ -47,7 +47,6 @@ describe("§14 — nuevos RSC exportan force-dynamic cuando dependen de sesión"
     "app/api/v1/usuarios/me/route.ts",
     "app/api/v1/usuarios/limites/route.ts",
     "app/api/v1/usuarios/notificaciones/route.ts",
-    "app/api/v1/usuarios/verificacion/dni/route.ts",
     "app/api/v1/usuarios/me/datos-download/file/route.ts",
   ];
 
@@ -78,9 +77,6 @@ describe("§14 — Zod validation en entrada de datos", () => {
     "app/api/v1/premios/[id]/canjear/route.ts",
     "app/api/v1/admin/canjes/[id]/route.ts",
     "app/api/v1/usuarios/me/route.ts",
-    "app/api/v1/usuarios/verificacion/telefono/route.ts",
-    "app/api/v1/usuarios/verificacion/telefono/confirmar/route.ts",
-    "app/api/v1/usuarios/verificacion/dni/route.ts",
     "app/api/v1/usuarios/limites/route.ts",
     "app/api/v1/usuarios/limites/autoexclusion/route.ts",
     "app/api/v1/usuarios/notificaciones/route.ts",
@@ -132,10 +128,8 @@ describe("Sub-Sprint 7 — PerfilRefreshOnUpdate pattern", () => {
     expect(src).toMatch(/router\.refresh/);
   });
 
-  it("VerificacionSection y DatosSection disparan el evento", () => {
-    const verif = read("components/perfil/VerificacionSection.tsx");
+  it("DatosSection dispara el evento", () => {
     const datos = read("components/perfil/DatosSection.tsx");
-    expect(verif).toMatch(/new Event\(["']perfil:refresh["']\)/);
     expect(datos).toMatch(/new Event\(["']perfil:refresh["']\)/);
   });
 });

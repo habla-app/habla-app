@@ -10,7 +10,6 @@ import {
   premioGanadoTemplate,
   solicitudEliminarTemplate,
   torneoCanceladoTemplate,
-  verifCodigoSmsEmailTemplate,
 } from "../lib/emails/templates";
 
 describe("templates — premio ganado", () => {
@@ -112,18 +111,6 @@ describe("templates — solicitud eliminar", () => {
     });
     expect(t.html).toContain("https://example.com/confirm?token=abc");
     expect(t.text).toContain("https://example.com/confirm?token=abc");
-  });
-});
-
-describe("templates — verificación SMS fallback email", () => {
-  it("muestra código prominente de 6 dígitos", () => {
-    const t = verifCodigoSmsEmailTemplate({
-      nombreUsuario: "U",
-      codigo: "123456",
-      expiraEnMin: 10,
-    });
-    expect(t.html).toContain("123456");
-    expect(t.subject).toContain("123456");
   });
 });
 

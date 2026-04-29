@@ -40,19 +40,13 @@ COPY . .
 # como literales en el bundle cliente durante `next build`. Railway con
 # builder=DOCKERFILE solo pasa variables a `docker build` si el Dockerfile
 # las declara como ARG. Si no, Next inlinea `undefined` y el cliente
-# nunca las ve (ej: PostHog nunca se inicializa → hotfix Abr 2026).
+# nunca las ve.
 #
 # Railway auto-forwardea cualquier ARG declarado acá a --build-arg si hay
 # una Service/Shared Variable con el mismo nombre. Agregar un ARG nuevo
 # acá cuando sumes una NEXT_PUBLIC_*.
 ARG NEXT_PUBLIC_APP_URL
-ARG NEXT_PUBLIC_POSTHOG_KEY
-ARG NEXT_PUBLIC_POSTHOG_HOST
-ARG NEXT_PUBLIC_SENTRY_DSN
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
-ENV NEXT_PUBLIC_POSTHOG_KEY=$NEXT_PUBLIC_POSTHOG_KEY
-ENV NEXT_PUBLIC_POSTHOG_HOST=$NEXT_PUBLIC_POSTHOG_HOST
-ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
 
 # Generar cliente Prisma antes del build de Next.js
 RUN pnpm --filter @habla/db exec prisma generate

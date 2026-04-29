@@ -77,33 +77,14 @@ describe("/perfil — StatsGrid (consumidor del balance via store)", () => {
   });
 });
 
-describe("/perfil — VerificacionSection", () => {
+describe("/perfil — VerificacionSection (Lote 1: solo email)", () => {
   const SRC = read("components/perfil/VerificacionSection.tsx");
 
-  it("4 rows: email, edad, teléfono, DNI", () => {
+  it("muestra solo rows de email + edad (teléfono/DNI removidos)", () => {
     expect(SRC).toMatch(/title="Correo electrónico"/);
     expect(SRC).toMatch(/title="Edad \(\+18\)"/);
-    expect(SRC).toMatch(/title="Teléfono"/);
-    expect(SRC).toMatch(/title="DNI"/);
-  });
-
-  it("usa authedFetch (§14)", () => {
-    expect(SRC).toMatch(/authedFetch/);
-    expect(SRC).not.toMatch(/(?<![a-zA-Z])fetch\(["']\/api\/v1\//);
-  });
-
-  it("flujo teléfono: 2 pasos (teléfono → código)", () => {
-    expect(SRC).toMatch(/paso === ["']telefono["']/);
-    expect(SRC).toMatch(/setPaso\(["']codigo["']\)/);
-  });
-
-  it("muestra devCode en modo dev", () => {
-    expect(SRC).toMatch(/devCode/);
-  });
-
-  it("DNI: input file + preview + submit base64", () => {
-    expect(SRC).toMatch(/imagenBase64/);
-    expect(SRC).toMatch(/FileReader/);
+    expect(SRC).not.toMatch(/title="Teléfono"/);
+    expect(SRC).not.toMatch(/title="DNI"/);
   });
 });
 

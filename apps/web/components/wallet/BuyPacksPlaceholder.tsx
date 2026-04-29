@@ -1,11 +1,10 @@
 "use client";
 // Visual de los 4 packs (mockup `.pack-options .pack-card`). La compra real
 // con Culqi/Yape se habilita con flag `PAGOS_HABILITADOS` (Lote 8). Mientras
-// el flag esté OFF, el click solo dispara el evento de analytics y no inicia
-// flujo de cobro.
+// el flag esté OFF, el click solo muestra un toast y no inicia flujo de
+// cobro.
 
 import { useState } from "react";
-import { track } from "@/lib/analytics";
 import { PACKS_LUKAS, type PackLukasId } from "@/lib/constants/packs-lukas";
 
 type Variant = "base" | "popular" | "best";
@@ -37,10 +36,6 @@ export function BuyPacksPlaceholder({
 
   const handleSelect = (pack: (typeof PACKS_LUKAS)[number]) => {
     setSelected(pack.id);
-    track("lukas_purchase_started", {
-      pack_id: pack.id,
-      amount: pack.soles,
-    });
     if (!pagosHabilitados) {
       setToast(
         `Próximamente disponible. Estamos cerrando Culqi para habilitar la compra del pack ${pack.id}.`,

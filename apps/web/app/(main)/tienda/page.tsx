@@ -10,7 +10,6 @@ import {
   type CategoriaPremio,
 } from "@/lib/services/premios.service";
 import { TiendaContent } from "@/components/tienda/TiendaContent";
-import { TrackOnMount } from "@/components/analytics/TrackOnMount";
 
 export const dynamic = "force-dynamic";
 
@@ -50,17 +49,14 @@ export default async function TiendaPage({ searchParams }: PageProps) {
   }
 
   return (
-    <>
-      <TrackOnMount event="tienda_viewed" />
-      <TiendaContent
-        premios={premiosResult.premios}
-        featured={premiosResult.featured}
-        categoriaActiva={categoria}
-        initialBalance={session?.user?.balanceLukas ?? null}
-        initialBalanceGanadas={balanceGanadas}
-        totalCanjeados={totalCanjeados}
-        isLoggedIn={Boolean(session?.user?.id)}
-      />
-    </>
+    <TiendaContent
+      premios={premiosResult.premios}
+      featured={premiosResult.featured}
+      categoriaActiva={categoria}
+      initialBalance={session?.user?.balanceLukas ?? null}
+      initialBalanceGanadas={balanceGanadas}
+      totalCanjeados={totalCanjeados}
+      isLoggedIn={Boolean(session?.user?.id)}
+    />
   );
 }

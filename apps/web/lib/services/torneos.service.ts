@@ -172,10 +172,10 @@ export async function descontarEntrada(
 
   // Guard de consistencia (Lote 6C-fix2): tras todo descuento, balanceLukas
   // DEBE igualar la suma de las 3 bolsas. Si diverge, hay un bug en algún
-  // path de mutación — loggeamos como error para detectarlo en Sentry sin
-  // romper el flujo del usuario. Ejemplos de divergencia: un decrement de
-  // balanceLukas sin tocar bolsas, o viceversa. La detección post-commit
-  // sirve como early-warning para nuevos bugs.
+  // path de mutación — loggeamos como error sin romper el flujo del
+  // usuario. Ejemplos de divergencia: un decrement de balanceLukas sin
+  // tocar bolsas, o viceversa. La detección post-commit sirve como
+  // early-warning para nuevos bugs.
   const sumaBolsas =
     refrescado.balanceCompradas + refrescado.balanceBonus + refrescado.balanceGanadas;
   if (refrescado.balanceLukas !== sumaBolsas) {

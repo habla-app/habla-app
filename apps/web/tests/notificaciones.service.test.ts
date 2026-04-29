@@ -52,13 +52,12 @@ describe("notificaciones.service — contrato AST", () => {
     );
   });
 
-  it("exporta 8 wrappers específicos (fire-and-forget)", () => {
+  it("exporta wrappers específicos (fire-and-forget)", () => {
     expect(SERVICE_SRC).toMatch(/export\s+async\s+function\s+notifyPremioGanado/);
     expect(SERVICE_SRC).toMatch(/export\s+async\s+function\s+notifyCanjeSolicitado/);
     expect(SERVICE_SRC).toMatch(/export\s+async\s+function\s+notifyCanjeEnviado/);
     expect(SERVICE_SRC).toMatch(/export\s+async\s+function\s+notifyCanjeEntregado/);
     expect(SERVICE_SRC).toMatch(/export\s+async\s+function\s+notifyTorneoCancelado/);
-    expect(SERVICE_SRC).toMatch(/export\s+async\s+function\s+notifyVerifCodigoEmail/);
     expect(SERVICE_SRC).toMatch(/export\s+async\s+function\s+notifySolicitudEliminar/);
     expect(SERVICE_SRC).toMatch(/export\s+async\s+function\s+notifyDatosDescargados/);
   });

@@ -20,7 +20,6 @@ import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/Modal";
 import { useLukasStore } from "@/stores/lukas.store";
 import { authedFetch } from "@/lib/api-client";
-import { track } from "@/lib/analytics";
 import { PUNTOS } from "@habla/shared";
 import { PredCard } from "./PredCard";
 import { ScorePicker } from "./ScorePicker";
@@ -241,47 +240,6 @@ export function ComboModal({
       // ya llamó revalidatePath; router.refresh fuerza el re-fetch
       // client-side sin perder el modal abierto.
       router.refresh();
-      // Analytics. Todas las 5 preds se envían siempre (el UI las fuerza),
-      // pero las 4 booleanas pueden estar undefined en el form hasta que el
-      // usuario las toque. Contamos las que el form ya había marcado.
-      const completadas =
-        (preds.predResultado !== undefined ? 1 : 0) +
-        (preds.predBtts !== undefined ? 1 : 0) +
-        (preds.predMas25 !== undefined ? 1 : 0) +
-        (preds.predTarjetaRoja !== undefined ? 1 : 0) +
-        1; // marcador exacto siempre tiene valor
-      track("ticket_submitted", {
-        torneo_id: torneo.torneoId,
-        ticket_id: json.data.ticket.id,
-        predicciones_completadas: completadas,
-      });
-      // Si el ticket NO reemplazó un placeholder (placeholder-first-flow),
-      // significa que la inscripción ocurrió fresh acá — disparamos el
-      // evento de inscripción también, alineado con el que InscribirButton
-      // dispara en la otra ruta.
-      if (!json.data.reemplazoPlaceholder && !torneo.tienePlaceholder) {
-        let esPrimerTicketUsuario = false;
-        try {
-          const flag = window.localStorage.getItem(
-            "habla:first_inscripcion_done",
-          );
-          if (!flag) {
-            esPrimerTicketUsuario = true;
-            window.localStorage.setItem(
-              "habla:first_inscripcion_done",
-              "1",
-            );
-          }
-        } catch {
-          /* storage bloqueado */
-        }
-        track("torneo_inscripto", {
-          torneo_id: torneo.torneoId,
-          ticket_id: json.data.ticket.id,
-          costo_lukas: torneo.entradaLukas,
-          es_primer_ticket_usuario: esPrimerTicketUsuario,
-        });
-      }
       setSuccessInfo({
         ticketId: json.data.ticket.id,
         entradaPagada: json.data.reemplazoPlaceholder ? 0 : torneo.entradaLukas,

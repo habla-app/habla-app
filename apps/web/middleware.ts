@@ -21,7 +21,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { checkLimit } from "@/lib/rate-limit";
-import * as Sentry from "@sentry/nextjs";
 
 // Exportada para test de regresión (auth-protection.test.ts).
 //
@@ -86,7 +85,7 @@ function getRateLimitConfig(
     return null;
   }
 
-  // Sentry debug: también excluido (ya tiene guard por token).
+  // Debug: excluido (ya tiene guard por token).
   if (pathname.startsWith("/api/debug/")) return null;
 
   // Signout: NUNCA rate-limiteamos (Mini-lote 7.6). Si el usuario quiere
@@ -137,21 +136,6 @@ async function applyRateLimit(
   const key = `${cfg.keyPrefix}:${subject}`;
   const result = checkLimit(key, cfg.limit, WINDOW_MS);
   if (result.ok) return null;
-
-  // Log como warning a Sentry (no error — es comportamiento esperado
-  // cuando clientes abusan). Si SENTRY_DSN no está, es no-op.
-  try {
-    Sentry.captureMessage(
-      `rate limit exceeded: ${pathname} (${cfg.keyPrefix})`,
-      {
-        level: "warning",
-        tags: { pathname, tier: cfg.keyPrefix },
-        extra: { limit: cfg.limit, subject },
-      },
-    );
-  } catch {
-    // Edge runtime + Sentry sin DSN puede tirar — no bloquea.
-  }
 
   return new NextResponse(
     JSON.stringify({
