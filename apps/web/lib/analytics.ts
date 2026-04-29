@@ -114,27 +114,34 @@ export function track(
 
   const body = JSON.stringify({ evento, props, sessionId, pagina });
 
-  // sendBeacon es ideal para fire-and-forget (sobrevive a navegaciones
-  // inminentes) pero requiere Blob y no setea cookies en algunos
-  // navegadores; cuando esté disponible y el body no sea gigante, lo
-  // usamos. Caso contrario, fetch con keepalive.
-  try {
-    if (
-      typeof navigator !== "undefined" &&
-      typeof navigator.sendBeacon === "function" &&
-      body.length < 60_000
-    ) {
+  // Página descargándose (tab cerrándose, navigate fuera): preferimos
+  // sendBeacon porque sobrevive a la descarga del documento. fetch con
+  // keepalive también puede, pero sendBeacon es la API recomendada para
+  // ese caso específico.
+  const docHidden =
+    typeof document !== "undefined" && document.visibilityState === "hidden";
+  if (
+    docHidden &&
+    typeof navigator !== "undefined" &&
+    typeof navigator.sendBeacon === "function" &&
+    body.length < 60_000
+  ) {
+    try {
       const blob = new Blob([body], { type: "application/json" });
       const ok = navigator.sendBeacon("/api/v1/analytics/track", blob);
       if (ok) return;
+    } catch {
+      /* fall back a fetch */
     }
-  } catch {
-    /* fall back a fetch */
   }
 
-  // authedFetch envía cookies (credentials: include) — necesario para
-  // que el endpoint vea la sesión y rellene userId. No await: si la red
-  // se cae, el caller no se entera (es analytics, no es crítico).
+  // Caso normal: fetch con keepalive. Visible en el panel Network del
+  // browser (Firefox no muestra sendBeacon ahí por default), lo cual es
+  // esencial para diagnosticar si analytics está disparando o no. El
+  // `keepalive: true` permite sobrevivir a navegaciones rápidas.
+  // authedFetch envía cookies (credentials: include) — el endpoint las
+  // necesita para identificar al user vía sesión NextAuth. No await: si
+  // la red falla, el caller no se entera (es analytics, no es crítico).
   void authedFetch("/api/v1/analytics/track", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

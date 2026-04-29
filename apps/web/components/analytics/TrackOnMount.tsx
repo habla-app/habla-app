@@ -7,20 +7,20 @@
 // evento + props, y se encarga de llamar `track(...)` exactamente UNA
 // vez por mount, con respeto al cookie consent.
 //
+// Edge case manejado (Lote 6 hotfix): si en mount el usuario todavía
+// NO concedió consent (banner pendiente o recién rechazó), `track()`
+// es no-op silencioso. Para no perder ese primer pageview, registramos
+// un listener al evento `habla:cookie-consent-change`. Si después del
+// mount el usuario acepta, disparamos el track UNA vez. Si nunca
+// acepta o ya tenía consent, el listener se limpia al unmount.
+//
 // Uso:
 //   import { TrackOnMount } from "@/components/analytics/TrackOnMount";
-//   ...
-//   return <>
-//     <TrackOnMount event="match_viewed" props={{ torneoId, partido }} />
-//     ...resto de la page...
-//   </>;
-//
-// Por qué un componente y no un useEffect inline: las pages son server
-// components y no pueden usar useEffect. Separar el track en un client
-// child es el camino más simple sin convertir toda la page a client.
+//   <TrackOnMount event="match_viewed" props={{ torneoId, partido }} />
 
 import { useEffect } from "react";
 import { track } from "@/lib/analytics";
+import { hasAnalyticsConsent, listenConsent } from "@/lib/cookie-consent";
 
 interface Props {
   event: string;
@@ -33,11 +33,31 @@ interface Props {
 export function TrackOnMount({ event, props, enabled = true }: Props) {
   useEffect(() => {
     if (!enabled) return;
-    track(event, props);
-    // Intencional: trackeamos UNA vez por mount. Si la URL cambia y la
-    // page re-renderea con props nuevos, seguirá trackeando una vez por
-    // mount. No metemos `event` y `props` como deps para evitar disparos
-    // múltiples por re-render con el mismo objeto pero referencia nueva.
+
+    let alreadyFired = false;
+    const fireOnce = () => {
+      if (alreadyFired) return;
+      alreadyFired = true;
+      track(event, props);
+    };
+
+    if (hasAnalyticsConsent()) {
+      // Caso normal: consent ya aceptado, disparamos en este tick.
+      fireOnce();
+      return;
+    }
+
+    // Caso edge: sin consent en este mount. Esperamos al primer cambio
+    // a `analytics: true` y disparamos. Si el usuario nunca acepta o
+    // rechaza, el unsubscribe en cleanup garantiza que no quede listener
+    // colgado.
+    const unsubscribe = listenConsent((state) => {
+      if (state.analytics) fireOnce();
+    });
+    return unsubscribe;
+    // Intencional: trackeamos UNA vez por mount. `event` y `props` no van
+    // como deps para evitar disparos múltiples por re-render con el mismo
+    // objeto pero referencia nueva.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return null;
