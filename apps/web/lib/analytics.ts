@@ -195,7 +195,7 @@ export function reset(): void {
 // todavía no existe en el repo, dejá el TODO con el lote esperado para
 // que cuando se construya esa pieza, alguien recuerde recablear.
 //
-// EVENTOS YA INSTRUMENTADOS (Lote 6 + Lote 7):
+// EVENTOS YA INSTRUMENTADOS (Lote 6 + Lote 7 + Lote 8):
 //   signup_started               apps/web/app/auth/signup/page.tsx (mount)
 //   signup_completed             POST /api/v1/auth/signup ok (server-side track)
 //                                + apps/web/app/auth/completar-perfil/page.tsx (mount, Google)
@@ -207,9 +207,9 @@ export function reset(): void {
 //   prediccion_enviada           POST /api/v1/tickets ok (server-side track)
 //   comunidad_leaderboard_visto  apps/web/app/(main)/comunidad/page.tsx (mount via TrackOnMount)
 //   casa_click_afiliado          GET /go/[casa] route handler (server-side track antes del redirect)
+//   articulo_visto               apps/web/app/(public)/{blog,casas,guias,pronosticos,partidos}/[slug]/page.tsx (mount via TrackOnMount con props { slug, categoria, titulo, ... })
+//   cuotas_comparator_visto      apps/web/components/mdx/CuotasComparator.tsx (mount via TrackOnMount; placeholder hasta Lote 9)
 //
 // EVENTOS PENDIENTES — instrumentar cuando se construya el emisor:
-//   articulo_visto               // LOTE_EDITORIAL: instrumentar `articulo_visto` cuando se construyan /blog/[slug], /casas/[slug], /guias/[slug], /partidos/[slug] (mount via TrackOnMount con props { slug, categoria })
-//   cuotas_comparator_visto      // LOTE_9: instrumentar `cuotas_comparator_visto` en el render del componente comparador de cuotas (mount via TrackOnMount)
 //   newsletter_suscripcion       // LOTE_EDITORIAL/AFILIACION: instrumentar `newsletter_suscripcion` en POST /api/v1/suscribir ok (server-side track)
 //   referido_invitacion_compartida  // LOTE_11: instrumentar `referido_invitacion_compartida` en click del botón "compartir mi link" (client-side track con props { canal })

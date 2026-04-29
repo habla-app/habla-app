@@ -1,12 +1,18 @@
-// Barrel export para los componentes MDX de afiliación (Lote 7).
+// Barrel export para los componentes MDX — Lotes 7 + 8.
 //
-// Estos componentes están listos para usarse en server pages como
-// componentes React standalone. El registro en el provider MDX (para
-// que se puedan invocar como `<CasaCTA slug="..." />` desde dentro de
-// un .mdx) se construye en Lote 8 cuando se cablee `MDXRemote` y el
-// pipeline de artículos editoriales.
+// Estos componentes se registran en `lib/content/mdx-components.tsx` para
+// que estén disponibles dentro de cualquier .mdx renderizado por el
+// pipeline editorial. También se pueden usar directamente desde server
+// pages como componentes React standalone.
 
 export { CasaCTA } from "./CasaCTA";
 export { CasaReviewCard } from "./CasaReviewCard";
 export { TablaCasas } from "./TablaCasas";
 export { DisclaimerLudopatia } from "./DisclaimerLudopatia";
+
+// Lote 8 — componentes editoriales nuevos
+export { CuotasComparator } from "./CuotasComparator";
+export { DisclaimerAfiliacion } from "./DisclaimerAfiliacion";
+export { PronosticoBox } from "./PronosticoBox";
+export { TOC } from "./TOC";
+export { RelatedArticles } from "./RelatedArticles";

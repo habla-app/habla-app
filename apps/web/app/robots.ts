@@ -2,7 +2,8 @@
 // Se sirve en /robots.txt.
 //
 // Política:
-//   - Indexamos: home, matches, torneos públicos, legales.
+//   - Indexamos: home, matches, torneos públicos, /legal/*, /ayuda/*,
+//     y todas las rutas editoriales del grupo (public) (Lote 8).
 //   - No indexamos: áreas privadas, auth, API, uploads, admin.
 
 import type { MetadataRoute } from "next";
@@ -21,6 +22,18 @@ export default function robots(): MetadataRoute.Robots {
           "/live-match",
           "/legal/",
           "/ayuda/",
+          // Lote 8 — rutas editoriales públicas
+          "/blog",
+          "/blog/",
+          "/casas",
+          "/casas/",
+          "/guias",
+          "/guias/",
+          "/pronosticos",
+          "/pronosticos/",
+          "/partidos/",
+          "/cuotas",
+          "/comunidad",
         ],
         disallow: [
           "/admin",
