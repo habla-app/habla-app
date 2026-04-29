@@ -17,11 +17,14 @@
 //     decididos por nosotros, no por el usuario. Documentado para que
 //     no se "filtre" un check en el handler por confusión.
 //
-// IP cruda nunca se persiste. Si por algún motivo se necesita (rate-limit
-// avanzado o deduplicación), se puede hashear con `hashIpForRateLimit`,
-// pero la tabla `eventos_analitica` no tiene columna para guardarla.
+// IP cruda nunca se persiste. La tabla `eventos_analitica` no tiene
+// columna para IP — sólo `pais` (de cf-ipcountry). Si en el futuro se
+// quiere persistir un identificador anónimo del origen para deduplicar
+// bursts, hashear con Web Crypto (globalThis.crypto.subtle) — NO con
+// `node:crypto`, que rompe el edge bundle de Next porque `lib/auth.ts`
+// (que importa este service via events.signIn) lo arrastra a edge via
+// middleware.ts. Mismo razonamiento documentado en `lib/auth-adapter.ts`.
 
-import { createHash } from "node:crypto";
 import { prisma, Prisma } from "@habla/db";
 import { logger } from "./logger";
 
@@ -126,15 +129,6 @@ export function extractClientIp(headers: HeadersLike): string {
   const real = headers.get("x-real-ip");
   if (real) return real.trim();
   return "unknown";
-}
-
-/**
- * SHA-256 hex de una IP. No se persiste en `eventos_analitica`, pero está
- * disponible si en el futuro queremos deduplicar bursts del mismo origen
- * sin retener IP cruda.
- */
-export function hashIpForRateLimit(ip: string): string {
-  return createHash("sha256").update(ip).digest("hex").slice(0, 32);
 }
 
 // ---------------------------------------------------------------------------
