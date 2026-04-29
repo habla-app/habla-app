@@ -10,20 +10,26 @@
 //    (transacción atómica) no bloquee su commit esperando el email.
 //
 // Lote 3 (Abr 2026): se quitaron los wrappers de canje (`notifyCanjeEnviado`,
-// `notifyCanjeEntregado`) y el `notifyPremioGanado` (será reemplazado por
-// `notifyPremioMensualGanado` en Lote 5). La columna
+// `notifyCanjeEntregado`) y el `notifyPremioGanado` (reemplazado por
+// `notifyPremioMensualGanado` en Lote 5 — abajo). La columna
 // `PreferenciasNotif.notifVencimientos` se dropeó del schema.
 //
 // Lote 4 (Abr 2026): se quitaron `notifyAuditoriaContable` y
 // `notifyBackupFallo` junto con la demolición de la auditoría contable.
 // Si volvemos a querer alertas internas, se recrean en Lote 6 con el
 // sistema de eventos in-house.
+//
+// Lote 5 (May 2026): `notifyPremioMensualGanado` notifica al ganador de
+// un premio del leaderboard mensual. El payload viene completo desde el
+// service (no se reconsulta nada) — el caller es el cron J o el endpoint
+// admin de cierre. Respeta `notifPremios` por defecto opt-in.
 
 import { prisma } from "@habla/db";
 import { enviarEmail } from "./email.service";
 import {
   cuentaEliminadaTemplate,
   datosDescargadosTemplate,
+  premioMensualGanadoTemplate,
   solicitudEliminarTemplate,
   torneoCanceladoTemplate,
 } from "../emails/templates";
@@ -185,6 +191,39 @@ export async function notifyDatosDescargados(input: {
     await enviarEmail({ to: destinatario.email, ...tpl });
   } catch (err) {
     logger.error({ err, usuarioId: input.usuarioId }, "notifyDatosDescargados: error");
+  }
+}
+
+export async function notifyPremioMensualGanado(input: {
+  userId: string;
+  email: string;
+  username: string;
+  posicion: number;
+  montoSoles: number;
+  mesKey: string;
+  nombreMes: string;
+  nombreMesSiguiente: string;
+  /** Monto del 1° puesto — para el cierre motivacional del email. */
+  premioPrimerPuestoSoles?: number;
+}): Promise<void> {
+  try {
+    if (input.montoSoles <= 0) return; // dummies de inspección no notifican
+    if (!(await debeNotificar(input.userId, "notifPremios"))) return;
+    if (!input.email) return;
+    const tpl = premioMensualGanadoTemplate({
+      username: input.username,
+      posicion: input.posicion,
+      nombreMes: input.nombreMes,
+      nombreMesSiguiente: input.nombreMesSiguiente,
+      montoSoles: input.montoSoles,
+      premioPrimerPuestoSoles: input.premioPrimerPuestoSoles ?? 500,
+    });
+    await enviarEmail({ to: input.email, ...tpl });
+  } catch (err) {
+    logger.error(
+      { err, userId: input.userId, mes: input.mesKey },
+      "notifyPremioMensualGanado: error",
+    );
   }
 }
 

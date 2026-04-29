@@ -4,6 +4,14 @@
 // pills a 4 (Predicciones · Aciertos · % Acierto · Mejor puesto), sin
 // "balance" ni "Lukas Premios". El banner de "ganaste X Lukas" ya no se
 // renderiza — un ticket "ganado" pasa a significar quedar en top 10.
+//
+// Lote 5 (May 2026): el modelo deja atrás la métrica per-torneo y se
+// orienta a la competencia mensual. Stat pills:
+//   ⚽ Predicciones · 🏆 Aciertos · 📅 Posición del mes · ⭐ Mejor mes
+// Tabs:
+//   Activas · Mes en curso · Histórico
+// El tab "Mes en curso" muestra los tickets de torneos finalizados del
+// mes calendario en curso, con `puntosFinales` congelados.
 
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -13,6 +21,10 @@ import {
   listarMisTickets,
   type TicketConTorneo,
 } from "@/lib/services/tickets.service";
+import {
+  listarMisTicketsDelMesActual,
+  obtenerMisStatsMensuales,
+} from "@/lib/services/leaderboard.service";
 import { StatsPill } from "@/components/tickets/StatsPill";
 import { MisTicketsTabs, type TicketsTab } from "@/components/tickets/MisTicketsTabs";
 import { MatchGroup } from "@/components/tickets/MatchGroup";
@@ -26,7 +38,7 @@ interface Props {
 }
 
 function resolveTab(raw: string | undefined): TicketsTab {
-  if (raw === "ganadas" || raw === "historial") return raw;
+  if (raw === "mes-actual" || raw === "historico") return raw;
   return "activas";
 }
 
@@ -36,24 +48,28 @@ export default async function MisCombinadasPage({ searchParams }: Props) {
     redirect("/auth/signin?callbackUrl=/mis-combinadas");
   }
   const tab = resolveTab(searchParams?.tab);
-  const [activasRes, ganadasRes, historialRes, stats] = await Promise.all([
-    listarMisTickets(session.user.id, { estado: "ACTIVOS", limit: 100 }),
-    listarMisTickets(session.user.id, { estado: "GANADOS", limit: 100 }),
-    listarMisTickets(session.user.id, { estado: "HISTORIAL", limit: 100 }),
-    calcularStats(session.user.id),
-  ]);
+  const usuarioId = session.user.id;
+
+  const [activasRes, historicoRes, mesActualTickets, stats, statsMensuales] =
+    await Promise.all([
+      listarMisTickets(usuarioId, { estado: "ACTIVOS", limit: 100 }),
+      listarMisTickets(usuarioId, { estado: "HISTORIAL", limit: 100 }),
+      listarMisTicketsDelMesActual(usuarioId),
+      calcularStats(usuarioId),
+      obtenerMisStatsMensuales(usuarioId),
+    ]);
 
   const counts = {
     activas: activasRes.total,
-    ganadas: ganadasRes.total,
-    historial: historialRes.total,
+    mesActual: mesActualTickets.length,
+    historico: historicoRes.total,
   };
 
-  const ticketsDeEstaTab =
-    tab === "ganadas"
-      ? ganadasRes.tickets
-      : tab === "historial"
-        ? historialRes.tickets
+  const ticketsDeEstaTab: TicketConTorneo[] =
+    tab === "mes-actual"
+      ? mesActualTickets
+      : tab === "historico"
+        ? historicoRes.tickets
         : activasRes.tickets;
 
   const grupos = agruparPorTorneo(ticketsDeEstaTab);
@@ -65,7 +81,8 @@ export default async function MisCombinadasPage({ searchParams }: Props) {
           Mis combinadas
         </h1>
         <p className="mt-1.5 text-sm leading-relaxed text-muted-d">
-          Cómo va con todas tus jugadas · Activas en vivo + resumen del historial
+          Cómo va con todas tus jugadas · Activas en vivo + tu performance
+          en el leaderboard mensual
         </p>
       </header>
 
@@ -82,15 +99,33 @@ export default async function MisCombinadasPage({ searchParams }: Props) {
           tone="gold"
         />
         <StatsPill
-          icon="🎯"
-          value={`${stats.aciertoPct}%`}
-          label="% Acierto"
+          icon="📅"
+          value={
+            statsMensuales.posicionDelMes !== null
+              ? `#${statsMensuales.posicionDelMes}`
+              : "—"
+          }
+          label={
+            statsMensuales.posicionDelMes !== null
+              ? `Pos. del mes · de ${statsMensuales.totalUsuariosMes}`
+              : "Pos. del mes"
+          }
           tone="green"
         />
         <StatsPill
           icon="⭐"
-          value={stats.mejorPuesto !== null ? `${stats.mejorPuesto}°` : "—"}
-          label="Mejor puesto"
+          value={
+            statsMensuales.mejorMes !== null
+              ? `Top ${statsMensuales.mejorMes.posicion}`
+              : stats.mejorPuesto !== null
+                ? `${stats.mejorPuesto}°`
+                : "—"
+          }
+          label={
+            statsMensuales.mejorMes !== null
+              ? `Mejor mes · ${statsMensuales.mejorMes.nombreMes}`
+              : "Mejor mes"
+          }
           tone="purple"
         />
       </div>
@@ -98,8 +133,8 @@ export default async function MisCombinadasPage({ searchParams }: Props) {
       <MisTicketsTabs active={tab} counts={counts} />
 
       {grupos.length === 0 ? (
-        <EmptyState tab={tab} />
-      ) : tab === "historial" ? (
+        <EmptyState tab={tab} mesNombre={statsMensuales.nombreMes} />
+      ) : tab === "historico" ? (
         <HistoryList grupos={grupos} />
       ) : (
         <div>
@@ -158,19 +193,25 @@ function prioridad(estado: string): number {
   return 4;
 }
 
-function EmptyState({ tab }: { tab: TicketsTab }) {
+function EmptyState({
+  tab,
+  mesNombre,
+}: {
+  tab: TicketsTab;
+  mesNombre: string;
+}) {
   const copy = {
     activas: {
       icon: "🎯",
-      title: "No tienes combinadas activas",
+      title: "No tenés combinadas activas",
       body: "Inscribite en un torneo abierto y armá tu combinada de 5 predicciones.",
     },
-    ganadas: {
-      icon: "🏆",
-      title: "Aún no quedaste en el top 10",
-      body: "Cuando termines un torneo dentro del top 10, vas a verlo acá.",
+    "mes-actual": {
+      icon: "📅",
+      title: `Aún no tenés tickets finalizados en ${mesNombre}`,
+      body: "Apenas se cierre el primer torneo del mes con tus predicciones, lo vas a ver acá con sus puntos finales.",
     },
-    historial: {
+    historico: {
       icon: "📜",
       title: "Sin historial todavía",
       body: "Tus combinadas de torneos finalizados y cancelados se guardan acá.",
