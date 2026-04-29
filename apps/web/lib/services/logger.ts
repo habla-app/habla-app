@@ -2,7 +2,7 @@
 // `console.log` en el código — usar este logger.
 //
 // En dev: output pretty-printed (si pino-pretty está disponible); en prod:
-// JSON estructurado para Railway / Sentry.
+// JSON estructurado para stdout de Railway.
 //
 // Uso:
 //   import { logger } from "@/lib/services/logger";

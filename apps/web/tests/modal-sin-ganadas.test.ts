@@ -18,20 +18,6 @@ describe("ModalSinGanadas — componente nuevo", () => {
     expect(SRC).toMatch(/^\s*(?:\/\/[^\n]*\n\s*)*"use client";?/);
   });
 
-  it("dispara evento tienda_canje_bloqueado_sin_ganadas al abrirse", () => {
-    expect(SRC).toMatch(/tienda_canje_bloqueado_sin_ganadas/);
-    expect(SRC).toMatch(/track\(/);
-  });
-
-  it("dispara evento tienda_sin_ganadas_cta_partidos_clicked al ir a partidos", () => {
-    expect(SRC).toMatch(/tienda_sin_ganadas_cta_partidos_clicked/);
-  });
-
-  it("importa track desde analytics (no posthog-js directo)", () => {
-    expect(SRC).toMatch(/from\s+["']@\/lib\/analytics["']/);
-    expect(SRC).not.toMatch(/from\s+["']posthog-js["']/);
-  });
-
   it("usa Modal de components/ui/Modal", () => {
     expect(SRC).toMatch(/from\s+["']@\/components\/ui\/Modal["']/);
   });
@@ -107,18 +93,3 @@ describe("PrizeCardV2 — usa balanceGanadas + ModalSinGanadas", () => {
   });
 });
 
-describe("analytics.ts — incluye los 3 eventos de Lote 6B", () => {
-  const SRC = read("lib/analytics.ts");
-
-  it("define wallet_desglose_viewed", () => {
-    expect(SRC).toMatch(/wallet_desglose_viewed/);
-  });
-
-  it("define tienda_canje_bloqueado_sin_ganadas", () => {
-    expect(SRC).toMatch(/tienda_canje_bloqueado_sin_ganadas/);
-  });
-
-  it("define tienda_sin_ganadas_cta_partidos_clicked", () => {
-    expect(SRC).toMatch(/tienda_sin_ganadas_cta_partidos_clicked/);
-  });
-});

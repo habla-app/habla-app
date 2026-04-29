@@ -32,7 +32,6 @@ import {
   premioGanadoTemplate,
   solicitudEliminarTemplate,
   torneoCanceladoTemplate,
-  verifCodigoSmsEmailTemplate,
   type AuditoriaAlertaInput,
   type AuditoriaContableAlertaInput,
   type BackupFalloInput,
@@ -259,25 +258,6 @@ export async function notifyTorneoCancelado(input: {
     await enviarEmail({ to: destinatario.email, ...tpl });
   } catch (err) {
     logger.error({ err, usuarioId: input.usuarioId }, "notifyTorneoCancelado: error");
-  }
-}
-
-export async function notifyVerifCodigoEmail(input: {
-  usuarioId: string;
-  codigo: string;
-  expiraEnMin: number;
-}): Promise<void> {
-  try {
-    const destinatario = await obtenerDestinatario(input.usuarioId);
-    if (!destinatario) return;
-    const tpl = verifCodigoSmsEmailTemplate({
-      nombreUsuario: destinatario.nombre,
-      codigo: input.codigo,
-      expiraEnMin: input.expiraEnMin,
-    });
-    await enviarEmail({ to: destinatario.email, ...tpl });
-  } catch (err) {
-    logger.error({ err, usuarioId: input.usuarioId }, "notifyVerifCodigoEmail: error");
   }
 }
 

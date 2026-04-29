@@ -9,7 +9,6 @@
 import Link from "next/link";
 import { SignupForm } from "@/components/auth/SignupForm";
 import { GoogleButton } from "@/components/auth/GoogleButton";
-import { TrackOnMount } from "@/components/analytics/TrackOnMount";
 import { BONUS_BIENVENIDA_LUKAS } from "@/lib/config/economia";
 
 interface PageProps {
@@ -24,10 +23,6 @@ export default function SignUpPage({ searchParams }: PageProps) {
 
   return (
     <div className="w-full max-w-[460px]">
-      <TrackOnMount
-        event="signup_started"
-        props={{ source: searchParams.callbackUrl ?? "direct" }}
-      />
       <div className="rounded-lg border border-light bg-card p-10 shadow-lg">
         <div aria-hidden className="text-center text-[56px] leading-none">
           ⊕

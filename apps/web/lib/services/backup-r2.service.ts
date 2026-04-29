@@ -1,8 +1,7 @@
 // Lote 7 — Backups automatizados de Postgres a Cloudflare R2 con
-// auto-monitoreo por email. Reemplaza la implementación anterior basada
-// en Sentry alerts por el patrón de Job G (auditoría de balances): el
-// estado vive en la tabla `BackupLog`, y si los últimos 2 intentos
-// fallaron consecutivamente se envía email al `ADMIN_ALERT_EMAIL`.
+// auto-monitoreo por email. El estado vive en la tabla `BackupLog`, y si
+// los últimos 2 intentos fallaron consecutivamente se envía email al
+// `ADMIN_ALERT_EMAIL`.
 //
 // Flujo:
 //   1. Spawn `pg_dump -Fc` (formato custom, comprimido) sobre DATABASE_URL.

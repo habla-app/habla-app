@@ -3,13 +3,12 @@
 // Lote 6B-fix2: restaura WalletBalanceHero (hero grande con balance total en gold)
 // y rediseña los 3 stats: Ganadas / Compradas / Gastadas en combinadas.
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { WalletBalanceHero } from "./WalletBalanceHero";
 import { WalletStats } from "./WalletStats";
 import { BuyPacksPlaceholder } from "./BuyPacksPlaceholder";
 import { MovesFilter, type MoveFiltro } from "./MovesFilter";
 import { TxList } from "./TxList";
-import { track } from "@/lib/analytics";
 import { MESES_VENCIMIENTO_COMPRA } from "@/lib/config/economia";
 import type {
   WalletDesglose,
@@ -43,16 +42,6 @@ export function WalletView({
     () => filtrarTx(transacciones, filtro),
     [transacciones, filtro],
   );
-
-  useEffect(() => {
-    track("wallet_desglose_viewed", {
-      compradas: desglose.compradas,
-      bonus: desglose.bonus,
-      ganadas: desglose.ganadas,
-      total: desglose.total,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   return (
     <div className="mx-auto w-full max-w-[960px] px-4 pb-28 pt-6 md:px-6 md:pt-8">

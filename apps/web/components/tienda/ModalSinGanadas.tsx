@@ -3,10 +3,8 @@
 // premio pero su balance de Lukas Ganados es insuficiente (BALANCE_INSUFICIENTE
 // devuelto por la API). Muestra el déficit y redirige a /matches.
 
-import { useEffect } from "react";
 import Link from "next/link";
 import { Modal, ModalHeader, ModalBody, ModalFooter } from "@/components/ui/Modal";
-import { track } from "@/lib/analytics";
 
 interface Props {
   open: boolean;
@@ -16,15 +14,6 @@ interface Props {
 }
 
 export function ModalSinGanadas({ open, onClose, ganadas, coste }: Props) {
-  useEffect(() => {
-    if (!open) return;
-    track("tienda_canje_bloqueado_sin_ganadas", {
-      ganadas_actuales: ganadas,
-      coste_premio: coste,
-      deficit: coste - ganadas,
-    });
-  }, [open, ganadas, coste]);
-
   return (
     <Modal isOpen={open} onClose={onClose} label="Lukas Ganados insuficientes" maxWidth="440px">
       <ModalHeader onClose={onClose} eyebrow="Canjear premio" shimmer>
@@ -74,10 +63,7 @@ export function ModalSinGanadas({ open, onClose, ganadas, coste }: Props) {
         <div className="flex flex-col gap-2.5">
           <Link
             href="/matches"
-            onClick={() => {
-              track("tienda_sin_ganadas_cta_partidos_clicked");
-              onClose();
-            }}
+            onClick={onClose}
             className="flex w-full items-center justify-center gap-2 rounded-md bg-brand-gold px-4 py-3 font-bold text-black shadow-gold-btn transition hover:bg-brand-gold-light"
           >
             ⚽ Ver partidos disponibles →

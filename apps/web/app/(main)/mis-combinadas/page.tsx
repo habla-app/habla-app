@@ -22,7 +22,6 @@ import { LukasPremiosPill } from "@/components/tickets/LukasPremiosPill";
 import { MisTicketsTabs, type TicketsTab } from "@/components/tickets/MisTicketsTabs";
 import { MatchGroup } from "@/components/tickets/MatchGroup";
 import { HistoryList } from "@/components/tickets/HistoryList";
-import { PremioGanadoTracker } from "@/components/analytics/PremioGanadoTracker";
 import type { TicketConContexto } from "@/components/tickets/adapter";
 
 export const dynamic = "force-dynamic";
@@ -113,17 +112,6 @@ export default async function MisCombinadasPage({ searchParams }: Props) {
           tone="purple"
         />
       </div>
-
-      <PremioGanadoTracker
-        tickets={ganadasRes.tickets
-          .filter((t) => t.premioLukas > 0 && t.posicionFinal !== null)
-          .map((t) => ({
-            ticketId: t.id,
-            torneoId: t.torneoId,
-            posicion: t.posicionFinal as number,
-            lukasGanados: t.premioLukas,
-          }))}
-      />
 
       <MisTicketsTabs active={tab} counts={counts} />
 

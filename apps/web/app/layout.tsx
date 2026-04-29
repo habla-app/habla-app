@@ -3,10 +3,8 @@
 // BottomNav) vive en los layouts hijos ((main), auth, admin).
 import type { Metadata, Viewport } from "next";
 import { Barlow_Condensed, DM_Sans } from "next/font/google";
-import { Suspense } from "react";
 import { ToastProvider } from "@/components/ui";
 import { SessionProviderClient } from "@/components/auth/SessionProviderClient";
-import { PostHogProvider } from "@/components/analytics/PostHogProvider";
 import { CookieBanner } from "@/components/CookieBanner";
 import "./globals.css";
 
@@ -78,12 +76,8 @@ export default function RootLayout({
     <html lang="es" className={`${barlow.variable} ${dmSans.variable}`}>
       <body className="font-body antialiased">
         <SessionProviderClient>
-          <Suspense fallback={null}>
-            <PostHogProvider>
-              <ToastProvider>{children}</ToastProvider>
-              <CookieBanner />
-            </PostHogProvider>
-          </Suspense>
+          <ToastProvider>{children}</ToastProvider>
+          <CookieBanner />
         </SessionProviderClient>
       </body>
     </html>

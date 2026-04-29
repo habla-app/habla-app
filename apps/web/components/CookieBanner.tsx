@@ -2,10 +2,11 @@
 // CookieBanner — barra inferior fija con 3 botones (Aceptar, Rechazar
 // opcionales, Configurar). Al "Configurar" abre un modal con switches
 // por categoría. Persiste decisión en localStorage via cookie-consent.ts
-// y dispatchea evento `habla:cookie-consent-change` que PostHogProvider
-// y analytics.ts escuchan.
+// y dispatchea evento `habla:cookie-consent-change` que el analytics
+// in-house del Lote 6 va a respetar.
 //
-// Lote 3.
+// Lote 3 (banner inicial). Lote 1 (cleanup): el toggle "analytics" pasa
+// a controlar el analytics in-house — sin terceros.
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -155,7 +156,7 @@ export function CookieBanner() {
               />
               <CategoryRow
                 title="Analíticas"
-                description="Mediciones agregadas y seudonimizadas (PostHog) que usamos para mejorar el producto."
+                description="Habla! puede medir cómo usas el sitio para mejorarlo. Esta data nunca sale de nuestros servidores."
                 checked={prefAnalytics}
                 disabled={false}
                 onChange={setPrefAnalytics}

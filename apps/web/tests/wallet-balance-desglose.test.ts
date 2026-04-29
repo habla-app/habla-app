@@ -1,6 +1,6 @@
 // Tests AST — Wallet redesign (Lote 6B-fix2).
 // Verifica que WalletView usa WalletBalanceHero (no Desglose), que WalletStats
-// tiene los 3 nuevos contenidos, y que wallet_desglose_viewed se sigue trackeando.
+// tiene los 5 nuevos contenidos.
 
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
@@ -21,16 +21,6 @@ describe("WalletView — restaura WalletBalanceHero (no WalletBalanceDesglose)",
 
   it("NO importa WalletBalanceDesglose", () => {
     expect(SRC).not.toMatch(/WalletBalanceDesglose/);
-  });
-
-  it("trackea wallet_desglose_viewed con las 3 bolsas", () => {
-    expect(SRC).toMatch(/wallet_desglose_viewed/);
-    expect(SRC).toMatch(/track\(/);
-  });
-
-  it("importa track desde analytics (no posthog-js directo)", () => {
-    expect(SRC).toMatch(/from\s+["']@\/lib\/analytics["']/);
-    expect(SRC).not.toMatch(/from\s+["']posthog-js["']/);
   });
 
   it("pasa los 5 totales del filtro de historial a WalletStats (Lote 6C-fix7)", () => {

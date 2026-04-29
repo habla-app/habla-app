@@ -5,7 +5,7 @@
 // El estado de consentimiento tiene 3 categorías:
 //   - necessary: siempre true, no se puede desactivar.
 //   - preferences: idioma, tema, etc.
-//   - analytics: PostHog y similares.
+//   - analytics: analytics in-house (Lote 6).
 //
 // Y un campo `status`:
 //   - "accepted"   → todas las opcionales en true
@@ -93,7 +93,7 @@ export function hasAnalyticsConsent(): boolean {
 
 /**
  * Subscribe a cambios de consent. Devuelve unsubscribe fn.
- * Útil en `analytics.ts` y `PostHogProvider`.
+ * Lo va a usar el analytics in-house del Lote 6.
  */
 export function listenConsent(
   callback: (state: ConsentState) => void,

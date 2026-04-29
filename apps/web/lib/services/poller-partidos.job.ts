@@ -20,8 +20,8 @@
 // de eventos.
 //
 // Rate limiting: backoff exponencial con cap 5 min si api-football
-// devuelve 429 (free plan tiene 100 req/día — esto lo monitorea Sentry
-// en prod).
+// devuelve 429 (free plan tiene 100 req/día — los logs Pino de Railway
+// dejan rastro).
 
 import { prisma } from "@habla/db";
 import {

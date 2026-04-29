@@ -10,7 +10,6 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { authedFetch } from "@/lib/api-client";
-import { track } from "@/lib/analytics";
 import { Button } from "@/components/ui";
 import { UsernameInput } from "./UsernameInput";
 import { TycCheckbox } from "./TycCheckbox";
@@ -54,23 +53,6 @@ export function SignupForm({ emailInicial = "", callbackUrl = "/" }: Props) {
         );
         setCargando(false);
         return;
-      }
-      // Analytics: el usuario completó el signup (BD + bonus creado). Para
-      // email flow, el perfil ya queda completo acá (ya eligió @handle y
-      // aceptó T&C). `email_verified` se dispara cuando vuelva del magic link.
-      track("signup_completed", { method: "email" });
-      track("profile_completed", {});
-      // Marcador para detectar vuelta del magic link y disparar
-      // `email_verified` en el PostHogProvider (primer session authenticated).
-      if (typeof window !== "undefined") {
-        try {
-          window.localStorage.setItem(
-            "habla:pending_email_verification",
-            email.trim().toLowerCase(),
-          );
-        } catch {
-          /* storage bloqueado, no crítico */
-        }
       }
       // Disparar magic link. signIn con redirect=true navega a /auth/verificar
       // si NextAuth está configurado con verifyRequest (lo está).
