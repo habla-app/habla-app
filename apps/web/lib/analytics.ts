@@ -195,7 +195,7 @@ export function reset(): void {
 // todavía no existe en el repo, dejá el TODO con el lote esperado para
 // que cuando se construya esa pieza, alguien recuerde recablear.
 //
-// EVENTOS YA INSTRUMENTADOS (Lote 6 + Lote 7 + Lote 8):
+// EVENTOS YA INSTRUMENTADOS (Lote 6 + Lote 7 + Lote 8 + Lote 9):
 //   signup_started               apps/web/app/auth/signup/page.tsx (mount)
 //   signup_completed             POST /api/v1/auth/signup ok (server-side track)
 //                                + apps/web/app/auth/completar-perfil/page.tsx (mount, Google)
@@ -208,7 +208,7 @@ export function reset(): void {
 //   comunidad_leaderboard_visto  apps/web/app/(main)/comunidad/page.tsx (mount via TrackOnMount)
 //   casa_click_afiliado          GET /go/[casa] route handler (server-side track antes del redirect)
 //   articulo_visto               apps/web/app/(public)/{blog,casas,guias,pronosticos,partidos}/[slug]/page.tsx (mount via TrackOnMount con props { slug, categoria, titulo, ... })
-//   cuotas_comparator_visto      apps/web/components/mdx/CuotasComparator.tsx (mount via TrackOnMount; placeholder hasta Lote 9)
+//   cuotas_comparator_visto      apps/web/components/mdx/CuotasComparator.tsx (mount via TrackOnMount con props { partidoId, hit })
 //
 // EVENTOS PENDIENTES — instrumentar cuando se construya el emisor:
 //   newsletter_suscripcion       // LOTE_EDITORIAL/AFILIACION: instrumentar `newsletter_suscripcion` en POST /api/v1/suscribir ok (server-side track)

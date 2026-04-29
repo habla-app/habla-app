@@ -1,48 +1,46 @@
-// CuotasComparator — Lote 8 (placeholder hasta Lote 9).
+// CuotasComparator — Lote 9.
 //
-// La data real de cuotas la cablea Lote 9. Por ahora renderiza una card
-// con el copy "Comparador de cuotas próximamente" en el estilo del
-// mockup, y dispara el evento `cuotas_comparator_visto` al montar para
-// que el funnel del Lote 6 ya tenga conteo.
+// Async server component que comparte data de odds con la vista. Tres
+// caminos en el RSC:
+//   - Cache hit: render directo de `<CuotasGrid>` con la data.
+//   - Cache miss + Redis configurado: render skeleton + `<CuotasComparatorPoller>`
+//     que pollea `/api/v1/cuotas/[partidoId]` cada 3s (max 4 intentos).
+//   - Sin Redis (REDIS_URL ausente): el cache siempre es miss, pero el
+//     poller tiraría loops infinitos contra el endpoint que tampoco
+//     persiste. El comportamiento es el mismo que Redis caído: miss →
+//     poller → max attempts → estado vacío. Aceptable: en producción
+//     siempre hay Redis (Railway).
 //
-// Cuando llegue Lote 9: este componente pasa a leer la data y desaparece
-// el placeholder. La firma `<CuotasComparator partidoId={...} />` se
-// mantiene para no romper los .mdx ya escritos.
+// El tracking del evento `cuotas_comparator_visto` se dispara una sola
+// vez en el mount inicial del wrapper (server-rendered), independiente
+// del estado.
+//
+// Reusable: el componente se registra en MDX_COMPONENTS y también se
+// importa directo desde los pages `/cuotas` y `/partidos/[slug]`.
 
+import { obtenerOddsCacheadas } from "@/lib/services/odds-cache.service";
 import { TrackOnMount } from "@/components/analytics/TrackOnMount";
+import { CuotasGrid } from "./CuotasGrid";
+import { CuotasComparatorPoller } from "./CuotasComparatorPoller";
 
 interface Props {
   partidoId: string;
 }
 
-export function CuotasComparator({ partidoId }: Props) {
+export async function CuotasComparator({ partidoId }: Props) {
+  const cached = await obtenerOddsCacheadas(partidoId);
+
   return (
     <>
       <TrackOnMount
         event="cuotas_comparator_visto"
-        props={{ partidoId, placeholder: true }}
+        props={{ partidoId, hit: !!cached }}
       />
-      <aside
-        role="note"
-        aria-label="Comparador de cuotas"
-        className="my-6 overflow-hidden rounded-md border border-light bg-card shadow-sm"
-      >
-        <header className="border-b border-light bg-subtle px-5 py-3">
-          <span className="font-display text-[11px] font-bold uppercase tracking-[0.08em] text-brand-blue-main">
-            📊 Comparador de cuotas
-          </span>
-        </header>
-        <div className="px-5 py-6 text-center">
-          <p className="m-0 font-display text-[16px] font-bold text-dark">
-            Comparador de cuotas próximamente
-          </p>
-          <p className="mt-2 text-[13px] text-muted-d">
-            Estamos cableando la integración con las casas autorizadas por
-            MINCETUR. Volvé pronto para comparar las mejores cuotas del
-            partido.
-          </p>
-        </div>
-      </aside>
+      {cached ? (
+        <CuotasGrid partidoId={partidoId} data={cached} />
+      ) : (
+        <CuotasComparatorPoller partidoId={partidoId} />
+      )}
     </>
   );
 }

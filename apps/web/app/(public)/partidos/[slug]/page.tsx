@@ -1,17 +1,25 @@
-// /partidos/[slug] — Lote 8. Previa editorial de un partido.
+// /partidos/[slug] — Lote 8 (con embed automático de Lote 9).
 //
-// El render del .mdx incluye `<CuotasComparator partidoId={...} />` como
-// placeholder hasta Lote 9. Si no hay .mdx publicado para el slug,
+// Previa editorial de un partido. Si no hay .mdx publicado para el slug,
 // devolvemos 404 — el slot de partidos en el sitemap solo lista los que
 // ya tienen previa.
+//
+// Lote 9: si el frontmatter tiene `partidoId` válido y el partido existe
+// en BD, embebemos `<CuotasComparator>` automáticamente al final del MDX.
+// El autor del MDX no necesita acordarse de ponerlo. Si el frontmatter
+// solo trae `partidoSlug` (sin `partidoId`), no embebemos — la columna
+// slug no existe en `Partido` y mapearlo desde el slug textual sería
+// brittle.
 
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { MDXRemote } from "next-mdx-remote/rsc";
 import remarkGfm from "remark-gfm";
+import { prisma } from "@habla/db";
 import * as partidos from "@/lib/content/partidos";
 import { MDX_COMPONENTS } from "@/lib/content/mdx-components";
 import { TOC } from "@/components/mdx/TOC";
+import { CuotasComparator } from "@/components/mdx/CuotasComparator";
 import { TrackOnMount } from "@/components/analytics/TrackOnMount";
 import { BackToTop } from "@/components/legal/BackToTop";
 
@@ -46,10 +54,19 @@ export function generateMetadata({
   };
 }
 
-export default function PartidoPreviaPage({ params }: { params: Params }) {
+export default async function PartidoPreviaPage({
+  params,
+}: {
+  params: Params;
+}) {
   const doc = partidos.getBySlug(params.slug);
   if (!doc) notFound();
   const { frontmatter, body, headings } = doc;
+
+  // Lote 9: embed automático del comparador si el frontmatter trae
+  // `partidoId` Y la fila existe en BD. Si no, omitimos el embed (no
+  // rompemos el render del MDX).
+  const partidoId = await resolvePartidoId(frontmatter.partidoId);
 
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-10 md:px-6 md:py-14">
@@ -88,11 +105,27 @@ export default function PartidoPreviaPage({ params }: { params: Params }) {
               }}
             />
           </div>
+          {partidoId ? <CuotasComparator partidoId={partidoId} /> : null}
         </article>
       </div>
       <BackToTop />
     </div>
   );
+}
+
+async function resolvePartidoId(
+  partidoId: string | undefined,
+): Promise<string | null> {
+  if (!partidoId) return null;
+  try {
+    const fila = await prisma.partido.findUnique({
+      where: { id: partidoId },
+      select: { id: true },
+    });
+    return fila?.id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function SportsEventJsonLd({
