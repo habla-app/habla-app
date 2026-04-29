@@ -92,6 +92,13 @@ export function hasAnalyticsConsent(): boolean {
 }
 
 /**
+ * Alias del Lote 6 para que la spec del helper cliente y los call sites
+ * lean en español. `analyticsHabilitado()` y `hasAnalyticsConsent()` son
+ * intercambiables.
+ */
+export const analyticsHabilitado = hasAnalyticsConsent;
+
+/**
  * Subscribe a cambios de consent. Devuelve unsubscribe fn.
  * Lo va a usar el analytics in-house del Lote 6.
  */

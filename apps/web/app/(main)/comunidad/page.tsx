@@ -22,6 +22,7 @@ import {
   TOTAL_PREMIO_MENSUAL,
 } from "@/lib/services/leaderboard.service";
 import { LeaderboardMensualTable } from "@/components/comunidad/LeaderboardMensualTable";
+import { TrackOnMount } from "@/components/analytics/TrackOnMount";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,10 @@ export default async function ComunidadPage() {
 
   return (
     <div className="mx-auto w-full max-w-[1100px] px-4 pb-24 pt-6 md:px-6 md:pt-8">
+      <TrackOnMount
+        event="comunidad_leaderboard_visto"
+        props={{ mes: vista.mes, totalUsuarios: vista.totalUsuarios }}
+      />
       {/* HERO — replica `.balance-hero-v2` del mockup: gradient
           azul vivo + franja gold animada arriba + emoji decorativo
           gigante a la derecha. */}

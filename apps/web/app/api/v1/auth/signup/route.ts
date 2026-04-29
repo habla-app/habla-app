@@ -21,6 +21,7 @@ import {
 import { esReservado } from "@/lib/config/usernames-reservados";
 import { esUsernameOfensivo } from "@/lib/utils/username-filter";
 import { logger } from "@/lib/services/logger";
+import { track } from "@/lib/services/analytics.service";
 
 export const dynamic = "force-dynamic";
 // Abr 2026: case-sensitive para display (Gustavo ≠ gustavo en UI), pero
@@ -110,7 +111,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    await prisma.usuario.create({
+    const nuevo = await prisma.usuario.create({
       data: {
         email,
         // Nombre vacío hasta que el usuario lo complete en /perfil.
@@ -119,9 +120,27 @@ export async function POST(req: NextRequest) {
         usernameLocked: true,
         tycAceptadosAt: new Date(),
       },
+      select: { id: true },
     });
 
     logger.info({ email, username }, "signup email completado");
+
+    // Lote 6 — analytics. signup_completed: cuenta creada (magic link
+    // todavía no clickeado, eso es email_verified en events.signIn de
+    // NextAuth). profile_completed: el flow email viene con username
+    // definitivo, no requiere completar-perfil.
+    void track({
+      evento: "signup_completed",
+      props: { method: "email" },
+      userId: nuevo.id,
+      request: req,
+    });
+    void track({
+      evento: "profile_completed",
+      props: { method: "email" },
+      userId: nuevo.id,
+      request: req,
+    });
 
     return Response.json({ ok: true, data: { email } });
   } catch (err) {

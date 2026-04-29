@@ -27,11 +27,13 @@
 import { prisma } from "@habla/db";
 import { enviarEmail } from "./email.service";
 import {
+  criticosResumenTemplate,
   cuentaEliminadaTemplate,
   datosDescargadosTemplate,
   premioMensualGanadoTemplate,
   solicitudEliminarTemplate,
   torneoCanceladoTemplate,
+  type CriticosResumenInput,
 } from "../emails/templates";
 import { logger } from "./logger";
 
@@ -224,6 +226,38 @@ export async function notifyPremioMensualGanado(input: {
       { err, userId: input.userId, mes: input.mesKey },
       "notifyPremioMensualGanado: error",
     );
+  }
+}
+
+/**
+ * Lote 6 — alerta a ADMIN_ALERT_EMAIL cuando hubo > 0 errores `level=critical`
+ * en la última hora. Lo dispara el cron M (instrumentation.ts) con su propio
+ * anti-spam (no manda más de 1 vez por hora).
+ *
+ * No respeta `PreferenciasNotif` — es un email operativo, no transaccional
+ * de usuario. El destinatario es el admin definido en env, no un Usuario.
+ */
+export async function notifyCriticosResumen(
+  input: CriticosResumenInput,
+): Promise<void> {
+  try {
+    const to = process.env.ADMIN_ALERT_EMAIL;
+    if (!to) {
+      logger.warn(
+        { source: "notify:criticos-resumen" },
+        "ADMIN_ALERT_EMAIL no configurado — skip alerta crítica",
+      );
+      return;
+    }
+    const tpl = criticosResumenTemplate(input);
+    await enviarEmail({ to, ...tpl });
+  } catch (err) {
+    // Importante: este logger.error podría re-disparar log_errores → cron M.
+    // Por eso el `source` es "notify:criticos-resumen" y el hook del logger
+    // hace skip si source.startsWith("logs"|"analytics") — pero "notify"
+    // SÍ se persiste (raro pero no debería loopearse en práctica porque
+    // el envío fallido no genera un nuevo crítico).
+    logger.error({ err, source: "notify:criticos-resumen" }, "notifyCriticosResumen: error");
   }
 }
 

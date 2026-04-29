@@ -21,6 +21,7 @@ import { getTeamColor, getTeamInitials } from "@/lib/utils/team-colors";
 import { BackButton } from "@/components/torneos/BackButton";
 import { InscritosList } from "@/components/torneos/InscritosList";
 import { TorneoStickyCTA } from "@/components/torneos/TorneoStickyCTA";
+import { TrackOnMount } from "@/components/analytics/TrackOnMount";
 
 interface Props {
   params: { id: string };
@@ -91,6 +92,15 @@ export default async function TorneoDetallePage({ params, searchParams }: Props)
         liga={partido.liga}
         fechaInicio={partido.fechaInicio}
         venue={partido.venue ?? null}
+      />
+      <TrackOnMount
+        event="match_viewed"
+        props={{
+          torneoId: torneo.id,
+          partido: `${partido.equipoLocal} vs ${partido.equipoVisita}`,
+          liga: partido.liga,
+          inscritos: torneo.totalInscritos,
+        }}
       />
       <div className="mb-4">
         <BackButton fallbackHref="/matches" />

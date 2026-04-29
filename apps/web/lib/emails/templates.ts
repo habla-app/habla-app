@@ -200,6 +200,87 @@ function ordinalEs(n: number): string {
   return map[n] ?? `${n}°`;
 }
 
+export interface CriticosResumenInput {
+  /** Mes/dia humano del rango — se renderea en el subject. */
+  ventana: string;
+  total: number;
+  topMensajes: Array<{ message: string; count: number; source: string }>;
+  porSource: Array<{ source: string; count: number }>;
+}
+
+export function criticosResumenTemplate(input: CriticosResumenInput) {
+  const subject = `🚨 Habla! · ${input.total} error${input.total === 1 ? "" : "es"} críticos en ${input.ventana}`;
+  const adminUrl = `${BASE_URL}/admin/logs?level=critical`;
+
+  const filasMensajes = input.topMensajes
+    .map(
+      (m) => `<tr>
+        <td style="padding:8px 10px;border-bottom:1px solid rgba(0,16,80,0.08);font-size:13px;color:#001050;font-weight:600;">${escapeHtml(m.message).slice(0, 200)}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid rgba(0,16,80,0.08);font-size:12px;color:rgba(0,16,80,0.6);font-family:monospace;">${escapeHtml(m.source)}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid rgba(0,16,80,0.08);font-size:14px;color:#D32F2F;font-weight:800;text-align:right;">×${m.count}</td>
+      </tr>`,
+    )
+    .join("");
+
+  const filasSource = input.porSource
+    .map(
+      (s) => `<li style="margin:4px 0;font-size:13px;color:rgba(0,16,80,0.85);">
+        <code style="background:rgba(0,16,80,0.06);padding:2px 6px;border-radius:4px;font-size:12px;">${escapeHtml(s.source)}</code> — ${s.count}
+      </li>`,
+    )
+    .join("");
+
+  const html = wrapEmail(
+    subject,
+    `<h1 style="margin:0 0 8px;font-size:22px;color:#D32F2F;">🚨 ${input.total} error${input.total === 1 ? "" : "es"} críticos</h1>
+    <p style="margin:0 0 16px;font-size:14px;color:rgba(0,16,80,0.85);line-height:1.5;">
+      En la última hora (${escapeHtml(input.ventana)}). Resumen automático del cron M de Habla!.
+    </p>
+
+    ${
+      input.topMensajes.length > 0
+        ? `<h2 style="margin:20px 0 8px;font-size:15px;color:#001050;">Top mensajes</h2>
+    <table style="width:100%;border-collapse:collapse;background:#FAFBFE;border:1px solid rgba(0,16,80,0.08);border-radius:8px;overflow:hidden;">
+      <thead><tr style="background:rgba(0,16,80,0.04);">
+        <th style="padding:8px 10px;text-align:left;font-size:11px;color:rgba(0,16,80,0.6);text-transform:uppercase;letter-spacing:.05em;">Mensaje</th>
+        <th style="padding:8px 10px;text-align:left;font-size:11px;color:rgba(0,16,80,0.6);text-transform:uppercase;letter-spacing:.05em;">Source</th>
+        <th style="padding:8px 10px;text-align:right;font-size:11px;color:rgba(0,16,80,0.6);text-transform:uppercase;letter-spacing:.05em;">Count</th>
+      </tr></thead>
+      <tbody>${filasMensajes}</tbody>
+    </table>`
+        : ""
+    }
+
+    ${
+      input.porSource.length > 0
+        ? `<h2 style="margin:20px 0 8px;font-size:15px;color:#001050;">Por source</h2>
+    <ul style="margin:0;padding-left:20px;list-style:disc;">${filasSource}</ul>`
+        : ""
+    }
+
+    ${ctaButton("Abrir /admin/logs", adminUrl)}
+
+    <p style="margin:24px 0 0;font-size:11px;color:rgba(0,16,80,0.5);text-align:center;">
+      Este email se manda como máximo 1 vez por hora. Si querés que pare, mirá el cron M en apps/web/instrumentation.ts.
+    </p>`,
+  );
+
+  const textLines = [
+    `🚨 ${input.total} errores críticos en Habla! (${input.ventana})`,
+    "",
+    "Top mensajes:",
+    ...input.topMensajes.map((m) => `  · [${m.source}] ×${m.count}: ${m.message.slice(0, 200)}`),
+    "",
+    "Por source:",
+    ...input.porSource.map((s) => `  · ${s.source}: ${s.count}`),
+    "",
+    `Abrir: ${adminUrl}`,
+  ];
+  const text = textLines.join("\n");
+
+  return { subject, html, text };
+}
+
 export interface CuentaEliminadaInput {
   nombreUsuario: string;
   modo: "hard" | "soft";
