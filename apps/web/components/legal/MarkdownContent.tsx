@@ -2,8 +2,8 @@
 //
 // react-markdown sanitiza por default (no eval, no scripts). Le sumamos
 // remark-gfm para tablas/listas/strikethrough. Los enlaces internos
-// (/legal/*, /tienda, /matches) se navegan via <Link> de Next; los
-// externos abren en nueva pestaña con rel="noopener noreferrer".
+// (/legal/*, /matches, etc.) se navegan via <Link> de Next; los externos
+// abren en nueva pestaña con rel="noopener noreferrer".
 //
 // Estilos via clases Tailwind aplicadas a cada elemento (no usamos un
 // plugin tipo `@tailwindcss/typography` para mantener cero deps nuevas

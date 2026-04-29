@@ -1,5 +1,9 @@
-// QuickAccessGrid — mockup `.quick-access-grid` (línea 3930). 4 cards
-// con ícono coloreado + label. Links a mis-combinadas, wallet, tienda,
+// QuickAccessGrid — mockup `.quick-access-grid` (línea 3930). Cards con
+// ícono coloreado + label.
+//
+// Lote 3 (Abr 2026): se retiraron los accesos a /wallet (sistema demolido
+// en Lote 2) y /tienda (demolido en Lote 3). Quedan los dos accesos que
+// siguen vigentes en el modelo editorial/comunidad: mis combinadas y
 // centro de ayuda.
 
 import Link from "next/link";
@@ -17,19 +21,7 @@ const ITEMS: Array<{
     label: "Mis combinadas",
   },
   {
-    href: "/wallet",
-    icon: "💰",
-    bg: "bg-alert-success-bg",
-    label: "Billetera",
-  },
-  {
-    href: "/tienda",
-    icon: "🎁",
-    bg: "bg-[#FCE7F3]",
-    label: "Tienda de premios",
-  },
-  {
-    href: "/faq",
+    href: "/ayuda/faq",
     icon: "❓",
     bg: "bg-accent-champions-bg",
     label: "Centro de ayuda",
@@ -40,7 +32,7 @@ export function QuickAccessGrid() {
   return (
     <nav
       aria-label="Accesos rápidos"
-      className="mb-7 grid grid-cols-2 gap-3 md:grid-cols-4"
+      className="mb-7 grid grid-cols-2 gap-3"
     >
       {ITEMS.map((it) => (
         <Link

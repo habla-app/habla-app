@@ -20,7 +20,6 @@ const LEGAL_LINKS: Array<{ label: string; href: string }> = [
 const PRODUCTO_LINKS: Array<{ label: string; href: string }> = [
   { label: "Torneos abiertos", href: "/matches" },
   { label: "En vivo ahora", href: "/live-match" },
-  { label: "Tienda de premios", href: "/tienda" },
   { label: "Centro de ayuda", href: "/ayuda/faq" },
 ];
 

@@ -37,9 +37,9 @@ export function ProfileHero({ perfil }: ProfileHeroProps) {
         ),
       )
     : 100;
-  const estaVerificado = Boolean(
-    perfil.emailVerified && (perfil.telefonoVerif || perfil.dniVerif),
-  );
+  // Lote 3 (Abr 2026): tras demoler la verificación de teléfono/DNI, "verificado"
+  // pasa a significar simplemente "email confirmado por NextAuth/Resend".
+  const estaVerificado = Boolean(perfil.emailVerified);
   const edadAnios = perfil.fechaNac
     ? Math.floor(
         (Date.now() - new Date(perfil.fechaNac).getTime()) /

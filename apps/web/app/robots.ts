@@ -2,7 +2,7 @@
 // Se sirve en /robots.txt.
 //
 // Política:
-//   - Indexamos: home, matches, tienda, torneos públicos, legales.
+//   - Indexamos: home, matches, torneos públicos, legales.
 //   - No indexamos: áreas privadas, auth, API, uploads, admin.
 
 import type { MetadataRoute } from "next";
@@ -17,7 +17,6 @@ export default function robots(): MetadataRoute.Robots {
         allow: [
           "/",
           "/matches",
-          "/tienda",
           "/torneo/",
           "/live-match",
           "/legal/",
@@ -26,7 +25,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: [
           "/admin",
           "/admin/",
-          "/wallet",
           "/perfil",
           "/mis-combinadas",
           "/api/",

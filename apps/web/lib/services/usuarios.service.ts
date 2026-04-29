@@ -42,9 +42,6 @@ export interface PerfilCompleto {
   usernameLocked: boolean;
   /** Timestamp de aceptación de T&C + mayoría de edad. */
   tycAceptadosAt: Date | null;
-  telefono: string | null;
-  telefonoVerif: boolean;
-  dniVerif: boolean;
   fechaNac: Date | null;
   ubicacion: string | null;
   rol: "JUGADOR" | "ADMIN";
@@ -70,9 +67,6 @@ export async function obtenerMiPerfil(usuarioId: string): Promise<PerfilCompleto
       username: true,
       usernameLocked: true,
       tycAceptadosAt: true,
-      telefono: true,
-      telefonoVerif: true,
-      dniVerif: true,
       fechaNac: true,
       ubicacion: true,
       rol: true,
@@ -102,9 +96,6 @@ export async function obtenerMiPerfil(usuarioId: string): Promise<PerfilCompleto
     username: usuario.username,
     usernameLocked: usuario.usernameLocked,
     tycAceptadosAt: usuario.tycAceptadosAt,
-    telefono: usuario.telefono,
-    telefonoVerif: usuario.telefonoVerif,
-    dniVerif: usuario.dniVerif,
     fechaNac: usuario.fechaNac,
     ubicacion: usuario.ubicacion,
     rol: usuario.rol,
@@ -124,7 +115,6 @@ export async function obtenerMiPerfil(usuarioId: string): Promise<PerfilCompleto
 export interface ActualizarPerfilInput {
   nombre?: string;
   ubicacion?: string;
-  telefono?: string;
   image?: string;
 }
 
@@ -134,8 +124,8 @@ export async function actualizarPerfil(
 ): Promise<PerfilCompleto> {
   // Registro formal (Abr 2026): `username` ya NO es editable post-registro.
   // El @handle se elige una sola vez (en /auth/signup o /auth/completar-perfil)
-  // y queda inmutable. El service solo permite nombre, ubicación, teléfono
-  // e imagen — intentar pasar username desde un caller legacy sería un bug.
+  // y queda inmutable. El service solo permite nombre, ubicación e imagen —
+  // intentar pasar username desde un caller legacy sería un bug.
   if (patch.nombre !== undefined && patch.nombre.trim().length < 2) {
     throw new ValidacionFallida("El nombre debe tener al menos 2 caracteres.", {
       field: "nombre",
@@ -148,9 +138,6 @@ export async function actualizarPerfil(
       ...(patch.nombre !== undefined ? { nombre: patch.nombre.trim() } : {}),
       ...(patch.ubicacion !== undefined
         ? { ubicacion: patch.ubicacion.trim() || null }
-        : {}),
-      ...(patch.telefono !== undefined
-        ? { telefono: patch.telefono.trim() || null, telefonoVerif: false }
         : {}),
       ...(patch.image !== undefined ? { image: patch.image } : {}),
     },
@@ -244,7 +231,6 @@ export async function confirmarEliminarCuenta(
         email: anonEmail,
         username: anonUsername,
         usernameLocked: true,
-        telefono: null,
         ubicacion: null,
         image: null,
         deletedAt: new Date(),
@@ -268,17 +254,15 @@ export async function confirmarEliminarCuenta(
 // in-app tipeando "ELIMINAR", el endpoint llama esto, y la cuenta se
 // elimina al instante. La función decide automáticamente entre:
 //
-//   - HARD delete: si NO hay actividad (tickets ni canjes). Borra el
-//     Usuario; el `onDelete: Cascade` se encarga de Account, Session,
-//     PreferenciasNotif, LimitesJuego, VerificacionTelefono,
-//     VerificacionDni, SolicitudEliminacion. Esto libera el email
+//   - HARD delete: si NO hay tickets. Borra el Usuario; el
+//     `onDelete: Cascade` se encarga de Account, Session,
+//     PreferenciasNotif, SolicitudEliminacion. Esto libera el email
 //     original Y la identidad OAuth (Account.providerAccountId) para
 //     que el usuario pueda re-registrarse limpio.
 //
-//   - SOFT delete: si tiene tickets o canjes. Anonimiza PII,
-//     marca deletedAt, y borra explícitamente Account/Session +
-//     dependencias cascade en una transacción atómica. Preserva
-//     Ticket/TransaccionLukas/Canje (audit + integridad de torneos
+//   - SOFT delete: si tiene tickets. Anonimiza PII, marca deletedAt y
+//     borra explícitamente Account/Session + dependencias cascade en
+//     una transacción atómica. Preserva Ticket (integridad de torneos
 //     históricos).
 //
 // En ambos casos, antes de tocar la BD se lee el email original para
@@ -304,14 +288,10 @@ export async function eliminarCuentaInmediato(
   if (!usuario || usuario.deletedAt) throw new NoAutenticado();
 
   // Detectar actividad histórica para decidir hard vs soft. Cualquier
-  // ticket o canje (incluso CANCELADO) es razón suficiente para soft —
-  // la integridad de torneos pasados / audit financiero pesa más que
-  // la limpieza total de la BD.
-  const [ticketsCount, canjesCount] = await Promise.all([
-    prisma.ticket.count({ where: { usuarioId } }),
-    prisma.canje.count({ where: { usuarioId } }),
-  ]);
-  const tieneActividad = ticketsCount > 0 || canjesCount > 0;
+  // ticket es razón suficiente para soft — la integridad de torneos
+  // pasados pesa más que la limpieza total de la BD.
+  const ticketsCount = await prisma.ticket.count({ where: { usuarioId } });
+  const tieneActividad = ticketsCount > 0;
   const modo: "hard" | "soft" = tieneActividad ? "soft" : "hard";
 
   // Capturar email + nombre ANTES de mutar (luego del soft delete el
@@ -328,10 +308,8 @@ export async function eliminarCuentaInmediato(
         where: { identifier: emailOriginal },
       });
       // El delete del Usuario dispara cascade en: Account, Session,
-      // PreferenciasNotif, LimitesJuego, VerificacionTelefono,
-      // VerificacionDni, SolicitudEliminacion. (Ticket / Transaccion /
-      // Canje no tienen onDelete declarado, pero acá no hay ninguno —
-      // por eso es hard.)
+      // PreferenciasNotif, SolicitudEliminacion. (Ticket no tiene
+      // onDelete declarado, pero acá no hay ninguno — por eso es hard.)
       await tx.usuario.delete({ where: { id: usuarioId } });
     });
 
@@ -351,7 +329,6 @@ export async function eliminarCuentaInmediato(
           email: anonEmail,
           username: anonUsername,
           usernameLocked: true,
-          telefono: null,
           ubicacion: null,
           image: null,
           deletedAt: new Date(),
@@ -370,10 +347,7 @@ export async function eliminarCuentaInmediato(
       // explícitas. `deleteMany` (no `delete`) para que no falle si no
       // hay registro previo (PreferenciasNotif puede no existir hasta
       // que el usuario abra /perfil por primera vez).
-      await tx.verificacionTelefono.deleteMany({ where: { usuarioId } });
-      await tx.verificacionDni.deleteMany({ where: { usuarioId } });
       await tx.preferenciasNotif.deleteMany({ where: { usuarioId } });
-      await tx.limitesJuego.deleteMany({ where: { usuarioId } });
       await tx.solicitudEliminacion.deleteMany({ where: { usuarioId } });
 
       // Magic links pendientes al email original.
@@ -383,7 +357,7 @@ export async function eliminarCuentaInmediato(
     });
 
     logger.info(
-      { usuarioId, ticketsCount, canjesCount },
+      { usuarioId, ticketsCount },
       "cuenta eliminada (soft inmediato)",
     );
   }
@@ -419,13 +393,6 @@ export interface DatosExportados {
     posicionFinal: number | null;
     creadoEn: Date;
   }>;
-  canjes: Array<{
-    id: string;
-    premioNombre: string;
-    lukasUsados: number;
-    estado: string;
-    creadoEn: Date;
-  }>;
   generadoEn: Date;
 }
 
@@ -433,18 +400,11 @@ export async function generarExportDatos(
   usuarioId: string,
 ): Promise<DatosExportados> {
   const perfil = await obtenerMiPerfil(usuarioId);
-  const [tickets, canjes] = await Promise.all([
-    prisma.ticket.findMany({
-      where: { usuarioId },
-      include: { torneo: { select: { nombre: true } } },
-      orderBy: { creadoEn: "desc" },
-    }),
-    prisma.canje.findMany({
-      where: { usuarioId },
-      include: { premio: { select: { nombre: true } } },
-      orderBy: { creadoEn: "desc" },
-    }),
-  ]);
+  const tickets = await prisma.ticket.findMany({
+    where: { usuarioId },
+    include: { torneo: { select: { nombre: true } } },
+    orderBy: { creadoEn: "desc" },
+  });
 
   const { nivel: _nivel, stats: _stats, ...perfilCore } = perfil;
   return {
@@ -462,13 +422,6 @@ export async function generarExportDatos(
       puntosTotal: t.puntosTotal,
       posicionFinal: t.posicionFinal,
       creadoEn: t.creadoEn,
-    })),
-    canjes: canjes.map((c) => ({
-      id: c.id,
-      premioNombre: c.premio.nombre,
-      lukasUsados: c.lukasUsados,
-      estado: c.estado,
-      creadoEn: c.creadoEn,
     })),
     generadoEn: new Date(),
   };

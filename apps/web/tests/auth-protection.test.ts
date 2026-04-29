@@ -29,8 +29,9 @@ const MIDDLEWARE_SRC = readFileSync(
 );
 
 describe("middleware matcher — protected routes", () => {
-  it("incluye /wallet, /perfil, /mis-combinadas y /admin en PROTECTED_MATCHERS", () => {
-    expect(MIDDLEWARE_SRC).toMatch(/"\/wallet\/:path\*"/);
+  it("incluye /perfil, /mis-combinadas y /admin en PROTECTED_MATCHERS", () => {
+    // Lote 3 (Abr 2026): /wallet salió del matcher junto con la
+    // demolición del sistema de billetera (la ruta no existe más).
     expect(MIDDLEWARE_SRC).toMatch(/"\/perfil\/:path\*"/);
     expect(MIDDLEWARE_SRC).toMatch(/"\/mis-combinadas\/:path\*"/);
     expect(MIDDLEWARE_SRC).toMatch(/"\/admin"/);
@@ -51,7 +52,6 @@ describe("middleware matcher — protected routes", () => {
     // paths críticos aparezcan en ambos lugares — si alguien agrega un
     // matcher arriba pero olvida abajo, este test reventa.
     const criticosEnConfig = [
-      "/wallet/:path*",
       "/perfil/:path*",
       "/mis-combinadas/:path*",
       "/admin/:path*",
@@ -137,14 +137,6 @@ describe("force-dynamic — páginas autenticadas", () => {
   it("/mis-combinadas/page.tsx exporta dynamic = 'force-dynamic'", () => {
     const file = readFileSync(
       resolve(ROOT, "app", "(main)", "mis-combinadas", "page.tsx"),
-      "utf-8",
-    );
-    expect(file).toMatch(/export\s+const\s+dynamic\s*=\s*["']force-dynamic["']/);
-  });
-
-  it("/wallet/page.tsx exporta dynamic = 'force-dynamic'", () => {
-    const file = readFileSync(
-      resolve(ROOT, "app", "(main)", "wallet", "page.tsx"),
       "utf-8",
     );
     expect(file).toMatch(/export\s+const\s+dynamic\s*=\s*["']force-dynamic["']/);

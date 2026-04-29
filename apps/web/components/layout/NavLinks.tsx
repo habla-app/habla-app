@@ -4,8 +4,9 @@
 // líneas 132-148, 1669-1675). Client Component para detectar ruta activa con
 // usePathname. Oculto en mobile (<lg), el BottomNav toma ese rol.
 //
-// Orden exacto del mockup: Partidos · 🔴 En vivo (con live-count) ·
-// Mis combinadas · Tienda · Billetera.
+// Lote 3 (Abr 2026): pivot editorial/comunidad. Items pasan a ser
+// Inicio · Partidos · Pronósticos · Comunidad · Mis combinadas. La tienda
+// y la billetera (que linkeaban a la economía interna) salieron del nav.
 //
 // Nota — Hotfix 19 Abr: el mockup HTML define el estado default como
 // `color:var(--dark-muted)` (#7B93D0), que sobre el header navy
@@ -14,13 +15,6 @@
 // mockup y usamos `text-white/80` (11.4:1 sobre navy, AAA) con hover a
 // blanco puro (`text-white`) + background tint, manteniendo la jerarquía
 // visual original.
-//
-// Trampa conocida del design system (no fixeada en este hotfix — scope):
-// los tokens nested `text-dark-text` / `text-dark-muted` no se generan
-// como utilities porque `textColor.dark: "#001050"` (string flat) en
-// tailwind.config colisiona con `colors.dark.*` y bloquea la expansión
-// nested. Usar `text-white/N` donde haga falta color claro sobre dark
-// surface; ver CLAUDE.md §14.
 //
 // Bug #12 (Hotfix #5): el contador del link "🔴 En vivo" ya no es un
 // prop hardcoded de NavBar — ahora delegamos a `<LiveCountBadge>` que
@@ -40,9 +34,14 @@ interface NavLinkDef {
 const LINKS: NavLinkDef[] = [
   {
     href: "/",
+    label: "Inicio",
+    match: (p) => p === "/",
+  },
+  {
+    href: "/matches",
     label: "Partidos",
     match: (p) =>
-      p === "/" || p.startsWith("/matches") || p.startsWith("/torneo"),
+      p.startsWith("/matches") || p.startsWith("/torneo"),
   },
   {
     href: "/live-match",
@@ -51,19 +50,19 @@ const LINKS: NavLinkDef[] = [
     match: (p) => p.startsWith("/live-match"),
   },
   {
+    href: "/pronosticos",
+    label: "Pronósticos",
+    match: (p) => p.startsWith("/pronosticos"),
+  },
+  {
+    href: "/comunidad",
+    label: "Comunidad",
+    match: (p) => p.startsWith("/comunidad"),
+  },
+  {
     href: "/mis-combinadas",
     label: "Mis combinadas",
     match: (p) => p.startsWith("/mis-combinadas"),
-  },
-  {
-    href: "/tienda",
-    label: "Tienda",
-    match: (p) => p.startsWith("/tienda"),
-  },
-  {
-    href: "/wallet",
-    label: "Billetera",
-    match: (p) => p.startsWith("/wallet"),
   },
 ];
 
@@ -98,7 +97,7 @@ export function NavLinks({ initialLiveCount = 0 }: NavLinksProps) {
           <Link
             key={link.href}
             href={link.href}
-            data-testid={`nav-link-${link.href === "/" ? "partidos" : link.href.replace(/\//g, "")}`}
+            data-testid={`nav-link-${link.href === "/" ? "inicio" : link.href.replace(/\//g, "")}`}
             aria-current={isActive ? "page" : undefined}
             className={`flex items-center gap-1.5 rounded-sm px-4 py-[9px] text-[13px] font-semibold transition-colors duration-150 ${
               isActive ? NAV_LINK_ACTIVE_CLASSES : NAV_LINK_INACTIVE_CLASSES

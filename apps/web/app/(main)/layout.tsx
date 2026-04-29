@@ -1,15 +1,12 @@
-// Layout del grupo (main) — envuelve landing, perfil, tienda, torneos,
-// torneo/:id con NavBar arriba y BottomNav fijo en mobile. Fondo light bg-page.
+// Layout del grupo (main) — envuelve landing, perfil, torneos, torneo/:id
+// con NavBar arriba y BottomNav fijo en mobile. Fondo light bg-page.
 //
 // Las rutas /auth/* y /admin/* tienen sus propios layouts y NO heredan de éste.
 //
-// Lote 2 (Abr 2026): se removió el hidratador del balance Lukas (sistema
-// demolido) y la lectura de balanceGanadas. El NavBar ya no muestra chip
-// de saldo.
-//
-// Bug #12 (Hotfix #5): llamamos `contarLiveMatches()` una sola vez y lo
-// pasamos como `initialLiveCount` tanto al NavBar (desktop) como al
-// BottomNav (mobile).
+// Lote 3 (Abr 2026): el BottomNav ya no muestra el badge "🔴 En vivo"
+// (los items son Inicio/Partidos/Pronósticos/Comunidad/Perfil). El badge
+// sigue presente en el NavBar desktop, así que `contarLiveMatches()` se
+// mantiene como prop sólo para él.
 
 import type { ReactNode } from "react";
 import { contarLiveMatches } from "@/lib/services/live-matches.service";
@@ -35,7 +32,7 @@ export default async function MainLayout({ children }: { children: ReactNode }) 
       <NavBar initialLiveCount={liveCount} />
       <main className="flex-1 pb-24 lg:pb-10">{children}</main>
       <Footer />
-      <BottomNav initialLiveCount={liveCount} />
+      <BottomNav />
     </div>
   );
 }

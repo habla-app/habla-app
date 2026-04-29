@@ -1,11 +1,14 @@
 "use client";
 // DatosSection — mockup `.profile-section` "Datos personales" (línea
 // 3999). Filas: nombre, usuario (@handle, read-only), correo (locked),
-// teléfono (hint), fecha nac (locked), ubicación.
+// fecha nac (locked), ubicación.
 //
 // Registro formal (Abr 2026): el @handle es INMUTABLE post-registro
 // (tooltip "Tu @handle es permanente"). Email y fecha nac ya eran locked.
 // PATCH /api/v1/usuarios/me ya no acepta username.
+//
+// Lote 3 (Abr 2026): se removió la fila "Teléfono" junto con la columna
+// `telefono` del Usuario (el flujo de verificación SMS murió en Lote 1).
 //
 // Ajustes Abr 2026: nombre se muestra como "Por completar" cuando está
 // vacío o coincide con el username (signups viejos o pre-OAuth). Se
@@ -106,12 +109,6 @@ export function DatosSection({ perfil }: Props) {
         hint="Tu @handle es permanente"
       />
       <DataRow label="Correo" value={perfil.email} locked />
-      <DataRow
-        label="Teléfono"
-        value={perfil.telefono ?? "No agregado"}
-        emptyValue={!perfil.telefono}
-        hint="Para cambiar, verificá uno nuevo arriba"
-      />
       <DataRow
         label="Fecha nacimiento"
         value={
