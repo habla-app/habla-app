@@ -13,6 +13,7 @@ import { MDX_COMPONENTS } from "@/lib/content/mdx-components";
 import { TOC } from "@/components/mdx/TOC";
 import { TrackOnMount } from "@/components/analytics/TrackOnMount";
 import { BackToTop } from "@/components/legal/BackToTop";
+import { NewsletterCTA } from "@/components/marketing/NewsletterCTA";
 
 interface Params {
   slug: string;
@@ -91,6 +92,8 @@ export default function GuiaPage({ params }: { params: Params }) {
               }}
             />
           </div>
+
+          <NewsletterCTA fuente="guia" />
         </article>
       </div>
       <BackToTop />

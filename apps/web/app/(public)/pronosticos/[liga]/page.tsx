@@ -8,6 +8,7 @@ import * as pronosticos from "@/lib/content/pronosticos";
 import { MDX_COMPONENTS } from "@/lib/content/mdx-components";
 import { TrackOnMount } from "@/components/analytics/TrackOnMount";
 import { BackToTop } from "@/components/legal/BackToTop";
+import { NewsletterCTA } from "@/components/marketing/NewsletterCTA";
 
 interface Params {
   liga: string;
@@ -78,6 +79,7 @@ export default function PronosticosLigaPage({ params }: { params: Params }) {
           }}
         />
       </article>
+      <NewsletterCTA fuente="pronosticos" />
       <BackToTop />
     </div>
   );

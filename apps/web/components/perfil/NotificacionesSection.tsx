@@ -47,9 +47,9 @@ const LABELS: Array<{
     descripcion: "Nuevas ligas, premios destacados y promos",
   },
   {
-    key: "emailSemanal",
-    titulo: "Email semanal de resumen",
-    descripcion: "Tu balance, mejores partidos y estadísticas cada domingo",
+    key: "notifSemanal",
+    titulo: "Resumen semanal por email",
+    descripcion: "Tu balance, mejores partidos y artículos cada sábado",
   },
 ];
 

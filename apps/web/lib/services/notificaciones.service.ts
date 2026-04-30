@@ -48,6 +48,8 @@ export const PREFERENCIAS_DEFAULT = {
   notifSugerencias: true,
   notifCierreTorneo: true,
   notifPromos: false,
+  // Lote 10: digest semanal opt-out (default true).
+  notifSemanal: true,
   emailSemanal: false,
 } as const;
 
@@ -61,6 +63,7 @@ export interface PreferenciasNotificaciones {
   notifSugerencias: boolean;
   notifCierreTorneo: boolean;
   notifPromos: boolean;
+  notifSemanal: boolean;
   emailSemanal: boolean;
 }
 
@@ -86,6 +89,7 @@ export interface ActualizarPreferenciasInput {
   notifSugerencias?: boolean;
   notifCierreTorneo?: boolean;
   notifPromos?: boolean;
+  notifSemanal?: boolean;
   emailSemanal?: boolean;
 }
 
@@ -114,6 +118,7 @@ export async function debeNotificar(
       notifSugerencias: true,
       notifCierreTorneo: true,
       notifPromos: true,
+      notifSemanal: true,
       emailSemanal: true,
     },
   });
