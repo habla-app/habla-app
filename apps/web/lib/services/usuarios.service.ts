@@ -45,6 +45,10 @@ export interface PerfilCompleto {
   fechaNac: Date | null;
   ubicacion: string | null;
   rol: "JUGADOR" | "ADMIN";
+  /** Lote 11: si false, /comunidad/[username] muestra estado "perfil
+   *  privado" — no expone stats ni historial de predicciones. Default
+   *  true (los usuarios existentes quedan visibles). */
+  perfilPublico: boolean;
   creadoEn: Date;
   image: string | null;
   emailVerified: Date | null;
@@ -70,6 +74,7 @@ export async function obtenerMiPerfil(usuarioId: string): Promise<PerfilCompleto
       fechaNac: true,
       ubicacion: true,
       rol: true,
+      perfilPublico: true,
       creadoEn: true,
       image: true,
       emailVerified: true,
@@ -99,6 +104,7 @@ export async function obtenerMiPerfil(usuarioId: string): Promise<PerfilCompleto
     fechaNac: usuario.fechaNac,
     ubicacion: usuario.ubicacion,
     rol: usuario.rol,
+    perfilPublico: usuario.perfilPublico,
     creadoEn: usuario.creadoEn,
     image: usuario.image,
     emailVerified: usuario.emailVerified,
@@ -116,6 +122,8 @@ export interface ActualizarPerfilInput {
   nombre?: string;
   ubicacion?: string;
   image?: string;
+  /** Lote 11 — toggle de privacidad del perfil público. */
+  perfilPublico?: boolean;
 }
 
 export async function actualizarPerfil(
@@ -124,8 +132,9 @@ export async function actualizarPerfil(
 ): Promise<PerfilCompleto> {
   // Registro formal (Abr 2026): `username` ya NO es editable post-registro.
   // El @handle se elige una sola vez (en /auth/signup o /auth/completar-perfil)
-  // y queda inmutable. El service solo permite nombre, ubicación e imagen —
-  // intentar pasar username desde un caller legacy sería un bug.
+  // y queda inmutable. El service solo permite nombre, ubicación, imagen
+  // y (Lote 11) el toggle `perfilPublico`. Intentar pasar username desde
+  // un caller legacy sería un bug.
   if (patch.nombre !== undefined && patch.nombre.trim().length < 2) {
     throw new ValidacionFallida("El nombre debe tener al menos 2 caracteres.", {
       field: "nombre",
@@ -140,6 +149,9 @@ export async function actualizarPerfil(
         ? { ubicacion: patch.ubicacion.trim() || null }
         : {}),
       ...(patch.image !== undefined ? { image: patch.image } : {}),
+      ...(patch.perfilPublico !== undefined
+        ? { perfilPublico: patch.perfilPublico }
+        : {}),
     },
   });
 

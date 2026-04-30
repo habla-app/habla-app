@@ -33,6 +33,9 @@ interface SectionShellProps {
   iconTone?: SectionIconTone;
   urgent?: boolean;
   badge?: string;
+  /** Lote 11 — id para anchor links desde QuickAccessGrid (ej.
+   *  /perfil#notificaciones). */
+  anchorId?: string;
   children: ReactNode;
 }
 
@@ -43,6 +46,7 @@ export function SectionShell({
   iconTone = "data",
   urgent = false,
   badge,
+  anchorId,
   children,
 }: SectionShellProps) {
   const outer = urgent
@@ -52,7 +56,7 @@ export function SectionShell({
     ? "bg-[#FFF7ED] border-b border-urgent-high/20"
     : "bg-subtle border-b border-light";
   return (
-    <section className={outer}>
+    <section className={outer} id={anchorId}>
       <header className={`flex items-center gap-3 px-5 py-4 ${headBg}`}>
         <div
           aria-hidden

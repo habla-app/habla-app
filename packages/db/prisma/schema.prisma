@@ -28,6 +28,10 @@ model Usuario {
   ubicacion    String? // Ciudad / Región libre
   verificado   Boolean   @default(false)
   rol          Rol       @default(JUGADOR)
+  // Lote 11 (May 2026): si false el perfil público en /comunidad/[username]
+  // muestra estado "Este usuario tiene perfil privado" (no expone stats ni
+  // historial). Default true — los usuarios existentes quedan visibles.
+  perfilPublico Boolean  @default(true)
   creadoEn     DateTime  @default(now())
   deletedAt    DateTime? // Sub-Sprint 7: soft delete (anonimiza PII)
   // Campos requeridos por NextAuth Prisma Adapter

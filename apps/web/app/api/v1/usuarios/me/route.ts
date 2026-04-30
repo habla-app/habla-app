@@ -24,6 +24,8 @@ const PatchSchema = z.object({
   nombre: z.string().min(2).max(100).optional(),
   ubicacion: z.string().max(80).optional(),
   image: z.string().url().optional(),
+  // Lote 11: toggle de privacidad del perfil público.
+  perfilPublico: z.boolean().optional(),
 });
 
 export async function GET() {
