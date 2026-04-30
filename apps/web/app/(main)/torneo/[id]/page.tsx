@@ -106,8 +106,13 @@ export default async function TorneoDetallePage({ params, searchParams }: Props)
         <BackButton fallbackHref="/matches" />
       </div>
 
-      {/* MATCH HEADER */}
-      <section className="mb-5 overflow-hidden rounded-lg bg-hero-blue p-6 text-white shadow-md md:p-8">
+      {/* MATCH HEADER — Lote 11: titular "Predice X vs Y" + countdown
+          + "X tipsters compitiendo" + ribbon dorado animado arriba. */}
+      <section className="relative mb-5 overflow-hidden rounded-lg bg-hero-blue p-6 text-white shadow-md md:p-8">
+        <span
+          aria-hidden
+          className="absolute left-0 right-0 top-0 block h-[4px] animate-shimmer bg-gold-shimmer bg-[length:400px_100%]"
+        />
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3 text-[11px] font-bold uppercase tracking-[0.06em]">
           <span className="rounded-full bg-white/15 px-3 py-1 text-white/80">
             🏆 {partido.liga}
@@ -115,6 +120,10 @@ export default async function TorneoDetallePage({ params, searchParams }: Props)
           </span>
           <StatusBadge estado={vm.estadoResuelto} />
         </div>
+
+        <p className="mb-4 font-display text-[14px] font-bold uppercase tracking-[0.08em] text-brand-gold-light md:text-[16px]">
+          Predice {partido.equipoLocal} vs {partido.equipoVisita}
+        </p>
 
         <div className="mb-4 grid grid-cols-[1fr_auto_1fr] items-center gap-4 md:gap-8">
           <TeamBlock
@@ -138,8 +147,24 @@ export default async function TorneoDetallePage({ params, searchParams }: Props)
           />
         </div>
 
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-[12px] text-white/80">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5">
+            <span aria-hidden>👥</span>
+            <strong className="text-white">
+              {torneo.totalInscritos.toLocaleString("es-PE")}
+            </strong>{" "}
+            tipster{torneo.totalInscritos === 1 ? "" : "s"} compitiendo
+          </span>
+          {vm.estadoResuelto === "ABIERTO" ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-gold-dim px-3 py-1.5 font-bold text-brand-gold-light">
+              <span aria-hidden>⏱</span>
+              {estadoCopy("ABIERTO", torneo.cierreAt, now)}
+            </span>
+          ) : null}
+        </div>
+
         {partido.venue && (
-          <div className="text-center text-[11px] text-white/60">
+          <div className="mt-3 text-center text-[11px] text-white/60">
             📍 {partido.venue}
           </div>
         )}

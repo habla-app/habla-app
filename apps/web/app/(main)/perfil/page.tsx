@@ -23,6 +23,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { obtenerMiPerfil } from "@/lib/services/usuarios.service";
 import { obtenerPreferencias } from "@/lib/services/notificaciones.service";
+import { obtenerMisStatsMensuales } from "@/lib/services/leaderboard.service";
 import { ProfileHero } from "@/components/perfil/ProfileHero";
 import { StatsGrid } from "@/components/perfil/StatsGrid";
 import { QuickAccessGrid } from "@/components/perfil/QuickAccessGrid";
@@ -38,9 +39,10 @@ export default async function PerfilPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/auth/signin?callbackUrl=/perfil");
 
-  const [perfil, preferencias] = await Promise.all([
+  const [perfil, preferencias, mensual] = await Promise.all([
     obtenerMiPerfil(session.user.id),
     obtenerPreferencias(session.user.id),
+    obtenerMisStatsMensuales(session.user.id),
   ]);
 
   return (
@@ -57,12 +59,15 @@ export default async function PerfilPage() {
       <PerfilRefreshOnUpdate />
 
       <ProfileHero perfil={perfil} />
-      <StatsGrid perfil={perfil} />
+      <StatsGrid perfil={perfil} mensual={mensual} />
       <QuickAccessGrid />
 
       <VerificacionSection perfil={perfil} />
       <DatosSection perfil={perfil} />
-      <NotificacionesSection inicial={preferencias} />
+      <NotificacionesSection
+        inicial={preferencias}
+        perfilPublicoInicial={perfil.perfilPublico}
+      />
       <FooterSections email={perfil.email} />
     </div>
   );

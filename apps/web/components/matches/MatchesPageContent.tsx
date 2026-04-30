@@ -100,16 +100,26 @@ export async function MatchesPageContent({
     <div className="mx-auto w-full max-w-[1280px] px-4 pt-6 md:px-6 md:pt-8">
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0">
-          <header className="mb-5">
+          {/* Lote 11: hero compacto rebrandeado al lenguaje editorial.
+              Mantiene el data-testid del page-title para que tests +
+              navegación por anchor sigan funcionando. */}
+          <header className="mb-5 overflow-hidden rounded-md bg-gradient-to-r from-brand-blue-dark to-[#000530] px-5 py-5 text-white shadow-md md:px-7 md:py-6">
+            <span
+              aria-hidden
+              className="absolute hidden"
+            />
+            <p className="mb-1.5 font-display text-[11px] font-bold uppercase tracking-[0.1em] text-brand-gold">
+              Predice gratis · Subí en el ranking del mes
+            </p>
             <h1
-              className="font-display text-[40px] font-black uppercase leading-none tracking-[0.01em] text-dark"
+              className="font-display text-[32px] font-black uppercase leading-none tracking-[0.01em] text-white md:text-[40px]"
               data-testid="matches-page-title"
             >
               {pageTitle}
             </h1>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-d">
-              Inscríbete al torneo, arma tu combinada de 5 predicciones y
-              compite por el pozo.
+            <p className="mt-2 text-[13px] leading-relaxed text-white/80">
+              Inscribite a un torneo, armá tu combinada de 5 predicciones y
+              ganá puntos para el leaderboard mensual. S/ 1,250 al Top 10.
             </p>
           </header>
 

@@ -1,25 +1,19 @@
 "use client";
 
-// NavLinks — réplica de `.nav-links` del mockup (docs/habla-mockup-completo.html
-// líneas 132-148, 1669-1675). Client Component para detectar ruta activa con
-// usePathname. Oculto en mobile (<lg), el BottomNav toma ese rol.
+// NavLinks — Lote 11 (May 2026). Pivot editorial.
 //
-// Lote 3 (Abr 2026): pivot editorial/comunidad. Items pasan a ser
-// Inicio · Partidos · Pronósticos · Comunidad · Mis combinadas. La tienda
-// y la billetera (que linkeaban a la economía interna) salieron del nav.
+// Simplificado a 5 items: Inicio · Pronósticos · Casas · Comunidad · Blog.
+// Los items "Partidos", "En vivo" y "Mis combinadas" ya no aparecen en el
+// nav desktop — el acceso a partidos vive en el BottomNav mobile (5 items
+// del Lote 3) y en CTAs internos de la home y `/matches`. "En vivo" se
+// reduce a un dot rojo discreto al lado de "Inicio" cuando hay partidos
+// jugándose ahora; el link sigue accesible vía /live-match desde otros
+// puntos de la UI (sidebar /matches, etc.) pero sin contar como un item
+// del nav top.
 //
-// Nota — Hotfix 19 Abr: el mockup HTML define el estado default como
-// `color:var(--dark-muted)` (#7B93D0), que sobre el header navy
-// `bg-dark-surface` (#001050) da contraste ~1.5:1, muy por debajo de
-// WCAG AA (4.5:1). Priorizamos contraste sobre fidelidad literal al
-// mockup y usamos `text-white/80` (11.4:1 sobre navy, AAA) con hover a
-// blanco puro (`text-white`) + background tint, manteniendo la jerarquía
-// visual original.
-//
-// Bug #12 (Hotfix #5): el contador del link "🔴 En vivo" ya no es un
-// prop hardcoded de NavBar — ahora delegamos a `<LiveCountBadge>` que
-// lee `useLiveMatchesCount()` con polling cada 30s y devuelve null si
-// count===0. Si no hay partidos, NO aparece ningún globo rojo ni "0".
+// Contraste WCAG AA: hereda de la versión anterior (text-white/80 sobre
+// navy `bg-dark-surface`), corregido para no usar el `--dark-muted` del
+// mockup (ratio ~1.5:1).
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LiveCountBadge } from "@/components/layout/LiveCountBadge";
@@ -27,7 +21,10 @@ import { LiveCountBadge } from "@/components/layout/LiveCountBadge";
 interface NavLinkDef {
   href: string;
   label: string;
-  hasLiveIndicator?: boolean;
+  /** Si true, dibuja un dot rojo pulsante junto al label cuando hay
+   *  partidos en vivo (count > 0). El conteo viene de SSR vía
+   *  `contarLiveMatches()` y se refresca client-side cada 30s. */
+  hasLiveDot?: boolean;
   match: (pathname: string) => boolean;
 }
 
@@ -35,19 +32,8 @@ const LINKS: NavLinkDef[] = [
   {
     href: "/",
     label: "Inicio",
+    hasLiveDot: true,
     match: (p) => p === "/",
-  },
-  {
-    href: "/matches",
-    label: "Partidos",
-    match: (p) =>
-      p.startsWith("/matches") || p.startsWith("/torneo"),
-  },
-  {
-    href: "/live-match",
-    label: "En vivo",
-    hasLiveIndicator: true,
-    match: (p) => p.startsWith("/live-match"),
   },
   {
     href: "/pronosticos",
@@ -55,14 +41,19 @@ const LINKS: NavLinkDef[] = [
     match: (p) => p.startsWith("/pronosticos"),
   },
   {
+    href: "/casas",
+    label: "Casas",
+    match: (p) => p.startsWith("/casas"),
+  },
+  {
     href: "/comunidad",
     label: "Comunidad",
     match: (p) => p.startsWith("/comunidad"),
   },
   {
-    href: "/mis-combinadas",
-    label: "Mis combinadas",
-    match: (p) => p.startsWith("/mis-combinadas"),
+    href: "/blog",
+    label: "Blog",
+    match: (p) => p.startsWith("/blog"),
   },
 ];
 
@@ -103,14 +94,14 @@ export function NavLinks({ initialLiveCount = 0 }: NavLinksProps) {
               isActive ? NAV_LINK_ACTIVE_CLASSES : NAV_LINK_INACTIVE_CLASSES
             }`}
           >
-            {link.hasLiveIndicator && (
+            {link.hasLiveDot && initialLiveCount > 0 && (
               <span
                 aria-hidden
                 className="h-[7px] w-[7px] flex-shrink-0 animate-pulse-dot rounded-full bg-urgent-critical"
               />
             )}
             <span>{link.label}</span>
-            {link.hasLiveIndicator && (
+            {link.hasLiveDot && (
               <LiveCountBadge initialCount={initialLiveCount} />
             )}
           </Link>

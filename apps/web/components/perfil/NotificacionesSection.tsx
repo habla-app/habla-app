@@ -1,6 +1,16 @@
 "use client";
-// NotificacionesSection — 7 toggles con debounce 500ms. Mockup `.toggle-row`
-// (línea 4040). PATCH /api/v1/usuarios/notificaciones.
+// NotificacionesSection — toggles del perfil. Lote 11 (May 2026).
+//
+// Simplificado a 4 notificaciones + 1 toggle de privacidad ("Perfil
+// público"). El resto de los toggles legacy (sugerencias, cierre de
+// torneo) ya no se exponen en UI — el schema los conserva por
+// compatibilidad pero ningún caller los usa post-Lote 11. Default opt-in
+// se mantiene por schema; el día que un usuario los reactive vía API
+// directa, igual recibirá los avisos.
+//
+// El toggle "Perfil público" controla `Usuario.perfilPublico` (Lote 11
+// migration). Cuando está off, /comunidad/[username] muestra "perfil
+// privado" (no expone stats ni historial de predicciones).
 
 import { useEffect, useRef, useState } from "react";
 import { authedFetch } from "@/lib/api-client";
@@ -9,6 +19,8 @@ import { SectionShell } from "./SectionShell";
 
 interface Props {
   inicial: PreferenciasNotificaciones;
+  /** Lote 11 — valor inicial de `Usuario.perfilPublico`. */
+  perfilPublicoInicial: boolean;
 }
 
 const LABELS: Array<{
@@ -18,43 +30,32 @@ const LABELS: Array<{
 }> = [
   {
     key: "notifInicioTorneo",
-    titulo: "Inicio de tus torneos",
+    titulo: "Inicio de tus predicciones",
     descripcion: "Aviso cuando empiece un partido donde estás inscrito",
   },
   {
     key: "notifResultados",
     titulo: "Resultados de tus combinadas",
-    descripcion: "Puntos actualizados en vivo y resultado final",
+    descripcion: "Puntos finales y posición en el ranking del torneo",
   },
   {
-    key: "notifPremios",
-    titulo: "Premios ganados 🏆",
-    descripcion: "Cuando ganes un premio en un torneo",
-  },
-  {
-    key: "notifSugerencias",
-    titulo: "Sugerencias de torneos",
-    descripcion: "Torneos de tus equipos o ligas favoritas",
-  },
-  {
-    key: "notifCierreTorneo",
-    titulo: "Cierre de torneos ⏰",
-    descripcion: "Recordatorio cuando un torneo de tus favoritos esté por cerrar",
+    key: "notifSemanal",
+    titulo: "Resumen semanal por email",
+    descripcion: "Top tipsters, mejores cuotas y artículos cada sábado",
   },
   {
     key: "notifPromos",
     titulo: "Novedades y promociones",
     descripcion: "Nuevas ligas, premios destacados y promos",
   },
-  {
-    key: "notifSemanal",
-    titulo: "Resumen semanal por email",
-    descripcion: "Tu balance, mejores partidos y artículos cada sábado",
-  },
 ];
 
-export function NotificacionesSection({ inicial }: Props) {
+export function NotificacionesSection({
+  inicial,
+  perfilPublicoInicial,
+}: Props) {
   const [prefs, setPrefs] = useState(inicial);
+  const [perfilPublico, setPerfilPublico] = useState(perfilPublicoInicial);
   const [guardando, setGuardando] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -76,6 +77,24 @@ export function NotificacionesSection({ inicial }: Props) {
     }, 500);
   }
 
+  function togglePerfilPublico() {
+    const nuevo = !perfilPublico;
+    setPerfilPublico(nuevo);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setGuardando(true);
+      try {
+        await authedFetch("/api/v1/usuarios/me", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ perfilPublico: nuevo }),
+        });
+      } finally {
+        setGuardando(false);
+      }
+    }, 500);
+  }
+
   useEffect(
     () => () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -85,11 +104,12 @@ export function NotificacionesSection({ inicial }: Props) {
 
   return (
     <SectionShell
-      title="Notificaciones"
-      subtitle="Elige qué avisos quieres recibir"
+      title="Notificaciones y privacidad"
+      subtitle="Elige qué avisos recibir y quién puede ver tu perfil"
       icon="🔔"
       iconTone="notif"
       badge={guardando ? "Guardando…" : undefined}
+      anchorId="notificaciones"
     >
       {LABELS.map((item) => (
         <ToggleRow
@@ -101,6 +121,14 @@ export function NotificacionesSection({ inicial }: Props) {
           testId={`pref-${item.key}`}
         />
       ))}
+      {/* Toggle de privacidad — Lote 11. */}
+      <ToggleRow
+        titulo="Perfil público"
+        descripcion="Permitir que otros vean tu @handle, stats y predicciones finalizadas en /comunidad/{tu-handle}"
+        value={perfilPublico}
+        onToggle={togglePerfilPublico}
+        testId="pref-perfilPublico"
+      />
     </SectionShell>
   );
 }
