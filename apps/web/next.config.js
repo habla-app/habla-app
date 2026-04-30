@@ -34,11 +34,19 @@ const nextConfig = {
     }
 
     // Edge runtime + client bundle: los builtins de Node que solo
-    // usamos server-only (Lote 7 — child_process/fs/etc para pg_dump)
-    // deben quedar como módulos vacíos. El código que los importa
-    // está guardado por `runtime = "nodejs"` en los handlers y por
+    // usamos server-only (Lote 7 — child_process/fs/etc para pg_dump,
+    // Lote 8 — fs/path para el loader de MDX) deben quedar como módulos
+    // vacíos. El código que los importa está guardado por
+    // `runtime = "nodejs"` en los handlers y por
     // `if (NEXT_RUNTIME !== "nodejs") return` en instrumentation.ts —
     // la fallback es solo para que webpack no falle al hacer bundle.
+    //
+    // Lote 10 — agregamos también las versiones con prefijo `node:` por
+    // si algún transitive import lo usa: `resolve.fallback` matchea por
+    // string exacto, así que `fs` y `node:fs` se tratan como módulos
+    // distintos. Sin esta entrada, webpack falla con UnhandledSchemeError
+    // al bundlear cualquier archivo que importe `node:fs`/`node:path`
+    // hacia targets que no soportan el scheme.
     if (nextRuntime === "edge" || !isServer) {
       config.resolve = config.resolve || {};
       config.resolve.fallback = {
@@ -50,6 +58,13 @@ const nextConfig = {
         path: false,
         "stream/promises": false,
         zlib: false,
+        "node:child_process": false,
+        "node:fs": false,
+        "node:fs/promises": false,
+        "node:os": false,
+        "node:path": false,
+        "node:stream/promises": false,
+        "node:zlib": false,
       };
     }
 
