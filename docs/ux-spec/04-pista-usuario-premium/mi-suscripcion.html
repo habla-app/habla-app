@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Habla! v3.1 — Mi suscripción Premium</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --blue-dark:#001050;--blue-main:#0052CC;--blue-light:#1A6EFF;
+  --gold:#FFB800;--gold-dim:rgba(255,184,0,.15);--gold-light:#FFD060;
+  --green:#00D68F;
+  --bg-page:#F5F7FC;--bg-card:#FFF;--bg-subtle:#F1F4FB;
+  --text-dark:#001050;--text-body:rgba(0,16,80,.85);--text-muted:rgba(0,16,80,.58);
+  --border-light:rgba(0,16,80,.08);
+  --premium-surface:#0a0e25;--premium-surface-2:#1a1f3a;
+  --status-green:#00D68F;--status-green-bg:#D1FAE5;--status-green-text:#065F46;
+  --status-amber:#F59E0B;--status-amber-bg:#FEF3C7;--status-amber-text:#92400E;
+  --status-red:#EF4444;--status-red-bg:#FEE2E2;--status-red-text:#991B1B;
+  --whatsapp-green:#25D366;
+  --shadow-sm:0 1px 2px rgba(0,16,80,.06);
+  --r-sm:8px;--r-md:12px;--r-lg:16px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',sans-serif;background:#0A1545;min-height:100vh;display:grid;place-items:center;padding:40px 20px;color:#fff}
+.wrap{max-width:420px;width:100%}
+.cap{text-align:center;margin-bottom:20px}
+.cap-meta{font-size:11px;color:var(--gold);letter-spacing:.15em;text-transform:uppercase;margin-bottom:6px;font-family:'Barlow Condensed',sans-serif;font-weight:700}
+.cap-title{font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:800;text-transform:uppercase}
+.cap-desc{font-size:13px;color:rgba(255,255,255,.6);margin-top:4px;line-height:1.5}
+.phone{width:380px;height:780px;background:#000;border-radius:44px;padding:12px;box-shadow:0 30px 80px rgba(0,0,0,.5);position:relative;margin:20px auto 0}
+.phone::before{content:'';position:absolute;top:24px;left:50%;transform:translateX(-50%);width:110px;height:28px;background:#000;border-radius:100px;z-index:100}
+.screen{width:100%;height:100%;background:var(--bg-page);border-radius:32px;overflow:hidden;display:flex;flex-direction:column;color:var(--text-dark);position:relative}
+.scroll{flex:1;overflow-y:auto;padding-top:56px;scrollbar-width:none}
+.scroll::-webkit-scrollbar{display:none}
+.statusbar{position:absolute;top:0;left:0;right:0;height:56px;display:flex;justify-content:space-between;align-items:center;padding:16px 32px 0;font-size:13px;font-weight:600;z-index:90;color:var(--text-dark)}
+.header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#fff;border-bottom:1px solid var(--border-light);position:sticky;top:0;z-index:50}
+.logo{display:flex;align-items:center;gap:8px;font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;color:var(--blue-dark)}
+.logomark{width:28px;height:28px;background:var(--blue-dark);color:var(--gold);border-radius:8px;display:grid;place-items:center;font-size:16px}
+.user-avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--gold),#FF8C00);color:var(--blue-dark);display:grid;place-items:center;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px}
+.page-h{padding:18px 16px 8px;background:#fff}
+.page-title{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:800;text-transform:uppercase;color:var(--text-dark)}
+.page-sub{font-size:12px;color:var(--text-muted);margin-top:2px}
+.estado-card{background:linear-gradient(135deg,var(--premium-surface),var(--premium-surface-2));color:#fff;border-radius:var(--r-lg);padding:18px;margin:12px 16px;border:1px solid rgba(255,184,0,.3);position:relative;overflow:hidden}
+.estado-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent)}
+.estado-row{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.estado-icon{width:48px;height:48px;background:linear-gradient(135deg,var(--gold),var(--gold-light));border-radius:12px;display:grid;place-items:center;font-size:22px;flex-shrink:0;color:var(--blue-dark)}
+.estado-text{flex:1}
+.estado-h{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.estado-name{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;text-transform:uppercase}
+.estado-badge{padding:2px 8px;border-radius:100px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;background:var(--status-green-bg);color:var(--status-green-text)}
+.estado-d{font-size:11px;color:rgba(255,255,255,.7)}
+.estado-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.1)}
+.estado-stat{padding:8px}
+.estado-stat-l{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:rgba(255,255,255,.6);margin-bottom:3px}
+.estado-stat-v{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:800;color:var(--gold)}
+.access-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 16px 16px}
+.access-card{background:#fff;border:1px solid var(--border-light);border-radius:var(--r-md);padding:12px;display:flex;align-items:center;gap:10px}
+.access-icon{width:32px;height:32px;background:var(--bg-subtle);border-radius:8px;display:grid;place-items:center;font-size:16px;flex-shrink:0}
+.access-icon.wa{background:var(--whatsapp-green);color:#fff}
+.access-text{flex:1;min-width:0}
+.access-h{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;color:var(--text-dark)}
+.access-d{font-size:10px;color:var(--text-muted);margin-top:1px}
+.section{background:#fff;padding:16px;margin-bottom:8px}
+.section-h{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-dark);margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
+.section-link{font-size:11px;color:var(--blue-main);font-weight:600}
+.plan-row-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.plan-mini{padding:10px 8px;background:var(--bg-subtle);border:1.5px solid var(--border-light);border-radius:var(--r-sm);text-align:center;cursor:pointer}
+.plan-mini.actual{border-color:var(--gold);background:var(--gold-dim)}
+.plan-mini-name{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-dark);margin-bottom:2px}
+.plan-mini-price{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;color:var(--text-dark)}
+.plan-mini-equiv{font-size:9px;color:var(--text-muted);margin-top:2px}
+.plan-actual-badge{display:inline-block;background:var(--gold);color:var(--blue-dark);padding:1px 4px;border-radius:3px;font-size:8px;font-weight:800;letter-spacing:.05em;margin-bottom:3px}
+.pago-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border-light);font-size:12px}
+.pago-row:last-child{border-bottom:0}
+.pago-info{flex:1}
+.pago-fecha{font-weight:600;color:var(--text-dark)}
+.pago-meta{font-size:10px;color:var(--text-muted);margin-top:1px}
+.pago-monto{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;color:var(--text-dark);margin-right:8px}
+.pago-status{padding:2px 6px;border-radius:100px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.pago-status.ok{background:var(--status-green-bg);color:var(--status-green-text)}
+.pago-status.refund{background:var(--status-amber-bg);color:var(--status-amber-text)}
+.btn-cancelar{display:block;width:100%;padding:12px;background:transparent;color:var(--status-red);border:1.5px solid var(--status-red);border-radius:var(--r-md);font-size:13px;font-weight:700;text-align:center;cursor:pointer;font-family:inherit;margin-top:8px}
+.cancel-note{font-size:11px;color:var(--text-muted);text-align:center;margin-top:8px;line-height:1.4}
+.bnav{display:grid;grid-template-columns:repeat(5,1fr);background:#fff;border-top:1px solid var(--border-light);padding:8px 4px 12px;box-shadow:0 -4px 12px rgba(0,16,80,.08)}
+.nav-i{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 4px}
+.nav-icon{font-size:18px}
+.nav-l{font-size:10px;font-weight:600;color:var(--text-muted)}
+.nav-i.active .nav-l{color:var(--text-dark)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="cap">
+  <div class="cap-meta">Lote D · Vista 04</div>
+  <div class="cap-title">Mi suscripción Premium</div>
+  <div class="cap-desc">Estado card · Accesos rápidos (Channel, bot, soporte) · Cambiar plan · Historial pagos · Cancelar suscripción.</div>
+</div>
+<div class="phone">
+  <div class="screen">
+    <div class="statusbar"><span>9:41</span><span style="display:flex;gap:6px;font-size:14px"><span>📶</span><span>📡</span><span>🔋</span></span></div>
+    <div class="scroll">
+      <div class="header">
+        <div class="logo"><div class="logomark">⊕</div><span>Habla!</span></div>
+        <div class="user-avatar">JM</div>
+      </div>
+      <div class="page-h">
+        <div class="page-title">Mi suscripción</div>
+        <div class="page-sub">Gestiona tu plan, pagos y acceso al Channel</div>
+      </div>
+
+      <div class="estado-card">
+        <div class="estado-row">
+          <div class="estado-icon">💎</div>
+          <div class="estado-text">
+            <div class="estado-h">
+              <span class="estado-name">Plan Anual</span>
+              <span class="estado-badge">✓ Activa</span>
+            </div>
+            <div class="estado-d">Próxima renovación: 30 abril 2027</div>
+          </div>
+        </div>
+        <div class="estado-grid">
+          <div class="estado-stat">
+            <div class="estado-stat-l">Próximo cobro</div>
+            <div class="estado-stat-v">S/ 399</div>
+          </div>
+          <div class="estado-stat">
+            <div class="estado-stat-l">Días restantes</div>
+            <div class="estado-stat-v">347</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="access-grid">
+        <div class="access-card">
+          <div class="access-icon wa">💬</div>
+          <div class="access-text"><div class="access-h">Mi Channel</div><div class="access-d">Habla! Picks</div></div>
+        </div>
+        <div class="access-card">
+          <div class="access-icon">🤖</div>
+          <div class="access-text"><div class="access-h">Bot FAQ</div><div class="access-d">Dudas 24/7</div></div>
+        </div>
+        <div class="access-card">
+          <div class="access-icon">📊</div>
+          <div class="access-text"><div class="access-h">Picks pasados</div><div class="access-d">Histórico web</div></div>
+        </div>
+        <div class="access-card">
+          <div class="access-icon">💬</div>
+          <div class="access-text"><div class="access-h">Soporte</div><div class="access-d">FAQ + chat</div></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-h">🔄 Cambiar plan</div>
+        <div class="plan-row-grid">
+          <div class="plan-mini">
+            <div class="plan-mini-name">Mensual</div>
+            <div class="plan-mini-price">S/ 49</div>
+            <div class="plan-mini-equiv">/ mes</div>
+          </div>
+          <div class="plan-mini">
+            <div class="plan-mini-name">Trimestral</div>
+            <div class="plan-mini-price">S/ 119</div>
+            <div class="plan-mini-equiv">S/ 39.6/mes</div>
+          </div>
+          <div class="plan-mini actual">
+            <span class="plan-actual-badge">ACTUAL</span>
+            <div class="plan-mini-name">Anual</div>
+            <div class="plan-mini-price">S/ 399</div>
+            <div class="plan-mini-equiv">S/ 33.2/mes</div>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:10px">El cambio aplica desde la siguiente renovación</div>
+      </div>
+
+      <div class="section">
+        <div class="section-h">💳 Historial de pagos <span class="section-link">Descargar todo</span></div>
+        <div class="pago-row">
+          <div class="pago-info">
+            <div class="pago-fecha">30 abril 2026</div>
+            <div class="pago-meta">Plan Anual · Visa •••• 4242</div>
+          </div>
+          <div class="pago-monto">S/ 399</div>
+          <span class="pago-status ok">✓ Pagado</span>
+        </div>
+        <div class="pago-row">
+          <div class="pago-info">
+            <div class="pago-fecha">30 marzo 2026</div>
+            <div class="pago-meta">Plan Mensual · Visa •••• 4242</div>
+          </div>
+          <div class="pago-monto">S/ 49</div>
+          <span class="pago-status ok">✓ Pagado</span>
+        </div>
+        <div class="pago-row">
+          <div class="pago-info">
+            <div class="pago-fecha">28 febrero 2026</div>
+            <div class="pago-meta">Plan Mensual · Visa •••• 4242</div>
+          </div>
+          <div class="pago-monto">S/ 49</div>
+          <span class="pago-status ok">✓ Pagado</span>
+        </div>
+        <div style="text-align:center;font-size:12px;color:var(--blue-main);font-weight:600;padding:8px 0">Ver más →</div>
+      </div>
+
+      <div class="section">
+        <div class="section-h" style="color:var(--status-red)">⚠ Zona crítica</div>
+        <button class="btn-cancelar">Cancelar suscripción</button>
+        <div class="cancel-note">
+          Mantienes acceso al Channel hasta tu próxima fecha de renovación.<br>
+          No te cobramos más después.
+        </div>
+      </div>
+
+      <div style="height:24px"></div>
+    </div>
+    <div class="bnav">
+      <div class="nav-i"><div class="nav-icon">🏠</div><div class="nav-l">Inicio</div></div>
+      <div class="nav-i"><div class="nav-icon">⚽</div><div class="nav-l">Partidos</div></div>
+      <div class="nav-i"><div class="nav-icon">🏆</div><div class="nav-l">Liga</div></div>
+      <div class="nav-i active"><div class="nav-icon">💎</div><div class="nav-l">Premium</div></div>
+      <div class="nav-i"><div class="nav-icon">👤</div><div class="nav-l">Perfil</div></div>
+    </div>
+  </div>
+</div>
+</div>
+</body>
+</html>

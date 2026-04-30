@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Habla! v3.1 — Post-pago Premium</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --blue-dark:#001050;--blue-main:#0052CC;
+  --gold:#FFB800;--gold-dim:rgba(255,184,0,.15);
+  --green:#00D68F;
+  --bg-page:#F5F7FC;--bg-card:#FFF;--bg-subtle:#F1F4FB;
+  --text-dark:#001050;--text-body:rgba(0,16,80,.85);--text-muted:rgba(0,16,80,.58);
+  --border-light:rgba(0,16,80,.08);
+  --whatsapp-green:#25D366;--whatsapp-green-dark:#128C7E;
+  --r-sm:8px;--r-md:12px;--r-lg:16px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',sans-serif;background:#0A1545;min-height:100vh;display:grid;place-items:center;padding:40px 20px;color:#fff}
+.wrap{max-width:420px;width:100%}
+.cap{text-align:center;margin-bottom:20px}
+.cap-meta{font-size:11px;color:var(--gold);letter-spacing:.15em;text-transform:uppercase;margin-bottom:6px;font-family:'Barlow Condensed',sans-serif;font-weight:700}
+.cap-title{font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:800;text-transform:uppercase}
+.cap-desc{font-size:13px;color:rgba(255,255,255,.6);margin-top:4px;line-height:1.5}
+.phone{width:380px;height:780px;background:#000;border-radius:44px;padding:12px;box-shadow:0 30px 80px rgba(0,0,0,.5);position:relative;margin:20px auto 0}
+.phone::before{content:'';position:absolute;top:24px;left:50%;transform:translateX(-50%);width:110px;height:28px;background:#000;border-radius:100px;z-index:100}
+.screen{width:100%;height:100%;background:var(--bg-page);border-radius:32px;overflow:hidden;display:flex;flex-direction:column;color:var(--text-dark);position:relative}
+.scroll{flex:1;overflow-y:auto;padding-top:56px;scrollbar-width:none}
+.scroll::-webkit-scrollbar{display:none}
+.statusbar{position:absolute;top:0;left:0;right:0;height:56px;display:flex;justify-content:space-between;align-items:center;padding:16px 32px 0;font-size:13px;font-weight:600;z-index:90;color:#fff}
+.hero{background:linear-gradient(135deg,var(--green) 0%,#0aa86a 100%);color:#fff;padding:36px 16px 24px;text-align:center;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;top:-30px;right:-30px;width:160px;height:160px;background:radial-gradient(circle,rgba(255,255,255,.15),transparent 70%)}
+.check-big{width:80px;height:80px;background:#fff;color:var(--green);border-radius:50%;display:grid;place-items:center;margin:0 auto 16px;font-size:42px;font-weight:800;box-shadow:0 12px 30px rgba(0,0,0,.2)}
+.hero-h{font-family:'Barlow Condensed',sans-serif;font-size:26px;font-weight:900;text-transform:uppercase;line-height:1;margin-bottom:8px}
+.hero-sub{font-size:13px;color:rgba(255,255,255,.85);margin-bottom:18px}
+.progress{display:flex;align-items:center;gap:6px;justify-content:center}
+.dot{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;background:#fff;color:var(--green)}
+.dash{width:24px;height:2px;background:#fff}
+.cta-channel-section{background:#fff;padding:28px 16px;text-align:center}
+.wa-icon-big{width:72px;height:72px;background:var(--whatsapp-green);color:#fff;border-radius:20px;display:grid;place-items:center;margin:0 auto 12px;font-size:32px;box-shadow:0 12px 30px rgba(37,211,102,.3)}
+.cta-h{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:800;color:var(--text-dark);margin-bottom:4px}
+.cta-sub{font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.5}
+.btn-wa{background:var(--whatsapp-green);color:#fff;padding:0 24px;border-radius:var(--r-md);font-weight:800;font-size:15px;display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:56px;border:none;cursor:pointer;font-family:inherit;text-transform:uppercase;letter-spacing:.04em;box-shadow:0 8px 20px rgba(37,211,102,.4)}
+.btn-wa-sub{font-size:11px;color:var(--text-muted);margin-top:8px}
+.section{background:#fff;padding:20px 16px;border-top:1px solid var(--border-light)}
+.section-h{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:14px}
+.step{display:flex;align-items:flex-start;gap:12px;margin-bottom:14px}
+.step-num{width:28px;height:28px;background:var(--gold-dim);color:#8B6200;border-radius:50%;display:grid;place-items:center;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;flex-shrink:0}
+.step-text{flex:1;font-size:13px;line-height:1.5;color:var(--text-body)}
+.step-text strong{color:var(--text-dark)}
+.email-info{background:var(--bg-subtle);border-radius:var(--r-md);padding:14px;margin:8px 16px;display:flex;align-items:center;gap:12px;font-size:12px;color:var(--text-body)}
+.email-info-icon{width:32px;height:32px;background:var(--blue-main);color:#fff;border-radius:8px;display:grid;place-items:center;font-size:16px;flex-shrink:0}
+.access-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 16px 16px}
+.access-card{background:#fff;border:1px solid var(--border-light);border-radius:var(--r-md);padding:14px;display:flex;align-items:center;gap:10px}
+.access-icon{width:32px;height:32px;background:var(--bg-subtle);border-radius:8px;display:grid;place-items:center;font-size:16px;flex-shrink:0}
+.access-text{flex:1;min-width:0}
+.access-h{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;color:var(--text-dark)}
+.access-d{font-size:10px;color:var(--text-muted);margin-top:1px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="cap">
+  <div class="cap-meta">Lote D · Vista 03 (CRÍTICA)</div>
+  <div class="cap-title">Post-pago Premium</div>
+  <div class="cap-desc">Hero verde celebratorio · CTA gigante para unirse al WhatsApp Channel · Instrucciones numeradas · Email confirmación · Accesos rápidos. SIN BottomNav (foco total en el CTA).</div>
+</div>
+<div class="phone">
+  <div class="screen">
+    <div class="statusbar"><span>9:41</span><span style="display:flex;gap:6px;font-size:14px"><span>📶</span><span>📡</span><span>🔋</span></span></div>
+    <div class="scroll">
+      <div class="hero">
+        <div class="check-big">✓</div>
+        <div class="hero-h">¡Bienvenido<br>a Premium!</div>
+        <div class="hero-sub">Plan Anual activo hasta el 30 de abril 2027</div>
+        <div class="progress">
+          <div class="dot">✓</div>
+          <div class="dash"></div>
+          <div class="dot">✓</div>
+          <div class="dash"></div>
+          <div class="dot">✓</div>
+        </div>
+      </div>
+
+      <div class="cta-channel-section">
+        <div class="wa-icon-big">💬</div>
+        <div class="cta-h">Únete al Channel</div>
+        <div class="cta-sub">Solo 1 click para empezar a recibir los picks. El link se abrirá en WhatsApp.</div>
+        <button class="btn-wa">📱 Unirme a Habla! Picks</button>
+        <div class="btn-wa-sub">Canal privado · Solo suscriptores Premium</div>
+      </div>
+
+      <div class="section">
+        <div class="section-h">📋 Qué pasa ahora</div>
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-text"><strong>Únete al Channel</strong> con el botón verde de arriba.</div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-text"><strong>Recibirás 2-4 picks/día</strong> con razonamiento estadístico completo.</div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-text"><strong>El primer pick llega en menos de 24h</strong> (excepto domingos cuando hay menos partidos).</div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-text"><strong>Para FAQ 24/7</strong> envía cualquier mensaje al WhatsApp del bot.</div>
+        </div>
+      </div>
+
+      <div class="email-info">
+        <div class="email-info-icon">📧</div>
+        <div>Te enviamos un email a <strong>juan@email.com</strong> con tu factura y el link al Channel por si lo necesitas después.</div>
+      </div>
+
+      <div style="padding:16px 16px 8px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">⚙ Más opciones</div>
+
+      <div class="access-grid">
+        <div class="access-card">
+          <div class="access-icon">🤖</div>
+          <div class="access-text"><div class="access-h">Bot FAQ</div><div class="access-d">Resuelve dudas 24/7</div></div>
+        </div>
+        <div class="access-card">
+          <div class="access-icon">⚙</div>
+          <div class="access-text"><div class="access-h">Mi suscripción</div><div class="access-d">Gestión y pagos</div></div>
+        </div>
+        <div class="access-card">
+          <div class="access-icon">📊</div>
+          <div class="access-text"><div class="access-h">Volver al inicio</div><div class="access-d">Producto B y C</div></div>
+        </div>
+        <div class="access-card">
+          <div class="access-icon">💬</div>
+          <div class="access-text"><div class="access-h">Soporte</div><div class="access-d">Contáctanos</div></div>
+        </div>
+      </div>
+
+      <div style="height:32px"></div>
+    </div>
+  </div>
+</div>
+</div>
+</body>
+</html>

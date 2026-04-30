@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1280">
+<title>Habla! v3.1 — Admin Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --blue-dark:#001050;--blue-main:#0052CC;
+  --gold:#FFB800;--gold-dim:rgba(255,184,0,.15);
+  --green:#00D68F;
+  --bg-page:#F5F7FC;--bg-card:#FFF;--bg-subtle:#F1F4FB;
+  --text-dark:#001050;--text-body:rgba(0,16,80,.85);--text-muted:rgba(0,16,80,.58);
+  --border-light:rgba(0,16,80,.08);
+  --admin-sidebar-bg:#001050;--admin-sidebar-text:rgba(255,255,255,.85);--admin-sidebar-text-muted:rgba(255,255,255,.55);
+  --admin-sidebar-active-bg:rgba(255,184,0,.15);--admin-sidebar-active-text:#FFB800;
+  --admin-sidebar-hover-bg:rgba(255,255,255,.05);--admin-sidebar-section-label:rgba(255,255,255,.4);
+  --admin-content-bg:#F5F7FC;--admin-card-bg:#FFFFFF;--admin-table-border:rgba(0,16,80,.06);
+  --status-green:#00D68F;--status-amber:#F59E0B;--status-red:#EF4444;
+  --status-red-bg:#FEE2E2;--status-red-text:#991B1B;
+  --r-md:12px;--r-lg:16px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',sans-serif;background:#0A1545;min-height:100vh;display:grid;place-items:center;padding:40px 20px;color:#fff}
+.wrap{max-width:1400px;width:100%}
+.cap{text-align:center;margin-bottom:20px;color:rgba(255,255,255,.85)}
+.cap-meta{font-size:11px;color:var(--gold);letter-spacing:.15em;text-transform:uppercase;margin-bottom:6px;font-family:'Barlow Condensed',sans-serif;font-weight:700}
+.cap-title{font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:800;text-transform:uppercase}
+.cap-desc{font-size:13px;color:rgba(255,255,255,.6);margin-top:4px;line-height:1.5;max-width:800px;margin-left:auto;margin-right:auto}
+.frame{background:var(--admin-content-bg);border-radius:var(--r-lg);overflow:hidden;display:grid;grid-template-columns:240px 1fr;height:780px;box-shadow:0 30px 80px rgba(0,0,0,.5);margin-top:20px}
+.sidebar{background:var(--admin-sidebar-bg);color:var(--admin-sidebar-text);display:flex;flex-direction:column}
+.sb-header{padding:18px 16px;border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:8px}
+.sb-logo{width:28px;height:28px;background:var(--gold);color:var(--blue-dark);border-radius:8px;display:grid;place-items:center;font-weight:800}
+.sb-title{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:800;letter-spacing:.04em;color:#fff}
+.sb-nav{flex:1;padding:12px 8px;overflow-y:auto;scrollbar-width:none}
+.sb-nav::-webkit-scrollbar{display:none}
+.sb-section{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--admin-sidebar-section-label);padding:16px 8px 6px}
+.sb-item{display:flex;align-items:center;padding:8px 12px;border-radius:6px;font-size:13px;color:var(--admin-sidebar-text);margin-bottom:2px;position:relative;cursor:pointer}
+.sb-item:hover{background:var(--admin-sidebar-hover-bg)}
+.sb-item.active{background:var(--admin-sidebar-active-bg);color:var(--admin-sidebar-active-text);font-weight:600}
+.sb-item.active::before{content:'';position:absolute;left:0;top:8px;bottom:8px;width:3px;background:var(--gold);border-radius:2px}
+.sb-counter{margin-left:auto;background:var(--status-red);color:#fff;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:700}
+.sb-footer{padding:16px;border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:10px}
+.sb-avatar{width:32px;height:32px;background:var(--gold);color:var(--blue-dark);border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700}
+.sb-user{font-size:12px;font-weight:600;color:#fff}
+.sb-logout{font-size:10px;color:rgba(255,255,255,.55)}
+.main{display:flex;flex-direction:column;overflow:hidden;color:var(--text-dark)}
+.topbar{height:56px;background:#fff;border-bottom:1px solid var(--admin-table-border);display:flex;align-items:center;justify-content:space-between;padding:0 24px;flex-shrink:0}
+.bcrumb{font-size:13px;color:var(--text-muted)}
+.bcrumb strong{color:var(--text-dark);font-weight:600}
+.topbar-actions{display:flex;gap:8px;align-items:center}
+.btn-sm{height:32px;padding:0 12px;font-size:13px;border-radius:8px;border:none;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px}
+.btn-outline{background:transparent;color:var(--text-dark);border:1.5px solid var(--border-light)}
+.btn-ghost{background:var(--bg-subtle);color:var(--text-dark)}
+.btn-md{height:40px;padding:0 16px;font-size:14px;border-radius:10px;font-weight:600}
+.btn-gold{background:var(--gold);color:var(--blue-dark);box-shadow:0 4px 14px rgba(255,184,0,.4)}
+.content{flex:1;padding:24px;overflow-y:auto;background:var(--admin-content-bg)}
+.page-h{margin-bottom:24px;display:flex;justify-content:space-between;align-items:flex-start}
+.page-title{font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:700;color:var(--text-dark);margin-bottom:4px}
+.page-desc{font-size:13px;color:var(--text-muted)}
+.alarm{background:var(--status-red-bg);border-left:4px solid var(--status-red);border-radius:8px;padding:12px 16px;margin-bottom:20px;display:flex;align-items:center;gap:12px;color:var(--status-red-text)}
+.alarm-i{width:28px;height:28px;background:var(--status-red);color:#fff;border-radius:50%;display:grid;place-items:center;font-size:14px;flex-shrink:0;font-weight:700}
+.alarm-c{flex:1;font-size:13px}
+.alarm-l{font-size:12px;font-weight:700;color:var(--status-red-text);text-decoration:underline;margin-left:auto}
+.section-h{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-dark);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--admin-table-border)}
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+.kpi{background:var(--admin-card-bg);border:1px solid var(--admin-table-border);border-radius:var(--r-md);padding:16px;position:relative;cursor:pointer;transition:transform .15s}
+.kpi:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,16,80,.08)}
+.kpi-status{position:absolute;top:14px;right:14px;width:8px;height:8px;border-radius:50%}
+.kpi-status.good{background:var(--status-green)}
+.kpi-status.amber{background:var(--status-amber)}
+.kpi-status.red{background:var(--status-red)}
+.kpi-l{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-bottom:8px}
+.kpi-v{font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:800;color:var(--text-dark);line-height:1;margin-bottom:4px}
+.kpi-t{font-size:11px;font-weight:600;display:flex;align-items:center;gap:4px}
+.kpi-t.up{color:var(--status-green)}
+.kpi-t.down{color:var(--status-red)}
+.kpi-t.flat{color:var(--text-muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="cap">
+  <div class="cap-meta">Lote F · Vista 02</div>
+  <div class="cap-title">Admin Dashboard</div>
+  <div class="cap-desc">Sidebar lateral fijo · Banner de alarmas · 5 secciones de KPIs (Captación / Productos / Conversión / Retención / Económicos) con semáforo verde/ámbar/rojo · Tendencia ↗/↘ · Selector de rango · Optimizado 1280px+.</div>
+</div>
+<div class="frame">
+  <div class="sidebar">
+    <div class="sb-header"><div class="sb-logo">⊕</div><div class="sb-title">Habla! Admin</div></div>
+    <div class="sb-nav">
+      <div class="sb-item active">▸ Dashboard</div>
+      <div class="sb-section">Operación</div>
+      <div class="sb-item">Picks Premium <span class="sb-counter">3</span></div>
+      <div class="sb-item">Channel WhatsApp</div>
+      <div class="sb-item">Suscripciones</div>
+      <div class="sb-item">Afiliados</div>
+      <div class="sb-item">Conversiones</div>
+      <div class="sb-item">Newsletter</div>
+      <div class="sb-item">Premios mes</div>
+      <div class="sb-section">Análisis</div>
+      <div class="sb-item">KPIs</div>
+      <div class="sb-item">Cohortes</div>
+      <div class="sb-item">Mobile Vitals</div>
+      <div class="sb-item">Finanzas</div>
+      <div class="sb-item">Alarmas <span class="sb-counter">1</span></div>
+      <div class="sb-section">Sistema</div>
+      <div class="sb-item">Logs</div>
+      <div class="sb-item">Auditoría</div>
+      <div class="sb-item">Usuarios</div>
+    </div>
+    <div class="sb-footer">
+      <div class="sb-avatar">GQ</div>
+      <div style="flex:1"><div class="sb-user">Gustavo Q.</div><div class="sb-logout">Cerrar sesión</div></div>
+    </div>
+  </div>
+  <div class="main">
+    <div class="topbar">
+      <div class="bcrumb">Inicio · <strong>Dashboard</strong></div>
+      <div class="topbar-actions">
+        <button class="btn-sm btn-outline">📅 Últimos 30 días ▾</button>
+        <button class="btn-sm btn-ghost">🔄</button>
+        <button class="btn-md btn-gold">Exportar reporte</button>
+      </div>
+    </div>
+    <div class="content">
+      <div class="page-h">
+        <div>
+          <div class="page-title">Dashboard</div>
+          <div class="page-desc">Vista global del estado del negocio · Última actualización hace 5 min</div>
+        </div>
+      </div>
+
+      <div class="alarm">
+        <div class="alarm-i">!</div>
+        <div class="alarm-c"><strong>1 alarma activa:</strong> Conversión Click→Registro casa cayó a 18% (target 25%). Posible causa: problema con tracking de bono Betano.</div>
+        <a class="alarm-l">Ver acción correctiva →</a>
+      </div>
+
+      <div class="section-h">📥 Captación</div>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-status good"></div><div class="kpi-l">Visitantes únicos / mes</div><div class="kpi-v">68,420</div><div class="kpi-t up">↗ +24% vs mes anterior</div></div>
+        <div class="kpi"><div class="kpi-status good"></div><div class="kpi-l">Registros nuevos</div><div class="kpi-v">3,180</div><div class="kpi-t up">↗ +18%</div></div>
+        <div class="kpi"><div class="kpi-status amber"></div><div class="kpi-l">Tasa rebote</div><div class="kpi-v">62%</div><div class="kpi-t flat">Target &lt;60%</div></div>
+        <div class="kpi"><div class="kpi-status good"></div><div class="kpi-l">Conv. visita→registro</div><div class="kpi-v">4.6%</div><div class="kpi-t up">↗ +0.8 pts</div></div>
+      </div>
+
+      <div class="section-h">⚽ Productos B y C</div>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-status good"></div><div class="kpi-l">Vistas de partido / día</div><div class="kpi-v">2,847</div><div class="kpi-t up">↗ +12%</div></div>
+        <div class="kpi"><div class="kpi-status good"></div><div class="kpi-l">Predicciones / partido top</div><div class="kpi-v">156</div><div class="kpi-t up">↗ +22%</div></div>
+        <div class="kpi"><div class="kpi-status good"></div><div class="kpi-l">Cross-link B↔C</div><div class="kpi-v">31%</div><div class="kpi-t up">Target ≥25%</div></div>
+        <div class="kpi"><div class="kpi-status amber"></div><div class="kpi-l">Tipsters activos / mes</div><div class="kpi-v">23%</div><div class="kpi-t down">Target ≥30%</div></div>
+      </div>
+
+      <div class="section-h">💰 Conversión</div>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-status good"></div><div class="kpi-l">CTR site-wide afiliados</div><div class="kpi-v">5.8%</div><div class="kpi-t up">Target ≥5%</div></div>
+        <div class="kpi"><div class="kpi-status red"></div><div class="kpi-l">Click→Registro casa</div><div class="kpi-v">18%</div><div class="kpi-t down">Target 25%</div></div>
+        <div class="kpi"><div class="kpi-status good"></div><div class="kpi-l">Registro→FTD</div><div class="kpi-v">28%</div><div class="kpi-t up">↗ +3 pts</div></div>
+        <div class="kpi"><div class="kpi-status good"></div><div class="kpi-l">Free→Premium</div><div class="kpi-v">1.4%</div><div class="kpi-t up">Target ≥1%</div></div>
+      </div>
+
+      <div class="section-h">🔁 Retención</div>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-status good"></div><div class="kpi-l">MRR Premium</div><div class="kpi-v">S/ 41.5K</div><div class="kpi-t up">↗ +28%</div></div>
+        <div class="kpi"><div class="kpi-status good"></div><div class="kpi-l">Churn mensual</div><div class="kpi-v">14%</div><div class="kpi-t up">&lt;20% target</div></div>
+        <div class="kpi"><div class="kpi-status good"></div><div class="kpi-l">DAU/MAU ratio</div><div class="kpi-v">18%</div><div class="kpi-t up">Target ≥15%</div></div>
+        <div class="kpi"><div class="kpi-status good"></div><div class="kpi-l">Engagement Channel</div><div class="kpi-v">87%</div><div class="kpi-t up">Lecturas/envíos</div></div>
+      </div>
+
+      <div class="section-h">📈 Económicos</div>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-status good"></div><div class="kpi-l">Revenue mes</div><div class="kpi-v">S/ 87K</div><div class="kpi-t up">↗ +35%</div></div>
+        <div class="kpi"><div class="kpi-status good"></div><div class="kpi-l">Margen operativo</div><div class="kpi-v">68%</div><div class="kpi-t up">Target ≥60%</div></div>
+        <div class="kpi"><div class="kpi-status good"></div><div class="kpi-l">CAC promedio</div><div class="kpi-v">S/ 42</div><div class="kpi-t up">Target &lt;S/50</div></div>
+        <div class="kpi"><div class="kpi-status good"></div><div class="kpi-l">LTV/CAC ratio</div><div class="kpi-v">5.2x</div><div class="kpi-t up">Target ≥3x</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</body>
+</html>

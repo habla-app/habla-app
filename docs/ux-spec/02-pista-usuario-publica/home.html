@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Habla! v3.1 — Home Mobile</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --blue-dark:#001050;--blue-main:#0052CC;--blue-light:#1A6EFF;--blue-pale:#0A2080;
+  --gold:#FFB800;--gold-dim:rgba(255,184,0,.15);--gold-light:#FFD060;--gold-dark:#8B6200;
+  --green:#00D68F;--live:#FF3D3D;
+  --bg-page:#F5F7FC;--bg-card:#FFF;--bg-subtle:#F1F4FB;
+  --text-dark:#001050;--text-body:rgba(0,16,80,.85);--text-muted:rgba(0,16,80,.58);
+  --border-light:rgba(0,16,80,.08);
+  --urgent-critical:#FF2E2E;--urgent-critical-bg:#FFE5E5;--urgent-high:#FF7A00;--urgent-high-bg:#FFEDD5;
+  --premium-surface:#0a0e25;--premium-surface-2:#1a1f3a;
+  --shadow-sm:0 1px 2px rgba(0,16,80,.06),0 1px 3px rgba(0,16,80,.08);
+  --shadow-md:0 4px 12px rgba(0,16,80,.1);
+  --shadow-lg:0 12px 28px rgba(0,16,80,.14);
+  --shadow-gold:0 6px 16px rgba(255,184,0,.4);
+  --r-sm:8px;--r-md:12px;--r-lg:16px;--r-xl:20px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',sans-serif;background:#0A1545;min-height:100vh;display:grid;place-items:center;padding:40px 20px;color:#fff}
+.wrap{max-width:420px;width:100%}
+.cap{text-align:center;margin-bottom:20px;color:rgba(255,255,255,.85)}
+.cap-meta{font-size:11px;color:var(--gold);letter-spacing:.15em;text-transform:uppercase;margin-bottom:6px;font-family:'Barlow Condensed',sans-serif;font-weight:700}
+.cap-title{font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:800;text-transform:uppercase}
+.cap-desc{font-size:13px;color:rgba(255,255,255,.6);margin-top:4px;line-height:1.5}
+.phone{width:380px;height:780px;background:#000;border-radius:44px;padding:12px;box-shadow:0 30px 80px rgba(0,0,0,.5);position:relative;margin:20px auto 0}
+.phone::before{content:'';position:absolute;top:24px;left:50%;transform:translateX(-50%);width:110px;height:28px;background:#000;border-radius:100px;z-index:100}
+.screen{width:100%;height:100%;background:var(--bg-page);border-radius:32px;overflow:hidden;display:flex;flex-direction:column;color:var(--text-dark);position:relative}
+.scroll{flex:1;overflow-y:auto;padding-top:56px;scrollbar-width:none}
+.scroll::-webkit-scrollbar{display:none}
+.statusbar{position:absolute;top:0;left:0;right:0;height:56px;display:flex;justify-content:space-between;align-items:center;padding:16px 32px 0;font-size:13px;font-weight:600;z-index:90;color:var(--text-dark)}
+.header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#fff;border-bottom:1px solid var(--border-light);position:sticky;top:0;z-index:50}
+.logo{display:flex;align-items:center;gap:8px;font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;color:var(--blue-dark)}
+.logomark{width:28px;height:28px;background:var(--blue-dark);color:var(--gold);border-radius:8px;display:grid;place-items:center;font-size:16px}
+.iconbtn{width:36px;height:36px;background:var(--bg-subtle);border-radius:50%;display:grid;place-items:center;font-size:16px}
+.hero{background:radial-gradient(circle at 20% 10%,rgba(255,184,0,.15),transparent 40%),linear-gradient(135deg,var(--blue-dark) 0%,var(--blue-pale) 100%);color:#fff;padding:24px 16px 28px;position:relative;overflow:hidden}
+.hero::after{content:'';position:absolute;bottom:-50px;right:-30px;width:200px;height:200px;background:radial-gradient(circle,rgba(255,184,0,.2),transparent 70%)}
+.tagline{font-family:'Barlow Condensed',sans-serif;font-size:32px;font-weight:900;text-transform:uppercase;line-height:.95;margin-bottom:8px}
+.tagline span{color:var(--gold)}
+.sub{font-size:14px;color:rgba(255,255,255,.7);margin-bottom:18px}
+.search{display:flex;align-items:center;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:100px;padding:10px 16px;gap:8px;font-size:13px;color:rgba(255,255,255,.6)}
+.live{margin:-16px 16px 0;background:linear-gradient(135deg,var(--blue-main),var(--blue-light));color:#fff;border-radius:var(--r-lg);padding:14px;position:relative;z-index:5;box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:12px}
+.dot{width:10px;height:10px;background:var(--live);border-radius:50%;animation:pulse 1.5s infinite;flex-shrink:0}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.live .label{font-size:10px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.7);margin-bottom:3px}
+.live .title{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700}
+.live .meta{font-size:11px;color:rgba(255,255,255,.7);margin-top:2px}
+.sec{padding:24px 16px 12px}
+.sec-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.sec-h h2{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;text-transform:uppercase;color:var(--text-dark)}
+.sec-link{font-size:12px;color:var(--blue-main);font-weight:600}
+.mc{background:#fff;border-radius:var(--r-lg);padding:14px;margin-bottom:12px;box-shadow:var(--shadow-sm);border:1px solid var(--border-light)}
+.mc-league{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.mc-cd{background:var(--urgent-critical-bg);color:var(--urgent-critical);padding:2px 8px;border-radius:100px;font-size:10px;font-weight:700}
+.mc-teams{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
+.mc-team{display:flex;flex-direction:column;align-items:center;flex:1;gap:4px}
+.mc-shield{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:16px;font-weight:700}
+.mc-name{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--text-dark);text-align:center}
+.mc-vs{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:800;color:var(--text-muted)}
+.cuotas{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px}
+.cuota{background:var(--bg-subtle);padding:8px 6px;border-radius:var(--r-sm);text-align:center;border:1px solid var(--border-light);position:relative}
+.cuota.best{background:var(--gold-dim);border-color:var(--gold)}
+.cuota.best::before{content:'★';position:absolute;top:-6px;right:-4px;background:var(--gold);color:var(--blue-dark);width:16px;height:16px;border-radius:50%;font-size:10px;display:grid;place-items:center;border:2px solid #fff}
+.ch{font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:2px}
+.cv{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:800;color:var(--text-dark)}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.mini{padding:8px;border-radius:var(--r-sm);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:4px;min-height:36px;border:none;cursor:pointer;font-family:inherit}
+.mini.ghost{background:var(--bg-subtle);color:var(--text-dark)}
+.mini.blue{background:var(--blue-main);color:#fff}
+.liga{background:radial-gradient(circle at 80% 20%,rgba(255,184,0,.25),transparent 50%),linear-gradient(135deg,var(--blue-dark) 0%,var(--blue-pale) 100%);color:#fff;border-radius:var(--r-xl);padding:20px 16px;margin:0 16px 12px;position:relative;overflow:hidden;box-shadow:var(--shadow-lg)}
+.liga::before{content:'🏆';position:absolute;top:-10px;right:-10px;font-size:100px;opacity:.12;transform:rotate(-15deg)}
+.liga h2{font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:800;text-transform:uppercase;margin-bottom:8px;position:relative}
+.liga .prize{font-size:14px;margin-bottom:14px;color:rgba(255,255,255,.85);position:relative}
+.liga .prize strong{color:var(--gold);font-weight:700}
+.lstats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;position:relative}
+.lstat{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:var(--r-sm);padding:8px;text-align:center}
+.lstat-v{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;color:var(--gold)}
+.lstat-l{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:rgba(255,255,255,.7);margin-top:2px}
+.lcta{width:100%;background:var(--gold);color:var(--blue-dark);padding:14px;border-radius:var(--r-md);font-weight:800;font-size:14px;text-transform:uppercase;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 6px 16px rgba(255,184,0,.4);border:none;cursor:pointer;font-family:inherit}
+.prem{background:linear-gradient(135deg,var(--premium-surface) 0%,var(--premium-surface-2) 100%);color:#fff;border-radius:var(--r-xl);padding:16px;margin:0 16px 12px;position:relative;border:1px solid rgba(255,184,0,.3);overflow:hidden;box-shadow:0 12px 40px rgba(10,14,37,.5)}
+.prem::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent)}
+.prem-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.prem-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:100px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:linear-gradient(135deg,var(--gold),var(--gold-light));color:var(--blue-dark)}
+.prem-price{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;color:var(--gold)}
+.prem-block{background:rgba(255,255,255,.04);border:1px dashed rgba(255,255,255,.15);border-radius:var(--r-md);padding:12px;margin-bottom:10px;position:relative}
+.prem-blur{filter:blur(4px);opacity:.6}
+.prem-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,transparent 0%,rgba(0,0,0,.6) 100%);border-radius:var(--r-md);font-size:24px}
+.prem-cta{background:var(--gold);color:var(--blue-dark);padding:12px;border-radius:var(--r-md);font-weight:700;font-size:13px;text-align:center;display:flex;align-items:center;justify-content:center;gap:6px;width:100%;border:none;cursor:pointer;font-family:inherit}
+.prem-meta{display:flex;justify-content:space-between;font-size:11px;color:rgba(255,255,255,.6);margin-top:8px}
+.bnav{display:grid;grid-template-columns:repeat(5,1fr);background:#fff;border-top:1px solid var(--border-light);padding:8px 4px 12px;position:sticky;bottom:0;z-index:50;box-shadow:0 -4px 12px rgba(0,16,80,.08)}
+.nav-i{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 4px}
+.nav-icon{font-size:18px}
+.nav-l{font-size:10px;font-weight:600;color:var(--text-muted)}
+.nav-i.active .nav-l{color:var(--text-dark)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="cap">
+  <div class="cap-meta">Lote B · Vista 02</div>
+  <div class="cap-title">Home — visitante anónimo</div>
+  <div class="cap-desc">Tagline · Live banner · Próximos partidos · Liga Habla! card · Premium teaser bloqueado · Bottom nav 5 ítems.</div>
+</div>
+<div class="phone">
+  <div class="screen">
+    <div class="statusbar"><span>9:41</span><span style="display:flex;gap:6px;font-size:14px"><span>📶</span><span>📡</span><span>🔋</span></span></div>
+    <div class="scroll">
+      <div class="header">
+        <div class="logo"><div class="logomark">⊕</div><span>Habla!</span></div>
+        <div style="display:flex;gap:10px;align-items:center"><div class="iconbtn">🔔</div><div class="iconbtn">☰</div></div>
+      </div>
+      <div class="hero">
+        <div class="tagline">Todas las fijas<br><span>en una</span></div>
+        <div class="sub">Análisis, cuotas comparadas, comunidad y picks Premium.</div>
+        <div class="search"><span>🔍</span> Busca un partido o equipo...</div>
+      </div>
+      <div class="live">
+        <div class="dot"></div>
+        <div style="flex:1">
+          <div class="label">En vivo · 67'</div>
+          <div class="title">Sporting Cristal vs Melgar</div>
+          <div class="meta">2-1 · Cuotas en vivo disponibles</div>
+        </div>
+        <span style="font-size:16px">›</span>
+      </div>
+      <div class="sec">
+        <div class="sec-h"><h2>⚡ Próximos partidos</h2><span class="sec-link">Ver todos ›</span></div>
+        <div class="mc">
+          <div class="mc-league"><span>🏆 Liga 1 Perú · Apertura</span><span class="mc-cd">Cierra en 8 min</span></div>
+          <div class="mc-teams">
+            <div class="mc-team"><div class="mc-shield" style="background:linear-gradient(135deg,#1E40AF,#3B82F6)">A</div><div class="mc-name">Alianza Lima</div></div>
+            <span class="mc-vs">VS</span>
+            <div class="mc-team"><div class="mc-shield" style="background:linear-gradient(135deg,#7C2D12,#DC2626)">U</div><div class="mc-name">Universitario</div></div>
+          </div>
+          <div class="cuotas">
+            <div class="cuota best"><div class="ch">Betano</div><div class="cv">2.05</div></div>
+            <div class="cuota"><div class="ch">Betsson</div><div class="cv">2.00</div></div>
+            <div class="cuota"><div class="ch">1xBet</div><div class="cv">1.98</div></div>
+          </div>
+          <div class="actions">
+            <button class="mini ghost">📊 Ver análisis</button>
+            <button class="mini blue">🏆 Predecir</button>
+          </div>
+        </div>
+        <div class="mc">
+          <div class="mc-league"><span>⚔️ Champions · Semifinal</span><span class="mc-cd" style="background:rgba(255,122,0,.15);color:var(--urgent-high)">Mañana 3pm</span></div>
+          <div class="mc-teams">
+            <div class="mc-team"><div class="mc-shield" style="background:linear-gradient(135deg,#7F1D1D,#DC2626)">R</div><div class="mc-name">Real Madrid</div></div>
+            <span class="mc-vs">VS</span>
+            <div class="mc-team"><div class="mc-shield" style="background:linear-gradient(135deg,#1E3A8A,#1D4ED8)">M</div><div class="mc-name">Man City</div></div>
+          </div>
+          <div class="cuotas">
+            <div class="cuota best"><div class="ch">Betsson</div><div class="cv">2.45</div></div>
+            <div class="cuota"><div class="ch">Stake</div><div class="cv">2.40</div></div>
+            <div class="cuota"><div class="ch">Betano</div><div class="cv">2.35</div></div>
+          </div>
+          <div class="actions">
+            <button class="mini ghost">📊 Ver análisis</button>
+            <button class="mini blue">🏆 Predecir</button>
+          </div>
+        </div>
+      </div>
+      <div class="liga">
+        <h2>🏆 Liga Habla!</h2>
+        <div class="prize">Compite gratis · Top 10 gana <strong>S/ 1,250</strong> al mes</div>
+        <div class="lstats">
+          <div class="lstat"><div class="lstat-v">2,847</div><div class="lstat-l">Tipsters</div></div>
+          <div class="lstat"><div class="lstat-v">S/ 500</div><div class="lstat-l">1er premio</div></div>
+          <div class="lstat"><div class="lstat-v">12d</div><div class="lstat-l">Cierra mes</div></div>
+        </div>
+        <button class="lcta">🚀 Empezar gratis</button>
+      </div>
+      <div class="prem">
+        <div class="prem-row">
+          <span class="prem-pill">💎 Pick Premium del día</span>
+          <span class="prem-price">S/ 49/mes</span>
+        </div>
+        <div class="prem-block">
+          <div class="prem-blur">
+            <div style="font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;margin-bottom:4px">Real Madrid vs Man City</div>
+            <div style="font-size:12px;color:rgba(255,255,255,.7)">Recomendación: BTTS Sí @ 1.85 · EV+ 12%</div>
+          </div>
+          <div class="prem-overlay">🔒</div>
+        </div>
+        <button class="prem-cta">⚡ Desbloquear con Premium</button>
+        <div class="prem-meta"><span>📊 65% acierto este mes</span><span>847 suscriptores</span></div>
+      </div>
+      <div style="height:24px"></div>
+    </div>
+    <div class="bnav">
+      <div class="nav-i active"><div class="nav-icon">🏠</div><div class="nav-l">Inicio</div></div>
+      <div class="nav-i"><div class="nav-icon">⚽</div><div class="nav-l">Partidos</div></div>
+      <div class="nav-i"><div class="nav-icon">🏆</div><div class="nav-l">Liga</div></div>
+      <div class="nav-i"><div class="nav-icon">💎</div><div class="nav-l">Premium</div></div>
+      <div class="nav-i"><div class="nav-icon">👤</div><div class="nav-l">Perfil</div></div>
+    </div>
+  </div>
+</div>
+</div>
+</body>
+</html>

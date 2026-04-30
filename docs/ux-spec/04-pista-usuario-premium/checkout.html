@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Habla! v3.1 — Checkout Premium</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --blue-dark:#001050;--blue-main:#0052CC;--blue-light:#1A6EFF;
+  --gold:#FFB800;--gold-dim:rgba(255,184,0,.15);
+  --green:#00D68F;
+  --bg-page:#F5F7FC;--bg-card:#FFF;--bg-subtle:#F1F4FB;
+  --text-dark:#001050;--text-body:rgba(0,16,80,.85);--text-muted:rgba(0,16,80,.58);
+  --border-light:rgba(0,16,80,.08);--border-strong:rgba(0,16,80,.16);
+  --shadow-gold-cta:0 4px 14px rgba(255,184,0,.4);
+  --r-sm:8px;--r-md:12px;--r-lg:16px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',sans-serif;background:#0A1545;min-height:100vh;display:grid;place-items:center;padding:40px 20px;color:#fff}
+.wrap{max-width:420px;width:100%}
+.cap{text-align:center;margin-bottom:20px}
+.cap-meta{font-size:11px;color:var(--gold);letter-spacing:.15em;text-transform:uppercase;margin-bottom:6px;font-family:'Barlow Condensed',sans-serif;font-weight:700}
+.cap-title{font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:800;text-transform:uppercase}
+.cap-desc{font-size:13px;color:rgba(255,255,255,.6);margin-top:4px;line-height:1.5}
+.phone{width:380px;height:780px;background:#000;border-radius:44px;padding:12px;box-shadow:0 30px 80px rgba(0,0,0,.5);position:relative;margin:20px auto 0}
+.phone::before{content:'';position:absolute;top:24px;left:50%;transform:translateX(-50%);width:110px;height:28px;background:#000;border-radius:100px;z-index:100}
+.screen{width:100%;height:100%;background:var(--bg-page);border-radius:32px;overflow:hidden;display:flex;flex-direction:column;color:var(--text-dark);position:relative}
+.scroll{flex:1;overflow-y:auto;padding-top:56px;scrollbar-width:none}
+.scroll::-webkit-scrollbar{display:none}
+.statusbar{position:absolute;top:0;left:0;right:0;height:56px;display:flex;justify-content:space-between;align-items:center;padding:16px 32px 0;font-size:13px;font-weight:600;z-index:90;color:var(--text-dark)}
+.header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#fff;border-bottom:1px solid var(--border-light);position:sticky;top:0;z-index:50}
+.logo{display:flex;align-items:center;gap:8px;font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;color:var(--blue-dark)}
+.logomark{width:28px;height:28px;background:var(--blue-dark);color:var(--gold);border-radius:8px;display:grid;place-items:center;font-size:16px}
+.hero{background:linear-gradient(135deg,var(--blue-dark) 0%,var(--blue-main) 100%);color:#fff;padding:18px 16px}
+.hero-h{font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;text-transform:uppercase;margin-bottom:4px}
+.hero-sub{font-size:12px;color:rgba(255,255,255,.7);margin-bottom:14px}
+.progress{display:flex;align-items:center;gap:6px}
+.dot{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700}
+.dot.done{background:var(--gold);color:var(--blue-dark)}
+.dot.curr{background:#fff;color:var(--blue-dark);outline:3px solid rgba(255,184,0,.4)}
+.dot.pending{background:rgba(255,255,255,.15);color:rgba(255,255,255,.5)}
+.dash{flex:1;height:2px;background:rgba(255,255,255,.2)}
+.dash.done{background:var(--gold)}
+.plan-resumen{background:#fff;border:2px solid var(--gold);border-radius:var(--r-md);padding:14px;margin:14px 16px}
+.plan-resumen-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.plan-resumen-name{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:800;color:var(--text-dark);text-transform:uppercase}
+.plan-resumen-precio{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:800;color:var(--text-dark)}
+.plan-resumen-detalles{display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:8px}
+.plan-cambiar{font-size:11px;color:var(--blue-main);font-weight:700;text-align:center;padding:6px;border-top:1px solid var(--border-light)}
+.section{padding:16px;background:#fff;margin-bottom:8px}
+.section-h{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:10px}
+.field{margin-bottom:12px}
+.label{font-size:11px;font-weight:600;color:var(--text-dark);margin-bottom:4px;display:block}
+.input{width:100%;height:48px;padding:0 14px;border:1.5px solid var(--border-light);border-radius:var(--r-md);background:#fff;font-size:14px;color:var(--text-dark);font-family:'DM Sans',sans-serif}
+.input.readonly{background:var(--bg-subtle);color:var(--text-muted)}
+.fields-row{display:grid;grid-template-columns:1fr 80px;gap:8px}
+.fields-row-3{display:grid;grid-template-columns:120px 1fr 80px;gap:8px}
+.card-icon{display:flex;justify-content:flex-end;align-items:center;gap:6px;margin-top:4px}
+.card-brand{padding:2px 6px;background:#1A1F71;color:#fff;border-radius:3px;font-size:9px;font-weight:800;font-family:monospace}
+.card-brand.mc{background:#EB001B}
+.security{padding:14px 16px;background:var(--bg-subtle);margin-bottom:8px}
+.security-row{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-muted);margin-bottom:6px}
+.security-row:last-child{margin-bottom:0}
+.security-icon{width:18px;height:18px;background:var(--green);color:#fff;border-radius:50%;display:grid;place-items:center;font-size:10px;flex-shrink:0}
+.logos{display:flex;gap:8px;align-items:center;margin-top:8px}
+.logo-bank{padding:3px 8px;background:#fff;border:1px solid var(--border-light);border-radius:4px;font-size:10px;font-weight:700;color:var(--text-dark);font-family:monospace}
+.sticky{background:#fff;border-top:1px solid var(--border-light);padding:12px 14px;display:flex;gap:8px;box-shadow:0 -4px 12px rgba(0,16,80,.08)}
+.btn-gold{background:var(--gold);color:var(--blue-dark);padding:0 16px;border-radius:var(--r-md);font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;gap:6px;flex:1;height:52px;border:none;cursor:pointer;font-family:inherit;box-shadow:var(--shadow-gold-cta)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="cap">
+  <div class="cap-meta">Lote D · Vista 02</div>
+  <div class="cap-title">Checkout Premium</div>
+  <div class="cap-desc">Hero con progreso · Plan resumen · Form OpenPay embebido · Seguridad badges · Sticky CTA pagar.</div>
+</div>
+<div class="phone">
+  <div class="screen">
+    <div class="statusbar"><span>9:41</span><span style="display:flex;gap:6px;font-size:14px"><span>📶</span><span>📡</span><span>🔋</span></span></div>
+    <div class="scroll">
+      <div class="header">
+        <div class="logo"><div class="logomark">⊕</div><span>Habla!</span></div>
+        <span style="font-size:13px;color:var(--text-muted)">‹ Volver</span>
+      </div>
+      <div class="hero">
+        <div class="hero-h">Activa tu Premium</div>
+        <div class="hero-sub">Falta 1 paso · Estás a un click</div>
+        <div class="progress">
+          <div class="dot done">✓</div>
+          <div class="dash done"></div>
+          <div class="dot curr">2</div>
+          <div class="dash"></div>
+          <div class="dot pending">3</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:9px;color:rgba(255,255,255,.6)"><span>Plan</span><span>Pagar</span><span>Channel</span></div>
+      </div>
+
+      <div class="plan-resumen">
+        <div class="plan-resumen-h">
+          <div>
+            <div class="plan-resumen-name">Anual · Más popular</div>
+            <div style="font-size:11px;color:var(--green);font-weight:700">Ahorras 32%</div>
+          </div>
+          <div class="plan-resumen-precio">S/ 399</div>
+        </div>
+        <div class="plan-resumen-detalles">
+          <span>S/ 33.2 al mes</span>
+          <span>✓ Garantía 7 días</span>
+        </div>
+        <div class="plan-cambiar">Cambiar plan ›</div>
+      </div>
+
+      <div class="section">
+        <div class="section-h">Tus datos</div>
+        <div class="field">
+          <label class="label">Nombre completo</label>
+          <input class="input" value="Juan Martínez" />
+        </div>
+        <div class="field">
+          <label class="label">Email</label>
+          <input class="input readonly" value="juan@email.com" readonly />
+        </div>
+        <div class="fields-row">
+          <div class="field">
+            <label class="label">Tipo doc.</label>
+            <select class="input"><option>DNI</option></select>
+          </div>
+          <div class="field">
+            <label class="label">Número</label>
+            <input class="input" placeholder="12345678" />
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-h">💳 Tarjeta</div>
+        <div class="field">
+          <label class="label">Número de tarjeta</label>
+          <input class="input" placeholder="•••• •••• •••• ••••" />
+          <div class="card-icon">
+            <span class="card-brand">VISA</span>
+            <span class="card-brand mc">MC</span>
+          </div>
+        </div>
+        <div class="fields-row">
+          <div class="field">
+            <label class="label">Vencimiento (MM/AA)</label>
+            <input class="input" placeholder="MM/AA" />
+          </div>
+          <div class="field">
+            <label class="label">CVV</label>
+            <input class="input" placeholder="123" />
+          </div>
+        </div>
+        <div class="field">
+          <label class="label">Nombre como aparece en la tarjeta</label>
+          <input class="input" />
+        </div>
+      </div>
+
+      <div class="security">
+        <div class="security-row"><div class="security-icon">🔒</div>Pago procesado por OpenPay BBVA</div>
+        <div class="security-row"><div class="security-icon">🛡</div>Tarjeta encriptada con TLS</div>
+        <div class="security-row"><div class="security-icon">✓</div>No guardamos datos de tarjeta</div>
+        <div class="logos">
+          <span class="logo-bank">BBVA</span>
+          <span class="logo-bank">OpenPay</span>
+          <span class="logo-bank">PCI DSS</span>
+        </div>
+      </div>
+
+      <div style="text-align:center;padding:16px;font-size:11px;color:var(--text-muted)">
+        Al continuar aceptas <a style="color:var(--blue-main)">Términos</a> y <a style="color:var(--blue-main)">Privacidad</a>.<br>
+        Renovación automática anual. Cancela cuando quieras desde tu perfil.
+      </div>
+      <div style="height:24px"></div>
+    </div>
+    <div class="sticky">
+      <button class="btn-gold">💎 Pagar S/ 399 · Activar</button>
+    </div>
+  </div>
+</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Habla! v3.1 — Perfil</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --blue-dark:#001050;--blue-main:#0052CC;--blue-light:#1A6EFF;
+  --gold:#FFB800;--gold-dim:rgba(255,184,0,.15);--gold-dark:#8B6200;
+  --green:#00D68F;
+  --bg-page:#F5F7FC;--bg-card:#FFF;--bg-subtle:#F1F4FB;
+  --text-dark:#001050;--text-body:rgba(0,16,80,.85);--text-muted:rgba(0,16,80,.58);
+  --border-light:rgba(0,16,80,.08);
+  --premium-surface:#0a0e25;--premium-surface-2:#1a1f3a;
+  --status-green:#00D68F;--status-amber:#F59E0B;--status-red:#EF4444;
+  --shadow-sm:0 1px 2px rgba(0,16,80,.06);
+  --r-sm:8px;--r-md:12px;--r-lg:16px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',sans-serif;background:#0A1545;min-height:100vh;display:grid;place-items:center;padding:40px 20px;color:#fff}
+.wrap{max-width:420px;width:100%}
+.cap{text-align:center;margin-bottom:20px}
+.cap-meta{font-size:11px;color:var(--gold);letter-spacing:.15em;text-transform:uppercase;margin-bottom:6px;font-family:'Barlow Condensed',sans-serif;font-weight:700}
+.cap-title{font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:800;text-transform:uppercase}
+.cap-desc{font-size:13px;color:rgba(255,255,255,.6);margin-top:4px;line-height:1.5}
+.phone{width:380px;height:780px;background:#000;border-radius:44px;padding:12px;box-shadow:0 30px 80px rgba(0,0,0,.5);position:relative;margin:20px auto 0}
+.phone::before{content:'';position:absolute;top:24px;left:50%;transform:translateX(-50%);width:110px;height:28px;background:#000;border-radius:100px;z-index:100}
+.screen{width:100%;height:100%;background:var(--bg-page);border-radius:32px;overflow:hidden;display:flex;flex-direction:column;color:var(--text-dark);position:relative}
+.scroll{flex:1;overflow-y:auto;padding-top:56px;scrollbar-width:none}
+.scroll::-webkit-scrollbar{display:none}
+.statusbar{position:absolute;top:0;left:0;right:0;height:56px;display:flex;justify-content:space-between;align-items:center;padding:16px 32px 0;font-size:13px;font-weight:600;z-index:90;color:var(--text-dark)}
+.header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#fff;border-bottom:1px solid var(--border-light);position:sticky;top:0;z-index:50}
+.logo{display:flex;align-items:center;gap:8px;font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;color:var(--blue-dark)}
+.logomark{width:28px;height:28px;background:var(--blue-dark);color:var(--gold);border-radius:8px;display:grid;place-items:center;font-size:16px}
+.user-avatar-h{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--gold),#FF8C00);color:var(--blue-dark);display:grid;place-items:center;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px}
+.page-h{padding:18px 16px 8px;background:#fff}
+.page-title{font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:800;text-transform:uppercase;color:var(--text-dark)}
+.page-sub{font-size:13px;color:var(--text-muted);margin-top:2px}
+.profile-hero{background:linear-gradient(135deg,var(--blue-dark) 0%,var(--blue-main) 100%);color:#fff;padding:24px 16px;text-align:center;position:relative;overflow:hidden}
+.profile-hero::before{content:'';position:absolute;top:-40px;right:-40px;width:160px;height:160px;background:radial-gradient(circle,rgba(255,184,0,.15),transparent 70%)}
+.avatar-big{width:80px;height:80px;border-radius:20px;background:linear-gradient(135deg,var(--gold),#FF8C00);color:var(--blue-dark);display:grid;place-items:center;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:32px;margin:0 auto 12px;box-shadow:0 8px 20px rgba(0,0,0,.2)}
+.username{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:8px}
+.prem-badge{background:linear-gradient(135deg,var(--gold),var(--gold-dim));color:var(--blue-dark);padding:3px 10px;border-radius:100px;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase}
+.fullname{font-size:13px;color:rgba(255,255,255,.7);margin:4px 0 16px}
+.nivel-bar-wrap{background:rgba(255,255,255,.1);border-radius:100px;height:8px;margin-bottom:6px;overflow:hidden}
+.nivel-bar{background:linear-gradient(90deg,var(--gold),var(--gold-dim));height:100%;width:62%;border-radius:100px}
+.nivel-info{display:flex;justify-content:space-between;font-size:11px;color:rgba(255,255,255,.7)}
+.nivel-info strong{color:var(--gold)}
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:16px;background:#fff}
+.stat-card{background:var(--bg-subtle);border-radius:var(--r-md);padding:12px;text-align:center}
+.stat-val{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:800;color:var(--text-dark);line-height:1}
+.stat-lbl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-top:4px}
+.stat-trend{font-size:9px;color:var(--green);font-weight:700;margin-top:2px}
+.prem-status{background:linear-gradient(135deg,var(--premium-surface),var(--premium-surface-2));color:#fff;border-radius:var(--r-lg);padding:16px;margin:0 16px 12px;border:1px solid rgba(255,184,0,.3);position:relative;overflow:hidden}
+.prem-status::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent)}
+.prem-status-row{display:flex;align-items:center;gap:12px}
+.prem-icon{width:44px;height:44px;background:linear-gradient(135deg,var(--gold),var(--gold-dim));border-radius:12px;display:grid;place-items:center;font-size:22px;flex-shrink:0}
+.prem-status-text{flex:1}
+.prem-status-h{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;text-transform:uppercase}
+.prem-status-d{font-size:11px;color:rgba(255,255,255,.7);margin-top:2px}
+.prem-cta-btn{background:var(--gold);color:var(--blue-dark);padding:8px 14px;border-radius:var(--r-sm);font-size:11px;font-weight:700;border:none;cursor:pointer;font-family:inherit}
+.qa-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 16px 16px}
+.qa-card{background:#fff;border:1px solid var(--border-light);border-radius:var(--r-md);padding:14px;display:flex;align-items:center;gap:10px;cursor:pointer}
+.qa-icon{width:36px;height:36px;background:var(--bg-subtle);border-radius:10px;display:grid;place-items:center;font-size:18px;flex-shrink:0}
+.qa-text{flex:1;min-width:0}
+.qa-title{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--text-dark);line-height:1.2}
+.qa-sub{font-size:10px;color:var(--text-muted);margin-top:2px}
+.casas-section{background:#fff;padding:16px;margin-bottom:8px}
+.section-title{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-dark);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+.section-link{font-size:11px;color:var(--blue-main);font-weight:600}
+.casa-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border-light)}
+.casa-row:last-child{border-bottom:0}
+.casa-logo{width:36px;height:36px;border-radius:8px;background:linear-gradient(135deg,var(--blue-main),var(--blue-light));color:#fff;display:grid;place-items:center;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;flex-shrink:0}
+.casa-info{flex:1;min-width:0}
+.casa-name{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--text-dark)}
+.casa-meta{font-size:11px;color:var(--text-muted);margin-top:1px}
+.casa-meta .active{color:var(--green);font-weight:600}
+.casa-link{font-size:13px;color:var(--blue-main);font-weight:700}
+.add-casa{display:flex;align-items:center;gap:10px;padding:12px;margin-top:12px;background:var(--gold-dim);border:1px dashed var(--gold);border-radius:var(--r-md);font-size:12px;font-weight:700;color:var(--gold-dark);cursor:pointer}
+.add-casa-icon{width:28px;height:28px;background:var(--gold);color:var(--blue-dark);border-radius:50%;display:grid;place-items:center;font-size:14px;font-weight:800;flex-shrink:0}
+.notif-section{background:#fff;padding:16px;margin-bottom:8px}
+.notif-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border-light)}
+.notif-row:last-child{border-bottom:0}
+.notif-text{flex:1}
+.notif-h{font-size:13px;font-weight:600;color:var(--text-dark)}
+.notif-d{font-size:11px;color:var(--text-muted);margin-top:2px}
+.toggle{width:40px;height:24px;background:var(--bg-subtle);border-radius:100px;position:relative;cursor:pointer;flex-shrink:0;transition:.2s}
+.toggle.on{background:var(--green)}
+.toggle::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.toggle.on::after{left:19px}
+.bnav{display:grid;grid-template-columns:repeat(5,1fr);background:#fff;border-top:1px solid var(--border-light);padding:8px 4px 12px;box-shadow:0 -4px 12px rgba(0,16,80,.08)}
+.nav-i{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 4px}
+.nav-icon{font-size:18px}
+.nav-l{font-size:10px;font-weight:600;color:var(--text-muted)}
+.nav-i.active .nav-l{color:var(--text-dark)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="cap">
+  <div class="cap-meta">Lote C · Vista 02</div>
+  <div class="cap-title">Perfil del usuario</div>
+  <div class="cap-desc">ProfileHero · Stats · Premium status · Quick access · Casas conectadas · Notificaciones · Footer sections.</div>
+</div>
+<div class="phone">
+  <div class="screen">
+    <div class="statusbar"><span>9:41</span><span style="display:flex;gap:6px;font-size:14px"><span>📶</span><span>📡</span><span>🔋</span></span></div>
+    <div class="scroll">
+      <div class="header">
+        <div class="logo"><div class="logomark">⊕</div><span>Habla!</span></div>
+        <div class="user-avatar-h">JM</div>
+      </div>
+      <div class="page-h">
+        <div class="page-title">Mi perfil</div>
+        <div class="page-sub">Hola, Juan Martínez</div>
+      </div>
+      <div class="profile-hero">
+        <div class="avatar-big">JM</div>
+        <div class="username">JuanM <span class="prem-badge">💎 Premium</span></div>
+        <div class="fullname">Juan Martínez · Lima, Perú</div>
+        <div class="nivel-bar-wrap"><div class="nivel-bar"></div></div>
+        <div class="nivel-info"><span><strong>Nivel 4</strong> · 312 / 500 pts</span><span>+47 para Nivel 5</span></div>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-val">87</div><div class="stat-lbl">Predicciones</div></div>
+        <div class="stat-card"><div class="stat-val">41</div><div class="stat-lbl">Aciertos</div></div>
+        <div class="stat-card"><div class="stat-val">47%</div><div class="stat-lbl">Acierto</div><div class="stat-trend">↗ +3% sem.</div></div>
+        <div class="stat-card"><div class="stat-val">312</div><div class="stat-lbl">Mejor mes</div></div>
+        <div class="stat-card"><div class="stat-val">#42</div><div class="stat-lbl">Pos. histórica</div></div>
+        <div class="stat-card"><div class="stat-val">4</div><div class="stat-lbl">Nivel</div></div>
+      </div>
+      <div class="prem-status">
+        <div class="prem-status-row">
+          <div class="prem-icon">💎</div>
+          <div class="prem-status-text">
+            <div class="prem-status-h">Plan Mensual · Activo</div>
+            <div class="prem-status-d">Próximo cobro: 15 may · S/ 49</div>
+          </div>
+          <button class="prem-cta-btn">Gestionar →</button>
+        </div>
+      </div>
+      <div class="qa-grid">
+        <div class="qa-card"><div class="qa-icon">📊</div><div class="qa-text"><div class="qa-title">Mis predicciones</div><div class="qa-sub">87 totales</div></div></div>
+        <div class="qa-card"><div class="qa-icon">🔗</div><div class="qa-text"><div class="qa-title">Mi link de referido</div><div class="qa-sub">3 referidos</div></div></div>
+        <div class="qa-card"><div class="qa-icon">📧</div><div class="qa-text"><div class="qa-title">Newsletter</div><div class="qa-sub">Suscrito</div></div></div>
+        <div class="qa-card"><div class="qa-icon">💬</div><div class="qa-text"><div class="qa-title">Soporte</div><div class="qa-sub">FAQ + chat</div></div></div>
+      </div>
+      <div class="casas-section">
+        <div class="section-title">🏠 Mis casas conectadas <span class="section-link">+ Conectar</span></div>
+        <div class="casa-row">
+          <div class="casa-logo">B</div>
+          <div class="casa-info">
+            <div class="casa-name">Betano</div>
+            <div class="casa-meta"><span class="active">● Activa</span> · 12 apuestas este mes</div>
+          </div>
+          <span class="casa-link">→</span>
+        </div>
+        <div class="casa-row">
+          <div class="casa-logo" style="background:linear-gradient(135deg,#7C2D12,#DC2626)">S</div>
+          <div class="casa-info">
+            <div class="casa-name">Stake</div>
+            <div class="casa-meta"><span class="active">● Activa</span> · 5 apuestas este mes</div>
+          </div>
+          <span class="casa-link">→</span>
+        </div>
+        <div class="add-casa">
+          <div class="add-casa-icon">+</div>
+          <span>Conecta una nueva casa (bono S/100 nuevos)</span>
+        </div>
+      </div>
+      <div class="notif-section">
+        <div class="section-title">🔔 Notificaciones</div>
+        <div class="notif-row">
+          <div class="notif-text"><div class="notif-h">Inicio de torneos</div><div class="notif-d">Cuando se abre un torneo nuevo</div></div>
+          <div class="toggle on"></div>
+        </div>
+        <div class="notif-row">
+          <div class="notif-text"><div class="notif-h">Resultados</div><div class="notif-d">Cuando finaliza un partido tuyo</div></div>
+          <div class="toggle on"></div>
+        </div>
+        <div class="notif-row">
+          <div class="notif-text"><div class="notif-h">Picks Premium</div><div class="notif-d">Alertas en WhatsApp</div></div>
+          <div class="toggle on"></div>
+        </div>
+        <div class="notif-row">
+          <div class="notif-text"><div class="notif-h">Newsletter semanal</div><div class="notif-d">Lunes, lo mejor de la semana</div></div>
+          <div class="toggle on"></div>
+        </div>
+        <div class="notif-row">
+          <div class="notif-text"><div class="notif-h">Perfil público</div><div class="notif-d">Otros tipsters pueden ver tus stats</div></div>
+          <div class="toggle on"></div>
+        </div>
+      </div>
+      <div style="height:24px"></div>
+    </div>
+    <div class="bnav">
+      <div class="nav-i"><div class="nav-icon">🏠</div><div class="nav-l">Inicio</div></div>
+      <div class="nav-i"><div class="nav-icon">⚽</div><div class="nav-l">Partidos</div></div>
+      <div class="nav-i"><div class="nav-icon">🏆</div><div class="nav-l">Liga</div></div>
+      <div class="nav-i"><div class="nav-icon">💎</div><div class="nav-l">Premium</div></div>
+      <div class="nav-i active"><div class="nav-icon">👤</div><div class="nav-l">Perfil</div></div>
+    </div>
+  </div>
+</div>
+</div>
+</body>
+</html>

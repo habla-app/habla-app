@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Habla! v3.1 — Premium landing</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --blue-dark:#001050;--blue-main:#0052CC;--blue-light:#1A6EFF;
+  --gold:#FFB800;--gold-dim:rgba(255,184,0,.15);--gold-light:#FFD060;
+  --green:#00D68F;
+  --bg-page:#F5F7FC;--bg-card:#FFF;--bg-subtle:#F1F4FB;
+  --text-dark:#001050;--text-body:rgba(0,16,80,.85);--text-muted:rgba(0,16,80,.58);
+  --border-light:rgba(0,16,80,.08);
+  --premium-surface:#0a0e25;--premium-surface-2:#1a1f3a;
+  --whatsapp-green:#25D366;--whatsapp-green-dark:#128C7E;--whatsapp-green-darker:#075E54;--whatsapp-chat-bg:#ECE5DD;
+  --shadow-gold-cta:0 4px 14px rgba(255,184,0,.4);
+  --shadow-nav-top:0 -4px 12px rgba(0,16,80,.08);
+  --r-sm:8px;--r-md:12px;--r-lg:16px;--r-xl:20px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',sans-serif;background:#0A1545;min-height:100vh;display:grid;place-items:center;padding:40px 20px;color:#fff}
+.wrap{max-width:420px;width:100%}
+.cap{text-align:center;margin-bottom:20px}
+.cap-meta{font-size:11px;color:var(--gold);letter-spacing:.15em;text-transform:uppercase;margin-bottom:6px;font-family:'Barlow Condensed',sans-serif;font-weight:700}
+.cap-title{font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:800;text-transform:uppercase}
+.cap-desc{font-size:13px;color:rgba(255,255,255,.6);margin-top:4px;line-height:1.5}
+.phone{width:380px;height:780px;background:#000;border-radius:44px;padding:12px;box-shadow:0 30px 80px rgba(0,0,0,.5);position:relative;margin:20px auto 0}
+.phone::before{content:'';position:absolute;top:24px;left:50%;transform:translateX(-50%);width:110px;height:28px;background:#000;border-radius:100px;z-index:100}
+.screen{width:100%;height:100%;background:var(--bg-page);border-radius:32px;overflow:hidden;display:flex;flex-direction:column;color:var(--text-dark);position:relative}
+.scroll{flex:1;overflow-y:auto;scrollbar-width:none}
+.scroll::-webkit-scrollbar{display:none}
+.statusbar{position:absolute;top:0;left:0;right:0;height:56px;display:flex;justify-content:space-between;align-items:center;padding:16px 32px 0;font-size:13px;font-weight:600;z-index:90;color:#fff}
+.hero{background:radial-gradient(circle at 80% 0%,rgba(37,211,102,.15),transparent 50%),linear-gradient(180deg,var(--premium-surface) 0%,var(--premium-surface-2) 100%);color:#fff;padding:0 16px 28px;text-align:center;position:relative}
+.back{position:absolute;top:60px;left:16px;font-size:13px;color:rgba(255,255,255,.7)}
+.crown{width:60px;height:60px;background:linear-gradient(135deg,var(--gold),var(--gold-light));border-radius:16px;display:grid;place-items:center;margin:76px auto 14px;font-size:30px;box-shadow:0 12px 30px rgba(255,184,0,.4)}
+.h1{font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:900;text-transform:uppercase;margin-bottom:8px;line-height:1}
+.h1 .gold{color:var(--gold)}
+.h1-sub{font-size:13px;color:rgba(255,255,255,.75);max-width:280px;margin:0 auto;line-height:1.5}
+.wa-mock{background:var(--whatsapp-chat-bg);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M0 0h100v100H0z' fill='%23ECE5DD'/%3E%3Cpath d='M20 20l5 5M40 60l5 5M70 30l5 5M30 80l5 5' stroke='%23DDD7CB' stroke-width='1.5'/%3E%3C/svg%3E");border:8px solid var(--whatsapp-green-darker);border-radius:24px;padding:12px 8px;margin:16px 16px 0;box-shadow:0 12px 30px rgba(0,0,0,.3)}
+.wa-h{background:var(--whatsapp-green-darker);color:#fff;padding:8px 12px;margin:-12px -8px 8px;border-radius:16px 16px 0 0;display:flex;align-items:center;gap:8px}
+.wa-icon{width:32px;height:32px;background:var(--blue-dark);border-radius:50%;display:grid;place-items:center;color:var(--gold);font-size:14px;font-weight:800;font-family:'Barlow Condensed',sans-serif}
+.wa-name{font-size:13px;font-weight:600;display:flex;align-items:center;gap:4px}
+.wa-v{width:12px;height:12px;background:var(--whatsapp-green);color:#fff;border-radius:50%;display:inline-grid;place-items:center;font-size:8px}
+.wa-meta{font-size:10px;color:rgba(255,255,255,.7)}
+.wa-pick{background:#fff;border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:11px;box-shadow:0 1px 1px rgba(0,0,0,.1);max-width:90%;color:#303030}
+.wa-title{font-weight:700;color:var(--whatsapp-green-dark);margin-bottom:4px}
+.wa-content{line-height:1.4}
+.wa-content strong{color:var(--text-dark)}
+.wa-house{display:inline-block;background:var(--gold-dim);color:#8B6200;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;margin-top:3px}
+.wa-pmeta{display:flex;justify-content:space-between;align-items:center;margin-top:4px;font-size:9px;color:#888}
+.social-proof{padding:24px 16px 16px;background:#fff;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.sp-item{padding:8px}
+.sp-val{font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:800;color:var(--text-dark);line-height:1}
+.sp-lbl{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-top:4px}
+.section{background:#fff;padding:24px 16px;border-top:1px solid var(--border-light)}
+.section-h{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;text-transform:uppercase;color:var(--text-dark);margin-bottom:16px;text-align:center}
+.incl{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;font-size:13px;line-height:1.4;color:var(--text-body)}
+.incl-check{width:22px;height:22px;background:var(--green);color:#fff;border-radius:50%;display:grid;place-items:center;font-size:11px;flex-shrink:0;margin-top:1px}
+.incl strong{color:var(--text-dark)}
+.plans{padding:16px;background:var(--bg-subtle)}
+.plan{background:#fff;border:2px solid var(--border-light);border-radius:var(--r-lg);padding:14px;margin-bottom:10px;position:relative}
+.plan.popular{border-color:var(--gold);box-shadow:0 8px 24px rgba(255,184,0,.3)}
+.plan-popular-badge{position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--gold);color:var(--blue-dark);padding:3px 10px;border-radius:100px;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.plan-row{display:flex;justify-content:space-between;align-items:center}
+.plan-name{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;color:var(--text-dark);text-transform:uppercase}
+.plan-equiv{font-size:11px;color:var(--text-muted)}
+.plan-equiv .save{color:var(--green);font-weight:700}
+.plan-price-amount{font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:800;color:var(--text-dark);line-height:1;text-align:right}
+.plan-price-period{font-size:10px;color:var(--text-muted);text-align:right}
+.guarantee{padding:12px 16px;background:var(--green);color:#fff;font-size:12px;font-weight:600;text-align:center;display:flex;align-items:center;justify-content:center;gap:6px}
+.faq-item{border-bottom:1px solid var(--border-light);padding:12px 0}
+.faq-q{font-size:13px;font-weight:700;color:var(--text-dark);display:flex;justify-content:space-between;align-items:center}
+.faq-a{font-size:12px;color:var(--text-body);margin-top:8px;display:none}
+.faq-item.open .faq-a{display:block}
+.testim{background:var(--bg-subtle);border-radius:var(--r-md);padding:12px;margin-bottom:8px}
+.testim-q{font-size:12px;color:var(--text-body);font-style:italic;line-height:1.5;margin-bottom:6px}
+.testim-a{font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:6px}
+.testim-avatar{width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,var(--gold),#FF8C00);color:var(--blue-dark);display:grid;place-items:center;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:10px}
+.sticky{background:#fff;border-top:1px solid var(--border-light);padding:12px 14px;display:flex;gap:8px;box-shadow:var(--shadow-nav-top)}
+.btn-gold{background:var(--gold);color:var(--blue-dark);padding:0 16px;border-radius:var(--r-md);font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;gap:6px;flex:1;height:48px;border:none;cursor:pointer;font-family:inherit;box-shadow:var(--shadow-gold-cta)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="cap">
+  <div class="cap-meta">Lote D · Vista 01 (CRÍTICA)</div>
+  <div class="cap-title">Premium landing</div>
+  <div class="cap-desc">Hero oscuro · Mockup WhatsApp Channel real · Social proof · Inclusiones · 3 planes con anual destacado · Garantía · Testimonios · FAQ · Sticky CTA.</div>
+</div>
+<div class="phone">
+  <div class="screen">
+    <div class="statusbar"><span>9:41</span><span style="display:flex;gap:6px;font-size:14px"><span>📶</span><span>📡</span><span>🔋</span></span></div>
+    <div class="scroll">
+      <div class="hero">
+        <div class="back">‹ Volver</div>
+        <div class="crown">💎</div>
+        <div class="h1">Picks de valor<br><span class="gold">en tu WhatsApp</span></div>
+        <div class="h1-sub">Recibe 2-4 picks/día generados con datos y validados por nuestro editor. Directo en tu canal privado.</div>
+      </div>
+      <div class="wa-mock">
+        <div class="wa-h">
+          <div class="wa-icon">⊕</div>
+          <div style="flex:1">
+            <div class="wa-name">Habla! Picks <span class="wa-v">✓</span></div>
+            <div class="wa-meta">Canal · 847 suscriptores</div>
+          </div>
+          <div style="font-size:14px;color:rgba(255,255,255,.7)">⋮</div>
+        </div>
+        <div class="wa-pick">
+          <div class="wa-title">🎯 Pick #1 · 7:00 PM</div>
+          <div class="wa-content"><strong>Alianza vs Universitario</strong><br>Ambos anotan: SÍ @ 1.85</div>
+          <span class="wa-house">🏠 Mejor cuota: Betano →</span>
+          <div class="wa-pmeta"><span>🔥 47</span><span>9:42 ✓✓</span></div>
+        </div>
+        <div class="wa-pick">
+          <div class="wa-title">🎯 Pick #2 · 7:15 PM</div>
+          <div class="wa-content"><strong>Real Madrid vs Man City</strong><br>Más de 2.5 goles @ 1.95</div>
+          <span class="wa-house">🏠 Mejor cuota: Betsson →</span>
+          <div class="wa-pmeta"><span>🔥 38</span><span>9:48 ✓✓</span></div>
+        </div>
+      </div>
+      <div class="social-proof">
+        <div class="sp-item"><div class="sp-val">65%</div><div class="sp-lbl">Acierto últ. mes</div></div>
+        <div class="sp-item"><div class="sp-val">847</div><div class="sp-lbl">Suscriptores</div></div>
+        <div class="sp-item"><div class="sp-val">+12%</div><div class="sp-lbl">ROI promedio</div></div>
+      </div>
+      <div class="section">
+        <div class="section-h">Lo que recibes</div>
+        <div class="incl"><div class="incl-check">✓</div><div><strong>2-4 picks/día</strong> con razonamiento estadístico (datos H2H, forma reciente, EV+)</div></div>
+        <div class="incl"><div class="incl-check">✓</div><div><strong>Casa con mejor cuota</strong> en cada pick — link directo</div></div>
+        <div class="incl"><div class="incl-check">✓</div><div><strong>Alertas en vivo</strong> durante partidos top (cambios de cuotas, oportunidades)</div></div>
+        <div class="incl"><div class="incl-check">✓</div><div><strong>Bot FAQ 24/7</strong> en WhatsApp para resolver dudas al instante</div></div>
+        <div class="incl"><div class="incl-check">✓</div><div><strong>Resumen semanal</strong> los lunes con performance de los picks</div></div>
+      </div>
+      <div class="plans">
+        <div class="plan">
+          <div class="plan-row">
+            <div><div class="plan-name">Mensual</div><div class="plan-equiv">Cancela cuando quieras</div></div>
+            <div><div class="plan-price-amount">S/ 49</div><div class="plan-price-period">por mes</div></div>
+          </div>
+        </div>
+        <div class="plan popular">
+          <div class="plan-popular-badge">Más popular</div>
+          <div class="plan-row">
+            <div><div class="plan-name">Anual</div><div class="plan-equiv"><span class="save">Ahorra 32%</span> · S/ 33.2/mes</div></div>
+            <div><div class="plan-price-amount">S/ 399</div><div class="plan-price-period">al año</div></div>
+          </div>
+        </div>
+        <div class="plan">
+          <div class="plan-row">
+            <div><div class="plan-name">Trimestral</div><div class="plan-equiv"><span class="save">Ahorra 19%</span> · S/ 39.6/mes</div></div>
+            <div><div class="plan-price-amount">S/ 119</div><div class="plan-price-period">por 3 meses</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="guarantee">✓ Garantía de 7 días · sin compromiso</div>
+      <div class="section">
+        <div class="section-h">Lo que dicen nuestros suscriptores</div>
+        <div class="testim">
+          <div class="testim-q">"Llevo 3 meses suscrito y voy +S/ 1,200 con apuestas siguiendo los picks. El bot del FAQ es brutal para dudas urgentes."</div>
+          <div class="testim-a"><div class="testim-avatar">CR</div>Carlos R · Lima</div>
+        </div>
+        <div class="testim">
+          <div class="testim-q">"Lo que más me sirve es el razonamiento de cada pick. No es 'apuesta a esto', te explica el por qué con datos. Aprendí más en 1 mes que en años."</div>
+          <div class="testim-a"><div class="testim-avatar">JM</div>Juan M · Arequipa</div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-h">Preguntas frecuentes</div>
+        <div class="faq-item open">
+          <div class="faq-q">¿Cómo recibo los picks? <span>−</span></div>
+          <div class="faq-a">Después de pagar, te enviamos un link único al WhatsApp Channel privado. Te unes con un click y recibes 2-4 picks/día.</div>
+        </div>
+        <div class="faq-item">
+          <div class="faq-q">¿Puedo cancelar cuando quiera? <span>+</span></div>
+        </div>
+        <div class="faq-item">
+          <div class="faq-q">¿Qué pasa si no acierto? <span>+</span></div>
+        </div>
+        <div class="faq-item">
+          <div class="faq-q">¿Comparten mis datos con las casas? <span>+</span></div>
+        </div>
+        <div class="faq-item">
+          <div class="faq-q">¿Cuánto tiempo me toma seguir un pick? <span>+</span></div>
+        </div>
+      </div>
+      <div style="height:24px"></div>
+    </div>
+    <div class="sticky">
+      <button class="btn-gold">⚡ Suscribirme con OpenPay</button>
+    </div>
+  </div>
+</div>
+</div>
+</body>
+</html>

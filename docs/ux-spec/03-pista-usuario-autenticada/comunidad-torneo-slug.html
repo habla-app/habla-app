@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Habla! v3.1 — Producto C · Vista de torneo</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --blue-dark:#001050;--blue-main:#0052CC;--blue-light:#1A6EFF;--blue-pale:#0A2080;
+  --gold:#FFB800;--gold-dim:rgba(255,184,0,.15);--gold-light:#FFD060;--gold-dark:#8B6200;
+  --green:#00D68F;--live:#FF3D3D;
+  --bg-page:#F5F7FC;--bg-card:#FFF;--bg-subtle:#F1F4FB;
+  --text-dark:#001050;--text-body:rgba(0,16,80,.85);--text-muted:rgba(0,16,80,.58);
+  --border-light:rgba(0,16,80,.08);
+  --premium-surface:#0a0e25;--premium-surface-2:#1a1f3a;
+  --shadow-sm:0 1px 2px rgba(0,16,80,.06);
+  --shadow-gold-cta:0 4px 14px rgba(255,184,0,.4);
+  --shadow-nav-top:0 -4px 12px rgba(0,16,80,.08);
+  --r-sm:8px;--r-md:12px;--r-lg:16px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',sans-serif;background:#0A1545;min-height:100vh;display:grid;place-items:center;padding:40px 20px;color:#fff}
+.wrap{max-width:420px;width:100%}
+.cap{text-align:center;margin-bottom:20px}
+.cap-meta{font-size:11px;color:var(--gold);letter-spacing:.15em;text-transform:uppercase;margin-bottom:6px;font-family:'Barlow Condensed',sans-serif;font-weight:700}
+.cap-title{font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:800;text-transform:uppercase}
+.cap-desc{font-size:13px;color:rgba(255,255,255,.6);margin-top:4px;line-height:1.5}
+.phone{width:380px;height:780px;background:#000;border-radius:44px;padding:12px;box-shadow:0 30px 80px rgba(0,0,0,.5);position:relative;margin:20px auto 0}
+.phone::before{content:'';position:absolute;top:24px;left:50%;transform:translateX(-50%);width:110px;height:28px;background:#000;border-radius:100px;z-index:100}
+.screen{width:100%;height:100%;background:var(--bg-page);border-radius:32px;overflow:hidden;display:flex;flex-direction:column;color:var(--text-dark);position:relative}
+.scroll{flex:1;overflow-y:auto;scrollbar-width:none}
+.scroll::-webkit-scrollbar{display:none}
+.statusbar{position:absolute;top:0;left:0;right:0;height:56px;display:flex;justify-content:space-between;align-items:center;padding:16px 32px 0;font-size:13px;font-weight:600;z-index:90;color:#fff}
+.hero{background:linear-gradient(135deg,#1a4ed8 0%,var(--blue-main) 50%,var(--blue-dark) 100%);color:#fff;padding:0 16px 24px}
+.back-row{display:flex;justify-content:space-between;align-items:center;padding-top:60px;margin-bottom:14px}
+.back{font-size:13px;color:rgba(255,255,255,.7)}
+.share{font-size:14px;color:rgba(255,255,255,.5)}
+.pills-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.competing{display:inline-flex;align-items:center;gap:6px;background:rgba(255,184,0,.2);border:1px solid rgba(255,184,0,.5);color:var(--gold);padding:4px 10px;border-radius:100px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.cd-pill{background:rgba(255,46,46,.15);border:1px solid rgba(255,46,46,.4);color:#FFB0B0;padding:4px 10px;border-radius:100px;font-size:11px;font-weight:700}
+.title-block{text-align:center}
+.title-block .h{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:800;color:#fff;text-transform:uppercase;line-height:1.1}
+.title-block .sub{font-size:13px;color:rgba(255,255,255,.7);margin-top:6px}
+.cross{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:var(--r-md);padding:10px 12px;display:flex;align-items:center;gap:8px;margin-top:14px;color:#fff;font-size:12px}
+.cross .arrow{margin-left:auto;color:var(--gold);font-size:13px}
+.section{background:#fff;margin-bottom:8px;padding:16px}
+.sh{display:flex;align-items:center;gap:8px;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-dark);margin-bottom:14px}
+.market{margin-bottom:14px}
+.m-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.m-name{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--text-dark)}
+.m-pts{font-size:10px;font-weight:700;color:var(--gold-dark);background:var(--gold-dim);padding:2px 6px;border-radius:4px}
+.m-opts-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.m-opts-2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.m-opt{padding:12px 8px;background:var(--bg-subtle);border:1.5px solid transparent;border-radius:var(--r-md);font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;color:var(--text-dark);text-align:center;min-height:44px;cursor:pointer;font-family:inherit}
+.m-opt.selected{background:var(--blue-main);color:#fff;border-color:var(--blue-dark)}
+.m-input{width:100%;padding:10px 12px;border:1.5px solid var(--border-light);border-radius:var(--r-md);font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;background:var(--bg-subtle);text-align:center;color:var(--text-dark)}
+.prem-inline{background:linear-gradient(135deg,var(--premium-surface),var(--premium-surface-2));color:#fff;border-radius:var(--r-md);padding:14px;margin:0 16px 8px;display:flex;align-items:center;gap:12px;border:1px solid rgba(255,184,0,.3)}
+.prem-inline .ico{width:40px;height:40px;background:var(--gold);border-radius:10px;display:grid;place-items:center;font-size:20px;color:var(--blue-dark);flex-shrink:0}
+.prem-inline .txt{flex:1;min-width:0}
+.prem-inline .pill{background:var(--gold);color:var(--blue-dark);padding:6px 12px;border-radius:100px;font-size:11px;font-weight:700;flex-shrink:0}
+.aff-inline{background:#fff;border:2px solid var(--gold);border-radius:var(--r-md);padding:12px;margin:0 16px 8px;display:flex;align-items:center;gap:10px;position:relative}
+.aff-inline::before{content:'★ MEJOR CUOTA';position:absolute;top:-8px;left:12px;background:var(--gold);color:var(--blue-dark);font-size:9px;font-weight:800;padding:2px 8px;border-radius:4px;letter-spacing:.05em}
+.aff-inline .txt{flex:1}
+.aff-inline .h{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;color:var(--text-dark)}
+.aff-inline .l{font-size:11px;color:var(--text-muted)}
+.aff-inline .l strong{color:var(--text-dark);font-size:18px;font-family:'Barlow Condensed',sans-serif}
+.aff-inline .btn{background:var(--blue-dark);color:var(--gold);padding:10px 14px;border-radius:var(--r-sm);font-size:12px;font-weight:700;border:none;cursor:pointer;font-family:inherit}
+.lb-row{display:grid;grid-template-columns:24px 36px 1fr auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border-light)}
+.lb-row:last-child{border-bottom:0}
+.lb-pos{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;color:var(--text-muted)}
+.lb-row.pod-1 .lb-pos{color:#B8860B}
+.lb-row.pod-2 .lb-pos{color:#999}
+.lb-row.pod-3 .lb-pos{color:#CD7F32}
+.avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--gold),#FF8C00);color:var(--blue-dark);display:grid;place-items:center;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:12px}
+.lb-name{font-weight:700;font-size:13px;color:var(--text-dark)}
+.lb-name-row{display:flex;align-items:center;gap:4px}
+.lb-prem{font-size:10px;background:var(--gold-dim);color:var(--gold-dark);padding:1px 4px;border-radius:3px;font-weight:700}
+.lb-pts{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;color:var(--text-dark)}
+.lb-pts-lbl{font-size:9px;color:var(--text-muted);text-transform:uppercase}
+.lb-divider{height:1px;background:linear-gradient(90deg,transparent,rgba(0,16,80,.16),transparent);margin:12px 0;position:relative}
+.lb-divider::after{content:'✂ Línea de premio';position:absolute;top:-7px;left:50%;transform:translateX(-50%);background:#fff;padding:0 8px;font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase}
+.lb-row.you{background:linear-gradient(90deg,transparent,rgba(0,82,204,.05) 50%,transparent);border-radius:var(--r-sm);padding:8px;margin:0 -8px}
+.lb-row.you .lb-name{color:var(--blue-main)}
+.sticky{background:#fff;border-top:1px solid var(--border-light);padding:10px 14px;display:flex;gap:8px;box-shadow:var(--shadow-nav-top)}
+.btn-gold{background:var(--gold);color:var(--blue-dark);padding:0 16px;border-radius:var(--r-md);font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;gap:6px;flex:1;height:44px;border:none;cursor:pointer;font-family:inherit;box-shadow:var(--shadow-gold-cta)}
+.bnav{display:grid;grid-template-columns:repeat(5,1fr);background:#fff;border-top:1px solid var(--border-light);padding:8px 4px 12px;box-shadow:var(--shadow-nav-top)}
+.nav-i{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 4px}
+.nav-icon{font-size:18px}
+.nav-l{font-size:10px;font-weight:600;color:var(--text-muted)}
+.nav-i.active .nav-l{color:var(--text-dark)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="cap">
+  <div class="cap-meta">Lote C · Vista 01 (CRÍTICA)</div>
+  <div class="cap-title">Producto C · Torneo del partido</div>
+  <div class="cap-desc">Form 5 mercados · Premium inline · Affiliate inline · Leaderboard preview · Cross-link a Producto B · Sticky CTA enviar predicción.</div>
+</div>
+<div class="phone">
+  <div class="screen">
+    <div class="statusbar"><span>9:41</span><span style="display:flex;gap:6px;font-size:14px"><span>📶</span><span>📡</span><span>🔋</span></span></div>
+    <div class="scroll">
+      <div class="hero">
+        <div class="back-row">
+          <span class="back">‹ Volver</span>
+          <span class="share">↗</span>
+        </div>
+        <div class="pills-row">
+          <span class="competing">⚡ 234 tipsters</span>
+          <span class="cd-pill">⏱ 8 min</span>
+        </div>
+        <div class="title-block">
+          <div class="h">Predice<br>Alianza vs Universitario</div>
+          <div class="sub">Suma hasta 21 puntos · Top 10 gana S/ 1,250</div>
+        </div>
+        <div class="cross">
+          <span style="font-size:16px">📊</span>
+          <span style="flex:1">Ver análisis completo y cuotas comparadas</span>
+          <span class="arrow">›</span>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="sh">🎯 Tu predicción</div>
+        <div class="market">
+          <div class="m-label"><span class="m-name">Resultado final (1X2)</span><span class="m-pts">3 pts</span></div>
+          <div class="m-opts-3">
+            <button class="m-opt selected">Alianza</button>
+            <button class="m-opt">Empate</button>
+            <button class="m-opt">Univ.</button>
+          </div>
+        </div>
+        <div class="market">
+          <div class="m-label"><span class="m-name">Ambos anotan</span><span class="m-pts">2 pts</span></div>
+          <div class="m-opts-2">
+            <button class="m-opt selected">Sí</button>
+            <button class="m-opt">No</button>
+          </div>
+        </div>
+        <div class="market">
+          <div class="m-label"><span class="m-name">Más de 2.5 goles</span><span class="m-pts">2 pts</span></div>
+          <div class="m-opts-2">
+            <button class="m-opt">Más</button>
+            <button class="m-opt selected">Menos</button>
+          </div>
+        </div>
+        <div class="market">
+          <div class="m-label"><span class="m-name">Tarjeta roja</span><span class="m-pts">6 pts</span></div>
+          <div class="m-opts-2">
+            <button class="m-opt">Sí</button>
+            <button class="m-opt selected">No</button>
+          </div>
+        </div>
+        <div class="market">
+          <div class="m-label"><span class="m-name">Marcador exacto</span><span class="m-pts">8 pts</span></div>
+          <input class="m-input" value="2 - 1" />
+        </div>
+      </div>
+
+      <div class="prem-inline">
+        <div class="ico">💎</div>
+        <div class="txt">
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700">8 de los Top 10 usan Premium</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.7)">Mira los picks que están sumando puntos</div>
+        </div>
+        <div class="pill">Probar →</div>
+      </div>
+
+      <div class="aff-inline">
+        <div class="txt">
+          <div class="h">¿Apostarías por tu predicción?</div>
+          <div class="l">Betano paga <strong>2.05</strong> por Alianza gana</div>
+        </div>
+        <button class="btn">Apostar →</button>
+      </div>
+
+      <div class="section">
+        <div class="sh">🏅 Leaderboard del mes</div>
+        <div class="lb-row pod-1"><div class="lb-pos">1</div><div class="avatar">CR</div><div><div class="lb-name-row"><div class="lb-name">CarlosR</div><span class="lb-prem">💎</span></div><div class="lb-pts-lbl">S/ 500 · 12 mo Premium</div></div><div style="text-align:right"><div class="lb-pts">847</div><div class="lb-pts-lbl">pts</div></div></div>
+        <div class="lb-row pod-2"><div class="lb-pos">2</div><div class="avatar">JM</div><div><div class="lb-name-row"><div class="lb-name">JuanM</div><span class="lb-prem">💎</span></div><div class="lb-pts-lbl">S/ 200</div></div><div style="text-align:right"><div class="lb-pts">802</div><div class="lb-pts-lbl">pts</div></div></div>
+        <div class="lb-row pod-3"><div class="lb-pos">3</div><div class="avatar">LF</div><div><div class="lb-name">LuisF</div><div class="lb-pts-lbl">S/ 200</div></div><div style="text-align:right"><div class="lb-pts">789</div><div class="lb-pts-lbl">pts</div></div></div>
+        <div class="lb-divider"></div>
+        <div class="lb-row you"><div class="lb-pos">156</div><div class="avatar">YO</div><div><div class="lb-name">Tú</div><div class="lb-pts-lbl">+47 para Top 100</div></div><div style="text-align:right"><div class="lb-pts">312</div><div class="lb-pts-lbl">pts</div></div></div>
+      </div>
+
+      <div style="height:24px"></div>
+    </div>
+    <div class="sticky">
+      <button class="btn-gold">🏆 Enviar mi predicción</button>
+    </div>
+    <div class="bnav">
+      <div class="nav-i"><div class="nav-icon">🏠</div><div class="nav-l">Inicio</div></div>
+      <div class="nav-i"><div class="nav-icon">⚽</div><div class="nav-l">Partidos</div></div>
+      <div class="nav-i active"><div class="nav-icon">🏆</div><div class="nav-l">Liga</div></div>
+      <div class="nav-i"><div class="nav-icon">💎</div><div class="nav-l">Premium</div></div>
+      <div class="nav-i"><div class="nav-icon">👤</div><div class="nav-l">Perfil</div></div>
+    </div>
+  </div>
+</div>
+</div>
+</body>
+</html>

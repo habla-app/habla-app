@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Habla! v3.1 — Vista de partido (Producto B)</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --blue-dark:#001050;--blue-main:#0052CC;--blue-light:#1A6EFF;--blue-pale:#0A2080;
+  --gold:#FFB800;--gold-dim:rgba(255,184,0,.15);--gold-light:#FFD060;--gold-dark:#8B6200;
+  --green:#00D68F;--live:#FF3D3D;
+  --bg-page:#F5F7FC;--bg-card:#FFF;--bg-subtle:#F1F4FB;
+  --text-dark:#001050;--text-body:rgba(0,16,80,.85);--text-muted:rgba(0,16,80,.58);
+  --border-light:rgba(0,16,80,.08);
+  --premium-surface:#0a0e25;--premium-surface-2:#1a1f3a;
+  --shadow-sm:0 1px 2px rgba(0,16,80,.06);
+  --shadow-gold-cta:0 4px 14px rgba(255,184,0,.4);
+  --shadow-nav-top:0 -4px 12px rgba(0,16,80,.08);
+  --r-sm:8px;--r-md:12px;--r-lg:16px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',sans-serif;background:#0A1545;min-height:100vh;display:grid;place-items:center;padding:40px 20px;color:#fff}
+.wrap{max-width:420px;width:100%}
+.cap{text-align:center;margin-bottom:20px}
+.cap-meta{font-size:11px;color:var(--gold);letter-spacing:.15em;text-transform:uppercase;margin-bottom:6px;font-family:'Barlow Condensed',sans-serif;font-weight:700}
+.cap-title{font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:800;text-transform:uppercase}
+.cap-desc{font-size:13px;color:rgba(255,255,255,.6);margin-top:4px;line-height:1.5}
+.phone{width:380px;height:780px;background:#000;border-radius:44px;padding:12px;box-shadow:0 30px 80px rgba(0,0,0,.5);position:relative;margin:20px auto 0}
+.phone::before{content:'';position:absolute;top:24px;left:50%;transform:translateX(-50%);width:110px;height:28px;background:#000;border-radius:100px;z-index:100}
+.screen{width:100%;height:100%;background:var(--bg-page);border-radius:32px;overflow:hidden;display:flex;flex-direction:column;color:var(--text-dark);position:relative}
+.scroll{flex:1;overflow-y:auto;scrollbar-width:none}
+.scroll::-webkit-scrollbar{display:none}
+.statusbar{position:absolute;top:0;left:0;right:0;height:56px;display:flex;justify-content:space-between;align-items:center;padding:16px 32px 0;font-size:13px;font-weight:600;z-index:90;color:#fff}
+.hero{background:radial-gradient(circle at 30% 100%,rgba(255,184,0,.15),transparent 50%),linear-gradient(180deg,var(--blue-dark) 0%,var(--blue-pale) 100%);color:#fff;padding:0 16px 24px}
+.back-row{display:flex;justify-content:space-between;align-items:center;padding-top:60px;margin-bottom:12px}
+.back{display:flex;align-items:center;gap:8px;font-size:13px;color:rgba(255,255,255,.7)}
+.icons{display:flex;gap:14px;color:rgba(255,255,255,.5);font-size:14px}
+.lr{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+.pill{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);padding:4px 10px;border-radius:100px;font-size:11px;font-weight:600;text-transform:uppercase}
+.cd-pill{background:rgba(255,46,46,.15);border:1px solid rgba(255,46,46,.4);color:#FFB0B0;padding:4px 10px;border-radius:100px;font-size:11px;font-weight:700}
+.teams{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;margin-bottom:14px}
+.team{display:flex;flex-direction:column;align-items:center;gap:8px}
+.shield{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;font-size:28px;font-weight:800;color:#fff;box-shadow:0 8px 20px rgba(0,0,0,.3)}
+.tname{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;text-align:center;line-height:1.1}
+.vs{width:40px;height:40px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:50%;display:grid;place-items:center;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px}
+.stadium{text-align:center;font-size:12px;color:rgba(255,255,255,.65)}
+.section{background:#fff;margin-bottom:8px;padding:16px}
+.sh{display:flex;align-items:center;gap:8px;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-dark);margin-bottom:10px}
+.cuotas-h{display:grid;grid-template-columns:80px 1fr 1fr 1fr auto;gap:6px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);padding:0 10px 6px}
+.cuotas-h span:nth-child(n+2){text-align:center}
+.cuotas-h span:last-child{width:32px}
+.cuotas-list{display:flex;flex-direction:column;gap:6px}
+.crow{display:grid;grid-template-columns:80px 1fr 1fr 1fr auto;gap:6px;align-items:center;padding:8px 10px;background:var(--bg-subtle);border-radius:var(--r-md);border:1px solid var(--border-light)}
+.crow.best{background:var(--gold-dim);border-color:var(--gold)}
+.crow .h{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--text-dark)}
+.crow .v{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;text-align:center;color:var(--text-dark)}
+.crow .go{background:var(--blue-main);color:#fff;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-size:14px}
+.crow.best .go{background:var(--gold);color:var(--blue-dark);box-shadow:0 4px 12px rgba(255,184,0,.4)}
+.cnote{font-size:10px;color:var(--text-muted);margin-top:8px;text-align:center}
+.analysis{font-size:14px;line-height:1.5;color:var(--text-body);margin-bottom:8px}
+.pron{background:linear-gradient(135deg,var(--blue-main),var(--blue-light));color:#fff;border-radius:var(--r-md);padding:14px;margin:12px 0}
+.pron .l{font-size:10px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:rgba(255,255,255,.7);margin-bottom:6px}
+.pron .pick{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:800;margin-bottom:4px}
+.pron .c{font-size:13px;color:rgba(255,255,255,.85)}
+.pron .c strong{color:var(--gold);font-weight:700}
+.psec{background:linear-gradient(135deg,var(--premium-surface) 0%,var(--premium-surface-2) 100%);color:#fff;margin-bottom:8px;padding:18px 16px;border-top:1px solid rgba(255,184,0,.3);border-bottom:1px solid rgba(255,184,0,.3)}
+.psec .sh{color:#fff}
+.plock{background:rgba(255,255,255,.04);border:1.5px dashed rgba(255,184,0,.4);border-radius:var(--r-md);padding:14px;margin-bottom:12px;position:relative;overflow:hidden}
+.plock-c{filter:blur(5px);opacity:.5}
+.plock-o{position:absolute;inset:0;background:linear-gradient(180deg,transparent 0%,rgba(10,14,37,.95) 90%);display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:16px;text-align:center}
+.pcta{background:var(--gold);color:var(--blue-dark);padding:12px;border-radius:var(--r-md);font-weight:700;font-size:13px;text-align:center;display:flex;align-items:center;justify-content:center;gap:6px;width:100%;border:none;cursor:pointer;font-family:inherit}
+.lwidget{background:linear-gradient(135deg,var(--blue-main),var(--blue-light));color:#fff;border-radius:var(--r-md);padding:14px;display:flex;align-items:center;gap:12px;margin-top:8px}
+.lw-ico{width:44px;height:44px;background:rgba(255,184,0,.2);border-radius:12px;display:grid;place-items:center;font-size:22px;flex-shrink:0}
+.lw-arrow{width:28px;height:28px;background:var(--gold);color:var(--blue-dark);border-radius:50%;display:grid;place-items:center;font-size:14px;font-weight:800;flex-shrink:0}
+.support{text-align:center;padding:16px;font-size:12px;color:var(--text-muted);background:#fff;border-top:1px solid var(--border-light)}
+.support a{color:var(--blue-main);font-weight:600}
+.sticky{background:#fff;border-top:1px solid var(--border-light);padding:10px 14px;display:flex;gap:8px;box-shadow:var(--shadow-nav-top)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-weight:600;border-radius:var(--r-md);font-family:inherit;border:none;cursor:pointer;height:44px}
+.btn-md{padding:0 16px;font-size:14px}
+.btn-out{background:transparent;color:var(--text-dark);border:1.5px solid rgba(0,16,80,.16);flex:0 0 auto;width:44px}
+.btn-gold{background:var(--gold);color:var(--blue-dark);box-shadow:var(--shadow-gold-cta);flex:1}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="cap">
+  <div class="cap-meta">Lote B · Vista 03 (CRÍTICA)</div>
+  <div class="cap-title">Producto B · Vista de partido</div>
+  <div class="cap-desc">Análisis editorial · Comparador detallado · Pronóstico Habla! · Pick Premium bloqueado · Cross-link a Producto C · Sticky CTA dinámico.</div>
+</div>
+<div class="phone">
+  <div class="screen">
+    <div class="statusbar"><span>9:41</span><span style="display:flex;gap:6px;font-size:14px"><span>📶</span><span>📡</span><span>🔋</span></span></div>
+    <div class="scroll">
+      <div class="hero">
+        <div class="back-row">
+          <span class="back">‹ Volver</span>
+          <div class="icons"><span>🔖</span><span>↗</span></div>
+        </div>
+        <div class="lr">
+          <span class="pill">🏆 Liga 1 · Apertura</span>
+          <span class="cd-pill">⏱ 8 min para cerrar</span>
+        </div>
+        <div class="teams">
+          <div class="team"><div class="shield" style="background:linear-gradient(135deg,#1E40AF,#3B82F6)">A</div><div class="tname">Alianza<br>Lima</div></div>
+          <div class="vs">VS</div>
+          <div class="team"><div class="shield" style="background:linear-gradient(135deg,#7C2D12,#DC2626)">U</div><div class="tname">Universitario<br>de Deportes</div></div>
+        </div>
+        <div class="stadium">📍 Estadio Alejandro Villanueva · Sábado 9:00 PM</div>
+      </div>
+
+      <div class="section">
+        <div class="sh">📊 Cuotas comparadas · Gana Alianza</div>
+        <div class="cuotas-h"><span style="text-align:left">Casa</span><span>1</span><span>X</span><span>2</span><span></span></div>
+        <div class="cuotas-list">
+          <div class="crow best"><div class="h">Betano</div><div class="v">2.05</div><div class="v">3.20</div><div class="v">3.40</div><div class="go">→</div></div>
+          <div class="crow"><div class="h">Betsson</div><div class="v">2.00</div><div class="v">3.15</div><div class="v">3.50</div><div class="go">→</div></div>
+          <div class="crow"><div class="h">1xBet</div><div class="v">1.98</div><div class="v">3.10</div><div class="v">3.55</div><div class="go">→</div></div>
+          <div class="crow"><div class="h">Stake</div><div class="v">2.02</div><div class="v">3.25</div><div class="v">3.45</div><div class="go">→</div></div>
+        </div>
+        <div class="cnote">★ Mejor cuota · Actualizadas hace 8 min</div>
+      </div>
+
+      <div class="section">
+        <div class="sh">🎯 Pronóstico Habla! (Gratis)</div>
+        <div class="analysis">Alianza llega con 4 victorias seguidas en casa. Universitario perdió 2 de los últimos 3 visitas a Matute. La defensa íntima ha sido sólida y la presión local pesa.</div>
+        <div class="pron">
+          <div class="l">Apuesta sugerida</div>
+          <div class="pick">Gana Alianza Lima</div>
+          <div class="c">Mejor cuota: <strong>2.05 en Betano</strong> · Confianza media-alta</div>
+        </div>
+      </div>
+
+      <div class="psec">
+        <div class="sh">💎 Pick Premium del editor</div>
+        <div class="plock">
+          <div class="plock-c">
+            <div style="color:var(--gold);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px">Stake 3% · EV+ 14%</div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;margin-bottom:4px">Ambos anotan: SÍ</div>
+            <div style="font-size:12px;color:rgba(255,255,255,.7);line-height:1.5">Razonamiento estadístico: Universitario anotó en 8/10 últimos partidos como visitante; Alianza recibió gol en 7/10 últimos en casa...</div>
+          </div>
+          <div class="plock-o">
+            <div style="font-size:28px;margin-bottom:6px">🔒</div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;margin-bottom:4px">Solo para suscriptores Premium</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.7)">2-4 picks/día con razonamiento estadístico</div>
+          </div>
+        </div>
+        <button class="pcta">⚡ Probar 7 días gratis</button>
+      </div>
+
+      <div class="section">
+        <div class="sh">🏆 Compite por este partido</div>
+        <div class="lwidget">
+          <div class="lw-ico">🏆</div>
+          <div style="flex:1">
+            <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700">234 tipsters compitiendo</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.75)">Predice y suma puntos para el Top 10 (S/ 1,250 en premios)</div>
+          </div>
+          <div class="lw-arrow">›</div>
+        </div>
+      </div>
+
+      <div class="support">¿Dudas con la jerga? <a>Ver guías y glosario ›</a></div>
+    </div>
+    <div class="sticky">
+      <button class="btn btn-md btn-out">📊</button>
+      <button class="btn btn-md btn-gold">💰 Apostar en Betano @ 2.05</button>
+    </div>
+  </div>
+</div>
+</div>
+</body>
+</html>
