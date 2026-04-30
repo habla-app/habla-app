@@ -3,7 +3,10 @@
 @tailwind utilities;
 
 /* ==========================================================================
-   DESIGN TOKENS — sincronizados 1:1 con docs/habla-mockup-completo.html
+   DESIGN TOKENS — fuente de verdad: docs/ux-spec/00-design-system/tokens.md
+   (Lote A v3.1, abr 2026). Tokens duplicados con tailwind.config.ts deben
+   mantenerse sincronizados manualmente; cuando se agrega un token, va en
+   ambos lugares.
    ========================================================================== */
 :root {
   /* Core brand */
@@ -91,13 +94,19 @@
   --pred-pending: rgba(0, 16, 80, 0.35);
   --pred-pending-bg: #F1F4FB;
 
-  /* Alert (info/success del mockup) */
+  /* Alert (info/success del mockup + warning/danger Lote A) */
   --alert-info-bg: #E0EBFF;
   --alert-info-border: #B8CAFF;
   --alert-info-text: #1D3F8E;
   --alert-success-bg: #D1FAE5;
   --alert-success-border: #A6E7C5;
   --alert-success-text: #065F46;
+  --alert-warning-bg: #FFF7E6;
+  --alert-warning-border: #FFD060;
+  --alert-warning-text: #92400E;
+  --alert-danger-bg: #FFE5E5;
+  --alert-danger-border: #FFB0B0;
+  --alert-danger-text: #991B1B;
 
   /* Danger — texto del botón cerrar sesión */
   --danger: #C9302C;
@@ -110,6 +119,73 @@
 
   /* Layout */
   --header-h: 68px;
+
+  /* ------------------------------------------------------------------------
+     Premium — Lote A v3.1 (tokens.md §5). Vistas Premium oscuras (landing,
+     checkout, pick bloqueado, mockup WhatsApp).
+     ------------------------------------------------------------------------ */
+  --premium-surface: #0a0e25;
+  --premium-surface-2: #1a1f3a;
+  --premium-border: rgba(255, 184, 0, 0.3);
+  --premium-border-soft: rgba(255, 184, 0, 0.15);
+  --premium-text-on-dark: #FFFFFF;
+  --premium-text-muted-on-dark: rgba(255, 255, 255, 0.7);
+  --premium-text-soft-on-dark: rgba(255, 255, 255, 0.45);
+  --premium-lock-overlay: linear-gradient(180deg, transparent 0%, rgba(10, 14, 37, 0.95) 90%);
+  --premium-watermark: rgba(255, 255, 255, 0.06);
+  --premium-blur-content: rgba(255, 255, 255, 0.04);
+
+  /* ------------------------------------------------------------------------
+     Admin desktop — Lote A v3.1 (tokens.md §6). Sidebar fijo, content,
+     status semáforo. Densidad mayor, sin animaciones decorativas.
+     ------------------------------------------------------------------------ */
+  --admin-sidebar-bg: #001050;
+  --admin-sidebar-text: rgba(255, 255, 255, 0.85);
+  --admin-sidebar-text-muted: rgba(255, 255, 255, 0.55);
+  --admin-sidebar-active-bg: rgba(255, 184, 0, 0.15);
+  --admin-sidebar-active-text: #FFB800;
+  --admin-sidebar-hover-bg: rgba(255, 255, 255, 0.05);
+  --admin-sidebar-section-label: rgba(255, 255, 255, 0.4);
+  --admin-sidebar-divider: rgba(255, 255, 255, 0.08);
+
+  --admin-content-bg: #F5F7FC;
+  --admin-card-bg: #FFFFFF;
+  --admin-table-row-hover: #F1F4FB;
+  --admin-table-row-stripe: #F8FAFD;
+  --admin-table-border: rgba(0, 16, 80, 0.06);
+
+  /* Status semaphore — KPIs, alarmas, sync states */
+  --status-green: #00D68F;
+  --status-green-bg: #D1FAE5;
+  --status-green-text: #065F46;
+  --status-amber: #F59E0B;
+  --status-amber-bg: #FEF3C7;
+  --status-amber-text: #92400E;
+  --status-red: #EF4444;
+  --status-red-bg: #FEE2E2;
+  --status-red-text: #991B1B;
+  --status-neutral-bg: #F3F4F6;
+  --status-neutral-text: #6B7280;
+
+  /* ------------------------------------------------------------------------
+     WhatsApp — Lote A v3.1 (tokens.md §7). Mockup chat / badge "Activo en
+     WhatsApp" / Premium landing.
+     ------------------------------------------------------------------------ */
+  --whatsapp-green: #25D366;
+  --whatsapp-green-dark: #128C7E;
+  --whatsapp-green-darker: #075E54;
+  --whatsapp-chat-bg: #ECE5DD;
+  --whatsapp-chat-bubble: #FFFFFF;
+  --whatsapp-chat-meta: #888888;
+  --whatsapp-check-blue: #4FC3F7;
+
+  /* ------------------------------------------------------------------------
+     Mobile vitals — Lote A v3.1 (tokens.md §8). Semáforo Lighthouse para
+     dashboard admin.
+     ------------------------------------------------------------------------ */
+  --vital-good: #00D68F;
+  --vital-needs-work: #F59E0B;
+  --vital-poor: #EF4444;
 }
 
 /* ==========================================================================
@@ -147,7 +223,226 @@ button {
   font-family: inherit;
 }
 
-/* Hide scrollbar utility */
+/* ==========================================================================
+   UTILITIES — Lote A v3.1
+   Escalas tipográficas (mobile + admin) + helpers reutilizables. Fuente:
+   docs/ux-spec/00-design-system/tipografia.md y tokens.md §14.
+   ========================================================================== */
+@layer utilities {
+  /* ----------------------------------------------------------------------
+     Escala mobile (pista usuario) — diseñada a 375px. Display = Barlow
+     Condensed (h1-h4 + números). Body/labels = DM Sans.
+     ---------------------------------------------------------------------- */
+  .text-display-xl {
+    font-family: var(--font-barlow), sans-serif;
+    font-size: 36px;
+    line-height: 1;
+    font-weight: 900;
+    letter-spacing: -0.01em;
+  }
+  .text-display-lg {
+    font-family: var(--font-barlow), sans-serif;
+    font-size: 28px;
+    line-height: 1.05;
+    font-weight: 800;
+  }
+  .text-display-md {
+    font-family: var(--font-barlow), sans-serif;
+    font-size: 22px;
+    line-height: 1.1;
+    font-weight: 800;
+  }
+  .text-display-sm {
+    font-family: var(--font-barlow), sans-serif;
+    font-size: 18px;
+    line-height: 1.15;
+    font-weight: 700;
+  }
+  .text-display-xs {
+    font-family: var(--font-barlow), sans-serif;
+    font-size: 14px;
+    line-height: 1.2;
+    font-weight: 700;
+  }
+
+  .text-body-lg {
+    font-size: 16px;
+    line-height: 1.5;
+    font-weight: 400;
+  }
+  .text-body-md {
+    font-size: 14px;
+    line-height: 1.5;
+    font-weight: 400;
+  }
+  .text-body-sm {
+    font-size: 13px;
+    line-height: 1.5;
+    font-weight: 400;
+  }
+  .text-body-xs {
+    font-size: 11px;
+    line-height: 1.4;
+    font-weight: 400;
+  }
+
+  .text-label-md {
+    font-size: 12px;
+    line-height: 1.3;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .text-label-sm {
+    font-size: 10px;
+    line-height: 1.3;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  /* Numbers — siempre Barlow Condensed (cuotas, marcadores, stats) */
+  .text-num-xl {
+    font-family: var(--font-barlow), sans-serif;
+    font-size: 32px;
+    line-height: 1;
+    font-weight: 800;
+  }
+  .text-num-lg {
+    font-family: var(--font-barlow), sans-serif;
+    font-size: 24px;
+    line-height: 1;
+    font-weight: 800;
+  }
+  .text-num-md {
+    font-family: var(--font-barlow), sans-serif;
+    font-size: 18px;
+    line-height: 1;
+    font-weight: 800;
+  }
+  .text-num-sm {
+    font-family: var(--font-barlow), sans-serif;
+    font-size: 14px;
+    line-height: 1;
+    font-weight: 700;
+  }
+
+  /* ----------------------------------------------------------------------
+     Escala admin (pista desktop) — diseñada a 1280px+. Más densa.
+     Mobile y admin no se mezclan: una vista de pista usuario nunca usa
+     clases text-admin-*, y viceversa.
+     ---------------------------------------------------------------------- */
+  .text-admin-page-title {
+    font-family: var(--font-barlow), sans-serif;
+    font-size: 24px;
+    line-height: 1.2;
+    font-weight: 700;
+  }
+  .text-admin-section {
+    font-family: var(--font-barlow), sans-serif;
+    font-size: 16px;
+    line-height: 1.3;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .text-admin-card-title {
+    font-family: var(--font-barlow), sans-serif;
+    font-size: 14px;
+    line-height: 1.3;
+    font-weight: 700;
+  }
+  .text-admin-body {
+    font-size: 13px;
+    line-height: 1.5;
+    font-weight: 400;
+  }
+  .text-admin-label {
+    font-size: 11px;
+    line-height: 1.3;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .text-admin-table-cell {
+    font-size: 13px;
+    line-height: 1.4;
+    font-weight: 400;
+  }
+  .text-admin-table-header {
+    font-size: 11px;
+    line-height: 1.2;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .text-admin-meta {
+    font-size: 11px;
+    line-height: 1.4;
+    font-weight: 400;
+  }
+
+  /* KPI numbers — Barlow Condensed para dashboards de KPIs */
+  .text-kpi-value-xl {
+    font-family: var(--font-barlow), sans-serif;
+    font-size: 36px;
+    line-height: 1;
+    font-weight: 800;
+  }
+  .text-kpi-value-lg {
+    font-family: var(--font-barlow), sans-serif;
+    font-size: 28px;
+    line-height: 1;
+    font-weight: 800;
+  }
+  .text-kpi-value-md {
+    font-family: var(--font-barlow), sans-serif;
+    font-size: 20px;
+    line-height: 1;
+    font-weight: 700;
+  }
+  .text-kpi-trend {
+    font-size: 11px;
+    line-height: 1.2;
+    font-weight: 600;
+  }
+
+  /* ----------------------------------------------------------------------
+     Helpers reutilizables — tokens.md §14
+     ---------------------------------------------------------------------- */
+  /* Scroll horizontal sin scrollbar (común en mobile chips/tabs) */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Touch target mínimo mobile (≥44×44px) — incluye padding clickeable */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* WhatsApp chat background (mockup Premium landing / chat preview) */
+  .bg-whatsapp-chat {
+    background-color: var(--whatsapp-chat-bg);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M0 0h100v100H0z' fill='%23ECE5DD'/%3E%3Cpath d='M20 20l5 5M40 60l5 5M70 30l5 5M30 80l5 5' stroke='%23DDD7CB' stroke-width='1.5'/%3E%3C/svg%3E");
+  }
+
+  /* Premium watermark — overlay con email del usuario en picks (Lote D) */
+  .premium-watermark {
+    color: var(--premium-watermark);
+    font-size: 8px;
+    letter-spacing: 0.05em;
+  }
+}
+
+/* ==========================================================================
+   LEGACY — clases utility heredadas del Lote 0. Conservadas para no romper
+   componentes que las consumen. Equivalente nuevo: `scrollbar-hide`.
+   ========================================================================== */
 .scrollbar-none {
   scrollbar-width: none;
 }
