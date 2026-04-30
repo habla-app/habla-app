@@ -1,38 +1,101 @@
 # CLAUDE.md — Habla! App
 
 > Cerebro del proyecto. Cargado en cada sesión: corto y denso. Historial detallado de cambios vive en commits y PRs.
-> Última reescritura: 13 May 2026 (Lote 11 — home rediseñada + nav adjustments + UX editorial).
+> Última reescritura: 30 Apr 2026 (Pivot a v3.1 — roadmap A-J + Premium WhatsApp Channel + admin desktop-only).
 
 ---
 
 ## Stack
 
-Next.js 14 (App Router) + React 18 + Tailwind 3 · PostgreSQL 16 + Prisma · Redis 7 + Socket.io · Cloudflare R2 (backups) · Resend (email) · api-football.com · OpenPay (BBVA, integración pendiente Lote 12) · Railway (Dockerfile multi-stage) · Cloudflare DNS+proxy. Monorepo pnpm 10 + Turborepo.
+Next.js 14 (App Router) + React 18 + Tailwind 3 · PostgreSQL 16 + Prisma · Redis 7 + Socket.io · Cloudflare R2 (backups) · Resend (email) · api-football.com · OpenPay BBVA (pasarela, Lote E) · WhatsApp Business API (Meta Cloud API, Lote E) · Anthropic Claude API (picks Premium + bot FAQ, Lote E) · Railway (Dockerfile multi-stage) · Cloudflare DNS+proxy. Monorepo pnpm 10 + Turborepo.
 
 ## Modelo actual
 
-Pivot 28 Abr 2026: de plataforma de torneos con saldo interno y tienda → **plataforma editorial + comunidad gratuita + afiliación MINCETUR**. Sin operación de juego propio. Las inscripciones a torneos son gratuitas y los usuarios sólo compiten por ranking. Las capas Premium y Cursos van detrás de feature flags y se prenden en lotes posteriores. Deadline: lanzamiento **8 de junio de 2026**.
+**Pivot 28 Abr 2026:** de plataforma de torneos con saldo interno y tienda → **plataforma editorial + comunidad gratuita + afiliación MINCETUR**. Sin operación de juego propio.
 
-URL prod: `https://hablaplay.com` (alias `https://www.hablaplay.com`). El plan completo de 16 lotes vive en `plan-final-lotes.md`.
+**Pivot 30 Abr 2026 (v3.1):** se descartan los lotes 12-16 originales (Premium con feature flag, Cursos, etc.) y se reemplazan por el **roadmap A-J** documentado en `Habla_Plan_de_Negocios_v3.1.md`. El nuevo Premium ya no es paywall genérico — es **suscripción con entrega vía WhatsApp Channel privado** ("Habla! Picks") + bot FAQ 1:1. Deadline: lanzamiento **8 de mayo de 2026**.
 
-## Estado de lotes
+### Tres productos del modelo v3.1 (jerarquía explícita)
+
+- **Producto B** — Cobertura dinámica de partidos. Cara visible #1.
+- **Producto C** — Liga Habla! comunitaria gratuita con S/1,250 mensuales en premios. Cara visible #2.
+- **Producto A** — Biblioteca soporte (guías, reseñas, glosario). Auxiliar invisible.
+- **Premium** — 4to producto. WhatsApp Channel privado broadcast (NO grupo) + Business API bot. Slogan: *"Habla! Todas las fijas en una"*.
+
+URL prod: `https://hablaplay.com` (alias `https://www.hablaplay.com`).
+
+## Estado de lotes — Histórico (Lotes 0-11) + Roadmap nuevo (A-J)
+
+### Lotes 0-11 — Reciclables ✅
+
+Toda la infraestructura previa al pivot v3.1 sigue válida. Lo construido en estos lotes es la base sobre la que se ejecuta el roadmap A-J.
 
 | Lote | Estado | Qué hace |
 |---|---|---|
 | 0 — Base previa al pivot | ✅ | Auth NextAuth v5 (Google + magic link Resend), torneos+tickets+ranking, backups R2 a Cloudflare, infra Railway+Cloudflare. |
-| 1 — Cleanup servicios externos | ✅ | Quita Sentry, PostHog, Twilio + verificación teléfono/DNI. Cookie banner adaptado. Eventos canónicos cableados en Lote 6 (lista vive en `apps/web/lib/analytics.ts`). |
-| 2 — Demolición Lukas + wallet | ✅ | Drop completo del sistema de saldo interno: 4 columnas de balance en Usuario, columnas económicas del Torneo, tabla TransaccionLukas, enums. UI sin balance: NavBar limpio, sidebar de 3 widgets, "Predecir gratis", ranking sin premio. Tienda en mantenimiento. |
-| 3 — Demolición tienda + canjes + verif + límites | ✅ | Drop tablas Premio/Canje/LimitesJuego/VerificacionTelefono/VerificacionDni + 4 enums + columnas Usuario.telefono/telefonoVerif/dniVerif + PreferenciasNotif.notifVencimientos. Borradas pages /tienda y /admin/canjes, endpoints /api/v1/{canjes,premios,admin/canjes,admin/seed/premios,usuarios/limites}, services canjes/premios/premios-seed/limites, JuegoResponsableSection. BottomNav reescrito a 5 items (Inicio · Partidos · Pronósticos · Comunidad · Perfil) con placeholders "Próximamente" en /pronosticos y /comunidad. |
-| 4 — Demolición contabilidad + eliminación total de Culqi | ✅ | Drop 8 tablas (asientos, asientos_lineas, cuentas_contables, movimientos_banco_{esperados,reales}, cargas_extracto_banco, auditoria_contable_logs, eventos_culqi) + enum TipoCuenta. Borrados services contabilidad/conciliacion-banco/extracto-interbank.parser/auditoria-contable, pages /admin/{contabilidad,conciliacion,ingresos,reportes}, endpoints /api/v1/admin/contabilidad/*, componente PreviewBanner, Job I de instrumentation, alerta backup 2-fallos, templates email auditoría/backup, CulqiAdapter+stubs apps/api/modules/pagos, CSP de *.culqi.com. Pasarela queda como esqueleto neutral (`types.ts` con 2 métodos + `mock-pasarela.ts`). Flag `pagosHabilitados()` se reemplaza por `premiumHabilitado()` + `cursosHabilitado()`. Adapter real OpenPay se construye en Lote 12. |
-| 5 — Leaderboard mensual + premios en efectivo | ✅ | Nuevas tablas `leaderboards` + `premios_mensuales` + columna `tickets.puntosFinales` (snapshot al FT). Service `leaderboard.service.ts` con `cerrarLeaderboard` idempotente y tabla fija S/ 1,250 (1°S/500 · 2°S/200 · 3°S/200 · 4°-10°S/50 c/u). Job J de instrumentation cierra el mes anterior cada día 1 ≥01:00 PET. Email `premioMensualGanado` + wrapper `notifyPremioMensualGanado`. Pages `/comunidad` (Top 100 mes en curso + Mi posición + reparto + meses cerrados), `/comunidad/mes/[mes]`, `/admin/leaderboard` (forzar cierre), `/admin/premios-mensuales` (CRUD estado + datosPago + notas + copiar template respuesta). Endpoints `POST /api/v1/admin/leaderboard/cerrar` (auth ADMIN o Bearer CRON_SECRET) + `GET/PATCH /api/v1/admin/premios-mensuales`. `/mis-combinadas`: stat pills nuevas (Pos. del mes · Mejor mes) + tab "Mes en curso". `finalizarTorneo` graba `puntosFinales` además de `posicionFinal`. |
-| 6 — Logs + analytics in-house | ✅ | Reemplaza Sentry+PostHog. Tablas `log_errores` + `eventos_analitica` con FK opcional a `usuarios` (SET NULL). Services `logs.service.ts` (registrar, paginar, stats 24h, resumen críticos última hora) y `analytics.service.ts` (track con país via `cf-ipcountry`, IP nunca persistida, queries de visitas/registros/funnel/top eventos). Helper cliente `apps/web/lib/analytics.ts` (track, capturePageview, identify, reset) que respeta toggle "Analíticas" del cookie banner antes de hacer POST. Endpoint `POST /api/v1/analytics/track` con rate-limit 60/min por IP, responde 204. Logger Pino enganchado vía `hooks.logMethod`: error→`error`, fatal→`critical` se persisten async fire-and-forget (anti-recursión: skip si source comienza con `analytics`/`logs`). Job M cada 1h en `instrumentation.ts`: si hay críticos > 0 en última hora, manda email a ADMIN_ALERT_EMAIL (anti-spam: 1 alerta/h en memoria). Email `criticosResumen` + wrapper `notifyCriticosResumen`. Pages `/admin/dashboard` (cards visitas/registros/críticos + funnel + series diarias + top eventos, selector 1d/7d/30d) y `/admin/logs` (tabla paginada con filtros level/source/fechas, expandible con stack+metadata). Endpoints lectura `GET /api/v1/admin/{analytics/overview,logs}`. Componente `TrackOnMount` reutilizable para server-pages. Eventos cableados: `signup_started` (mount /auth/signup), `signup_completed`+`profile_completed` (POST /auth/signup ok email · POST /auth/completar-perfil ok google · events.signIn google), `email_verified` (events.signIn cualquier provider), `match_viewed` (mount /torneo/[id]), `prediccion_enviada` (POST /tickets ok), `comunidad_leaderboard_visto` (mount /comunidad). TODOs sembrados en `lib/analytics.ts` para `articulo_visto`, `casa_click_afiliado`, `cuotas_comparator_visto`, `newsletter_suscripcion`, `referido_invitacion_compartida`. |
-| 7 — Afiliación MINCETUR (schema + tracker + admin) | ✅ | Tablas `afiliados` + `clicks_afiliados` + `conversiones_afiliados` (FK opcional a `usuarios`, SET NULL). Service `afiliacion.service.ts`: `obtenerAfiliadoPor{Slug,Id}`, `obtenerActivosOrdenados`, `listarTodos`, `registrarClick` (hashea IP con SHA-256 + sal in-memory rotada por proceso vía Web Crypto, IP cruda nunca se persiste, fire-and-forget), `crear/actualizar/desactivarAfiliado` (soft delete = `activo=false`), `registrarConversionManual`, `obtenerStatsAfiliado` (clicks/uniques/serie/conversiones/revenue por periodo 7d\|30d\|90d), `obtenerStatsResumenTodos`, `listarClicksDeAfiliado`, `listarConversiones`, `parsearUtm`. Endpoint `GET /go/[casa]/route.ts` (Node runtime): registra click + dispara `analyticsService.track('casa_click_afiliado', { afiliado, afiliadoId, pagina_origen })` antes de `NextResponse.redirect 302` a `urlBase`; si slug no existe o `activo=false`, responde 404 con HTML mínimo "Casa no disponible". Componentes MDX en `apps/web/components/mdx/` (server, leen DB, devuelven `null` si afiliado inactivo): `<CasaCTA>` (CTA dorado prominente, variant gold\|compact), `<CasaReviewCard>` (logo+rating+bono+pros/contras+métodos pago+CTA), `<TablaCasas>` (tabla comparativa con scroll-x mobile), `<DisclaimerLudopatia>` (legal con teléfono 0800-1-2025 MINCETUR). Endpoints admin: `POST/GET /api/v1/admin/afiliados`, `PATCH/DELETE /api/v1/admin/afiliados/[id]`, `GET /api/v1/admin/afiliados/[id]/stats`, `POST/GET /api/v1/admin/conversiones`. Pages admin: `/admin/afiliados` (tabla con stats 7d/30d/conv mes), `/admin/afiliados/[id]` (stats + form edición + histórico clicks paginado + conversiones), `/admin/afiliados/nuevo` (form crear con validación slug kebab-case + URL + ratings 0-5 + enum modeloComision CPA/REVSHARE/HIBRIDO), `/admin/conversiones` (filtros afiliado+rango + form inline para registrar). `AdminTopNav` ampliado con items "Afiliados" y "Conversiones". `lib/analytics.ts` actualizado: `casa_click_afiliado` movido a "ya instrumentados". |
-| 8 — Editorial + provider MDX | ✅ | Pipeline editorial completo basado en `.mdx` en filesystem (sin tabla nueva). Loaders en `apps/web/lib/content/{articles,casas,guias,pronosticos,partidos}.ts` que parsean frontmatter con `gray-matter` + Zod (`schema.ts`), cachean in-process por slug y skipean docs con frontmatter inválido (warning a `/admin/logs` Lote 6). Cada directorio bajo `apps/web/content/{blog,casas,guias,pronosticos,partidos}` tiene `_meta.ts` con la lista ordenada para listings sin tocar fs. Provider MDX en `lib/content/mdx-components.tsx` (typed `MDXComponents` de `mdx/types`) registra estilo Tailwind para tags HTML estándar (réplica de MarkdownContent.tsx con ids slugificados en h2/h3) + custom components Lote 7 (`<CasaCTA>`, `<CasaReviewCard>`, `<TablaCasas>`, `<DisclaimerLudopatia>`) + Lote 8 (`<CuotasComparator>` placeholder hasta Lote 9 + tracking `cuotas_comparator_visto`, `<DisclaimerAfiliacion>`, `<PronosticoBox>` con confianza 1-5, `<TOC>` client con scroll-spy IntersectionObserver, `<RelatedArticles>` server matcheando por tags). Nuevo grupo de rutas `app/(public)/` con `revalidate=3600` (ISR), header propio `PublicHeader` (avatar si hay sesión, "Iniciar sesión" si no) + `PublicNavLinks` (desktop + details/summary mobile), Footer global, sin BottomNav. Pages: `/blog` (listing paginado 12 con `?page=N`), `/blog/[slug]` (TOC sticky desktop + mobile collapsable + `articulo_visto` mount + JSON-LD Article + OG dinámico per-route via `lib/content/og-template.tsx`), `/casas` (grid filtrable client-side por rating mín / con-bono / métodos de pago via `components/public/CasasGrid.tsx`, sólo activos+autorizados), `/casas/[slug]` (review + JSON-LD Review con `aggregateRating` cuando hay rating + CTA dorado al final), `/guias` + `/guias/[slug]` (JSON-LD Article + HowTo opcional via `tipo: "howto"`), `/pronosticos` (lista de ligas) + `/pronosticos/[liga]`, `/partidos/[slug]` (JSON-LD SportsEvent), `/cuotas` (placeholder hasta Lote 9). Borrado `(main)/pronosticos/page.tsx` (placeholder Lote 3). Sitemap ampliado a las 11 nuevas rutas con changefreq adecuado por tipo. Robots allow para todas. Smoke MDX en `content/{blog,casas,guias}/dummy.mdx` + `content/pronosticos/liga-1-peru.mdx` validan el pipeline end-to-end. `lib/analytics.ts` actualizado: `articulo_visto` y `cuotas_comparator_visto` movidos a "ya instrumentados". |
-| 9 — Comparador de cuotas + odds cache | ✅ | `api-football.client.ts` extendido con `fetchOddsByFixture` + tipos (`ApiFootballOddsResponse/Bookmaker/Bet/Value` y constantes `APIFOOTBALL_BET_ID_{1X2,OU,BTTS}`). Service nuevo `lib/services/odds-cache.service.ts`: `BOOKMAKER_MAPPING` (Bet365·Betsson·1xBet·Pinnacle como semilla), `LIGAS_TOP_PARA_ODDS` (liga-1-peru + champions + 5 europeas + libertadores + sudamericana), TTL `ODDS_CACHE_TTL_SECONDS=1800`, `actualizarOddsPartido` (lee `Partido.externalId`, fetch a api-football, cross-check con `obtenerActivosOrdenados` del Lote 7, calcula mejor casa por outcome para 1X2/+2.5/BTTS, persiste `odds:partido:{id}` con TTL renovado), `obtenerOddsCacheadas`, `ejecutarCronOdds` (recorre próximos 20 partidos top en ventana 24h; si fallan >50% emite log level=critical → alimenta Job M de alertas Lote 6). Errores parciales se loggean con `registrarError({level:'warn', source:'odds-cache'})`. Sin Redis = degradación graceful (siempre miss, comparador termina en estado vacío). `instrumentation.ts`: Job N tick cada 30min. Endpoint público `GET /api/v1/cuotas/[partidoId]` (hit→200+SWR, miss→200 `{status:'updating'}`+fire-and-forget refresh, partido inexistente→404). Endpoint admin `POST /api/v1/admin/odds/refresh` (auth ADMIN o Bearer CRON_SECRET) fuerza el cron. `redis.ts` extendido con `set/get` typed. Componentes: `<CuotasGrid>` plano server-safe (3 secciones · CTA dorado por celda con `/go/[casa]?utm_source=cuotas&utm_medium=comparador&partidoId&mercado&outcome` + estado vacío con CTA a `/casas`), `<CuotasComparatorPoller>` cliente (4 reintentos cada 3s, skeleton + estado vacío al fallar), `<CuotasComparator>` async server (lee cache, hit→Grid, miss→Poller, dispara `cuotas_comparator_visto` con props `{partidoId, hit}` una sola vez en mount). `/cuotas` recableado: SSR `revalidate=1800`, `prisma.partido.findMany` próximas 36h hasta 30 partidos, `<CuotasPageClient>` envuelve con `HorizontalScrollChips` por liga (filtra in-memory via `data-liga`/`data-hidden`). `/partidos/[slug]` ahora async; embed automático de `<CuotasComparator>` al final del MDX si `frontmatter.partidoId` existe en BD (no embebe si solo hay `partidoSlug`). `lib/analytics.ts`: `cuotas_comparator_visto` pasa de placeholder a productivo en la lista canónica. |
-| 10 — Verificación MINCETUR weekly + newsletter automation | ✅ | **Mincetur**: `ALTER afiliados ADD verificacionPendiente BOOLEAN DEFAULT false`. Service `lib/services/mincetur-check.service.ts` con `verificarCasa(slug, opts)` (fetch HTML registro `apuestasdeportivas.mincetur.gob.pe`, strip+canon, match case/accent-insensitive de `Afiliado.nombre`; ok→`autorizadoMincetur=true`+`ultimaVerificacionMincetur=now`+`verificacionPendiente=false`; sin match→`autorizadoMincetur=false`+`activo=false`+log `level=critical`+email crítico admin; scrape falla→`verificacionPendiente=true`+email warn) y `verificarTodasActivas` (fetch HTML una vez, throttle 5s entre checks, fail-soft global). Cron K cada 1h: lunes hora Lima ≥06:00 + idempotency via `yaVerificadoEstaSemana()` contra `inicioSemanaLima(now)`. Endpoint admin `POST /api/v1/admin/mincetur/verificar` (auth ADMIN o Bearer CRON_SECRET) con body opcional `{slug}`. **Newsletter**: 2 tablas — `suscriptores_newsletter` (email UNIQUE, confirmadoEn, unsubscribedEn, fuente; doble opt-in via magic link JWT firmado AUTH_SECRET) y `digests_enviados` (semana ISO YYYY-WW UNIQUE, contenido JSONB, destinatarios, enviadoEn, aprobadoPor). `ALTER preferencias_notif ADD notifSemanal BOOLEAN DEFAULT true` (opt-out, supera al legacy `emailSemanal`). Service `lib/services/newsletter.service.ts` con `generarDigestSemanal(ref)` (top 3 tipsters mes vía Lote 5 + 5 partidos próximos 7d con mejor cuota 1X2 vía cache Lote 9 + 2 últimos artículos vía Lote 8 + frase + CTAs), `getSemanaIsoKey`, `crearDraftSemanal`, `aprobarYEnviarDigest` (lotes 50 vía Resend, header `List-Unsubscribe` magic link TTL 90d), `obtenerDestinatariosDigest` (unión confirmados + usuarios `notifSemanal=true && emailVerified` dedup lowercase), `suscribirEmail`/`confirmarSuscripcion`/`desuscribir` (un unsubscribe corta ambos canales: SuscriptorNewsletter.unsubscribedEn + Usuario.PreferenciasNotif.notifSemanal=false). Cron L cada 1h: sábado ≥09:00 PET crea draft + email admin con preview/link a /admin/newsletter; domingo ≥12:00 PET recordatorio si sigue sin enviar (anti-dup in-memory). Template `digestSemanalTemplate` en `emails/templates.ts` (mismo wrapEmail navy+gold; secciones top tipsters/partidos/artículos/destacado/CTAs + footer unsubscribe). Endpoints públicos `POST /api/v1/newsletter/suscribir` (rate-limit 5/min IP, dispara `newsletter_suscripcion` con props `{fuente, estado}`), `GET /api/v1/newsletter/confirmar?token=...` (302 → `/?suscripcion=confirmada`), `GET /api/v1/newsletter/unsubscribe?token=...` (302 → `/?suscripcion=cancelada`). Endpoints admin `POST /api/v1/admin/newsletter/draft` (genera idempotente), `PUT` (edita JSONB), `POST /api/v1/admin/newsletter/aprobar` (envía). Pages: `/admin/newsletter` con `<NewsletterAdminPanel>` (preview semana actual + JSON editor + Aprobar y enviar + histórico tabla), `/(public)/suscribir` con `<SuscribirForm>`. Componente nuevo `<NewsletterCTA>` en `components/marketing/` embebido en footer de `/blog/[slug]` (`fuente="blog"`), `/guias/[slug]` (`fuente="guia"`), `/pronosticos/[liga]` (`fuente="pronosticos"`). `AdminTopNav` agrega item "Newsletter". `NotificacionesSection` perfil reemplaza toggle `emailSemanal` por `notifSemanal`; schema mantiene `emailSemanal` legacy default false (ningún caller lo usa post-Lote 10). `lib/analytics.ts`: `newsletter_suscripcion` pasa a "ya instrumentados". |
-| 11 — Home rediseñada + nav adjustments + UX editorial | ✅ | Pivot visual de la home y rediseño UX coherente con el lenguaje editorial. **Home `/`** rehecha de cero (de grilla `MatchesPageContent` a hub editorial 6 secciones): `<HomeHero>` (gradient navy + franja gold animada + 2 CTAs "Ver pronósticos del día"/"Compite gratis"), Pronósticos del día (top 3 partidos próximos 24h con `<CuotasComparatorMini>` embebido + link a `/partidos/[slug]` si hay MDX o `/torneo/[id]` como fallback), Compite gratis (`<LeaderboardPreview>` top 5 mes en curso + `<ComunidadCTA>`), Casas autorizadas top (6 con `<CasaReviewCardMini>`), Últimos análisis (3 últimos via `articles.getAll().slice(0,3)`), Newsletter banner (`<NewsletterCTA fuente="home" />`). Mantiene `force-dynamic`. **Componentes nuevos**: `components/home/{HomeHero,SectionBar,PartidoDelDiaCard,LeaderboardPreview,ArticleCard}.tsx`, `components/mdx/{CuotasComparatorMini,CasaReviewCardMini}.tsx` (variantes compactas de los Lote 9 / Lote 7 — sólo 1X2 en mini-cuotas, sin pros/contras ni métodos de pago en mini-casa). **NavBar simplificado** (5 links: Inicio · Pronósticos · Casas · Comunidad · Blog), live-dot rojo discreto al lado de "Inicio" cuando `count>0`; "Partidos"/"En vivo"/"Mis combinadas" salen del nav top (`BottomNav` mobile mantiene los 5 items del Lote 3). **Footer global rehecho**: 4 columnas (Marca + redes / Producto / Editorial / Legal), redes sociales inline SVG (Instagram·Twitter·TikTok·YouTube), bloque inferior con DisclaimerLudopatia inline (variante dark), texto de afiliación, +18 con teléfono MINCETUR 0800-1-2025 y datos legales (RUC + razón social) leídos de env vars `LEGAL_RUC`/`LEGAL_RAZON_SOCIAL`/`LEGAL_DOMICILIO`; si no están seteadas, la línea se omite (no rompe build). **`/matches`** pasa a hero rebrandeado al lenguaje editorial (gradient navy compacto + copy "Predice gratis · Subí en el ranking del mes"). **`/torneo/[id]`** hero suma titular dorado "Predice [A] vs [B]" + countdown inline + "X tipsters compitiendo" + ribbon dorado animado arriba (sin tocar la lógica de inscripción ni el StickyCTA). **`/perfil`**: `StatsGrid` pasa de 4 a 6 stats (Predicciones · Aciertos · % Acierto · Mejor mes · Pos. histórica · Nivel) consumiendo `obtenerMisStatsMensuales` del Lote 5 + nivel del perfil; `QuickAccessGrid` rehecho a 4 cards (Mi link de referido placeholder disabled hasta Lote 13 + Mis predicciones + Newsletter [anchor a `#notificaciones`] + Soporte); `NotificacionesSection` simplificado a 4 toggles canónicos (`notifInicioTorneo`/`notifResultados`/`notifSemanal`/`notifPromos`) + nuevo toggle "Perfil público" (PATCH `/api/v1/usuarios/me` con `perfilPublico`); legacy `notifSugerencias`/`notifCierreTorneo` se mantienen en schema pero ya no tienen UI. **`/comunidad/[username]` (page nueva)**: lookup case-insensitive del @handle, 404 si no existe, "Perfil privado" si `perfilPublico=false`; render hero con avatar/nivel + 6 stats + tabla de últimas 10 predicciones FINALIZADAS (`puntosFinales != null`, no expone activas) + JSON-LD `Person` con `aggregateRating` cuando `stats.jugadas > 20` (mapea %acierto/20 a estrellas 0-5). Service nuevo `lib/services/perfil-publico.service.ts` con `obtenerPerfilPublico(username)`. **Migración `20260512000000_lote_11_perfil_publico`** aditiva pura (`ALTER usuarios ADD perfilPublico BOOLEAN NOT NULL DEFAULT TRUE`). **Env vars opcionales** consumidas por el footer: `LEGAL_RUC`, `LEGAL_RAZON_SOCIAL`, `LEGAL_DOMICILIO_FISCAL` (ya listadas en `.env.example`/CLAUDE.md desde antes; Gustavo las completa en Railway durante Lote 15). |
-| 12-13 — Premium + Cursos | ⏳ | Paywalls (flag `PREMIUM_HABILITADO`, `CURSOS_HABILITADO`). |
-| 14-16 — QA, beta, lanzamiento | ⏳ | Smoke, k6, soft-launch, lanzamiento 8 jun. |
+| 1 — Cleanup servicios externos | ✅ | Quita Sentry, PostHog, Twilio + verificación teléfono/DNI. Cookie banner adaptado. Eventos canónicos cableados en Lote 6. |
+| 2 — Demolición Lukas + wallet | ✅ | Drop completo del sistema de saldo interno + tienda en mantenimiento. |
+| 3 — Demolición tienda + canjes + verif + límites | ✅ | Drop tablas Premio/Canje/LimitesJuego/VerificacionTelefono/VerificacionDni + 4 enums. BottomNav reescrito a 5 items. |
+| 4 — Demolición contabilidad + eliminación total de Culqi | ✅ | Drop 8 tablas contables + Culqi. Pasarela queda como esqueleto neutral (`types.ts` con 2 métodos + `mock-pasarela.ts`). |
+| 5 — Leaderboard mensual + premios en efectivo | ✅ | Tablas `leaderboards` + `premios_mensuales`. Service `leaderboard.service.ts` con cierre idempotente y tabla S/1,250 (1°S/500 · 2°S/200 · 3°S/200 · 4°-10°S/50 c/u). Job J cierra mes anterior. |
+| 6 — Logs + analytics in-house | ✅ | Reemplaza Sentry+PostHog. Tablas `log_errores` + `eventos_analitica`. Pages `/admin/dashboard`, `/admin/logs`. Job M alertas críticos. |
+| 7 — Afiliación MINCETUR (schema + tracker + admin) | ✅ | Tablas `afiliados` + `clicks_afiliados` + `conversiones_afiliados`. Endpoint `/go/[casa]`. Componentes MDX `<CasaCTA>`, `<CasaReviewCard>`, `<TablaCasas>`, `<DisclaimerLudopatia>`. |
+| 8 — Editorial + provider MDX | ✅ | Pipeline editorial completo basado en `.mdx`. Pages `/blog`, `/casas`, `/guias`, `/pronosticos`, `/partidos/[slug]`. JSON-LD por tipo. |
+| 9 — Comparador de cuotas + odds cache | ✅ | `<CuotasComparator>` con cache Redis 30min. `LIGAS_TOP_PARA_ODDS` + `BOOKMAKER_MAPPING`. Job N cron 30min. |
+| 10 — Verificación MINCETUR weekly + newsletter automation | ✅ | Cron K verifica casas vs registro MINCETUR. Newsletter doble opt-in con digest semanal. `<NewsletterCTA>` embedded. |
+| 11 — Home rediseñada + nav adjustments + UX editorial | ✅ | Home hub editorial 6 secciones. NavBar 5 links. `/comunidad/[username]` con perfil público. Stats 6 columnas en `/perfil`. |
+
+### Lotes 12-16 originales — DEPRECADOS ❌
+
+Los lotes 12 (Premium con paywall), 13 (Cursos), 14-16 (QA, beta, lanzamiento) **se descartan** y se reemplazan por el roadmap A-J.
+
+### Roadmap nuevo A-J — Pendiente ⏳
+
+| Lote | Pista | Carpeta specs | Qué hace |
+|---|---|---|---|
+| **A** — Design system v3.1 + tokens nuevos | Ambas | `00-design-system/` | Tokens Premium, WhatsApp, admin. `<MobileHeader>`, `<BottomNav>`, `<CrossProductBanner>`. |
+| **B** — Reauditoría móvil capa pública | Usuario | `02-pista-usuario-publica/` | Refactor mobile-first de home, partidos, blog, casas, guías, pronósticos, auth, suscribir. Sticky CTAs, BottomNav consistente. |
+| **C** — Reauditoría móvil capa autenticada | Usuario | `03-pista-usuario-autenticada/` | Refactor mobile-first de comunidad, perfil, mis-predicciones, live-match, perfil público. URLs renombradas. |
+| **D** — Premium WhatsApp UI usuario | Usuario | `04-pista-usuario-premium/` | Vistas `/premium`, `/premium/checkout`, `/premium/exito`, `/premium/mi-suscripcion`. Componente reusable `<PickWrapper>`. |
+| **E** — Premium backend automatización | Backend | `04-pista-usuario-premium/` | Modelos `Suscripcion`/`PagoSuscripcion`/`PickPremium`/`MiembroChannel`. OpenPay adapter. WhatsApp Business client. Bot FAQ con Claude API. Cron sync membresía. |
+| **F** — Admin desktop operación | Admin | `05-pista-admin-operacion/` | Sidebar lateral fijo 240px reemplaza topbar. Dashboard con 5 categorías KPI. `/admin/picks-premium` con atajos teclado. Channel WhatsApp, suscripciones, refactors Lotes 5/7/10. |
+| **G** — Admin desktop KPIs análisis | Admin | `06-pista-admin-analisis/` | KPIs detallado, cohortes, mobile-vitals, finanzas, alarmas, sistema (logs+auditoría+usuarios). |
+| **H** — Microcopy + emails + WhatsApp templates | Usuario | `07-microcopy-emails-whatsapp/` | Catálogo microcopy i18n-ready, 11 emails React Email, 7 templates WhatsApp Business para aprobación Meta, sistema toast/banner basado en sonner. |
+| **I** — Mobile-first audit + PWA | Usuario | dentro de `00-design-system/` | Auditoría final mobile + manifest.json + service worker básico. |
+| **J** — QA + soft launch + lanzamiento 8 mayo | Ambas | (no requiere specs) | Smoke, k6, soft-launch con 5-10 testers, lanzamiento. |
+
+**Ruta crítica:** A → B → C → D → E → J. F/G/H/I pueden paralelo después de D.
+
+**Decisión clave:** ejecutar Lote E (backend Premium) antes que Lote D (frontend Premium) si Meta Business y OpenPay BBVA tardan en aprobar. Esto evita que D quede con muchos fallbacks visibles.
+
+## docs/ux-spec/ — Fuente de verdad UX
+
+Esta carpeta es lo que Claude Code lee al ejecutar cada lote del roadmap A-J. **Antes de empezar cualquier lote, leer:**
+
+1. El `README.md` raíz de `docs/ux-spec/`.
+2. El `README.md` de la carpeta del lote correspondiente.
+3. Cada `.spec.md` de vista en orden recomendado.
+
+```
+docs/ux-spec/
+├── README.md
+├── 00-design-system/                    ← Lote A
+│   ├── tokens.md, tipografia.md, componentes-{base,mobile,admin}.md
+│   └── mockup-actualizado.html
+├── 01-arquitectura/                     ← contextual (todos los lotes)
+│   ├── inventario-vistas.md, mapa-rutas.md, flujos-navegacion.md
+│   └── auditoria-repo-actual.md
+├── 02-pista-usuario-publica/            ← Lote B (14 archivos)
+├── 03-pista-usuario-autenticada/        ← Lote C (11 archivos)
+├── 04-pista-usuario-premium/            ← Lotes D + E (16 archivos)
+├── 05-pista-admin-operacion/            ← Lote F (11 archivos + 2 mockups)
+├── 06-pista-admin-analisis/             ← Lote G (7 archivos)
+└── 07-microcopy-emails-whatsapp/        ← Lote H (7 archivos)
+```
+
+Cada `.spec.md` sigue 8 secciones canónicas: Lote responsable / Estado actual repo / Cambios necesarios / Datos / Estados UI / Componentes que reutiliza / Reglas / Mockup referencia.
+
+`Habla_Plan_de_Negocios_v3.1.md` (raíz del repo) es la fuente de verdad estratégica detrás de todas las specs.
 
 ## Servicios externos vigentes
 
@@ -40,60 +103,115 @@ URL prod: `https://hablaplay.com` (alias `https://www.hablaplay.com`). El plan c
 - **Railway** — hosting (Dockerfile, 1 réplica web, Postgres, Redis, backups nativos).
 - **Resend** — emails transaccionales (dominio `hablaplay.com` verificado).
 - **api-football.com** — datos deportivos. Header `x-apisports-key`.
-- **OpenPay (BBVA)** — pasarela de pagos (pendiente). Esqueleto neutral en `lib/services/pasarela-pagos` (2 métodos: `crearCobroUnico`, `crearSuscripcion`). Adapter real se construye en Lote 12 detrás de flags `PREMIUM_HABILITADO` / `CURSOS_HABILITADO`.
+- **OpenPay (BBVA)** — pasarela de pagos. **Lote E.** Adapter real reemplaza el esqueleto neutral del Lote 4.
+- **WhatsApp Business API (Meta Cloud)** — bot FAQ 1:1 + envío de picks Premium 1:1. **Lote E.** Channel privado se gestiona manualmente desde la app (Meta no expone API de Channels al momento de este spec).
+- **Anthropic Claude API** — generación de picks Premium con razonamiento estadístico + bot FAQ conversacional. **Lote E.** Modelo default `claude-opus-4-7`.
 - **Cloudflare R2** — backups `pg_dump` diarios + mensual.
 - **Google OAuth** — provider de NextAuth.
 - **Google Search Console** — SEO ownership.
+- **Google PageSpeed Insights API** — Lighthouse semanal contra rutas críticas. **Lote G.**
 - **Uptime Robot** — monitor `/api/health`.
-- **Registro MINCETUR** — `https://apuestasdeportivas.mincetur.gob.pe/`. Sólo lectura: el cron K (Lote 10) scrapea HTML cada lunes ≥06:00 PET para verificar que cada `Afiliado.nombre` siga listado. No requiere credenciales ni API key. Si scrape falla, el cron es fail-soft (marca `verificacionPendiente=true`+email warn al admin); si una casa pierde el match, se desactiva automáticamente con email crítico.
+- **Registro MINCETUR** — `https://apuestasdeportivas.mincetur.gob.pe/`. Sólo lectura: cron K (Lote 10) scrapea HTML cada lunes ≥06:00 PET.
 
-Eliminados en Lote 1: Sentry, PostHog, Twilio. Eliminado en Lote 4: Culqi (reemplazado por OpenPay BBVA, pendiente Lote 12).
+Eliminados en Lote 1: Sentry, PostHog, Twilio. Eliminado en Lote 4: Culqi.
 
 ## Feature flags
 
-- `PREMIUM_HABILITADO=false` — capa Premium (Lote 11+).
-- `CURSOS_HABILITADO=false` — capa Cursos (Lote 12+).
+Los flags `PREMIUM_HABILITADO` y `CURSOS_HABILITADO` del modelo previo **se eliminan**. Premium ahora es producto productivo desde Lote D/E. Cursos no existe en v3.1.
+
+Si alguna vista usa estos flags todavía: refactor en Lote D para eliminarlos.
 
 ## Reglas duras
 
 1. **Prod-first, no local.** No correr `pnpm dev`/`next build`/migrar BD/levantar Postgres en local. Validación pre-push: solo `pnpm tsc --noEmit` + `pnpm lint`. Validación funcional la hace Gustavo en `hablaplay.com` post-deploy.
 2. **Migraciones con `--create-only`.** Generar el SQL pero no aplicar local. Aplicación pasa por `prisma migrate deploy` en el `CMD` del Dockerfile al arrancar.
-   - **Backup manual pre-deploy sólo si la migración compromete integridad de Postgres**: renombres de columna, cambios de tipo, conversiones JSONB↔relacional, FKs movidas, drops de tabla con data productiva. `CREATE TABLE` / `ALTER TABLE ADD COLUMN` / `UPDATE` de backfill puro **no** requieren backup. Regla establecida en Lote 5 (May 2026), válida desde entonces.
-3. **Branch por lote.** `feat/lote-N-<slug>`. Migraciones y merges a `main` los aplica Claude Code directamente al cerrar el lote, sin gate de OK escrito de Gustavo. **Cierre incluye `git push origin main`** — Railway deploya desde `origin/main`, no desde local; merge sin push = deploy invisible (ver incidente Lote 8, May 2026). El SQL de la migración (cuando existe) queda en el reporte como referencia. Política nueva desde Lote 8; reemplaza la regla previa que pedía OK explícito antes de aplicar.
+   - **Backup manual pre-deploy sólo si la migración compromete integridad de Postgres**: renombres de columna, cambios de tipo, conversiones JSONB↔relacional, FKs movidas, drops de tabla con data productiva. `CREATE TABLE` / `ALTER TABLE ADD COLUMN` / `UPDATE` de backfill puro **no** requieren backup.
+3. **Branch por lote.** `feat/lote-<letra>-<slug>` (ej: `feat/lote-d-premium-frontend`). Migraciones y merges a `main` los aplica Claude Code directamente al cerrar el lote, sin gate de OK escrito de Gustavo. **Cierre incluye `git push origin main`** — Railway deploya desde `origin/main`, no desde local; merge sin push = deploy invisible.
 4. **Commits Conventional.** `feat:`, `fix:`, `chore:`, `docs:`.
-5. **Cero servicios externos nuevos** sin discutir antes. La política del pivot es minimizar dependencias externas y pagos recurrentes.
+5. **Cero servicios externos nuevos** sin discutir antes. Las nuevas dependencias del v3.1 (OpenPay, WhatsApp Business, Anthropic, PageSpeed Insights) están aprobadas en el plan v3.1 y son las únicas. Cualquier otra requiere discusión previa.
 6. **TypeScript strict + Zod en entrada + Pino para logs** (no `console.log`).
-7. **Cero hex hardcodeados en JSX.** Tokens Tailwind (`brand-*`, `urgent-*`, `accent-*`, `dark-*`, `pred-*`).
+7. **Cero hex hardcodeados en JSX.** Tokens Tailwind del Lote A (`brand-*`, `gold-*`, `premium-*`, `whatsapp-*`, `admin-*`).
 8. **Fechas con timezone explícito.** Helpers en `lib/utils/datetime.ts`. Default `America/Lima`.
 9. **`authedFetch` para `/api/v1/*`** desde el cliente. Centraliza `credentials: 'include'`.
 10. **Modales con `createPortal(document.body)`** (`components/ui/Modal.tsx`).
 11. **Operaciones admin one-shot** como endpoints `POST /api/v1/admin/*` con auth ADMIN o `Bearer CRON_SECRET`. Nunca en `startCommand`/`Dockerfile`.
-12. **UX alineado al mockup.** Cualquier cambio de UX (copy, layout, componente, rebrand) respeta el estilo definido en `docs/habla-mockup-completo.html`: paleta, tipografías, espaciados, componentes y tono de copy. Leer el mockup antes de tocar UI; si una decisión no está cubierta ahí, preguntar antes de inventar.
+12. **UX alineado a `docs/ux-spec/`.** Cualquier cambio de UX (copy, layout, componente, rebrand) respeta lo definido en las specs del lote correspondiente. **Si una decisión no está cubierta en la spec del lote, leer también el `00-design-system/` y los lotes adyacentes antes de inventar.** El mockup `docs/habla-mockup-completo.html` es legacy del modelo previo — el mockup vigente es `docs/ux-spec/00-design-system/mockup-actualizado.html`.
+13. **Mobile-first riguroso para pista usuario.** Lighthouse Mobile >90, LCP <2.5s, INP <200ms, CLS <0.1. **Desktop-only para pista admin** (1280px+, mobile bloqueado con `<MobileGuard>`). Esta separación es decisión arquitectónica del v3.1.
+
+### Reglas adicionales del v3.1
+
+14. **Cero datos de tarjeta tocan el servidor de Habla!.** Tokenización con OpenPay.js client-side. Backend recibe solo el token.
+15. **Verificación de firma obligatoria** en TODO webhook. Sin firma válida → 401. OpenPay HMAC-SHA256, WhatsApp X-Hub-Signature-256.
+16. **Idempotencia obligatoria** en webhooks (pueden reintentar mismo evento). Verificar estado actual antes de procesar.
+17. **Retry con backoff exponencial** para envíos críticos (emails, WhatsApp). 3 intentos: 1s, 2s, 4s. Después → log critical.
+18. **Cero auto-publicación de picks Premium.** Cada pick generado por Claude API DEBE pasar por aprobación humana del editor antes de salir al Channel.
+19. **Watermark con email del usuario** en cada pick que llega al bot 1:1 (dificulta forwarding masivo).
+20. **Atajos de teclado** en vistas operativas admin (validar picks: A/R/E/↑↓/Esc). Inputs activos suprimen los atajos.
+21. **Auditoría 100%** en acciones admin destructivas (helper `logAuditoria()` invocado desde cada server action). Logs pueden samplearse, auditoría nunca.
+22. **Tono según `tono-de-voz.spec.md`** del Lote H. Persona "tú" (no "usted"), informal-friendly, español neutro Perú. Cero promesas legales.
+23. **Apuesta responsable** mencionada en cualquier comunicación que invite a apostar. Línea Tugar 0800-19009.
 
 ## Variables de entorno relevantes
 
 Lista de nombres (valores en Railway vault, no acá). Detalle en `.env.example`.
 
 ```
+# Existentes (Lotes 0-11)
 DATABASE_URL  REDIS_URL
 AUTH_SECRET  NEXTAUTH_URL  GOOGLE_CLIENT_ID  GOOGLE_CLIENT_SECRET
 API_FOOTBALL_KEY  API_FOOTBALL_HOST
-PREMIUM_HABILITADO  CURSOS_HABILITADO
 RESEND_API_KEY
 NEXT_PUBLIC_APP_URL  JWT_SECRET  NODE_ENV
-CRON_SECRET  ADMIN_ALERT_EMAIL
+CRON_SECRET  ADMIN_ALERT_EMAIL  ADMIN_EMAIL
 R2_ACCOUNT_ID  R2_ACCESS_KEY_ID  R2_SECRET_ACCESS_KEY  R2_BUCKET_BACKUPS  R2_ENDPOINT
 LEGAL_RAZON_SOCIAL  LEGAL_RUC  LEGAL_PARTIDA_REGISTRAL  LEGAL_DOMICILIO_FISCAL
 LEGAL_DISTRITO  LEGAL_TITULAR_NOMBRE  LEGAL_TITULAR_DNI
+
+# Nuevas v3.1 — OpenPay BBVA (Lote E)
+OPENPAY_MERCHANT_ID  OPENPAY_PRIVATE_KEY  OPENPAY_PUBLIC_KEY
+OPENPAY_PRODUCTION  OPENPAY_WEBHOOK_SECRET
+
+# Nuevas v3.1 — WhatsApp Business API (Lote E)
+META_BUSINESS_ID  WHATSAPP_PHONE_NUMBER_ID  WHATSAPP_ACCESS_TOKEN
+WHATSAPP_VERIFY_TOKEN  WHATSAPP_APP_SECRET
+WHATSAPP_CHANNEL_PREMIUM_INVITE_LINK
+WHATSAPP_BUSINESS_PHONE_NUMBER
+
+# Nuevas v3.1 — Anthropic API (Lote E)
+ANTHROPIC_API_KEY  ANTHROPIC_MODEL
+
+# Nuevas v3.1 — PageSpeed Insights (Lote G, opcional)
+PAGESPEED_API_KEY
+
+# Nuevas v3.1 — Resend webhook (Lote F newsletter, opcional)
+RESEND_WEBHOOK_SECRET
 ```
+
+**Tasks paralelas externas que requieren lead time:**
+
+- OpenPay BBVA: cuenta + verificación KYC (1-3 días hábiles) + crear 3 planes (mensual/trimestral/anual) en dashboard.
+- Meta Business Account + WhatsApp Business API: verificación de negocio (2-7 días) + número dedicado verificado + System User Token.
+- Anthropic Console: cuenta + método de pago + límite gasto $50/mes.
+- WhatsApp Channel privado: crear manualmente desde la app + subir 3-5 picks históricos.
+- WhatsApp templates: submit 7 templates a Meta para aprobación (1-3 días por cada una).
+- Resend: verificar dominio `hablaplay.com` con DNS records (SPF, DKIM, DMARC).
+
+Ejecutar estas tasks en paralelo a los lotes para no bloquear el lanzamiento del 8 mayo.
 
 ## Formato de reporte post-lote
 
-Cada lote cierra con un reporte de 6 secciones, en este orden:
+Cada lote del roadmap A-J cierra con un reporte de 6 secciones, en este orden:
 
 1. **Resumen 1 línea** del cambio.
 2. **Archivos** creados / modificados / eliminados.
-3. **Migración aplicada** (o "ninguna"). SQL completo si la migración existe — desde Lote 8 se aplica directo al cerrar el lote (regla 3 actualizada); el SQL queda en el reporte sólo como referencia.
-4. **Pasos manuales para Gustavo post-deploy**, paso a paso, asumiendo cero contexto previo. Cubrir backup pre-deploy, variables Railway, suscripciones a cancelar, DNS, configs en proveedores externos, smoke en `hablaplay.com`.
+3. **Migración aplicada** (o "ninguna"). SQL completo si la migración existe.
+4. **Pasos manuales para Gustavo post-deploy**, paso a paso, asumiendo cero contexto previo. Cubrir backup pre-deploy, variables Railway, configuración en proveedores externos (OpenPay, Meta, Anthropic), DNS, smoke en `hablaplay.com`.
 5. **Pendientes** que quedaron fuera del lote.
 6. **CLAUDE.md actualizado** según esta estructura.
+
+## Autonomía y cierre del lote
+
+- **Autonomía total.** Claude Code decide sin preguntar, documenta decisiones en el reporte.
+- **Cierre con merge a main + push** (Railway deploya automático).
+- **Validación post-deploy es del usuario** en `hablaplay.com`. Claude Code NO hace `pnpm dev` ni `next build` local.
+- **Pasos manuales para Gustavo explícitos y atómicos** asumiendo cero conocimiento técnico (especialmente para OpenPay BBVA, Meta Business Manager, Anthropic Console, rotación del Channel cada 6 meses).
