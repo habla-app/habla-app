@@ -1,5 +1,8 @@
-// Pantalla de error cuando NextAuth rechaza el magic link (token vencido,
-// config rota, etc.). Mapea `?error=…` a un mensaje en español.
+// /auth/error — pantalla de error de NextAuth. Lote B v3.1.
+// Spec: docs/ux-spec/02-pista-usuario-publica/auth.spec.md.
+//
+// Mapea `?error=…` a mensajes humanos. CTA "Volver a Iniciar sesión".
+
 import Link from "next/link";
 import { Button } from "@/components/ui";
 
@@ -11,9 +14,15 @@ const MENSAJES_ERROR: Record<string, string> = {
   Configuration:
     "El servidor de autenticación no está configurado correctamente. Contacta a soporte.",
   AccessDenied:
-    "No tienes permiso para acceder. Verifica tu email o intenta de nuevo.",
+    "Acceso denegado. Verifica que tu email sea el correcto e intenta de nuevo.",
   Verification:
-    "El link de acceso ya venció o fue usado. Solicita uno nuevo.",
+    "El link mágico expiró o ya fue usado. Solicita uno nuevo.",
+  OAuthCallback:
+    "Hubo un problema al ingresar con Google. Inténtalo de nuevo.",
+  OAuthSignin:
+    "No pudimos iniciar el flujo de Google. Inténtalo de nuevo.",
+  OAuthCreateAccount:
+    "Tuvimos un problema creando tu cuenta. Contacta a soporte.",
   Default: "Algo salió mal al procesar tu acceso. Intenta de nuevo.",
 };
 
@@ -22,21 +31,23 @@ export default function AuthErrorPage({ searchParams }: ErrorPageProps) {
   const mensaje = MENSAJES_ERROR[tipo] ?? MENSAJES_ERROR.Default;
 
   return (
-    <div className="w-full max-w-[460px] text-center">
-      <div className="rounded-lg border border-light bg-card p-10 shadow-lg">
+    <>
+      <div className="rounded-lg border border-light bg-card p-6 text-center shadow-lg md:p-8">
         <div aria-hidden className="text-[56px] leading-none">
           ⚠️
         </div>
-        <h1 className="mt-4 font-display text-[34px] font-black uppercase tracking-wide text-dark">
+        <h1 className="mt-4 font-display text-display-lg uppercase tracking-wide text-dark">
           Algo salió mal
         </h1>
-        <p className="mt-3 text-sm leading-relaxed text-body">{mensaje}</p>
+        <p className="mt-3 text-body-md leading-relaxed text-body">
+          {mensaje}
+        </p>
         <Link href="/auth/signin" className="mt-6 inline-block">
           <Button variant="primary" size="lg">
-            Intentar de nuevo
+            Volver a iniciar sesión
           </Button>
         </Link>
       </div>
-    </div>
+    </>
   );
 }

@@ -1,19 +1,17 @@
 "use client";
 
-// CasasGrid — Lote 8. Grid filtrable de casas en /casas.
+// CasasGrid — Listing filtrable de casas en /casas. Lote B v3.1 (refactor
+// mobile-first del Lote 8). Spec:
+// docs/ux-spec/02-pista-usuario-publica/casas.spec.md.
 //
-// Filtros:
-//   - Rating mínimo (slider 0-5).
-//   - Solo con bono presente (checkbox).
-//   - Métodos de pago (chips toggleables).
-//
-// Filtro client-side sobre la lista que SSR ya entregó. Para Lote 14
-// donde las casas pueden ser ~20-30, esto rinde sin necesidad de paginar.
-// Si el universo crece a >100, mover a server-side filtering vía URL
-// params.
+// Diferencias vs Lote 8:
+// - Mobile-first: filtros en sheet colapsable arriba (no sidebar fijo).
+// - Touch targets ≥44px en chips, CTAs y botones de filtros.
+// - Cards con stack vertical full-width en mobile, grid 2-col en md+.
+// - Buscador por nombre con debounce 300ms.
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 interface Item {
   slug: string;
@@ -32,11 +30,21 @@ interface Props {
 }
 
 export function CasasGrid({ items }: Props) {
+  const [showFilters, setShowFilters] = useState(false);
   const [minRating, setMinRating] = useState<number>(0);
   const [soloConBono, setSoloConBono] = useState<boolean>(false);
   const [metodosSeleccionados, setMetodosSeleccionados] = useState<Set<string>>(
     () => new Set<string>(),
   );
+  const [queryInput, setQueryInput] = useState<string>("");
+  const [query, setQuery] = useState<string>("");
+
+  // Debounce 300ms del query input (UX mobile: evita re-render por cada
+  // tecla mientras se escribe).
+  useEffect(() => {
+    const t = setTimeout(() => setQuery(queryInput.trim().toLowerCase()), 300);
+    return () => clearTimeout(t);
+  }, [queryInput]);
 
   const todosLosMetodos = useMemo(() => {
     const set = new Set<string>();
@@ -54,9 +62,16 @@ export function CasasGrid({ items }: Props) {
         );
         if (!tieneAlguno) return false;
       }
+      if (query && !it.nombre.toLowerCase().includes(query)) return false;
       return true;
     });
-  }, [items, minRating, soloConBono, metodosSeleccionados]);
+  }, [items, minRating, soloConBono, metodosSeleccionados, query]);
+
+  const totalActivos =
+    (minRating > 0 ? 1 : 0) +
+    (soloConBono ? 1 : 0) +
+    metodosSeleccionados.size +
+    (query ? 1 : 0);
 
   function toggleMetodo(m: string) {
     setMetodosSeleccionados((prev) => {
@@ -67,22 +82,63 @@ export function CasasGrid({ items }: Props) {
     });
   }
 
-  return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px_1fr]">
-      {/* Sidebar filtros */}
-      <aside className="lg:sticky lg:top-24 lg:h-fit">
-        <div className="rounded-md border border-light bg-card p-5">
-          <p className="mb-4 font-display text-[12px] font-bold uppercase tracking-wider text-muted-d">
-            Filtros
-          </p>
+  function reset() {
+    setMinRating(0);
+    setSoloConBono(false);
+    setMetodosSeleccionados(new Set());
+    setQueryInput("");
+  }
 
-          <div className="mb-5">
+  return (
+    <div>
+      {/* SEARCH BAR sticky bajo el header */}
+      <div className="mb-3">
+        <label htmlFor="casa-search" className="sr-only">
+          Buscar casa
+        </label>
+        <div className="relative">
+          <span
+            aria-hidden
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-d"
+          >
+            🔎
+          </span>
+          <input
+            id="casa-search"
+            type="search"
+            placeholder="Buscar casa..."
+            value={queryInput}
+            onChange={(e) => setQueryInput(e.target.value)}
+            className="touch-target h-12 w-full rounded-md border border-light bg-card pl-10 pr-4 text-body-md text-dark placeholder:text-muted-d focus:border-brand-blue-main focus:outline-none focus:ring-2 focus:ring-brand-blue-main/30"
+          />
+        </div>
+      </div>
+
+      {/* FILTROS toggle */}
+      <div className="mb-5">
+        <button
+          type="button"
+          onClick={() => setShowFilters((v) => !v)}
+          className="touch-target inline-flex items-center gap-2 rounded-md border border-light bg-card px-4 py-2.5 text-body-sm font-bold text-dark transition-colors hover:border-brand-blue-main hover:text-brand-blue-main"
+          aria-expanded={showFilters}
+        >
+          🎚 Filtros{totalActivos > 0 ? ` (${totalActivos} activo${totalActivos > 1 ? "s" : ""})` : ""}
+          <span aria-hidden>{showFilters ? "▴" : "▾"}</span>
+        </button>
+      </div>
+
+      {showFilters ? (
+        <div className="mb-6 rounded-md border border-light bg-card p-4 md:p-5">
+          {/* Rating */}
+          <div className="mb-4">
             <label
               htmlFor="rating-min"
-              className="mb-1 block text-[12px] font-bold text-dark"
+              className="mb-1 block text-label-md text-dark"
             >
               Rating mínimo:{" "}
-              <span className="font-mono">{minRating.toFixed(1)}</span>
+              <span className="text-num-sm tabular-nums">
+                {minRating.toFixed(1)}
+              </span>
             </label>
             <input
               id="rating-min"
@@ -96,22 +152,22 @@ export function CasasGrid({ items }: Props) {
             />
           </div>
 
-          <label className="mb-5 flex items-center gap-2 text-[13px] text-dark">
+          {/* Bono */}
+          <label className="mb-4 flex items-center gap-2 text-body-md text-dark">
             <input
               type="checkbox"
               checked={soloConBono}
               onChange={(e) => setSoloConBono(e.target.checked)}
-              className="h-4 w-4 accent-brand-gold"
+              className="h-5 w-5 accent-brand-gold"
             />
             Sólo con bono vigente
           </label>
 
-          {todosLosMetodos.length > 0 && (
+          {/* Métodos */}
+          {todosLosMetodos.length > 0 ? (
             <div>
-              <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.05em] text-muted-d">
-                Métodos de pago
-              </p>
-              <div className="flex flex-wrap gap-1.5">
+              <p className="mb-2 text-label-sm text-muted-d">Métodos de pago</p>
+              <div className="flex flex-wrap gap-2">
                 {todosLosMetodos.map((m) => {
                   const sel = metodosSeleccionados.has(m);
                   return (
@@ -119,7 +175,7 @@ export function CasasGrid({ items }: Props) {
                       key={m}
                       type="button"
                       onClick={() => toggleMetodo(m)}
-                      className={`rounded-sm border px-2.5 py-1 text-[11px] font-bold transition-colors ${
+                      className={`touch-target rounded-full border px-3 py-2 text-body-sm font-bold transition-colors ${
                         sel
                           ? "border-brand-gold bg-brand-gold/15 text-brand-gold-dark"
                           : "border-light bg-subtle text-dark hover:bg-card"
@@ -131,28 +187,46 @@ export function CasasGrid({ items }: Props) {
                 })}
               </div>
             </div>
-          )}
-        </div>
-      </aside>
+          ) : null}
 
-      {/* Grilla */}
-      <div className="min-w-0">
-        <p className="mb-4 text-[12px] text-muted-d">
-          {filtrados.length} {filtrados.length === 1 ? "casa" : "casas"} —{" "}
-          autorizadas por MINCETUR
+          {totalActivos > 0 ? (
+            <div className="mt-4 border-t border-light pt-3">
+              <button
+                type="button"
+                onClick={reset}
+                className="touch-target text-body-sm font-bold text-brand-blue-main hover:underline"
+              >
+                Limpiar filtros
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* RESULTS */}
+      <p className="mb-3 text-body-xs text-muted-d">
+        {filtrados.length} {filtrados.length === 1 ? "casa" : "casas"} ·
+        autorizadas por MINCETUR
+      </p>
+
+      {filtrados.length === 0 ? (
+        <p className="rounded-md border border-light bg-card px-5 py-10 text-center text-body-sm text-muted-d">
+          Ninguna casa cumple los filtros seleccionados.{" "}
+          <button
+            type="button"
+            onClick={reset}
+            className="font-bold text-brand-blue-main hover:underline"
+          >
+            Limpiar filtros
+          </button>
         </p>
-        {filtrados.length === 0 ? (
-          <p className="rounded-md border border-light bg-card px-5 py-10 text-center text-[14px] text-muted-d">
-            Ninguna casa cumple los filtros seleccionados.
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-            {filtrados.map((it) => (
-              <ItemCard key={it.slug} item={it} />
-            ))}
-          </div>
-        )}
-      </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {filtrados.map((it) => (
+            <ItemCard key={it.slug} item={it} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -160,72 +234,69 @@ export function CasasGrid({ items }: Props) {
 function ItemCard({ item }: { item: Item }) {
   return (
     <article className="overflow-hidden rounded-md border border-light bg-card shadow-sm transition-all hover:shadow-md">
-      <header className="flex items-center gap-3 border-b border-light bg-subtle px-5 py-4">
+      <header className="flex items-center gap-3 border-b border-light bg-subtle px-4 py-3 md:px-5">
         <CasaLogoMini item={item} />
         <div className="min-w-0 flex-1">
-          <h2 className="m-0 font-display text-[18px] font-black uppercase tracking-[0.02em] text-dark">
+          <h2 className="m-0 font-display text-display-sm uppercase text-dark">
             {item.nombre}
           </h2>
-          <div className="mt-0.5 flex items-center gap-2 text-[11px]">
+          <div className="mt-0.5 flex items-center gap-2 text-body-xs">
             {item.rating !== null ? (
-              <span className="font-mono font-bold text-dark">
+              <span className="text-num-sm tabular-nums text-dark">
                 ★ {item.rating.toFixed(1)}
               </span>
             ) : null}
-            <span className="font-bold uppercase tracking-[0.05em] text-brand-blue-main">
+            <span className="text-label-sm text-brand-blue-main">
               ✓ MINCETUR
             </span>
           </div>
         </div>
       </header>
 
-      <div className="px-5 py-4">
-        {item.bonoActual && (
+      <div className="px-4 py-4 md:px-5">
+        {item.bonoActual ? (
           <div className="mb-3 rounded-sm border border-brand-gold/30 bg-brand-gold-dim px-3 py-2">
-            <div className="text-[10px] font-bold uppercase tracking-[0.06em] text-brand-gold-dark">
-              Bono
-            </div>
-            <div className="font-display text-[14px] font-black text-dark">
+            <div className="text-label-sm text-brand-gold-dark">Bono</div>
+            <div className="font-display text-display-xs text-dark">
               {item.bonoActual}
             </div>
           </div>
-        )}
-        <p className="m-0 line-clamp-3 text-[13px] leading-snug text-body">
+        ) : null}
+        <p className="m-0 line-clamp-3 text-body-sm leading-snug text-body">
           {item.excerpt}
         </p>
-        {item.metodosPago.length > 0 && (
+        {item.metodosPago.length > 0 ? (
           <div className="mt-3 flex flex-wrap gap-1">
             {item.metodosPago.slice(0, 4).map((m) => (
               <span
                 key={m}
-                className="inline-block rounded-sm border border-light bg-subtle px-2 py-0.5 text-[10px] font-semibold text-dark"
+                className="inline-block rounded-sm border border-light bg-subtle px-2 py-0.5 text-body-xs font-semibold text-dark"
               >
                 {m}
               </span>
             ))}
             {item.metodosPago.length > 4 ? (
-              <span className="text-[10px] text-muted-d">
+              <span className="text-body-xs text-muted-d">
                 +{item.metodosPago.length - 4}
               </span>
             ) : null}
           </div>
-        )}
+        ) : null}
       </div>
 
-      <footer className="flex gap-2 border-t border-light bg-subtle/60 px-5 py-3">
+      <footer className="flex gap-2 border-t border-light bg-subtle/60 px-4 py-3 md:px-5">
         <Link
           href={`/casas/${item.slug}`}
-          className="inline-flex flex-1 items-center justify-center rounded-sm border border-light bg-card px-3 py-2 text-[12px] font-bold text-dark hover:bg-page"
+          className="touch-target inline-flex flex-1 items-center justify-center rounded-sm border border-light bg-card px-3 py-2 text-body-sm font-bold text-dark hover:bg-page"
         >
           Ver review
         </Link>
         <Link
-          href={`/go/${item.afiliadoSlug}`}
+          href={`/go/${item.afiliadoSlug}?utm_source=casas&utm_medium=listing`}
           rel="sponsored noopener"
-          className="inline-flex flex-1 items-center justify-center gap-1 rounded-sm bg-brand-gold px-3 py-2 font-display text-[12px] font-extrabold uppercase tracking-[0.03em] text-black shadow-gold-btn hover:-translate-y-px hover:bg-brand-gold-light"
+          className="touch-target inline-flex flex-1 items-center justify-center gap-1 rounded-sm bg-brand-gold px-3 py-2 font-display text-label-md text-black shadow-gold-btn hover:-translate-y-px hover:bg-brand-gold-light"
         >
-          Ir a {item.nombre}
-          <span aria-hidden>→</span>
+          Ir a {item.nombre} →
         </Link>
       </footer>
     </article>
@@ -247,7 +318,7 @@ function CasaLogoMini({ item }: { item: Item }) {
   return (
     <div
       aria-hidden
-      className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-sm bg-brand-gold font-display text-[16px] font-black text-black shadow-gold-btn"
+      className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-sm bg-brand-gold font-display text-display-xs text-black shadow-gold-btn"
     >
       {inicial}
     </div>

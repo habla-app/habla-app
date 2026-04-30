@@ -73,7 +73,7 @@ export function SuscribirForm() {
       <div>
         <label
           htmlFor="suscribir-email"
-          className="mb-1.5 block font-display text-[12px] font-bold uppercase tracking-[0.04em] text-muted-d"
+          className="mb-1.5 block font-display text-label-sm text-muted-d"
         >
           Email
         </label>
@@ -86,16 +86,16 @@ export function SuscribirForm() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="tu@email.com"
-          className="block w-full rounded-sm border-[1.5px] border-light bg-card px-3.5 py-2.5 text-[15px] text-dark outline-none transition-colors focus:border-brand-blue-main focus:ring-2 focus:ring-brand-blue-main/10"
+          className="touch-target block w-full rounded-sm border-[1.5px] border-light bg-card px-3.5 py-3 text-body-md text-dark outline-none transition-colors focus:border-brand-blue-main focus:ring-2 focus:ring-brand-blue-main/10"
         />
       </div>
 
-      <label className="flex items-start gap-2 text-[13px] text-body">
+      <label className="flex items-start gap-2 text-body-sm text-body">
         <input
           type="checkbox"
           checked={acepta}
           onChange={(e) => setAcepta(e.target.checked)}
-          className="mt-0.5 h-4 w-4 rounded border-light"
+          className="mt-0.5 h-5 w-5 rounded border-light accent-brand-gold"
         />
         <span>
           Acepto recibir el newsletter editorial de Habla! y los{" "}
@@ -110,7 +110,7 @@ export function SuscribirForm() {
       </label>
 
       {errorMsg ? (
-        <p className="rounded-sm border-[1.5px] border-urgent-crit-fg/30 bg-urgent-crit-fg/5 px-3 py-2 text-[13px] font-bold text-urgent-crit-fg">
+        <p className="rounded-sm border-[1.5px] border-alert-danger-border bg-alert-danger-bg px-3 py-2 text-body-sm font-bold text-alert-danger-text">
           {errorMsg}
         </p>
       ) : null}

@@ -11,12 +11,12 @@ import { FaqClient } from "@/components/faq/FaqClient";
 export const metadata: Metadata = {
   title: "Centro de Ayuda — Preguntas Frecuentes",
   description:
-    "Respuestas a las preguntas más comunes sobre Habla!: cómo funciona, Lukas, torneos, premios y soporte.",
+    "Respuestas a las preguntas más comunes sobre Habla!: cómo funciona la Liga Habla!, Premium, casas autorizadas MINCETUR y soporte.",
   robots: { index: true, follow: true },
   openGraph: {
     title: "Centro de Ayuda | Habla!",
     description:
-      "Respuestas a las preguntas más comunes sobre Habla!: cómo funciona, Lukas, torneos, premios y soporte.",
+      "Respuestas a las preguntas más comunes sobre Habla!: Liga, Premium, casas autorizadas MINCETUR y soporte.",
   },
 };
 
@@ -24,15 +24,17 @@ export default function FaqPage() {
   const faq = loadFaq();
 
   return (
-    <div className="mx-auto max-w-[900px] px-4 py-10 md:px-6 md:py-14">
-      <header className="mb-8">
-        <h1 className="mb-3 font-display text-[40px] font-black leading-tight text-dark md:text-[48px]">
-          Centro de Ayuda
+    <div className="mx-auto w-full max-w-[900px] px-4 py-6 md:px-6 md:py-10">
+      <header className="mb-6">
+        <p className="mb-2 inline-block rounded-sm bg-brand-blue-main/10 px-2.5 py-1 text-label-sm text-brand-blue-main">
+          ❓ Centro de ayuda
+        </p>
+        <h1 className="font-display text-display-lg leading-tight text-dark md:text-[40px]">
+          Preguntas frecuentes
         </h1>
-        <p className="text-[16px] leading-[1.7] text-body">
-          ¿Tenés una duda sobre Habla!? Acá están las respuestas a las
-          preguntas que más recibimos. Si no encontrás lo que buscás, escribinos
-          a{" "}
+        <p className="mt-2 text-body-md leading-[1.55] text-body">
+          ¿Una duda sobre Habla!? Acá están las respuestas. Si no la
+          encuentras, escríbenos a{" "}
           <a
             href="mailto:soporte@hablaplay.com"
             className="font-bold text-brand-blue-main hover:underline"
@@ -45,17 +47,17 @@ export default function FaqPage() {
 
       <FaqClient categories={faq.categories} />
 
-      <section className="mt-12 rounded-md border border-light bg-hero-blue p-6 text-white md:p-8">
-        <h2 className="mb-2 font-display text-[24px] font-bold">
+      <section className="mt-12 rounded-md border border-light bg-hero-blue p-5 text-white md:p-7">
+        <h2 className="mb-2 font-display text-display-md text-white">
           ¿No encontraste tu respuesta?
         </h2>
-        <p className="mb-5 text-[15px] leading-[1.6] text-white/85">
-          Escribinos por correo o WhatsApp. Te respondemos sin vueltas.
+        <p className="mb-5 text-body-md leading-[1.55] text-white/85">
+          Escríbenos por correo. Respondemos sin vueltas.
         </p>
         <div className="flex flex-wrap gap-3">
           <a
             href="mailto:soporte@hablaplay.com"
-            className="inline-flex items-center gap-2 rounded-sm bg-brand-gold px-5 py-2.5 text-[14px] font-bold text-black shadow-gold-btn transition-all hover:-translate-y-px hover:bg-brand-gold-light"
+            className="touch-target inline-flex items-center gap-2 rounded-sm bg-brand-gold px-5 py-2.5 text-body-sm font-bold text-black shadow-gold-btn transition-all hover:-translate-y-px hover:bg-brand-gold-light"
           >
             <svg
               width="16"
@@ -71,7 +73,7 @@ export default function FaqPage() {
             </svg>
             soporte@hablaplay.com
           </a>
-          <span className="inline-flex items-center gap-2 rounded-sm border border-white/30 px-5 py-2.5 text-[14px] font-bold text-white/70">
+          <span className="touch-target inline-flex items-center gap-2 rounded-sm border border-white/30 px-5 py-2.5 text-body-sm font-bold text-white/70">
             <svg
               width="16"
               height="16"

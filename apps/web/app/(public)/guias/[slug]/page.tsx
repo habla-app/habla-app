@@ -52,11 +52,9 @@ export default function GuiaPage({ params }: { params: Params }) {
   const { frontmatter, body, headings } = doc;
 
   return (
-    <div className="mx-auto max-w-[1200px] px-4 py-10 md:px-6 md:py-14">
+    <div className="mx-auto w-full max-w-[1200px] px-4 py-6 md:px-6 md:py-10">
       <ArticleJsonLd doc={doc} />
-      {frontmatter.tipo === "howto" && (
-        <HowToJsonLd doc={doc} />
-      )}
+      {frontmatter.tipo === "howto" ? <HowToJsonLd doc={doc} /> : null}
       <TrackOnMount
         event="articulo_visto"
         props={{
@@ -69,14 +67,14 @@ export default function GuiaPage({ params }: { params: Params }) {
       <div className="lg:flex lg:gap-10">
         <TOC headings={headings} />
         <article className="min-w-0 flex-1 lg:max-w-[760px]">
-          <header className="mb-8">
-            <p className="mb-2 inline-block rounded-sm bg-brand-blue-main/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.06em] text-brand-blue-main">
+          <header className="mb-6">
+            <p className="mb-2 inline-block rounded-sm bg-brand-blue-main/10 px-2.5 py-1 text-label-sm text-brand-blue-main">
               📚 Guía
             </p>
-            <h1 className="mb-3 font-display text-[36px] font-black leading-tight text-dark md:text-[44px]">
+            <h1 className="mb-3 font-display text-display-lg leading-tight text-dark md:text-[40px]">
               {frontmatter.title}
             </h1>
-            <p className="text-[16px] leading-[1.6] text-body">
+            <p className="text-body-md leading-[1.6] text-body md:text-body-lg">
               {frontmatter.excerpt}
             </p>
           </header>

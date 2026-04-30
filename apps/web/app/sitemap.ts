@@ -27,7 +27,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const estaticas: MetadataRoute.Sitemap = [
     { url: `${BASE_URL}/`, lastModified: now, changeFrequency: "daily", priority: 1.0 },
-    { url: `${BASE_URL}/matches`, lastModified: now, changeFrequency: "daily", priority: 0.9 },
+    { url: `${BASE_URL}/cuotas`, lastModified: now, changeFrequency: "hourly", priority: 0.9 },
     { url: `${BASE_URL}/live-match`, lastModified: now, changeFrequency: "hourly", priority: 0.8 },
     { url: `${BASE_URL}/ayuda/faq`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
     // Lote 8 — rutas listing del grupo (public)
@@ -35,8 +35,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE_URL}/casas`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
     { url: `${BASE_URL}/guias`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
     { url: `${BASE_URL}/pronosticos`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
-    { url: `${BASE_URL}/cuotas`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
     { url: `${BASE_URL}/comunidad`, lastModified: now, changeFrequency: "daily", priority: 0.6 },
+    { url: `${BASE_URL}/premium`, lastModified: now, changeFrequency: "weekly", priority: 0.6 },
+    { url: `${BASE_URL}/suscribir`, lastModified: now, changeFrequency: "monthly", priority: 0.4 },
   ];
 
   // Fecha de vigencia v1.0 de los documentos legales (24 abr 2026).

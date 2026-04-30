@@ -72,6 +72,19 @@ const nextConfig = {
   },
 
   // -------------------------------------------------------------------
+  // Redirects — Lote B v3.1.
+  // /matches y /torneos pasaron a deprecarse (consolidados en /cuotas y
+  // /comunidad). El tráfico de SEO acumulado se redirige 301 para no
+  // perder ranking.
+  // -------------------------------------------------------------------
+  async redirects() {
+    return [
+      { source: "/matches", destination: "/cuotas", permanent: true },
+      { source: "/matches/:path*", destination: "/cuotas", permanent: true },
+    ];
+  },
+
+  // -------------------------------------------------------------------
   // Headers de seguridad globales.
   //
   // CSP en modo Report-Only — cualquier violación solo se reporta, no
