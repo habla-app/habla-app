@@ -238,7 +238,15 @@ model PreferenciasNotif {
   notifSugerencias  Boolean  @default(true) // Sugerencias de torneos
   notifCierreTorneo Boolean  @default(true) // Cierre próximo / recordatorios
   notifPromos       Boolean  @default(false) // Novedades / promos (opt-in) — newsletter editorial / afiliados
-  emailSemanal      Boolean  @default(false) // Resumen semanal (opt-in)
+  // Lote 10 (May 2026): digest semanal opt-out (default true). El cron L
+  // genera el draft los sábados, el admin aprueba desde /admin/newsletter
+  // y se envía a unión {SuscriptorNewsletter confirmados, usuarios con
+  // notifSemanal=true y email verificado}.
+  notifSemanal      Boolean  @default(true)
+  // emailSemanal: legacy del Lote 1 (default false) — superado por
+  // notifSemanal. Se conserva por compatibilidad de datos hasta cleanup
+  // posterior; ningún caller lo usa más a partir de Lote 10.
+  emailSemanal      Boolean  @default(false)
   actualizadoEn     DateTime @default(now()) @updatedAt
 
   @@map("preferencias_notif")
@@ -427,6 +435,12 @@ model Afiliado {
   activo                      Boolean  @default(true)
   ordenDestacado              Int      @default(100) // menor = más arriba
   ultimaVerificacionMincetur  DateTime?
+  // Lote 10 (May 2026): true cuando el cron K no pudo verificar al
+  // afiliado (red caída, DOM cambió, fetch falló) y NO debe modificar
+  // autorizadoMincetur/activo. El admin lo resuelve manualmente desde
+  // /admin/afiliados/[id]. Se resetea a false en la próxima verificación
+  // exitosa.
+  verificacionPendiente       Boolean  @default(false)
   creadoEn                    DateTime @default(now())
   actualizadoEn               DateTime @default(now()) @updatedAt
 
@@ -471,4 +485,57 @@ model ConversionAfiliado {
 
   @@index([afiliadoId, reportadoEn(sort: Desc)])
   @@map("conversiones_afiliados")
+}
+
+// ==========================================
+// Lote 10 (May 2026) — Newsletter editorial
+// ==========================================
+//
+// Dos tablas:
+//
+//   - suscriptores_newsletter   un email externo por fila. Flujo doble opt-in:
+//                               POST /api/v1/newsletter/suscribir crea la
+//                               fila SIN confirmadoEn y manda magic link.
+//                               GET /api/v1/newsletter/confirmar?token=...
+//                               setea confirmadoEn. unsubscribedEn lo setea
+//                               GET /api/v1/newsletter/unsubscribe?token=...
+//                               (sin login).
+//   - digests_enviados          1 fila por semana ISO (YYYY-WW). El cron L
+//                               crea la fila los sábados con `enviadoEn=null`
+//                               y el `contenido` JSONB del digest. El admin
+//                               aprueba desde /admin/newsletter; el endpoint
+//                               admin envía a la unión de subscribers
+//                               confirmados + usuarios con notifSemanal=true
+//                               y email verificado, dedup por email.
+
+model SuscriptorNewsletter {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  confirmadoEn    DateTime?
+  unsubscribedEn  DateTime?
+  // "footer" | "popup" | "leadmagnet" | "page-suscribir" | etc. Texto libre
+  // para que ampliar fuentes no requiera migración.
+  fuente          String?
+  creadoEn        DateTime  @default(now())
+
+  @@map("suscriptores_newsletter")
+}
+
+model DigestEnviado {
+  id            String    @id @default(cuid())
+  // YYYY-WW (ISO 8601 week date — semana del año). Único: 1 digest por
+  // semana. La idempotencia del cron L vive acá.
+  semana        String    @unique
+  // JSONB del digest. Forma:
+  //   { titulo, secciones: { topTipsters[], partidosTop[], articulosNuevos[],
+  //     destacadoSemanaAnterior?, frase, ctas[] } }
+  contenido     Json
+  destinatarios Int       @default(0)
+  enviadoEn     DateTime?
+  // Email del admin que aprobó (no FK porque conservamos la traza incluso
+  // si el admin se desvincula).
+  aprobadoPor   String?
+  creadoEn      DateTime  @default(now())
+
+  @@map("digests_enviados")
 }

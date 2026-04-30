@@ -281,6 +281,202 @@ export function criticosResumenTemplate(input: CriticosResumenInput) {
   return { subject, html, text };
 }
 
+// ============================================================================
+// Lote 10 — Digest semanal (newsletter editorial)
+// ============================================================================
+
+export interface DigestTipsterRow {
+  username: string;
+  puntos: number;
+  posicion: number;
+}
+
+export interface DigestPartidoRow {
+  partidoId: string;
+  equipos: string;
+  liga: string;
+  kickoff: string;
+  mejorCuota: { casa: string; outcome: string; odd: number } | null;
+}
+
+export interface DigestArticuloRow {
+  slug: string;
+  titulo: string;
+  excerpt: string;
+}
+
+export interface DigestDestacadoRow {
+  pronostico: string;
+  acerto: boolean;
+  casa: string | null;
+  link: string | null;
+}
+
+export interface DigestCtaRow {
+  texto: string;
+  url: string;
+}
+
+export interface DigestSemanalEmailInput {
+  digest: {
+    semana: string;
+    titulo: string;
+    secciones: {
+      topTipsters: DigestTipsterRow[];
+      partidosTop: DigestPartidoRow[];
+      articulosNuevos: DigestArticuloRow[];
+      destacadoSemanaAnterior: DigestDestacadoRow | null;
+      frase: string;
+      ctas: DigestCtaRow[];
+    };
+  };
+  baseUrl: string;
+  unsubscribeUrl: string;
+}
+
+export function digestSemanalTemplate(input: DigestSemanalEmailInput) {
+  const { digest, baseUrl, unsubscribeUrl } = input;
+  const subject = digest.titulo || "Tu resumen Habla! de la semana";
+
+  const tipstersHtml =
+    digest.secciones.topTipsters.length > 0
+      ? `<h2 style="margin:24px 0 8px;font-size:17px;color:#001050;">🏆 Top tipsters del mes</h2>
+<table style="width:100%;border-collapse:collapse;background:#FAFBFE;border:1px solid rgba(0,16,80,0.08);border-radius:10px;overflow:hidden;">
+  ${digest.secciones.topTipsters
+    .map(
+      (t) => `<tr>
+    <td style="padding:10px 12px;font-size:14px;font-weight:800;color:#FFB800;width:36px;">#${t.posicion}</td>
+    <td style="padding:10px 12px;font-size:14px;color:#001050;">@${escapeHtml(t.username)}</td>
+    <td style="padding:10px 12px;text-align:right;font-size:13px;color:rgba(0,16,80,0.7);">${t.puntos} pts</td>
+  </tr>`,
+    )
+    .join("")}
+</table>`
+      : "";
+
+  const partidosHtml =
+    digest.secciones.partidosTop.length > 0
+      ? `<h2 style="margin:28px 0 8px;font-size:17px;color:#001050;">⚽ Partidos top de la semana</h2>
+${digest.secciones.partidosTop
+  .map((p) => {
+    const cuotaTxt = p.mejorCuota
+      ? `<div style="margin-top:6px;font-size:12px;color:rgba(0,16,80,0.7);">Mejor cuota: <strong>${p.mejorCuota.outcome} ${p.mejorCuota.odd.toFixed(2)}</strong> en ${escapeHtml(p.mejorCuota.casa)}</div>`
+      : "";
+    return `<div style="border:1px solid rgba(0,16,80,0.1);border-radius:10px;padding:14px;margin-bottom:8px;background:#fff;">
+      <div style="font-size:11px;font-weight:700;color:#0052CC;text-transform:uppercase;letter-spacing:.05em;">${escapeHtml(p.liga)}</div>
+      <div style="font-size:15px;font-weight:700;color:#001050;margin-top:4px;">${escapeHtml(p.equipos)}</div>
+      <div style="font-size:12px;color:rgba(0,16,80,0.6);margin-top:4px;">${formatKickoffShort(p.kickoff)}</div>
+      ${cuotaTxt}
+    </div>`;
+  })
+  .join("")}`
+      : "";
+
+  const articulosHtml =
+    digest.secciones.articulosNuevos.length > 0
+      ? `<h2 style="margin:28px 0 8px;font-size:17px;color:#001050;">📰 Nuevo en el blog</h2>
+${digest.secciones.articulosNuevos
+  .map(
+    (a) => `<div style="border-left:3px solid #FFB800;padding:8px 14px;margin-bottom:10px;background:#FFFDF5;border-radius:0 8px 8px 0;">
+    <a href="${baseUrl}/blog/${encodeURIComponent(a.slug)}" style="text-decoration:none;color:#001050;">
+      <div style="font-size:15px;font-weight:700;">${escapeHtml(a.titulo)}</div>
+      <div style="font-size:13px;color:rgba(0,16,80,0.7);margin-top:4px;line-height:1.5;">${escapeHtml(a.excerpt)}</div>
+    </a>
+  </div>`,
+  )
+  .join("")}`
+      : "";
+
+  const destacadoHtml = digest.secciones.destacadoSemanaAnterior
+    ? `<h2 style="margin:28px 0 8px;font-size:17px;color:#001050;">⚡ Destacado de la semana pasada</h2>
+<div style="border:1.5px solid ${digest.secciones.destacadoSemanaAnterior.acerto ? "#10B981" : "#D32F2F"};border-radius:10px;padding:14px;background:${digest.secciones.destacadoSemanaAnterior.acerto ? "#ECFDF5" : "#FEF2F2"};">
+  <div style="font-size:11px;font-weight:700;color:${digest.secciones.destacadoSemanaAnterior.acerto ? "#10B981" : "#D32F2F"};text-transform:uppercase;letter-spacing:.05em;">${digest.secciones.destacadoSemanaAnterior.acerto ? "✅ Acertado" : "❌ Falló"}</div>
+  <div style="font-size:14px;color:#001050;margin-top:6px;">${escapeHtml(digest.secciones.destacadoSemanaAnterior.pronostico)}</div>
+  ${digest.secciones.destacadoSemanaAnterior.casa ? `<div style="font-size:12px;color:rgba(0,16,80,0.6);margin-top:4px;">Casa: ${escapeHtml(digest.secciones.destacadoSemanaAnterior.casa)}</div>` : ""}
+</div>`
+    : "";
+
+  const ctasHtml = digest.secciones.ctas
+    .map(
+      (c) => `<div style="text-align:center;margin:12px 0;">
+      <a href="${absUrl(c.url, baseUrl)}" style="display:inline-block;background:#FFB800;color:#001050;font-weight:700;padding:12px 24px;border-radius:10px;text-decoration:none;font-size:14px;">${escapeHtml(c.texto)}</a>
+    </div>`,
+    )
+    .join("");
+
+  const html = wrapEmail(
+    subject,
+    `<h1 style="margin:0 0 6px;font-size:24px;color:#001050;">${escapeHtml(digest.titulo)}</h1>
+<p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#FFB800;text-transform:uppercase;letter-spacing:.06em;">Semana ${escapeHtml(digest.semana)}</p>
+<p style="margin:14px 0 0;font-size:14px;color:rgba(0,16,80,0.85);line-height:1.6;">${escapeHtml(digest.secciones.frase)}</p>
+${tipstersHtml}
+${partidosHtml}
+${articulosHtml}
+${destacadoHtml}
+<div style="margin:32px 0 0;padding-top:20px;border-top:1px solid rgba(0,16,80,0.08);">${ctasHtml}</div>
+<p style="margin:24px 0 0;font-size:11px;color:rgba(0,16,80,0.5);text-align:center;line-height:1.55;">
+  Recibís este resumen porque te suscribiste o tenés "Resumen semanal" activo en tus preferencias.<br />
+  <a href="${unsubscribeUrl}" style="color:rgba(0,16,80,0.5);text-decoration:underline;">Darme de baja</a> · <a href="${baseUrl}/perfil" style="color:rgba(0,16,80,0.5);text-decoration:underline;">Cambiar preferencias</a>
+</p>`,
+  );
+
+  // Resend acepta headers personalizados via la API. Lo agregamos en el
+  // payload del enviarEmail (más abajo): ListUnsubscribe header.
+  const text = [
+    digest.titulo,
+    `Semana ${digest.semana}`,
+    "",
+    digest.secciones.frase,
+    "",
+    digest.secciones.topTipsters.length > 0
+      ? "Top tipsters del mes:"
+      : null,
+    ...digest.secciones.topTipsters.map(
+      (t) => `  #${t.posicion} @${t.username} — ${t.puntos} pts`,
+    ),
+    "",
+    digest.secciones.partidosTop.length > 0 ? "Partidos top:" : null,
+    ...digest.secciones.partidosTop.map(
+      (p) =>
+        `  · [${p.liga}] ${p.equipos} (${formatKickoffShort(p.kickoff)})`,
+    ),
+    "",
+    digest.secciones.articulosNuevos.length > 0
+      ? "Nuevo en el blog:"
+      : null,
+    ...digest.secciones.articulosNuevos.map(
+      (a) => `  · ${a.titulo} — ${baseUrl}/blog/${a.slug}`,
+    ),
+    "",
+    `Darme de baja: ${unsubscribeUrl}`,
+  ]
+    .filter((x): x is string => x !== null)
+    .join("\n");
+
+  return { subject, html, text };
+}
+
+function formatKickoffShort(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString("es-PE", {
+      timeZone: "America/Lima",
+      day: "2-digit",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function absUrl(maybeRelative: string, baseUrl: string): string {
+  if (/^https?:\/\//i.test(maybeRelative)) return maybeRelative;
+  if (maybeRelative.startsWith("/")) return `${baseUrl}${maybeRelative}`;
+  return `${baseUrl}/${maybeRelative}`;
+}
+
 export interface CuentaEliminadaInput {
   nombreUsuario: string;
   modo: "hard" | "soft";

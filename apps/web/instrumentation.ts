@@ -434,6 +434,184 @@ export async function register() {
   }, 45_000);
 
   // -------------------------------------------------------------------
+  // Job K — Verificación MINCETUR weekly (Lote 10). Tick cada 1h.
+  // Sólo dispara cuando es lunes hora Lima Y hora ≥06:00 PET Y no se
+  // verificó esta semana (chequeo via `ultimaVerificacionMincetur` de
+  // cualquier afiliado vs `inicioSemanaLima(now)`).
+  //
+  // El service hace fetch al registro MINCETUR una vez por corrida y
+  // reusa el HTML para todos los afiliados con throttle 5s entre updates.
+  // Si scrape falla → fail-soft: marca pendientes + email warn.
+  // -------------------------------------------------------------------
+  const { verificarTodasActivas, yaVerificadoEstaSemana } = await import(
+    "./lib/services/mincetur-check.service"
+  );
+
+  const MINCETUR_TICK_INTERVAL_MS = 60 * 60 * 1000; // 1h
+  const MINCETUR_TARGET_LIMA_HOUR = 6;
+
+  async function tickVerificarMincetur() {
+    try {
+      const now = new Date();
+      const dayOfWeekLima = (() => {
+        // 0=domingo, 1=lunes, ..., 6=sábado en hora Lima.
+        const fmt = new Intl.DateTimeFormat("en-US", {
+          timeZone: "America/Lima",
+          weekday: "short",
+        });
+        const map: Record<string, number> = {
+          Sun: 0,
+          Mon: 1,
+          Tue: 2,
+          Wed: 3,
+          Thu: 4,
+          Fri: 5,
+          Sat: 6,
+        };
+        return map[fmt.format(now)] ?? -1;
+      })();
+      if (dayOfWeekLima !== 1) return; // sólo lunes
+      if (horaLima(now) < MINCETUR_TARGET_LIMA_HOUR) return;
+
+      if (await yaVerificadoEstaSemana(now)) return; // idempotencia
+
+      logger.info("[cron in-process] disparando verificación MINCETUR");
+      const r = await verificarTodasActivas();
+      logger.info(
+        {
+          total: r.total,
+          ok: r.ok,
+          perdio: r.perdio,
+          indeterminado: r.indeterminado,
+        },
+        "[cron in-process] ciclo verificar-mincetur completo",
+      );
+    } catch (err) {
+      logger.error(
+        { err, source: "cron:mincetur-check" },
+        "[cron in-process] tick de verificar-mincetur falló",
+      );
+    }
+  }
+
+  // Primera corrida 150s tras boot — deja al sistema estabilizarse.
+  setTimeout(() => {
+    void tickVerificarMincetur();
+    setInterval(() => {
+      void tickVerificarMincetur();
+    }, MINCETUR_TICK_INTERVAL_MS);
+  }, 150_000);
+
+  // -------------------------------------------------------------------
+  // Job L — Generación + recordatorio del digest semanal (Lote 10).
+  // Tick cada 1h.
+  //
+  // Sábado ≥09:00 PET: si no existe draft de la semana actual, lo crea
+  // (`crearDraftSemanal()`) y manda email al admin con preview + link a
+  // /admin/newsletter para aprobar.
+  //
+  // Domingo ≥12:00 PET: si el draft de la semana sigue sin aprobar
+  // (`enviadoEn=null`), manda recordatorio al admin.
+  //
+  // Idempotencia: la fila `digests_enviados.semana` (UNIQUE) garantiza
+  // que el draft no se duplique. El recordatorio se manda como mucho
+  // 1 vez por proceso (estado in-memory; restart manda otro — aceptable).
+  // -------------------------------------------------------------------
+  const {
+    crearDraftSemanal,
+    obtenerDraftPorSemana,
+    getSemanaIsoKey,
+  } = await import("./lib/services/newsletter.service");
+
+  const NEWSLETTER_TICK_INTERVAL_MS = 60 * 60 * 1000; // 1h
+  const NEWSLETTER_DRAFT_LIMA_HOUR = 9;
+  const NEWSLETTER_REMINDER_LIMA_HOUR = 12;
+  const newsletterStateGlobal = globalThis as unknown as {
+    __hablaUltimoRecordatorioSemana?: string;
+  };
+
+  async function tickNewsletterSemanal() {
+    try {
+      const now = new Date();
+      const fmt = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/Lima",
+        weekday: "short",
+      });
+      const dia = fmt.format(now); // Sat, Sun, etc.
+      const horaLimaActual = horaLima(now);
+      const semana = getSemanaIsoKey(now);
+
+      // Sábado ≥09:00 PET: crear draft si no existe.
+      if (dia === "Sat" && horaLimaActual >= NEWSLETTER_DRAFT_LIMA_HOUR) {
+        const r = await crearDraftSemanal(now);
+        if (r.created) {
+          const baseUrl =
+            process.env.NEXT_PUBLIC_APP_URL ?? "https://hablaplay.com";
+          const adminEmail = process.env.ADMIN_ALERT_EMAIL;
+          if (adminEmail) {
+            const { enviarEmail } = await import("./lib/services/email.service");
+            await enviarEmail({
+              to: adminEmail,
+              subject: `📨 Habla! · Draft del newsletter de ${semana} listo para revisar`,
+              html: `<p>Se generó automáticamente el draft del digest semanal para la semana <strong>${semana}</strong>.</p>
+<p>Revisalo y aprobá desde <a href="${baseUrl}/admin/newsletter">${baseUrl}/admin/newsletter</a>.</p>`,
+              text: `Draft del newsletter de ${semana} listo. Revisar y aprobar en ${baseUrl}/admin/newsletter`,
+            });
+          }
+          logger.info(
+            { semana, source: "cron:newsletter" },
+            "[cron in-process] draft semanal creado + admin notificado",
+          );
+        }
+        return;
+      }
+
+      // Domingo ≥12:00 PET: recordatorio si sigue sin aprobar.
+      if (
+        dia === "Sun" &&
+        horaLimaActual >= NEWSLETTER_REMINDER_LIMA_HOUR
+      ) {
+        const draft = await obtenerDraftPorSemana(semana);
+        if (!draft || draft.enviadoEn) return;
+        if (newsletterStateGlobal.__hablaUltimoRecordatorioSemana === semana) {
+          return; // ya recordamos esta semana en este proceso
+        }
+        const baseUrl =
+          process.env.NEXT_PUBLIC_APP_URL ?? "https://hablaplay.com";
+        const adminEmail = process.env.ADMIN_ALERT_EMAIL;
+        if (adminEmail) {
+          const { enviarEmail } = await import("./lib/services/email.service");
+          await enviarEmail({
+            to: adminEmail,
+            subject: `⏰ Recordatorio: aprobar el newsletter de ${semana}`,
+            html: `<p>El draft del digest de la semana <strong>${semana}</strong> sigue sin enviarse.</p>
+<p><a href="${baseUrl}/admin/newsletter">Aprobar en /admin/newsletter</a></p>`,
+            text: `Recordatorio: el digest de ${semana} sigue sin enviarse. Aprobar en ${baseUrl}/admin/newsletter`,
+          });
+        }
+        newsletterStateGlobal.__hablaUltimoRecordatorioSemana = semana;
+        logger.info(
+          { semana, source: "cron:newsletter" },
+          "[cron in-process] recordatorio newsletter enviado",
+        );
+      }
+    } catch (err) {
+      logger.error(
+        { err, source: "cron:newsletter" },
+        "[cron in-process] tick de newsletter-semanal falló",
+      );
+    }
+  }
+
+  // Primera corrida 180s tras boot.
+  setTimeout(() => {
+    void tickNewsletterSemanal();
+    setInterval(() => {
+      void tickNewsletterSemanal();
+    }, NEWSLETTER_TICK_INTERVAL_MS);
+  }, 180_000);
+
+  // -------------------------------------------------------------------
   // Jobs F (vencimiento Lukas) y G (auditoría de balances) se removieron
   // en Lote 2 cuando se demolió el sistema de Lukas. Job I (auditoría
   // contable) se removió en Lote 4 cuando se demolió el aparato contable.
@@ -449,6 +627,8 @@ export async function register() {
       cierreLeaderboardMensual: `${LEADERBOARD_TICK_INTERVAL_MS / 1000 / 60}min (día 1 ≥01:00 PET)`,
       alertaCriticos: `${CRITICOS_TICK_INTERVAL_MS / 1000 / 60}min (anti-spam ${CRITICOS_ANTISPAM_MS / 1000 / 60}min)`,
       refreshOdds: `${ODDS_TICK_INTERVAL_MS / 1000 / 60}min`,
+      verificarMincetur: `${MINCETUR_TICK_INTERVAL_MS / 1000 / 60}min (lunes ≥${MINCETUR_TARGET_LIMA_HOUR}:00 PET)`,
+      newsletterSemanal: `${NEWSLETTER_TICK_INTERVAL_MS / 1000 / 60}min (sábado draft ≥${NEWSLETTER_DRAFT_LIMA_HOUR}:00, domingo reminder ≥${NEWSLETTER_REMINDER_LIMA_HOUR}:00 PET)`,
     },
     "cron in-process registrado",
   );

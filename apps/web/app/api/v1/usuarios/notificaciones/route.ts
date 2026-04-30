@@ -23,6 +23,7 @@ const PatchSchema = z.object({
   notifSugerencias: z.boolean().optional(),
   notifCierreTorneo: z.boolean().optional(),
   notifPromos: z.boolean().optional(),
+  notifSemanal: z.boolean().optional(),
   emailSemanal: z.boolean().optional(),
 });
 
