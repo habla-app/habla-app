@@ -72,7 +72,7 @@ export function LeaderboardPreview({
           contar.
         </p>
         <Link
-          href="/matches"
+          href="/cuotas"
           className="mt-4 inline-flex items-center justify-center rounded-md bg-brand-gold px-4 py-2 font-display text-[12px] font-extrabold uppercase tracking-[0.04em] text-black shadow-gold-btn transition-all hover:bg-brand-gold-light"
         >
           Hacer mi predicción

@@ -53,7 +53,7 @@ export default async function CasaReviewPage({ params }: { params: Params }) {
   const { frontmatter, body, headings } = doc;
 
   return (
-    <div className="mx-auto max-w-[1200px] px-4 py-10 md:px-6 md:py-14">
+    <div className="mx-auto w-full max-w-[1200px] px-4 py-6 md:px-6 md:py-10">
       <ReviewJsonLd
         slug={frontmatter.slug}
         title={frontmatter.title}
@@ -77,28 +77,28 @@ export default async function CasaReviewPage({ params }: { params: Params }) {
       <div className="lg:flex lg:gap-10">
         <TOC headings={headings} />
         <article className="min-w-0 flex-1 lg:max-w-[760px]">
-          <header className="mb-8">
-            <p className="mb-2 inline-block rounded-sm bg-brand-blue-main/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.06em] text-brand-blue-main">
+          <header className="mb-6">
+            <p className="mb-2 inline-block rounded-sm bg-brand-blue-main/10 px-2.5 py-1 text-label-sm text-brand-blue-main">
               ✓ Casa autorizada MINCETUR
             </p>
-            <h1 className="mb-3 font-display text-[36px] font-black leading-tight text-dark md:text-[44px]">
+            <h1 className="mb-3 font-display text-display-lg leading-tight text-dark md:text-[40px]">
               {frontmatter.title}
             </h1>
-            <p className="text-[16px] leading-[1.6] text-body">
+            <p className="text-body-md leading-[1.6] text-body md:text-body-lg">
               {frontmatter.excerpt}
             </p>
-            <div className="mt-4 flex items-center gap-3 text-[12px] text-muted-d">
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-body-xs text-muted-d">
               <span className="font-bold text-dark">{frontmatter.author}</span>
               <span aria-hidden>·</span>
               <time dateTime={frontmatter.publishedAt}>
                 {formatDate(frontmatter.publishedAt)}
               </time>
-              {frontmatter.updatedAt !== frontmatter.publishedAt && (
+              {frontmatter.updatedAt !== frontmatter.publishedAt ? (
                 <>
                   <span aria-hidden>·</span>
                   <span>Actualizado {formatDate(frontmatter.updatedAt)}</span>
                 </>
-              )}
+              ) : null}
             </div>
           </header>
 
@@ -114,24 +114,23 @@ export default async function CasaReviewPage({ params }: { params: Params }) {
             />
           </div>
 
-          {afiliado && afiliado.activo && afiliado.autorizadoMincetur && (
+          {afiliado && afiliado.activo && afiliado.autorizadoMincetur ? (
             <div className="mt-10 rounded-md border border-brand-gold/30 bg-brand-gold-dim p-5 text-center">
-              <p className="m-0 mb-3 font-display text-[15px] font-bold uppercase tracking-[0.04em] text-brand-gold-dark">
+              <p className="m-0 mb-3 font-display text-display-xs text-brand-gold-dark">
                 Reclamá tu bono en {afiliado.nombre}
               </p>
               <Link
-                href={`/go/${afiliado.slug}`}
+                href={`/go/${afiliado.slug}?utm_source=review&utm_medium=cta`}
                 rel="sponsored noopener"
-                className="inline-flex items-center justify-center gap-2 rounded-md bg-brand-gold px-6 py-3.5 font-display text-[15px] font-extrabold uppercase tracking-[0.03em] text-black shadow-gold-btn transition-all hover:-translate-y-px hover:bg-brand-gold-light hover:shadow-gold"
+                className="touch-target inline-flex items-center justify-center gap-2 rounded-md bg-brand-gold px-6 py-3.5 font-display text-[15px] font-extrabold uppercase tracking-[0.03em] text-black shadow-gold-btn transition-all hover:-translate-y-px hover:bg-brand-gold-light hover:shadow-gold"
               >
-                Ir a {afiliado.nombre}
-                <span aria-hidden>→</span>
+                Ir a {afiliado.nombre} →
               </Link>
-              <p className="mt-3 text-[11px] text-muted-d">
+              <p className="mt-3 text-body-xs text-muted-d">
                 Operador autorizado por MINCETUR. Juega responsablemente. +18.
               </p>
             </div>
-          )}
+          ) : null}
         </article>
       </div>
       <BackToTop />

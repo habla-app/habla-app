@@ -1,10 +1,10 @@
-// /casas — Lote 8. Listing público de casas autorizadas por MINCETUR.
+// /casas — Listing público de casas autorizadas MINCETUR (Lote B v3.1).
+// Spec: docs/ux-spec/02-pista-usuario-publica/casas.spec.md.
 //
-// Filtros client-side (rating mín, bono presente, métodos de pago) sobre
-// la lista de casas activas. SSR carga la grilla completa; el filtrado
-// es interactivo sin tocar BD. Para pocas decenas de casas (que es lo que
-// cabe esperar en el universo MINCETUR), filtrar in-memory en el cliente
-// es lo más simple y rápido.
+// Refactor visual del Lote 8: layout mobile-first con stack vertical y
+// filtros más simples (rating, bono, métodos de pago) usando bottom-sheet
+// en mobile. La lógica de datos del Lote 7-8 (afiliación + verificación
+// MINCETUR) se mantiene intacta.
 
 import type { Metadata } from "next";
 import * as casas from "@/lib/content/casas";
@@ -13,7 +13,7 @@ import { CasasGrid } from "@/components/public/CasasGrid";
 export const metadata: Metadata = {
   title: "Casas de apuestas autorizadas por MINCETUR · Habla!",
   description:
-    "Comparativa de casas de apuestas online autorizadas por MINCETUR en Perú. Reviews, bonos vigentes, métodos de pago y experiencia editorial de Habla!.",
+    "Comparativa editorial de las casas de apuestas online autorizadas por MINCETUR en Perú. Bonos vigentes, métodos de pago y mejores cuotas por partido.",
   alternates: { canonical: "/casas" },
   openGraph: {
     title: "Casas autorizadas MINCETUR | Habla!",
@@ -25,7 +25,6 @@ export const metadata: Metadata = {
 export default async function CasasIndexPage() {
   const reviews = await casas.getActivas();
 
-  // Pasamos al cliente sólo lo que el filtro necesita.
   const items = reviews.map((r) => ({
     slug: r.doc.frontmatter.slug,
     title: r.doc.frontmatter.title,
@@ -39,20 +38,22 @@ export default async function CasasIndexPage() {
   }));
 
   return (
-    <div className="mx-auto max-w-[1200px] px-4 py-10 md:px-6 md:py-14">
-      <header className="mb-8">
-        <h1 className="mb-3 font-display text-[40px] font-black leading-tight text-dark md:text-[48px]">
-          Casas autorizadas MINCETUR
+    <div className="mx-auto w-full max-w-[1200px] px-4 py-6 md:px-6 md:py-10">
+      <header className="mb-6">
+        <p className="mb-2 inline-block rounded-sm bg-brand-blue-main/10 px-2.5 py-1 text-label-sm text-brand-blue-main">
+          🛡️ Verificadas MINCETUR
+        </p>
+        <h1 className="font-display text-display-lg leading-tight text-dark md:text-[40px]">
+          Casas autorizadas en Perú
         </h1>
-        <p className="max-w-[720px] text-[16px] leading-[1.7] text-body">
-          Reviews editoriales de las casas de apuestas online autorizadas por
-          MINCETUR en Perú. Comparamos bonos, métodos de pago, velocidad de
-          retiros y experiencia general — sin maquillaje.
+        <p className="mt-2 text-body-md leading-[1.55] text-body">
+          {items.length} casas autorizadas · reviews editoriales · cuotas
+          comparadas en cada partido top.
         </p>
       </header>
 
       {items.length === 0 ? (
-        <p className="rounded-md border border-light bg-card px-5 py-10 text-center text-[14px] text-muted-d">
+        <p className="rounded-md border border-light bg-card px-5 py-10 text-center text-body-sm text-muted-d">
           Estamos terminando las primeras reviews. Volvé pronto.
         </p>
       ) : (

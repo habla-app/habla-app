@@ -224,7 +224,7 @@ export default async function ComunidadPage() {
             Crea tu cuenta gratis y empezá a sumar puntos en cada partido.
           </p>
           <Link
-            href="/auth/signin?callbackUrl=/matches"
+            href="/auth/signin?callbackUrl=/cuotas"
             className="mt-4 inline-flex items-center justify-center gap-2 rounded-md bg-brand-gold px-5 py-3 font-display text-[14px] font-extrabold uppercase tracking-[0.04em] text-black shadow-gold-btn transition-all hover:bg-brand-gold-light"
           >
             Crear cuenta gratis
@@ -233,7 +233,7 @@ export default async function ComunidadPage() {
       ) : (
         <section className="rounded-md border border-light bg-card p-5 text-center shadow-sm">
           <Link
-            href="/matches"
+            href="/cuotas"
             className="inline-flex items-center justify-center gap-2 rounded-md border-[1.5px] border-strong bg-transparent px-5 py-3 text-[14px] font-bold text-body transition-colors hover:border-brand-blue-main hover:text-brand-blue-main"
           >
             Ver partidos para predecir →

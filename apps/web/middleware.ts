@@ -11,8 +11,10 @@
 // lo que las rutas /api/* nunca ejecutan `auth()` aquí — los route
 // handlers llaman `auth()` ellos mismos cuando necesitan sesión.
 //
-// Rutas públicas (sin login): /, /torneos, /torneo/[id], /matches,
-// /live-match, /pronosticos, /comunidad. NO se listan en el matcher.
+// Rutas públicas (sin login): /, /cuotas, /partidos/[slug], /casas,
+// /blog, /guias, /pronosticos. NO se listan en el matcher.
+// Lote B (v3.1): /matches eliminada — su tráfico se redirige a /cuotas
+// vía Next.js redirect en next.config (mantiene compat de SEO).
 //
 // Registro formal (Abr 2026): si el usuario está logueado pero con
 // `usernameLocked=false` (OAuth primera vez), redirect a

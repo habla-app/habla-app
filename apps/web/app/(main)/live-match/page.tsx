@@ -335,7 +335,7 @@ function EmptyLive() {
           Cuando arranque algún torneo, el ranking en tiempo real aparece acá.
         </p>
         <a
-          href="/matches"
+          href="/cuotas"
           className="mt-5 inline-flex items-center justify-center gap-2 rounded-md bg-brand-gold px-5 py-3 font-display text-[14px] font-extrabold uppercase tracking-[0.04em] text-black shadow-gold-btn transition-colors hover:bg-brand-gold-light"
         >
           Ver partidos próximos

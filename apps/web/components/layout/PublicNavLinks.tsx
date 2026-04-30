@@ -18,20 +18,21 @@ interface NavLinkDef {
 }
 
 const LINKS: NavLinkDef[] = [
-  { href: "/blog", label: "Blog", match: (p) => p.startsWith("/blog") },
-  { href: "/casas", label: "Casas", match: (p) => p.startsWith("/casas") },
-  { href: "/guias", label: "Guías", match: (p) => p.startsWith("/guias") },
+  { href: "/cuotas", label: "Partidos", match: (p) => p.startsWith("/cuotas") || p.startsWith("/partidos") },
   {
     href: "/pronosticos",
     label: "Pronósticos",
     match: (p) => p.startsWith("/pronosticos"),
   },
-  { href: "/cuotas", label: "Cuotas", match: (p) => p.startsWith("/cuotas") },
+  { href: "/casas", label: "Casas", match: (p) => p.startsWith("/casas") },
   {
     href: "/comunidad",
-    label: "Comunidad",
-    match: (p) => p.startsWith("/comunidad"),
+    label: "Liga",
+    match: (p) => p.startsWith("/comunidad") || p.startsWith("/torneo"),
   },
+  { href: "/premium", label: "Premium", match: (p) => p.startsWith("/premium") },
+  { href: "/blog", label: "Blog", match: (p) => p.startsWith("/blog") },
+  { href: "/guias", label: "Guías", match: (p) => p.startsWith("/guias") },
 ];
 
 const INACTIVE = "text-white/80 hover:bg-white/[0.06] hover:text-white";

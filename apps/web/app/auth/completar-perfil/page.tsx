@@ -29,41 +29,39 @@ export default async function CompletarPerfilPage({ searchParams }: PageProps) {
   }
 
   return (
-    <div className="w-full max-w-[480px]">
-      <div className="rounded-lg border border-light bg-card p-10 shadow-lg">
+    <>
+      <div className="rounded-lg border border-light bg-card p-6 shadow-lg md:p-8">
         <div aria-hidden className="text-center text-[56px] leading-none">
           🎯
         </div>
-        <h1 className="mt-4 text-center font-display text-[30px] font-black uppercase tracking-wide text-dark">
-          Elegí tu @handle
+        <h1 className="mt-4 text-center font-display text-display-lg uppercase tracking-wide text-dark">
+          Casi listo
         </h1>
-        <p className="mt-2 text-center text-sm leading-relaxed text-muted-d">
-          Así te van a ver los otros jugadores en el ranking y en la lista de
-          inscritos.
+        <p className="mt-2 text-center text-body-sm leading-relaxed text-muted-d">
+          Elige cómo te van a ver otros tipsters en el ranking.
         </p>
 
-        <div className="mt-5 rounded-sm border border-urgent-high/30 bg-urgent-high-bg px-3 py-2 text-[12px] text-urgent-high-dark">
+        <div className="mt-5 rounded-sm border border-alert-warning-border bg-alert-warning-bg px-3 py-2 text-body-xs text-alert-warning-text">
           <strong>Importante:</strong> el @handle no se puede cambiar después.
-          Elegilo con calma.
         </div>
 
         <div className="mt-5">
           <CompletarPerfilForm callbackUrl={callbackUrl} />
         </div>
 
-        <p className="mt-5 text-center text-[11px] leading-relaxed text-muted-d">
+        <p className="mt-5 text-center text-body-xs leading-relaxed text-muted-d">
           Entraste con{" "}
           <strong className="text-dark">{session.user.email}</strong>. Si no
-          sos vos,{" "}
+          eres tú,{" "}
           <Link
             href="/api/auth/signout"
             className="font-semibold text-brand-blue-main hover:underline"
           >
-            cerrá sesión
+            cerrar sesión
           </Link>
           .
         </p>
       </div>
-    </div>
+    </>
   );
 }

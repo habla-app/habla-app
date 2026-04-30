@@ -150,7 +150,7 @@ export default async function MisCombinadasPage({ searchParams }: Props) {
 
       <div className="mt-6 text-center">
         <Link
-          href="/matches"
+          href="/cuotas"
           className="inline-flex items-center justify-center gap-2 rounded-md border-[1.5px] border-strong bg-transparent px-5 py-3 text-[14px] font-bold text-body transition-colors hover:border-brand-blue-main hover:text-brand-blue-main"
         >
           Ver más partidos para predecir →
@@ -225,7 +225,7 @@ function EmptyState({
       <p className="text-base font-semibold text-dark">{copy.title}</p>
       <p className="mt-1 text-[13px] text-muted-d">{copy.body}</p>
       <Link
-        href="/matches"
+        href="/cuotas"
         className="mt-5 inline-flex items-center justify-center gap-2 rounded-md bg-brand-gold px-5 py-3 font-display text-[14px] font-extrabold uppercase tracking-[0.04em] text-black shadow-gold-btn transition-all hover:bg-brand-gold-light"
       >
         Ir a partidos
