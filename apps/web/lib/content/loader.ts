@@ -12,8 +12,14 @@
 // hasta que el proceso muera. Suficiente para Lote 14 donde se publican
 // piezas con frecuencia baja (días, no minutos).
 
-import { readFileSync, readdirSync, existsSync } from "node:fs";
-import { join } from "node:path";
+// Importamos sin el prefix `node:` para que el fallback de webpack
+// (`fs: false`, `path: false` en `next.config.js`) aplique en builds
+// edge/client. El prefix `node:` no es matcheado por `resolve.fallback`
+// — en Lote 10 al traer este loader vía `articles.ts` a más bundles
+// (newsletter.service), el build falló con UnhandledSchemeError. En
+// runtime Node, `import "fs"` y `import "node:fs"` son equivalentes.
+import { readFileSync, readdirSync, existsSync } from "fs";
+import { join } from "path";
 import matter from "gray-matter";
 import type { ZodTypeAny, infer as Zinfer } from "zod";
 import type { BaseFrontmatter, LoadedDoc } from "./types";
