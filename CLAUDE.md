@@ -2,6 +2,7 @@
 
 > Cerebro del proyecto. Cargado en cada sesión: corto y denso. Historial detallado de cambios vive en commits y PRs.
 > Última reescritura: 30 Apr 2026 (Pivot a v3.1 — roadmap A-J + Premium WhatsApp Channel + admin desktop-only).
+> Última actualización: 30 Apr 2026 — Lote A cerrado (design system v3.1 + tokens premium/admin/whatsapp/vital/status + átomos compartidos + scaffolds mobile/admin).
 
 ---
 
@@ -53,7 +54,7 @@ Los lotes 12 (Premium con paywall), 13 (Cursos), 14-16 (QA, beta, lanzamiento) *
 
 | Lote | Pista | Carpeta specs | Qué hace |
 |---|---|---|---|
-| **A** — Design system v3.1 + tokens nuevos | Ambas | `00-design-system/` | Tokens Premium, WhatsApp, admin. `<MobileHeader>`, `<BottomNav>`, `<CrossProductBanner>`. |
+| **A** — Design system v3.1 + tokens nuevos ✅ | Ambas | `00-design-system/` | Tokens nuevos en `tailwind.config.ts` + `globals.css`: alert warning/danger, premium (surface/border/watermark + 3 gradients + 3 shadows), admin sidebar/content/status, whatsapp, vital, zIndex jerárquico (base→tooltip 0-90). Tipografías `text-display-*`/`text-body-*`/`text-label-*`/`text-num-*` (mobile) + `text-admin-*`/`text-kpi-value-*` (admin) en `@layer utilities`. Utilities `scrollbar-hide`/`touch-target`/`bg-whatsapp-chat`/`premium-watermark`. Helper `lib/utils/cn.ts`. Átomos compartidos nuevos en `components/ui/`: `<Card>` (7 variants), `<Badge>` (10 variants × 3 sizes), `<Spinner>`, `<Skeleton>` (text/lines/circle/rect), `<Avatar>` (5 sizes + initials fallback), `<Divider>` (solid/dashed/decorative), `<IconButton>`, `<Input>` (3 sizes × 3 states + slots). Scaffolds en `components/ui/mobile/` (`<MobileHeader>`, `<StickyCTABar>`, `<CrossProductBanner>` nuevos + re-exports `<BottomNav>`/`<HorizontalScrollChips>`) y `components/ui/admin/` (`<MobileGuard>`, `<AdminSidebar>`, `<AdminTopbar>`, `<AdminCard>`, `<AdminTable>` preview funcional). Carpeta `components/ui/premium/` con README, componentes vienen en Lote D. Cero migraciones. Cero refactor de vistas (eso es Lote B+). |
 | **B** — Reauditoría móvil capa pública | Usuario | `02-pista-usuario-publica/` | Refactor mobile-first de home, partidos, blog, casas, guías, pronósticos, auth, suscribir. Sticky CTAs, BottomNav consistente. |
 | **C** — Reauditoría móvil capa autenticada | Usuario | `03-pista-usuario-autenticada/` | Refactor mobile-first de comunidad, perfil, mis-predicciones, live-match, perfil público. URLs renombradas. |
 | **D** — Premium WhatsApp UI usuario | Usuario | `04-pista-usuario-premium/` | Vistas `/premium`, `/premium/checkout`, `/premium/exito`, `/premium/mi-suscripcion`. Componente reusable `<PickWrapper>`. |
@@ -64,7 +65,7 @@ Los lotes 12 (Premium con paywall), 13 (Cursos), 14-16 (QA, beta, lanzamiento) *
 | **I** — Mobile-first audit + PWA | Usuario | dentro de `00-design-system/` | Auditoría final mobile + manifest.json + service worker básico. |
 | **J** — QA + soft launch + lanzamiento 8 mayo | Ambas | (no requiere specs) | Smoke, k6, soft-launch con 5-10 testers, lanzamiento. |
 
-**Ruta crítica:** A → B → C → D → E → J. F/G/H/I pueden paralelo después de D.
+**Ruta crítica:** A ✅ → B → C → D → E → J. F/G/H/I pueden paralelo después de D.
 
 **Decisión clave:** ejecutar Lote E (backend Premium) antes que Lote D (frontend Premium) si Meta Business y OpenPay BBVA tardan en aprobar. Esto evita que D quede con muchos fallbacks visibles.
 
