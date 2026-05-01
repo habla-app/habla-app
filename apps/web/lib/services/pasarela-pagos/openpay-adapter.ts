@@ -22,9 +22,8 @@
 // Verificación de firma de webhook: HMAC-SHA256 del raw body con
 // `OPENPAY_WEBHOOK_SECRET`. Comparación constant-time.
 
-import crypto from "node:crypto";
-
 import { logger } from "@/lib/services/logger";
+import { hmacSha256Hex, timingSafeEqualHex } from "@/lib/utils/hmac";
 
 import {
   OPENPAY_PLAN_IDS,
@@ -79,9 +78,11 @@ export class OpenPayAdapter implements PasarelaPagos {
     }
     this.cfg = cfg;
     this.baseUrl = cfg.production ? PRODUCTION_URL : SANDBOX_URL;
-    // OpenPay auth: Basic con privateKey:'' (password vacío).
+    // OpenPay auth: Basic con privateKey:'' (password vacío). Usamos `btoa`
+    // (Web API) en vez de `Buffer.from` para no arrastrar imports node:* al
+    // edge bundle si algún caller transitivo termina ahí.
     this.authHeader =
-      "Basic " + Buffer.from(`${cfg.privateKey}:`).toString("base64");
+      "Basic " + globalThis.btoa(`${cfg.privateKey}:`);
   }
 
   // -------------------------------------------------------------------------
@@ -249,7 +250,10 @@ export class OpenPayAdapter implements PasarelaPagos {
   // Verificación de firma del webhook
   // -------------------------------------------------------------------------
 
-  verificarFirmaWebhook(rawBody: string, signature: string | null): boolean {
+  async verificarFirmaWebhook(
+    rawBody: string,
+    signature: string | null,
+  ): Promise<boolean> {
     if (!signature) return false;
     if (!this.cfg.webhookSecret) {
       logger.warn(
@@ -258,15 +262,8 @@ export class OpenPayAdapter implements PasarelaPagos {
       );
       return false;
     }
-    const expected = crypto
-      .createHmac("sha256", this.cfg.webhookSecret)
-      .update(rawBody)
-      .digest("hex");
-    // Constant-time comparison.
-    const a = Buffer.from(expected);
-    const b = Buffer.from(signature);
-    if (a.length !== b.length) return false;
-    return crypto.timingSafeEqual(a, b);
+    const expected = await hmacSha256Hex(this.cfg.webhookSecret, rawBody);
+    return timingSafeEqualHex(expected, signature);
   }
 }
 
@@ -286,10 +283,10 @@ export class OpenPayApiError extends Error {
  * instanciar el adapter (útil cuando el webhook llega antes de que cualquier
  * suscripción exista). Lee `OPENPAY_WEBHOOK_SECRET` del env.
  */
-export function verificarFirmaOpenPay(
+export async function verificarFirmaOpenPay(
   rawBody: string,
   signature: string | null,
-): boolean {
+): Promise<boolean> {
   if (!signature) return false;
   const secret = process.env.OPENPAY_WEBHOOK_SECRET;
   if (!secret) {
@@ -299,14 +296,8 @@ export function verificarFirmaOpenPay(
     );
     return false;
   }
-  const expected = crypto
-    .createHmac("sha256", secret)
-    .update(rawBody)
-    .digest("hex");
-  const a = Buffer.from(expected);
-  const b = Buffer.from(signature);
-  if (a.length !== b.length) return false;
-  return crypto.timingSafeEqual(a, b);
+  const expected = await hmacSha256Hex(secret, rawBody);
+  return timingSafeEqualHex(expected, signature);
 }
 
 /**

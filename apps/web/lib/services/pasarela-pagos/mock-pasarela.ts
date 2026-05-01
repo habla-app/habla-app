@@ -47,7 +47,10 @@ export class MockPasarelaPagos implements PasarelaPagos {
     /* no-op */
   }
 
-  verificarFirmaWebhook(_rawBody: string, _signature: string | null): boolean {
+  async verificarFirmaWebhook(
+    _rawBody: string,
+    _signature: string | null,
+  ): Promise<boolean> {
     return true;
   }
 }

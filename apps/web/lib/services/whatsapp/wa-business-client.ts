@@ -14,9 +14,8 @@
 // configurados, los métodos retornan { ok: false, reason: 'unconfigured' }
 // SIN tirar — graceful degradation, igual que `email.service.ts`.
 
-import crypto from "node:crypto";
-
 import { logger } from "@/lib/services/logger";
+import { hmacSha256Hex, timingSafeEqualHex } from "@/lib/utils/hmac";
 
 const API_VERSION = "v22.0";
 const FETCH_TIMEOUT_MS = 30_000;
@@ -188,17 +187,14 @@ export class WhatsAppBusinessClient {
    * es `sha256=<hex>`. Si no está configurado el app secret, retorna false
    * (la regla 15 del CLAUDE.md exige firma válida o 401).
    */
-  verificarFirmaWebhook(rawBody: string, signature: string | null): boolean {
+  async verificarFirmaWebhook(
+    rawBody: string,
+    signature: string | null,
+  ): Promise<boolean> {
     if (!signature || !this.cfg?.appSecret) return false;
     const sigBody = signature.replace(/^sha256=/, "");
-    const expected = crypto
-      .createHmac("sha256", this.cfg.appSecret)
-      .update(rawBody)
-      .digest("hex");
-    const a = Buffer.from(expected);
-    const b = Buffer.from(sigBody);
-    if (a.length !== b.length) return false;
-    return crypto.timingSafeEqual(a, b);
+    const expected = await hmacSha256Hex(this.cfg.appSecret, rawBody);
+    return timingSafeEqualHex(expected, sigBody);
   }
 }
 
@@ -214,21 +210,15 @@ function normalizeTo(phone: string): string {
  * Verificación independiente de firma — útil en el route handler antes de
  * instanciar el cliente. Lee `WHATSAPP_APP_SECRET` del env.
  */
-export function verificarFirmaWhatsApp(
+export async function verificarFirmaWhatsApp(
   rawBody: string,
   signature: string | null,
-): boolean {
+): Promise<boolean> {
   const secret = process.env.WHATSAPP_APP_SECRET;
   if (!signature || !secret) return false;
   const sigBody = signature.replace(/^sha256=/, "");
-  const expected = crypto
-    .createHmac("sha256", secret)
-    .update(rawBody)
-    .digest("hex");
-  const a = Buffer.from(expected);
-  const b = Buffer.from(sigBody);
-  if (a.length !== b.length) return false;
-  return crypto.timingSafeEqual(a, b);
+  const expected = await hmacSha256Hex(secret, rawBody);
+  return timingSafeEqualHex(expected, sigBody);
 }
 
 /** True si las credenciales mínimas están configuradas. */

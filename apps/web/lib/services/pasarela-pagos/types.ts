@@ -66,8 +66,10 @@ export interface PasarelaPagos {
   cancelarSuscripcion(suscripcionPasarelaId: string): Promise<void>;
   /** Emite reembolso de un cobro. Usado para garantía 7 días. */
   reembolsar(cobroPasarelaId: string): Promise<void>;
-  /** Verifica firma HMAC-SHA256 de un webhook entrante. */
-  verificarFirmaWebhook(rawBody: string, signature: string | null): boolean;
+  /** Verifica firma HMAC-SHA256 de un webhook entrante. Async por usar
+   *  Web Crypto (`globalThis.crypto.subtle`) — Lote E refactor para
+   *  evitar `node:crypto` que rompe el bundle de Next. */
+  verificarFirmaWebhook(rawBody: string, signature: string | null): Promise<boolean>;
 }
 
 // ---------------------------------------------------------------------------
