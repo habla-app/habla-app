@@ -6,7 +6,7 @@
 //
 // Auth: layout admin valida ADMIN.
 
-import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminTopbar } from "@/components/ui/admin/AdminTopbar";
 import {
   obtenerErroresRecientes,
   obtenerStatsErroresUltimas24h,
@@ -50,10 +50,10 @@ export default async function AdminLogsPage({ searchParams }: PageProps) {
 
   return (
     <>
-      <AdminPageHeader
-        icon="🐛"
+      <AdminTopbar
         title="Logs"
-        description="Errores y warnings persistidos por el logger Pino + el cron M alerta cuando hay críticos > 0 en la última hora."
+        description="Errores y warnings persistidos por el logger Pino. El cron M alerta cuando hay críticos > 0 en la última hora."
+        breadcrumbs={[{ label: "Sistema" }, { label: "Logs" }]}
       />
 
       {/* Stats 24h */}

@@ -15,7 +15,7 @@ import {
   listarLeaderboardsCerrados,
   obtenerLeaderboardMesActual,
 } from "@/lib/services/leaderboard.service";
-import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminTopbar } from "@/components/ui/admin/AdminTopbar";
 import { CerrarLeaderboardPanel } from "@/components/admin/CerrarLeaderboardPanel";
 import Link from "next/link";
 
@@ -29,10 +29,10 @@ export default async function AdminLeaderboardPage() {
 
   return (
     <>
-      <AdminPageHeader
-        icon="🏆"
+      <AdminTopbar
         title="Leaderboards mensuales"
         description="Cada mes calendario forma un leaderboard. Cierre automático el día 1 ≥01:00 PET; podés forzarlo manualmente desde acá."
+        breadcrumbs={[{ label: "Análisis" }, { label: "Leaderboard" }]}
       />
 
       {/* MES EN CURSO */}

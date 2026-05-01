@@ -752,3 +752,359 @@ export async function expirarGarantias(): Promise<number> {
   });
   return result.count;
 }
+
+// ===========================================================================
+// Lote F — funciones para `/admin/suscripciones`
+// ===========================================================================
+
+export interface ListarSuscripcionesAdminInput {
+  estado?: PrismaEstadoSuscripcion;
+  plan?: "MENSUAL" | "TRIMESTRAL" | "ANUAL";
+  q?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface SuscripcionAdminFila {
+  id: string;
+  usuarioId: string;
+  email: string;
+  nombre: string;
+  username: string;
+  plan: "MENSUAL" | "TRIMESTRAL" | "ANUAL";
+  precio: number;
+  estado: PrismaEstadoSuscripcion;
+  activa: boolean;
+  cancelada: boolean;
+  iniciada: Date;
+  proximoCobro: Date | null;
+  vencimiento: Date | null;
+  enGarantia: boolean;
+}
+
+export async function listarSuscripcionesAdmin(
+  input: ListarSuscripcionesAdminInput = {},
+): Promise<{
+  rows: SuscripcionAdminFila[];
+  total: number;
+  page: number;
+  pageSize: number;
+}> {
+  const page = Math.max(1, input.page ?? 1);
+  const pageSize = Math.min(200, Math.max(10, input.pageSize ?? 50));
+
+  const where: Record<string, unknown> = {};
+  if (input.estado) where.estado = input.estado;
+  if (input.plan) where.plan = input.plan;
+  if (input.q && input.q.length > 0) {
+    where.usuario = {
+      OR: [
+        { email: { contains: input.q, mode: "insensitive" } },
+        { nombre: { contains: input.q, mode: "insensitive" } },
+        { username: { contains: input.q, mode: "insensitive" } },
+      ],
+    };
+  }
+
+  const [rows, total] = await Promise.all([
+    prisma.suscripcion.findMany({
+      where,
+      include: {
+        usuario: { select: { email: true, nombre: true, username: true } },
+      },
+      orderBy: { creadoEn: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.suscripcion.count({ where }),
+  ]);
+
+  return {
+    rows: rows.map((r) => ({
+      id: r.id,
+      usuarioId: r.usuarioId,
+      email: r.usuario.email,
+      nombre: r.usuario.nombre,
+      username: r.usuario.username,
+      plan: r.plan,
+      precio: r.precio,
+      estado: r.estado,
+      activa: r.activa,
+      cancelada: r.cancelada,
+      iniciada: r.iniciada,
+      proximoCobro: r.proximoCobro,
+      vencimiento: r.vencimiento,
+      enGarantia: r.enGarantia,
+    })),
+    total,
+    page,
+    pageSize,
+  };
+}
+
+export interface SuscripcionAdminDetalle extends SuscripcionAdminFila {
+  openpaySuscripcionId: string | null;
+  openpayCustomerId: string | null;
+  motivoCancela: string | null;
+  canceladaEn: Date | null;
+  reembolsoPedido: boolean;
+  reembolsoEn: Date | null;
+  pagos: Array<{
+    id: string;
+    monto: number;
+    estado: string;
+    fecha: Date;
+    acreditadoEn: Date | null;
+    rechazadoEn: Date | null;
+    ultimosCuatro: string | null;
+    marcaTarjeta: string | null;
+    codigoError: string | null;
+    mensajeError: string | null;
+    intentos: number;
+  }>;
+}
+
+export async function obtenerDetalleSuscripcionAdmin(
+  id: string,
+): Promise<SuscripcionAdminDetalle | null> {
+  const s = await prisma.suscripcion.findUnique({
+    where: { id },
+    include: {
+      usuario: { select: { email: true, nombre: true, username: true } },
+      pagos: { orderBy: { fecha: "desc" } },
+    },
+  });
+  if (!s) return null;
+  return {
+    id: s.id,
+    usuarioId: s.usuarioId,
+    email: s.usuario.email,
+    nombre: s.usuario.nombre,
+    username: s.usuario.username,
+    plan: s.plan,
+    precio: s.precio,
+    estado: s.estado,
+    activa: s.activa,
+    cancelada: s.cancelada,
+    iniciada: s.iniciada,
+    proximoCobro: s.proximoCobro,
+    vencimiento: s.vencimiento,
+    enGarantia: s.enGarantia,
+    openpaySuscripcionId: s.openpaySuscripcionId,
+    openpayCustomerId: s.openpayCustomerId,
+    motivoCancela: s.motivoCancela,
+    canceladaEn: s.canceladaEn,
+    reembolsoPedido: s.reembolsoPedido,
+    reembolsoEn: s.reembolsoEn,
+    pagos: s.pagos.map((p) => ({
+      id: p.id,
+      monto: p.monto,
+      estado: p.estado,
+      fecha: p.fecha,
+      acreditadoEn: p.acreditadoEn,
+      rechazadoEn: p.rechazadoEn,
+      ultimosCuatro: p.ultimosCuatro,
+      marcaTarjeta: p.marcaTarjeta,
+      codigoError: p.codigoError,
+      mensajeError: p.mensajeError,
+      intentos: p.intentos,
+    })),
+  };
+}
+
+export interface StatsSuscripciones {
+  totalActivas: number;
+  mrrCentimos: number;
+  cancelandoMes: number;
+  vencidasUltMes: number;
+}
+
+export async function obtenerStatsSuscripciones(): Promise<StatsSuscripciones> {
+  const inicioMes = new Date();
+  inicioMes.setDate(1);
+  inicioMes.setHours(0, 0, 0, 0);
+  const haceUnMes = new Date();
+  haceUnMes.setDate(haceUnMes.getDate() - 30);
+
+  const [activasRows, cancelandoMes, vencidasUltMes] = await Promise.all([
+    prisma.suscripcion.findMany({
+      where: { activa: true },
+      select: { plan: true, precio: true },
+    }),
+    prisma.suscripcion.count({
+      where: {
+        cancelada: true,
+        canceladaEn: { gte: inicioMes },
+      },
+    }),
+    prisma.suscripcion.count({
+      where: {
+        estado: { in: [PrismaEstadoSuscripcion.VENCIDA, PrismaEstadoSuscripcion.FALLIDA] },
+        actualizadoEn: { gte: haceUnMes },
+      },
+    }),
+  ]);
+
+  const mrrCentimos = activasRows.reduce((acc, s) => {
+    const meses = s.plan === "ANUAL" ? 12 : s.plan === "TRIMESTRAL" ? 3 : 1;
+    return acc + Math.round(s.precio / meses);
+  }, 0);
+
+  return {
+    totalActivas: activasRows.length,
+    mrrCentimos,
+    cancelandoMes,
+    vencidasUltMes,
+  };
+}
+
+/**
+ * Cancelación inmediata (override admin): cancela en OpenPay, marca activa=false
+ * y remueve del Channel ahora — no espera al vencimiento. Distinto al
+ * `cancelarSuscripcion` normal del usuario (que mantiene acceso hasta
+ * vencimiento). Atómico.
+ */
+export async function cancelarInmediatoAdmin(input: {
+  suscripcionId: string;
+  motivo: string;
+}): Promise<{ ok: true }> {
+  const sus = await prisma.suscripcion.findUnique({
+    where: { id: input.suscripcionId },
+  });
+  if (!sus) {
+    throw new ValidacionFallida("Suscripción no encontrada");
+  }
+  if (!sus.activa) {
+    return { ok: true }; // Idempotente
+  }
+
+  if (sus.openpaySuscripcionId) {
+    try {
+      const openpay = new OpenPayAdapter();
+      await openpay.cancelarSuscripcion(sus.openpaySuscripcionId);
+    } catch (err) {
+      logger.error(
+        { err, suscripcionId: sus.id, source: "suscripciones:admin-cancel" },
+        "cancelarInmediatoAdmin: OpenPay cancel falló (continuamos local)",
+      );
+    }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.suscripcion.update({
+      where: { id: sus.id },
+      data: {
+        estado: PrismaEstadoSuscripcion.CANCELANDO,
+        cancelada: true,
+        canceladaEn: new Date(),
+        motivoCancela: `[ADMIN] ${input.motivo}`,
+        activa: false, // Override: revoca acceso ahora
+      },
+    });
+    await tx.miembroChannel.updateMany({
+      where: {
+        suscripcionId: sus.id,
+        estado: { in: ["INVITADO", "REINVITADO", "UNIDO"] },
+      },
+      data: { estado: "REMOVIDO", removidoEn: new Date() },
+    });
+  });
+
+  void track({
+    evento: "admin_suscripcion_cancelada_manual",
+    userId: sus.usuarioId,
+    props: { suscripcionId: sus.id, motivo: input.motivo.slice(0, 100) },
+  });
+
+  return { ok: true };
+}
+
+/**
+ * Reembolso fuera de garantía (override admin). Bypass del check `enGarantia`
+ * que normalmente bloquearía. Requiere motivo obligatorio.
+ */
+export async function reembolsarManualAdmin(input: {
+  suscripcionId: string;
+  motivo: string;
+  aprobadoPor?: string;
+}): Promise<{ ok: true }> {
+  const sus = await prisma.suscripcion.findUnique({
+    where: { id: input.suscripcionId },
+    include: {
+      pagos: { orderBy: { fecha: "desc" }, take: 1 },
+      usuario: true,
+    },
+  });
+  if (!sus) {
+    throw new ValidacionFallida("Suscripción no encontrada");
+  }
+  if (sus.estado === PrismaEstadoSuscripcion.REEMBOLSADA) {
+    return { ok: true }; // Idempotente
+  }
+  const ultimoPago = sus.pagos[0];
+  if (!ultimoPago || ultimoPago.estado !== "PAGADO") {
+    throw new ValidacionFallida(
+      "No hay pago acreditado para reembolsar (estado actual: " +
+        (ultimoPago?.estado ?? "ninguno") +
+        ")",
+    );
+  }
+
+  const openpay = new OpenPayAdapter();
+  await openpay.reembolsar(ultimoPago.openpayCobroId);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.suscripcion.update({
+      where: { id: sus.id },
+      data: {
+        estado: PrismaEstadoSuscripcion.REEMBOLSADA,
+        activa: false,
+        reembolsoPedido: true,
+        reembolsoEn: new Date(),
+        motivoCancela: `[ADMIN-REEMBOLSO] ${input.motivo}`,
+      },
+    });
+    await tx.pagoSuscripcion.update({
+      where: { id: ultimoPago.id },
+      data: { estado: "REEMBOLSADO" },
+    });
+    await tx.miembroChannel.updateMany({
+      where: {
+        suscripcionId: sus.id,
+        estado: { in: ["INVITADO", "REINVITADO", "UNIDO"] },
+      },
+      data: { estado: "REMOVIDO", removidoEn: new Date() },
+    });
+  });
+
+  void track({
+    evento: "admin_reembolso_procesado",
+    userId: sus.usuarioId,
+    props: {
+      suscripcionId: sus.id,
+      monto: ultimoPago.monto,
+      motivo: input.motivo.slice(0, 100),
+      enGarantia: sus.enGarantia,
+      aprobadoPor: input.aprobadoPor ?? null,
+    },
+  });
+
+  if (sus.usuario) {
+    void retryConBackoff(
+      () =>
+        enviarEmailReembolso({
+          email: sus.usuario.email,
+          nombre: sus.usuario.nombre,
+          monto: ultimoPago.monto,
+        }),
+      { intentos: 3, label: "email-reembolso-admin" },
+    ).catch((err) => {
+      logger.error(
+        { err, suscripcionId: sus.id, source: "suscripciones:admin-reembolso" },
+        "reembolsarManualAdmin: email falló",
+      );
+    });
+  }
+
+  return { ok: true };
+}

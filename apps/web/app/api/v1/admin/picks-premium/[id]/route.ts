@@ -21,6 +21,7 @@ import {
 import { logger } from "@/lib/services/logger";
 import { track } from "@/lib/services/analytics.service";
 import { distribuirPickAprobado } from "@/lib/services/whatsapp/picks-distribuidor.service";
+import { logAuditoria } from "@/lib/services/auditoria.service";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -127,11 +128,29 @@ export async function PATCH(
           "distribuirPickAprobado falló post-edit",
         );
       });
+      await logAuditoria({
+        actorId: adminUserId !== "cron" ? adminUserId ?? null : null,
+        actorEmail: session?.user?.email ?? null,
+        accion: "pick.editar_y_aprobar",
+        entidad: "PickPremium",
+        entidadId: pick.id,
+        resumen: `Pick ${pick.id} editado y aprobado`,
+        metadata: { camposEditados: Object.keys(campos) },
+      });
     } else {
       void track({
         evento: "pick_premium_editado",
         userId: adminUserId !== "cron" ? adminUserId : undefined,
         props: { pickId: pick.id },
+      });
+      await logAuditoria({
+        actorId: adminUserId !== "cron" ? adminUserId ?? null : null,
+        actorEmail: session?.user?.email ?? null,
+        accion: "pick.editar",
+        entidad: "PickPremium",
+        entidadId: pick.id,
+        resumen: `Pick ${pick.id} editado (sin aprobar)`,
+        metadata: { camposEditados: Object.keys(campos) },
       });
     }
 

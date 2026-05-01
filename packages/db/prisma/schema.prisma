@@ -871,3 +871,33 @@ enum RolMensaje {
   USER
   ASSISTANT
 }
+
+// ==========================================
+// Lote F (May 2026) — Auditoría admin
+// ==========================================
+//
+// Registra cada acción admin destructiva o sensible (aprobar pick,
+// cancelar suscripción, reembolsar, marcar premio pagado, editar campañas
+// de newsletter, banear miembro, etc.). Regla 21 del CLAUDE.md:
+// auditoría 100%, nunca se sample-ea.
+//
+// `actorId` queda NULLABLE: si el actor fue un cron one-shot autenticado
+// con CRON_SECRET, no hay user real. `actorEmail` es la copia denormalizada
+// para no perder rastro si el usuario admin se elimina luego.
+
+model AuditoriaAdmin {
+  id          String   @id @default(cuid())
+  actorId     String?  // userId del admin que ejecutó la acción
+  actorEmail  String?  // snapshot del email para preservar trazabilidad
+  accion      String   // ej: "pick.aprobar", "suscripcion.cancelar", "premio.marcar_pagado"
+  entidad     String   // ej: "PickPremium", "Suscripcion", "PremioMensual"
+  entidadId   String?  // id del row mutado (cuando aplica)
+  resumen     String?  // descripción breve human-readable
+  metadata    Json?    // diff o contexto (ej: { motivo, montoOriginal, montoNuevo })
+  creadoEn    DateTime @default(now())
+
+  @@index([creadoEn(sort: Desc)])
+  @@index([entidad, creadoEn(sort: Desc)])
+  @@index([actorId, creadoEn(sort: Desc)])
+  @@map("auditoria_admin")
+}

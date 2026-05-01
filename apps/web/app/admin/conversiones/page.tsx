@@ -7,7 +7,7 @@
 // para que sean linkeables desde otras pages (ej. /admin/afiliados/[id]
 // linkea aquí con afiliadoId pre-filtrado).
 
-import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminTopbar } from "@/components/ui/admin/AdminTopbar";
 import { NuevaConversionForm } from "@/components/admin/NuevaConversionForm";
 import {
   listarConversiones,
@@ -51,10 +51,10 @@ export default async function AdminConversionesPage({
 
   return (
     <>
-      <AdminPageHeader
-        icon="💵"
+      <AdminTopbar
         title="Conversiones"
-        description="Registros manuales de REGISTRO/FTD reportados por las casas. Nos sirven para reconciliar al cierre del mes con lo que paga el partner."
+        description="Registros manuales de REGISTRO/FTD reportados por las casas. Reconciliación de pagos."
+        breadcrumbs={[{ label: "Operación" }, { label: "Conversiones" }]}
       />
 
       <section className="mb-6">

@@ -25,6 +25,7 @@ import {
 import { logger } from "@/lib/services/logger";
 import { track } from "@/lib/services/analytics.service";
 import { distribuirPickAprobado } from "@/lib/services/whatsapp/picks-distribuidor.service";
+import { logAuditoria } from "@/lib/services/auditoria.service";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -97,6 +98,21 @@ export async function POST(
         evento: "pick_premium_aprobado",
         userId: adminUserId !== "cron" ? adminUserId : undefined,
         props: { pickId: pick.id, editado },
+      });
+      // Auditoría 100% — regla 21 del CLAUDE.md
+      await logAuditoria({
+        actorId: adminUserId !== "cron" ? adminUserId ?? null : null,
+        actorEmail: session?.user?.email ?? null,
+        accion: editado ? "pick.editado_y_aprobado" : "pick.aprobar",
+        entidad: "PickPremium",
+        entidadId: pick.id,
+        resumen: `Pick ${pick.id} ${editado ? "editado y aprobado" : "aprobado"} por ${adminUserId ?? "cron"}`,
+        metadata: {
+          partidoId: pick.partidoId,
+          mercado: pick.mercado,
+          outcome: pick.outcome,
+          cuotaSugerida: pick.cuotaSugerida,
+        },
       });
     }
 

@@ -10,7 +10,7 @@
 //
 // El layout admin ya hace auth check (rol=ADMIN).
 
-import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminTopbar } from "@/components/ui/admin/AdminTopbar";
 import {
   getSemanaIsoKey,
   listarDigests,
@@ -29,10 +29,10 @@ export default async function AdminNewsletterPage() {
 
   return (
     <>
-      <AdminPageHeader
-        icon="📨"
+      <AdminTopbar
         title="Newsletter"
-        description="Generar, revisar y aprobar el digest semanal. Se envía a la unión de suscriptores confirmados + usuarios con notifSemanal=true."
+        description="Generar, revisar y aprobar el digest semanal. Test obligatorio antes de envío masivo."
+        breadcrumbs={[{ label: "Operación" }, { label: "Newsletter" }]}
       />
       <NewsletterAdminPanel
         semanaActual={semanaActual}
