@@ -134,9 +134,10 @@ describe("authedFetch — credentials always include", () => {
 describe("force-dynamic — páginas autenticadas", () => {
   const ROOT = resolve(__dirname, "..");
 
-  it("/mis-combinadas/page.tsx exporta dynamic = 'force-dynamic'", () => {
+  it("/mis-predicciones/page.tsx exporta dynamic = 'force-dynamic'", () => {
+    // Lote C (Abr 2026): renombre /mis-combinadas → /mis-predicciones.
     const file = readFileSync(
-      resolve(ROOT, "app", "(main)", "mis-combinadas", "page.tsx"),
+      resolve(ROOT, "app", "(main)", "mis-predicciones", "page.tsx"),
       "utf-8",
     );
     expect(file).toMatch(/export\s+const\s+dynamic\s*=\s*["']force-dynamic["']/);
