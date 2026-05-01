@@ -48,23 +48,27 @@ export default async function AdminLogsPage({ searchParams }: PageProps) {
     stats24h.porLevel.map((p) => [p.level, p.count]),
   );
 
+  // Source más frecuente
+  const topSource = stats24h.porSource[0]?.source ?? "—";
+
   return (
     <>
       <AdminTopbar
         title="Logs"
-        description="Errores y warnings persistidos por el logger Pino. El cron M alerta cuando hay críticos > 0 en la última hora."
+        description="Errores persistidos por el logger Pino · El cron M alerta cuando hay críticos en la última hora"
         breadcrumbs={[{ label: "Sistema" }, { label: "Logs" }]}
       />
 
       {/* Stats 24h */}
-      <section className="mb-5 grid grid-cols-3 gap-3">
+      <section className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard label="Críticos · 24h" value={counts24h.critical ?? 0} tone="alert" />
         <StatCard label="Errores · 24h" value={counts24h.error ?? 0} tone="warn" />
         <StatCard label="Warnings · 24h" value={counts24h.warn ?? 0} tone="muted" />
+        <StatCardText label="Source más frecuente" value={topSource} />
       </section>
 
       {/* Filtros */}
-      <section className="mb-5 rounded-md border border-light bg-card p-4 shadow-sm">
+      <section className="mb-5 rounded-md border border-admin-table-border bg-admin-card-bg p-4 shadow-sm">
         <LogsFiltros
           initialLevel={level ?? ""}
           initialSource={source ?? ""}
@@ -74,17 +78,15 @@ export default async function AdminLogsPage({ searchParams }: PageProps) {
       </section>
 
       {/* Tabla */}
-      <section className="rounded-md border border-light bg-card p-5 shadow-sm">
+      <section className="rounded-md border border-admin-table-border bg-admin-card-bg p-5 shadow-sm">
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="font-display text-[20px] font-black uppercase tracking-[0.02em] text-dark">
-            Errores recientes
-          </h2>
-          <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-muted-d">
+          <h2 className="text-admin-card-title text-dark">Errores recientes</h2>
+          <span className="text-admin-meta text-muted-d">
             {logs.total.toLocaleString("es-PE")} total · página {logs.page}/{logs.totalPages}
           </span>
         </div>
         {logs.rows.length === 0 ? (
-          <p className="rounded-sm border border-dashed border-light bg-subtle px-4 py-8 text-center text-[13px] text-muted-d">
+          <p className="rounded-sm border border-dashed border-admin-table-border bg-subtle px-4 py-8 text-center text-admin-body text-muted-d">
             Sin errores que coincidan con los filtros. {logs.total === 0 && "Todo limpio 🎉"}
           </p>
         ) : (
@@ -95,6 +97,17 @@ export default async function AdminLogsPage({ searchParams }: PageProps) {
         )}
       </section>
     </>
+  );
+}
+
+function StatCardText({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-admin-table-border bg-admin-card-bg p-4 shadow-sm">
+      <div className="text-admin-label text-muted-d">{label}</div>
+      <div className="mt-2 truncate font-mono text-[14px] font-bold text-dark">
+        {value}
+      </div>
+    </div>
   );
 }
 

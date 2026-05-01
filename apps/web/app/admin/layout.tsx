@@ -34,10 +34,12 @@ export default async function AdminLayout({
 
   // Counters del sidebar — fail-soft. Si la BD se cae, mostramos 0 y el
   // shell sigue navegable.
-  const [picksPendientes] = await Promise.all([
+  const [picksPendientes, alarmasActivas] = await Promise.all([
     prisma.pickPremium
       .count({ where: { estado: "PENDIENTE" } })
       .catch(() => 0),
+    // Lote G: counter real de alarmas activas
+    prisma.alarma.count({ where: { activa: true } }).catch(() => 0),
   ]);
 
   return (
@@ -49,7 +51,7 @@ export default async function AdminLayout({
       }}
       counters={{
         picksPendientes,
-        alarmasActivas: 0, // Lote G: alarmas reales con `obtenerAlarmasActivas`
+        alarmasActivas,
       }}
     >
       {children}

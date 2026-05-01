@@ -586,8 +586,10 @@ export async function obtenerKpisEconomicos(rango: Rango): Promise<KpisGrupo> {
 }
 
 // ---------------------------------------------------------------------------
-// Alarmas — placeholder para Lote G
+// Alarmas — Lote G: lee del modelo `Alarma` real
 // ---------------------------------------------------------------------------
+
+import { obtenerAlarmasActivas as obtenerAlarmasActivasReal } from "./alarmas.service";
 
 export interface Alarma {
   id: string;
@@ -600,10 +602,39 @@ export interface Alarma {
 }
 
 /**
- * Devuelve alarmas activas. Lote F: implementación stub que devuelve [].
- * Lote G implementa la lógica real (`alarmas.service.ts`) que evalúa cada
- * KPI vs umbral crítico y persiste alarmas en BD para tracking.
+ * Adapter que convierte `AlarmaFila` (de alarmas.service) al shape esperado
+ * por `<AlarmaBanner>` del dashboard del Lote F. Mantenemos la interfaz
+ * estable para que el banner no se rompa cuando llegue Lote G.
  */
 export async function obtenerAlarmasActivas(): Promise<Alarma[]> {
-  return [];
+  const filas = await obtenerAlarmasActivasReal();
+  return filas.map((a) => {
+    const ctx = (a.contexto ?? {}) as {
+      valorActual?: number;
+      thresholdMin?: number | null;
+      thresholdMax?: number | null;
+    };
+    const umbral =
+      ctx.thresholdMin !== undefined && ctx.thresholdMin !== null
+        ? `> ${ctx.thresholdMin}`
+        : ctx.thresholdMax !== undefined && ctx.thresholdMax !== null
+          ? `< ${ctx.thresholdMax}`
+          : "—";
+    return {
+      id: a.id,
+      kpi: a.titulo,
+      valorActual: ctx.valorActual !== undefined ? String(ctx.valorActual) : "—",
+      umbral,
+      accionSugerida: a.descripcion.slice(0, 200),
+      href: a.metricId
+        ? `/admin/kpis?metric=${a.metricId}`
+        : "/admin/alarmas",
+      severidad:
+        a.severidad === "CRITICAL"
+          ? "critical"
+          : a.severidad === "WARNING"
+            ? "warning"
+            : "info",
+    };
+  });
 }
