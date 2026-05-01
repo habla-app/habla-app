@@ -22,6 +22,9 @@ export { Chip, chipClassName, CHIP_BASE, CHIP_NEUTRAL, CHIP_ACTIVE } from "./Chi
 export { Alert } from "./Alert";
 
 export { ToastProvider, useToast } from "./Toast";
+export { Toaster } from "./Toaster";
+export { Banner } from "./Banner";
+export type { BannerVariant } from "./Banner";
 
 export { Modal, ModalHeader, ModalBody, ModalFooter } from "./Modal";
 

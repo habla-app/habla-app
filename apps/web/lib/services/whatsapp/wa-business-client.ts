@@ -135,6 +135,107 @@ export class WhatsAppBusinessClient {
   }
 
   /**
+   * Envía una template HSM (pre-aprobada por Meta) a un número. Las
+   * templates se usan FUERA de la ventana de 24h (notificaciones
+   * proactivas: factura, fallo de pago, recordatorio de renovación).
+   *
+   * Requisitos:
+   *   - El `templateName` debe estar previamente aprobado en Meta
+   *     Business Manager con el mismo `language` y `variables`.
+   *   - `variables` se mandan en orden (Meta las matchea por posición:
+   *     index 0 → `{{1}}`, etc).
+   *
+   * Lote H — coordinador del envío vive en `templates.ts` (catálogo
+   * central tipado). Este método es un transporte HTTP minimalista.
+   */
+  async enviarTemplate(input: {
+    to: string;
+    templateName: string;
+    languageCode?: string;
+    variables: string[];
+  }): Promise<EnviarMensajeResult> {
+    if (!this.cfg) {
+      logger.warn(
+        { source: "whatsapp:client" },
+        "enviarTemplate: cliente no configurado, skip",
+      );
+      return { ok: false, reason: "unconfigured" };
+    }
+    const url = `https://graph.facebook.com/${API_VERSION}/${this.cfg.phoneNumberId}/messages`;
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS);
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.cfg.accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: normalizeTo(input.to),
+          type: "template",
+          template: {
+            name: input.templateName,
+            language: { code: input.languageCode ?? "es" },
+            components:
+              input.variables.length > 0
+                ? [
+                    {
+                      type: "body",
+                      parameters: input.variables.map((v) => ({
+                        type: "text",
+                        text: v,
+                      })),
+                    },
+                  ]
+                : [],
+          },
+        }),
+        signal: ac.signal,
+      });
+      const text = await res.text();
+      let body: unknown = text;
+      try {
+        body = JSON.parse(text);
+      } catch {
+        /* keep raw */
+      }
+      if (!res.ok) {
+        if (res.status === 429) {
+          return { ok: false, reason: "rate-limit", status: 429, body };
+        }
+        logger.error(
+          {
+            url,
+            status: res.status,
+            body,
+            templateName: input.templateName,
+            source: "whatsapp:client",
+          },
+          "enviarTemplate: API error",
+        );
+        return { ok: false, reason: "api-error", status: res.status, body };
+      }
+      const data = body as { messages?: Array<{ id: string }> };
+      const messageId = data.messages?.[0]?.id;
+      if (!messageId) {
+        return { ok: false, reason: "api-error", status: res.status, body };
+      }
+      return { ok: true, messageId };
+    } catch (err) {
+      logger.error(
+        { err, templateName: input.templateName, source: "whatsapp:client" },
+        "enviarTemplate: fetch falló",
+      );
+      return { ok: false, reason: "fetch-error" };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
    * Marca un mensaje recibido del usuario como "leído". No-op si el cliente
    * no está configurado.
    */
