@@ -24,6 +24,7 @@ import { listar } from "@/lib/services/torneos.service";
 import { obtenerActivosOrdenados } from "@/lib/services/afiliacion.service";
 import { obtenerLeaderboardMesActual } from "@/lib/services/leaderboard.service";
 import { detectarEstadoUsuario } from "@/lib/services/estado-usuario.service";
+import { obtenerPickAprobadoUltimo } from "@/lib/services/picks-premium-publicos.service";
 import * as articles from "@/lib/content/articles";
 import { HomeHero } from "@/components/home/HomeHero";
 import { SectionBar } from "@/components/home/SectionBar";
@@ -51,12 +52,15 @@ export default async function HomePage() {
   const estadoUsuario = await detectarEstadoUsuario(usuarioIdActual);
 
   // Carga concurrente — todas las queries son independientes.
-  const [torneosVentana, casasActivas, leaderboard, articulos] =
+  const [torneosVentana, casasActivas, leaderboard, articulos, pickPremium] =
     await Promise.all([
       listar({ estado: "ABIERTO", limit: 20 }),
       obtenerActivosOrdenados(),
       obtenerLeaderboardMesActual({ usuarioIdActual }),
       Promise.resolve(articles.getAll()),
+      estadoUsuario === "premium"
+        ? Promise.resolve(null)
+        : obtenerPickAprobadoUltimo(),
     ]);
 
   const now = new Date();
@@ -124,7 +128,7 @@ export default async function HomePage() {
       />
 
       {/* SECCIÓN 4 — Premium teaser (oculto si premium) */}
-      <PremiumTeaserHome estado={estadoUsuario} />
+      <PremiumTeaserHome estado={estadoUsuario} pick={pickPremium} />
 
       {/* SECCIÓN 5 — Leaderboard preview */}
       <section className="mb-12">

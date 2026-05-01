@@ -29,12 +29,14 @@ import { obtenerPorSlug } from "@/lib/services/torneos.service";
 import { obtenerLeaderboardMesActual } from "@/lib/services/leaderboard.service";
 import { obtenerOddsCacheadas } from "@/lib/services/odds-cache.service";
 import { detectarEstadoUsuario } from "@/lib/services/estado-usuario.service";
+import { obtenerPickAprobadoDePartido } from "@/lib/services/picks-premium-publicos.service";
 import { TrackOnMount } from "@/components/analytics/TrackOnMount";
 import { TorneoHero } from "@/components/torneo/TorneoHero";
 import { PrediccionForm } from "@/components/torneo/PrediccionForm";
 import { PremiumInline } from "@/components/torneo/PremiumInline";
 import { AffiliateInline } from "@/components/torneo/AffiliateInline";
 import { LeaderboardTorneoPreview } from "@/components/torneo/LeaderboardTorneoPreview";
+import { PickWrapper } from "@/components/ui/premium";
 
 interface Props {
   params: { slug: string };
@@ -56,13 +58,15 @@ export default async function TorneoPage({ params }: Props) {
 
   // Cargas paralelas no críticas — si fallan, la vista renderiza sin esa
   // sección.
-  const [cuotas, leaderboardMes, estadoUsuario] = await Promise.all([
-    obtenerOddsCacheadas(partido.id).catch(() => null),
-    obtenerLeaderboardMesActual({ usuarioIdActual: session.user.id }).catch(
-      () => null,
-    ),
-    detectarEstadoUsuario(session.user.id),
-  ]);
+  const [cuotas, leaderboardMes, estadoUsuario, pickPremium] =
+    await Promise.all([
+      obtenerOddsCacheadas(partido.id).catch(() => null),
+      obtenerLeaderboardMesActual({ usuarioIdActual: session.user.id }).catch(
+        () => null,
+      ),
+      detectarEstadoUsuario(session.user.id),
+      obtenerPickAprobadoDePartido(partido.id),
+    ]);
 
   const esPremium = estadoUsuario === "premium";
   const tienePred = miTicket !== null && !esPlaceholder(miTicket);
@@ -163,6 +167,20 @@ export default async function TorneoPage({ params }: Props) {
           yaEnviada={tienePred}
         />
       </section>
+
+      {/* Pick Premium del partido — desbloqueado si Premium, teaser si no.
+          Solo se renderiza si hay un pick aprobado para este partido. */}
+      {pickPremium || esPremium ? (
+        <div className="px-4">
+          <PickWrapper
+            pick={pickPremium}
+            estadoUsuario={estadoUsuario}
+            mode="section"
+            utmSource="torneo"
+            email={session.user.email ?? null}
+          />
+        </div>
+      ) : null}
 
       {!esPremium ? (
         <div className="py-2">

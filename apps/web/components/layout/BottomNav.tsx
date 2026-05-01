@@ -71,8 +71,15 @@ interface Props {
 export function BottomNav({ liveDot = false, isAuthenticated = false }: Props) {
   const pathname = usePathname() ?? "/";
 
-  // Oculto en /auth/* y /admin/* (tienen layouts propios).
-  if (pathname.startsWith("/auth") || pathname.startsWith("/admin")) {
+  // Oculto en /auth/*, /admin/* y /premium/exito (tienen layouts propios o
+  // foco crítico). El post-pago suprime BottomNav para que el CTA verde de
+  // unirse al WhatsApp Channel sea la única acción visible.
+  if (
+    pathname.startsWith("/auth") ||
+    pathname.startsWith("/admin") ||
+    pathname === "/premium/exito" ||
+    pathname.startsWith("/premium/exito/")
+  ) {
     return null;
   }
 
