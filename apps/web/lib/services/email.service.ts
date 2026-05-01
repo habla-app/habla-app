@@ -1,5 +1,10 @@
 // Wrapper de envío de emails con Resend — Sub-Sprint 6.
 //
+// Lote E (May 2026): se exponen helpers tipados para los emails de Premium
+// (bienvenida, renovación, fallo de pago, reembolso). Cada helper renderiza
+// un template (templates.ts) y delega al `enviarEmail` genérico.
+//
+//
 // Diseño:
 //  - Usa la REST API de Resend directamente con `fetch` (NextAuth ya incluye
 //    `next-auth/providers/resend` pero no expone su cliente). Así evitamos
@@ -97,4 +102,105 @@ export async function enviarEmail(payload: EmailPayload): Promise<EmailResult> {
     logger.error({ err, to: payload.to, subject: payload.subject }, "enviarEmail: throw");
     return { ok: false, reason: "fetch-error" };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Lote E (May 2026) — Helpers tipados para emails de Premium
+// ---------------------------------------------------------------------------
+
+import {
+  bienvenidaPremiumTemplate,
+  falloPagoPremiumTemplate,
+  reembolsoPremiumTemplate,
+  renovacionPremiumTemplate,
+  type BienvenidaPremiumInput,
+  type FalloPagoPremiumInput,
+  type ReembolsoPremiumInput,
+  type RenovacionPremiumInput,
+} from "@/lib/emails/templates";
+
+const PREMIUM_FROM = "Habla! Premium <premium@hablaplay.com>";
+
+/** Email de bienvenida tras la primera activación de la suscripción. */
+export async function enviarEmailBienvenidaPremium(input: {
+  email: string;
+  nombre: string;
+  plan: "MENSUAL" | "TRIMESTRAL" | "ANUAL";
+  proximoCobro: Date;
+}): Promise<EmailResult> {
+  const channelLink = process.env.WHATSAPP_CHANNEL_PREMIUM_INVITE_LINK ?? null;
+  const tpl = bienvenidaPremiumTemplate({
+    nombre: input.nombre,
+    plan: input.plan,
+    proximoCobro: input.proximoCobro,
+    channelLink,
+  } satisfies BienvenidaPremiumInput);
+  return enviarEmail({
+    to: input.email,
+    from: PREMIUM_FROM,
+    subject: tpl.subject,
+    html: tpl.html,
+    text: tpl.text,
+  });
+}
+
+/** Email de cobro recurrente acreditado. */
+export async function enviarEmailRenovacion(input: {
+  email: string;
+  nombre: string;
+  plan: "MENSUAL" | "TRIMESTRAL" | "ANUAL";
+  proximoCobro: Date;
+  monto: number; // céntimos de soles
+}): Promise<EmailResult> {
+  const tpl = renovacionPremiumTemplate({
+    nombre: input.nombre,
+    plan: input.plan,
+    proximoCobro: input.proximoCobro,
+    monto: input.monto,
+  } satisfies RenovacionPremiumInput);
+  return enviarEmail({
+    to: input.email,
+    from: PREMIUM_FROM,
+    subject: tpl.subject,
+    html: tpl.html,
+    text: tpl.text,
+  });
+}
+
+/** Email de reembolso procesado tras pedido en garantía 7 días. */
+export async function enviarEmailReembolso(input: {
+  email: string;
+  nombre: string;
+  monto: number;
+}): Promise<EmailResult> {
+  const tpl = reembolsoPremiumTemplate({
+    nombre: input.nombre,
+    monto: input.monto,
+  } satisfies ReembolsoPremiumInput);
+  return enviarEmail({
+    to: input.email,
+    from: PREMIUM_FROM,
+    subject: tpl.subject,
+    html: tpl.html,
+    text: tpl.text,
+  });
+}
+
+/** Email cuando el pago (primer cobro o renovación) falla definitivamente. */
+export async function enviarEmailFalloPago(input: {
+  email: string;
+  nombre: string;
+  motivo: string;
+}): Promise<EmailResult> {
+  const tpl = falloPagoPremiumTemplate({
+    nombre: input.nombre,
+    motivo: input.motivo,
+  } satisfies FalloPagoPremiumInput);
+  return enviarEmail({
+    to: input.email,
+    from: PREMIUM_FROM,
+    subject: tpl.subject,
+    html: tpl.html,
+    text: tpl.text,
+  });
 }

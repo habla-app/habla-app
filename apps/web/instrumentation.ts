@@ -617,6 +617,127 @@ export async function register() {
   // contable) se removió en Lote 4 cuando se demolió el aparato contable.
   // -------------------------------------------------------------------
 
+  // -------------------------------------------------------------------
+  // Job O — Generación de picks Premium con Claude API (Lote E). Tick cada
+  // 4h. Procesa hasta 3 partidos top próximos (36h ahead) sin pick aprobado.
+  // Cero auto-publicación: cada pick queda en estado PENDIENTE para que el
+  // editor lo apruebe desde /admin/picks-premium (Lote F).
+  //
+  // Fail-soft: si ANTHROPIC_API_KEY no está configurada, el service skip-ea
+  // silenciosamente con log warn (no rompe el server).
+  // -------------------------------------------------------------------
+  const { generarPicksPremiumDelDia } = await import(
+    "./lib/services/picks-premium-generador.service"
+  );
+
+  const PICKS_GEN_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4h
+
+  async function tickGenerarPicksPremium() {
+    try {
+      const r = await generarPicksPremiumDelDia();
+      if (r.partidosProcesados > 0 || r.picksCreados > 0 || r.errores > 0) {
+        logger.info(
+          { ...r, source: "cron:picks-premium:gen" },
+          "[cron in-process] ciclo generar-picks-premium",
+        );
+      }
+    } catch (err) {
+      logger.error(
+        { err, source: "cron:picks-premium:gen" },
+        "[cron in-process] tick de generar-picks-premium falló",
+      );
+    }
+  }
+
+  // Primera corrida 200s tras boot — deja al sistema estabilizarse y al
+  // refresh de odds (Job N, 45s + 30min) tener al menos un ciclo.
+  setTimeout(() => {
+    void tickGenerarPicksPremium();
+    setInterval(() => {
+      void tickGenerarPicksPremium();
+    }, PICKS_GEN_INTERVAL_MS);
+  }, 200_000);
+
+  // -------------------------------------------------------------------
+  // Job P — Evaluación de picks Premium post-partido (Lote E). Tick cada
+  // 1h. Para cada pick aprobado sin resultadoFinal cuyo partido ya pasó a
+  // FINALIZADO, calcula GANADO/PERDIDO/NULO/PUSH y persiste.
+  // -------------------------------------------------------------------
+  const { evaluarPicksFinalizados } = await import(
+    "./lib/services/picks-premium-evaluador.service"
+  );
+
+  const PICKS_EVAL_INTERVAL_MS = 60 * 60 * 1000; // 1h
+
+  async function tickEvaluarPicksFinalizados() {
+    try {
+      const r = await evaluarPicksFinalizados();
+      if (r.evaluados > 0 || r.candidatos > 0) {
+        logger.info(
+          { ...r, source: "cron:picks-premium:eval" },
+          "[cron in-process] ciclo evaluar-picks-finalizados",
+        );
+      }
+    } catch (err) {
+      logger.error(
+        { err, source: "cron:picks-premium:eval" },
+        "[cron in-process] tick de evaluar-picks-finalizados falló",
+      );
+    }
+  }
+
+  // Primera corrida 220s tras boot.
+  setTimeout(() => {
+    void tickEvaluarPicksFinalizados();
+    setInterval(() => {
+      void tickEvaluarPicksFinalizados();
+    }, PICKS_EVAL_INTERVAL_MS);
+  }, 220_000);
+
+  // -------------------------------------------------------------------
+  // Job Q — Sync de membresía Channel ↔ suscripciones (Lote E). Tick cada
+  // 1h. Detecta vencimientos, cancelaciones efectivas, pagos fallidos
+  // persistentes y reinvites pendientes. Manda email batch al admin con
+  // los usuarios que debe remover manualmente del WhatsApp Channel
+  // (Meta no expone API de Channels al momento).
+  // -------------------------------------------------------------------
+  const { syncMembresiaChannel } = await import(
+    "./lib/services/sync-membresia.service"
+  );
+
+  const SYNC_MEMBRESIA_INTERVAL_MS = 60 * 60 * 1000; // 1h
+
+  async function tickSyncMembresia() {
+    try {
+      const r = await syncMembresiaChannel();
+      if (
+        r.invites_reenviados > 0 ||
+        r.vencimientos_procesados > 0 ||
+        r.cancelaciones_efectivas > 0 ||
+        r.pagos_fallidos_marcados > 0 ||
+        r.errores > 0
+      ) {
+        logger.info(
+          { ...r, source: "cron:sync-membresia" },
+          "[cron in-process] ciclo sync-membresia",
+        );
+      }
+    } catch (err) {
+      logger.error(
+        { err, source: "cron:sync-membresia" },
+        "[cron in-process] tick de sync-membresia falló",
+      );
+    }
+  }
+
+  // Primera corrida 240s tras boot.
+  setTimeout(() => {
+    void tickSyncMembresia();
+    setInterval(() => {
+      void tickSyncMembresia();
+    }, SYNC_MEMBRESIA_INTERVAL_MS);
+  }, 240_000);
+
   logger.info(
     {
       cerrarTorneos: `${CERRAR_INTERVAL_MS / 1000}s`,
@@ -629,6 +750,9 @@ export async function register() {
       refreshOdds: `${ODDS_TICK_INTERVAL_MS / 1000 / 60}min`,
       verificarMincetur: `${MINCETUR_TICK_INTERVAL_MS / 1000 / 60}min (lunes ≥${MINCETUR_TARGET_LIMA_HOUR}:00 PET)`,
       newsletterSemanal: `${NEWSLETTER_TICK_INTERVAL_MS / 1000 / 60}min (sábado draft ≥${NEWSLETTER_DRAFT_LIMA_HOUR}:00, domingo reminder ≥${NEWSLETTER_REMINDER_LIMA_HOUR}:00 PET)`,
+      generarPicksPremium: `${PICKS_GEN_INTERVAL_MS / 1000 / 60}min`,
+      evaluarPicksFinalizados: `${PICKS_EVAL_INTERVAL_MS / 1000 / 60}min`,
+      syncMembresia: `${SYNC_MEMBRESIA_INTERVAL_MS / 1000 / 60}min`,
     },
     "cron in-process registrado",
   );
