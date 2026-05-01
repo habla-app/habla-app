@@ -25,7 +25,7 @@
 // - PrediccionForm (Lote C)
 // - AffiliateInline (Lote B)
 // - NewsletterCTA refactor mobile (Lote B)
-// - PWAInstallPrompt (Lote I)
+// - PWAInstallPrompt (Lote I) ✅
 // - NivelProgressBar (Lote C)
 // - MisCasasConectadas (Lote C)
 // - EstadoUsuarioBanner (Lote B)
@@ -40,3 +40,6 @@ export type { CrossProductDirection } from "./CrossProductBanner";
 export { BottomNav } from "./BottomNav";
 
 export { HorizontalScrollChips } from "./HorizontalScrollChips";
+
+// Lote I — PWA installable banner mobile.
+export { PWAInstallPrompt } from "./PWAInstallPrompt";

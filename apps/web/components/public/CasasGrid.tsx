@@ -310,6 +310,11 @@ function CasaLogoMini({ item }: { item: Item }) {
       <img
         src={item.logoUrl}
         alt={`Logo ${item.nombre}`}
+        // Lote I: explicit dimensions + lazy/decoding async para CWV.
+        width={40}
+        height={40}
+        loading="lazy"
+        decoding="async"
         className="h-10 w-10 flex-shrink-0 rounded-sm bg-card object-contain shadow-sm"
       />
     );

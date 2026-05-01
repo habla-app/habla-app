@@ -27,6 +27,17 @@ const SIZES: Record<AvatarSize, string> = {
   xl: "h-20 w-20 text-[28px]",
 };
 
+// Pixel sizes en sync con SIZES — usados como `width`/`height` del <img>
+// para que el browser reserve espacio antes de que el bitmap descargue
+// (CLS prevention, Lote I).
+const PX_SIZES: Record<AvatarSize, number> = {
+  xs: 24,
+  sm: 32,
+  md: 40,
+  lg: 56,
+  xl: 80,
+};
+
 function initialsFromName(name: string | undefined): string {
   if (!name) return "?";
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -53,12 +64,18 @@ export function Avatar({
   );
 
   if (src) {
+    const px = PX_SIZES[size];
     return (
       <span className={baseCls} {...rest}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={src}
           alt={alt ?? name ?? "Avatar"}
+          // Lote I: explicit dimensions + lazy/decoding async para CWV.
+          width={px}
+          height={px}
+          loading="lazy"
+          decoding="async"
           className="h-full w-full object-cover"
         />
       </span>
