@@ -162,6 +162,33 @@ export async function actualizarPerfil(
 export { esReservado };
 
 // ---------------------------------------------------------------------------
+// Casas conectadas — Lote C v3.1 (placeholder).
+//
+// El modelo `UsuarioCasa` (relación many-to-many usuario↔afiliado con
+// `primerFtd`, `apuestasMes`) lo crean los Lotes D/E si se decide instrumentar
+// FTD reportado por usuario. En Lote C devolvemos siempre array vacío — la
+// sección `<MisCasasConectadas>` del perfil renderea el empty state con CTA
+// "➕ Conecta una nueva casa" hacia /casas. Cuando el modelo exista, este
+// service se reescribe sin tocar callers.
+// ---------------------------------------------------------------------------
+
+export interface CasaConectada {
+  slug: string;
+  nombre: string;
+  /** URL del logo en R2 (ya disponible en `Afiliado.logoUrl`). */
+  logoUrl: string | null;
+  primerFtd: Date | null;
+  /** Número de apuestas reportadas en el mes calendario en curso. */
+  apuestasMes: number;
+}
+
+export async function obtenerCasasConectadas(
+  _userId: string,
+): Promise<CasaConectada[]> {
+  return [];
+}
+
+// ---------------------------------------------------------------------------
 // Eliminar cuenta (soft delete)
 // ---------------------------------------------------------------------------
 

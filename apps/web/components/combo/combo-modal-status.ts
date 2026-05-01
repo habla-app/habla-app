@@ -76,9 +76,9 @@ export function computeComboModalUIState(
           kind: "reset",
         },
         secondaryCta: {
-          label: "Ver mis combinadas",
+          label: "Ver mis predicciones",
           kind: "link",
-          href: "/mis-combinadas",
+          href: "/mis-predicciones",
         },
       };
 

@@ -113,12 +113,12 @@ export function UserMenu({
             Mi perfil
           </Link>
           <Link
-            href="/mis-combinadas"
+            href="/mis-predicciones"
             onClick={() => setAbierto(false)}
             role="menuitem"
             className="block px-4 py-2.5 text-sm text-body transition-colors hover:bg-subtle"
           >
-            Mis combinadas
+            Mis predicciones
           </Link>
           {esAdmin && (
             <Link

@@ -1,11 +1,16 @@
 // Middleware unificado — Lote 1 agrega rate limiting sobre el middleware
 // de auth preexistente.
 //
-// DOS RESPONSABILIDADES:
+// TRES RESPONSABILIDADES:
 //   1) Rate limiting para rutas /api/* (con tiers por endpoint).
-//   2) Protección de rutas autenticadas: /perfil, /mis-combinadas, /admin.
-//      Más el redirect a /auth/completar-perfil si el usuario está
-//      logueado pero sin @handle definitivo (Abr 2026).
+//   2) Protección de rutas autenticadas: /perfil, /mis-predicciones,
+//      /admin (Lote C v3.1 renombró /mis-combinadas → /mis-predicciones,
+//      el redirect 301 vive en next.config). Más el redirect a
+//      /auth/completar-perfil si el usuario está logueado pero sin
+//      @handle definitivo.
+//   3) Redirect 301 dinámico de /torneo/:id → /comunidad/torneo/:partidoId
+//      (Lote C v3.1, requiere lookup BD para mapear el id legacy del
+//      torneo al partidoId del slug nuevo).
 //
 // La rama de rate-limit retorna antes de entrar a la lógica de auth, por
 // lo que las rutas /api/* nunca ejecutan `auth()` aquí — los route
@@ -30,9 +35,18 @@ import { checkLimit } from "@/lib/rate-limit";
 // soporta spread (`[...PROTECTED_MATCHERS]`) en `config.matcher`. La lista
 // se duplica literal en `config.matcher` abajo — el test valida que no
 // driften entre sí.
+//
+// Lote C v3.1: agregamos /mis-predicciones (rename de /mis-combinadas).
+// /torneo/:id legacy NO entra al matcher de auth — la page server-side
+// (`app/(main)/torneo/[id]/page.tsx`) hace su propio redirect 301 a
+// /comunidad/torneo/:partidoId sin requerir auth. /mis-combinadas queda
+// en la lista por compat con sesiones que aún tengan la URL en caché del
+// browser — Next dispara el redirect del next.config y el matcher no
+// llega a ejecutarse.
 export const PROTECTED_MATCHERS = [
   "/perfil/:path*",
   "/mis-combinadas/:path*",
+  "/mis-predicciones/:path*",
   "/admin",
   "/admin/:path*",
 ] as const;
@@ -173,6 +187,11 @@ export default auth(async (req) => {
   // mismos si necesitan sesión.
   if (pathname.startsWith("/api/")) return;
 
+  // Lote C v3.1 — el redirect 301 dinámico /torneo/:id legacy →
+  // /comunidad/torneo/:partidoId vive en `app/(main)/torneo/[id]/page.tsx`
+  // (Server Component runtime nodejs) porque el middleware corre en edge
+  // y NO puede importar Prisma. La page redirige y NO renderiza UI.
+
   const isLoggedIn = !!req.auth;
   const session = req.auth;
 
@@ -218,9 +237,11 @@ export const config = {
   // Mantener en sync con PROTECTED_MATCHERS arriba.
   // Lote 1: agregamos /api/:path* para rate limiting (auth gating skippea
   // /api/* en el handler arriba).
+  // Lote C v3.1: agregamos /mis-predicciones (rename de /mis-combinadas).
   matcher: [
     "/perfil/:path*",
     "/mis-combinadas/:path*",
+    "/mis-predicciones/:path*",
     "/admin",
     "/admin/:path*",
     "/api/:path*",
