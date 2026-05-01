@@ -2,18 +2,20 @@
 //
 // Lote 2 — SEO base. Lote 3 — agrega /legal/*. Lote 8 — agrega rutas
 // editoriales públicas (/blog, /casas, /guias, /pronosticos, /partidos,
-// /cuotas) y leagues de pronósticos.
+// /cuotas) y leagues de pronósticos. Lote J — remueve URLs legacy
+// `/torneo/[id]` (redirigen 301 a `/comunidad/torneo/[slug]` que es
+// privada; tenerlas en sitemap genera "Soft 404" en Google Search
+// Console).
 //
 // Se sirve en /sitemap.xml.
 //
 // Excluye rutas privadas (/perfil, /mis-predicciones, /admin, /auth,
-// /comunidad/torneo/[slug], /comunidad/[username]) y endpoints API —
+// /comunidad/torneo/[slug], /comunidad/mes/[mes]) y endpoints API —
 // esos van en robots.ts como Disallow. Lote C v3.1 renombró
 // /mis-combinadas → /mis-predicciones (redirect 301 vive en
 // next.config.js).
 
 import type { MetadataRoute } from "next";
-import { prisma } from "@habla/db";
 import * as articles from "@/lib/content/articles";
 import * as casas from "@/lib/content/casas";
 import * as guias from "@/lib/content/guias";
@@ -120,26 +122,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // siguen accesibles individualmente.
   }
 
-  // Torneos públicos — ABIERTO o EN_VIVO. Limitamos a 1000 para no explotar
-  // el XML; el caso real tendrá decenas, no miles.
-  let torneos: MetadataRoute.Sitemap = [];
-  try {
-    const rows = await prisma.torneo.findMany({
-      where: { estado: { in: ["ABIERTO", "EN_JUEGO"] } },
-      select: { id: true, creadoEn: true },
-      take: 1000,
-      orderBy: { creadoEn: "desc" },
-    });
-    torneos = rows.map((t) => ({
-      url: `${BASE_URL}/torneo/${t.id}`,
-      lastModified: t.creadoEn,
-      changeFrequency: "hourly" as const,
-      priority: 0.8,
-    }));
-  } catch {
-    // Si la BD está caída, devolvemos solo lo que esté disponible — mejor
-    // un sitemap parcial que fallar el render entero.
-  }
+  // Lote J — torneos legacy removidos del sitemap. La URL nueva
+  // `/comunidad/torneo/[slug]` es privada (requiere auth para predecir
+  // sin revelar la cuota mejor casa antes del cierre). No indexable.
+  // El SEO público de partidos vive en `/partidos/[slug]` (vista
+  // editorial pública con `<PartidoHero>` + cuotas + pick Premium
+  // teaser), ya incluida arriba.
 
   return [
     ...estaticas,
@@ -149,6 +137,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...guiasEntries,
     ...pronosticosEntries,
     ...partidosEntries,
-    ...torneos,
   ];
 }

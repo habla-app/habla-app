@@ -1,18 +1,16 @@
-// k6 load test — Sub-Sprint 5.
+// k6 load test — Sub-Sprint 5 (LEGACY, modelo previo al pivot v3.1).
 //
-// Simula 500 clientes conectados a la misma sala de torneo vía
-// Socket.io, escuchando `ranking:update`. Corre 10 minutos con rampa
-// de warm-up + steady state.
+// DEPRECADO desde Lote J (1 may 2026). El modelo v3.1 ya no tiene
+// torneos con saldo interno ni ranking en tiempo real vía Socket.io
+// para usuarios anónimos: la Liga Habla! comunitaria muestra ranking
+// vía SSR + revalidate, no broadcast WS para anónimos.
 //
-// Uso:
-//   export BASE_URL=http://localhost:3000
-//   export TORNEO_ID=<id>
-//   k6 run tests/load/ranking-500-users.js
+// Para load testing de las rutas críticas v3.1 usar:
+//   tests/load/v31-rutas-criticas.js
 //
-// Pasa si:
-//   - 0 caídas del proceso del server
-//   - latency_ws p95 < 500ms
-//   - Ninguna conexión abandonada no-intencional (errors_ws < 1% del total)
+// Este archivo se mantiene como referencia histórica del comportamiento
+// de Socket.io del Sub-Sprint 5, por si vuelve a levantarse el stress
+// test del namespace `/torneo` para staff admin/live-match (Lote 0).
 
 import { check, sleep } from "k6";
 import ws from "k6/ws";
