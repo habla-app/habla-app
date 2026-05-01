@@ -18,6 +18,7 @@ import { auth } from "@/lib/auth";
 import * as partidos from "@/lib/content/partidos";
 import { obtenerOddsCacheadas } from "@/lib/services/odds-cache.service";
 import { detectarEstadoUsuario } from "@/lib/services/estado-usuario.service";
+import { obtenerPickAprobadoDePartido } from "@/lib/services/picks-premium-publicos.service";
 import { MDX_COMPONENTS } from "@/lib/content/mdx-components";
 import { TrackOnMount } from "@/components/analytics/TrackOnMount";
 import { BackToTop } from "@/components/legal/BackToTop";
@@ -91,9 +92,11 @@ export default async function PartidoPreviaPage({
       })
     : null;
 
-  // PickPremium: depende del modelo creado en Lote E. Mientras no exista,
-  // siempre null. La sección Premium maneja el fallback.
-  const pickPremium = null;
+  // PickPremium real (Lote E). Si no hay pick aprobado para este partido
+  // o la query falla → null (PickWrapper muestra fallback "Próximamente").
+  const pickPremium = partidoBd
+    ? await obtenerPickAprobadoDePartido(partidoBd.id)
+    : null;
 
   return (
     <article className="mx-auto w-full max-w-[1200px]">
