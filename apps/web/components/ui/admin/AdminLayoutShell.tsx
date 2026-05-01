@@ -74,6 +74,17 @@ export function AdminLayoutShell({
       label: "ANÁLISIS",
       items: [
         { label: "Métricas", href: "/admin/metricas", icon: "📊" },
+        { label: "KPIs", href: "/admin/kpis", icon: "🎯" },
+        { label: "Cohortes", href: "/admin/cohortes", icon: "👥" },
+        { label: "Mobile Vitals", href: "/admin/mobile-vitals", icon: "⚡" },
+        { label: "Finanzas", href: "/admin/finanzas", icon: "💰" },
+        {
+          label: "Alarmas",
+          href: "/admin/alarmas",
+          icon: "🚨",
+          counter: counters?.alarmasActivas,
+          counterTone: "red",
+        },
         { label: "Leaderboard", href: "/admin/leaderboard", icon: "📈" },
       ],
     },
@@ -87,7 +98,8 @@ export function AdminLayoutShell({
       label: "SISTEMA",
       items: [
         { label: "Logs", href: "/admin/logs", icon: "🐛" },
-        { label: "Usuarios", href: "/admin/usuarios", icon: "👥" },
+        { label: "Auditoría", href: "/admin/auditoria", icon: "📜" },
+        { label: "Usuarios", href: "/admin/usuarios", icon: "👤" },
       ],
     },
   ];

@@ -463,6 +463,7 @@ model Afiliado {
   clicks       ClickAfiliado[]
   conversiones ConversionAfiliado[]
   picksPremium PickPremium[]
+  comisiones   ComisionAfiliacion[]
 
   @@map("afiliados")
 }
@@ -900,4 +901,176 @@ model AuditoriaAdmin {
   @@index([entidad, creadoEn(sort: Desc)])
   @@index([actorId, creadoEn(sort: Desc)])
   @@map("auditoria_admin")
+}
+
+// ==========================================
+// Lote G (May 2026) — Admin desktop análisis
+// ==========================================
+//
+// Seis modelos:
+//
+//   - metricas_vitales       Core Web Vitals (LCP/INP/CLS) capturados por
+//                            web-vitals client lib. Sample 10% en cliente
+//                            para no saturar BD bajo tráfico real.
+//   - lighthouse_runs        Histórico de corridas Lighthouse (manual o
+//                            cron semanal con PageSpeed Insights API).
+//                            Score 0-100 por categoría + raw JSON.
+//   - costos_operativos      Costos mensuales editables por admin
+//                            (Anthropic, Resend, Railway, salarios, etc.)
+//                            UNIQUE (mes, categoria). Monto en céntimos PEN.
+//   - comisiones_afiliacion  Pagos de comisión que reportan las casas a
+//                            Habla! mensualmente. UNIQUE (mes, afiliadoId).
+//   - alarmas                Alarmas activas/desactivadas. Tipo (KPI /
+//                            EVENTO_CRITICO / MANUAL) + severidad. CRITICAL
+//                            dispara email; warn/info solo BD.
+//   - alarmas_config         Thresholds editables por KPI. El cron
+//                            evaluar-alarmas (1h) los lee, calcula valores
+//                            actuales y crea/desactiva alarmas idempotente.
+
+model MetricaVital {
+  id              String   @id @default(cuid())
+  // 'LCP' | 'INP' | 'CLS' | 'FCP' | 'TTFB' (Web Vitals oficiales).
+  nombre          String
+  // Valor en ms (LCP/INP/FCP/TTFB) o score sin unidad (CLS).
+  valor           Float
+  // Pathname de la página donde se midió. Ej. "/partidos/[slug]" reemplazado
+  // por el real ej. "/partidos/manchester-vs-liverpool". Hard cap 200 chars.
+  ruta            String
+  // 'mobile' | 'desktop' | 'tablet' inferido del UA.
+  deviceType      String?
+  // '4g' | '3g' | 'wifi' | 'slow-2g' del Network Information API (best-effort).
+  connectionType  String?
+  // UA truncado para análisis ad-hoc; no PII.
+  userAgent       String?
+  fecha           DateTime @default(now())
+
+  @@index([nombre, fecha(sort: Desc)])
+  @@index([ruta, nombre, fecha(sort: Desc)])
+  @@map("metricas_vitales")
+}
+
+model LighthouseRun {
+  id              String   @id @default(cuid())
+  ruta            String   // ej. "/", "/partidos/[slug]", "/comunidad", "/premium"
+  device          String   // 'mobile' | 'desktop'
+  // Scores 0-100 (PageSpeed Insights ya los normaliza).
+  performance     Int
+  accessibility   Int
+  bestPractices   Int
+  seo             Int
+  // Métricas crudas en ms (LCP / INP / CLS si están disponibles).
+  lcpMs           Int?
+  inpMs           Int?
+  cls             Float?
+  // Origen de la corrida.
+  origen          String   @default("cron") // 'cron' | 'manual'
+  // Email del admin que disparó (manual) o null (cron).
+  disparadoPor    String?
+  // Notas opcionales (ej. "post-deploy de Lote G").
+  notas           String?
+  fecha           DateTime @default(now())
+
+  @@index([ruta, device, fecha(sort: Desc)])
+  @@index([fecha(sort: Desc)])
+  @@map("lighthouse_runs")
+}
+
+model CostoOperativo {
+  id            String    @id @default(cuid())
+  // Formato YYYY-MM. Único por (mes, categoría) para idempotencia.
+  mes           String
+  // String libre: "anthropic_api" | "openpay_pasarela" | "whatsapp_api" |
+  // "resend" | "railway" | "cloudflare" | "salarios" | "premios_liga" |
+  // "marketing_paid" | "otros" | etc.
+  categoria     String
+  // Monto en céntimos PEN. 1 sol = 100. Permite Decimal-friendly sin Decimal.
+  monto         Int
+  notas         String?
+  // userId del admin que registró el costo. Snapshot — no FK.
+  registradoPor String?
+  registradoEn  DateTime  @default(now())
+  // Última edición (admin puede corregir post-cierre).
+  editadoEn     DateTime  @updatedAt
+
+  @@unique([mes, categoria])
+  @@index([mes])
+  @@map("costos_operativos")
+}
+
+model ComisionAfiliacion {
+  id            String    @id @default(cuid())
+  mes           String                  // YYYY-MM
+  afiliadoId    String
+  afiliado      Afiliado  @relation(fields: [afiliadoId], references: [id], onDelete: Cascade)
+  // Monto pagado por la casa al banco de Habla! ese mes (céntimos PEN).
+  monto         Int
+  // FTDs reportados que dispararon esa comisión (informativo).
+  ftdsContados  Int       @default(0)
+  notas         String?
+  registradoPor String?                  // userId del admin que registró
+  registradoEn  DateTime  @default(now())
+
+  @@unique([mes, afiliadoId])
+  @@index([mes])
+  @@index([afiliadoId, mes])
+  @@map("comisiones_afiliacion")
+}
+
+model Alarma {
+  id                  String         @id @default(cuid())
+  tipo                TipoAlarma
+  severidad           SeveridadAlarma
+  titulo              String
+  descripcion         String         @db.Text
+  // ID del KPI cuando tipo=KPI_THRESHOLD. Ej. 'conv_visita_registro'.
+  metricId            String?
+  // Datos contextuales (ej. {valorActual, threshold, ventanaMin, source}).
+  contexto            Json?
+  // Lifecycle.
+  activa              Boolean        @default(true)
+  desactivadaEn       DateTime?
+  desactivadaPor      String?              // null si auto-desactivada por cron
+  motivoDesactivacion String?
+  creadaEn            DateTime       @default(now())
+
+  @@index([activa, severidad, creadaEn(sort: Desc)])
+  @@index([metricId, activa])
+  @@map("alarmas")
+}
+
+enum TipoAlarma {
+  KPI_THRESHOLD
+  EVENTO_CRITICO
+  MANUAL
+}
+
+enum SeveridadAlarma {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+model AlarmaConfiguracion {
+  id              String          @id @default(cuid())
+  metricId        String          @unique     // ej. 'conv_visita_registro'
+  // Etiqueta human-readable del KPI (snapshot, así no requiere lookup).
+  metricLabel     String
+  // thresholdMin: alarma si valor < min. thresholdMax: alarma si valor > max.
+  // Ambos opcionales (algún KPI puede tener solo uno). Si los dos son null
+  // → config inerte (skipped por el cron).
+  thresholdMin    Float?
+  thresholdMax    Float?
+  // Duración en minutos que el valor debe estar fuera de threshold para
+  // disparar. 60-180 razonable para KPIs estables; 0 = instantáneo.
+  duracionMinutos Int             @default(60)
+  severidad       SeveridadAlarma @default(WARNING)
+  habilitada      Boolean         @default(true)
+  // Resumen humano que se incluye en la descripción de la alarma cuando
+  // dispara. Ej. "Conversión visita→registro cayó debajo de 2%".
+  notasInternas   String?
+  creadoEn        DateTime        @default(now())
+  actualizadoEn   DateTime        @updatedAt
+
+  @@index([habilitada, metricId])
+  @@map("alarmas_config")
 }

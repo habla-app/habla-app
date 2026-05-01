@@ -484,3 +484,344 @@ export async function solicitarExportDatos(
   });
   return { ok: true, urlDescarga };
 }
+
+// ---------------------------------------------------------------------------
+// Admin queries y acciones — Lote G
+// ---------------------------------------------------------------------------
+
+import { Prisma } from "@habla/db";
+
+export type UsuarioEstado = "activo" | "banned" | "soft_deleted";
+
+export interface UsuarioAdminFila {
+  id: string;
+  email: string;
+  nombre: string;
+  username: string;
+  rol: "JUGADOR" | "ADMIN";
+  estado: UsuarioEstado;
+  image: string | null;
+  emailVerified: Date | null;
+  creadoEn: Date;
+  ticketsCount: number;
+}
+
+export interface ListarUsuariosInput {
+  query?: string;
+  rol?: "JUGADOR" | "ADMIN";
+  estado?: UsuarioEstado;
+  page?: number;
+  pageSize?: number;
+}
+
+export async function listarUsuariosAdmin(
+  input: ListarUsuariosInput = {},
+): Promise<{
+  rows: UsuarioAdminFila[];
+  total: number;
+  page: number;
+  pageSize: number;
+  stats: {
+    total: number;
+    activos: number;
+    admins: number;
+    softDeleted: number;
+  };
+}> {
+  const page = Math.max(1, input.page ?? 1);
+  const pageSize = Math.min(100, Math.max(10, input.pageSize ?? 50));
+
+  const where: Prisma.UsuarioWhereInput = {};
+  if (input.query && input.query.trim()) {
+    const q = input.query.trim();
+    where.OR = [
+      { email: { contains: q, mode: "insensitive" } },
+      { nombre: { contains: q, mode: "insensitive" } },
+      { username: { contains: q, mode: "insensitive" } },
+    ];
+  }
+  if (input.rol) where.rol = input.rol;
+  if (input.estado === "activo") where.deletedAt = null;
+  if (input.estado === "soft_deleted") where.deletedAt = { not: null };
+  // estado === "banned" — convención: nombre arranca con "[BAN]" o user
+  // tiene flag custom. v3.1 no tiene un flag explícito de "banned"; usamos
+  // soft_deleted como ban definitivo + queda anonimizado. Para "ban" sin
+  // anonimización (caso temporal) → usamos `deletedAt` también pero
+  // metadatamos en auditoría.
+
+  const [rows, total, statsTotal, statsActivos, statsAdmins, statsSoftDeleted] =
+    await Promise.all([
+      prisma.usuario.findMany({
+        where,
+        orderBy: { creadoEn: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: {
+          id: true,
+          email: true,
+          nombre: true,
+          username: true,
+          rol: true,
+          image: true,
+          emailVerified: true,
+          creadoEn: true,
+          deletedAt: true,
+          _count: { select: { tickets: true } },
+        },
+      }),
+      prisma.usuario.count({ where }),
+      prisma.usuario.count(),
+      prisma.usuario.count({ where: { deletedAt: null } }),
+      prisma.usuario.count({ where: { rol: "ADMIN", deletedAt: null } }),
+      prisma.usuario.count({ where: { deletedAt: { not: null } } }),
+    ]);
+
+  return {
+    rows: rows.map((u) => ({
+      id: u.id,
+      email: u.email,
+      nombre: u.nombre,
+      username: u.username,
+      rol: u.rol,
+      estado: (u.deletedAt ? "soft_deleted" : "activo") as UsuarioEstado,
+      image: u.image,
+      emailVerified: u.emailVerified,
+      creadoEn: u.creadoEn,
+      ticketsCount: u._count.tickets,
+    })),
+    total,
+    page,
+    pageSize,
+    stats: {
+      total: statsTotal,
+      activos: statsActivos,
+      admins: statsAdmins,
+      softDeleted: statsSoftDeleted,
+    },
+  };
+}
+
+export interface UsuarioDetalleAdmin {
+  id: string;
+  email: string;
+  nombre: string;
+  username: string;
+  rol: "JUGADOR" | "ADMIN";
+  estado: UsuarioEstado;
+  image: string | null;
+  emailVerified: Date | null;
+  creadoEn: Date;
+  fechaNac: Date | null;
+  ubicacion: string | null;
+  perfilPublico: boolean;
+  telefono: string | null;
+  /** Contadores agregados de actividad. */
+  ticketsCount: number;
+  conversionesAfiliadosCount: number;
+  suscripcionActiva: {
+    plan: string;
+    estado: string;
+    activa: boolean;
+    iniciada: Date;
+    proximoCobro: Date | null;
+  } | null;
+}
+
+export async function obtenerDetalleUsuarioAdmin(
+  id: string,
+): Promise<UsuarioDetalleAdmin | null> {
+  const user = await prisma.usuario.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      email: true,
+      nombre: true,
+      username: true,
+      rol: true,
+      image: true,
+      emailVerified: true,
+      creadoEn: true,
+      deletedAt: true,
+      fechaNac: true,
+      ubicacion: true,
+      perfilPublico: true,
+      telefono: true,
+      _count: {
+        select: { tickets: true, conversionesAfiliados: true },
+      },
+      suscripciones: {
+        where: { activa: true },
+        orderBy: { iniciada: "desc" },
+        take: 1,
+        select: {
+          plan: true,
+          estado: true,
+          activa: true,
+          iniciada: true,
+          proximoCobro: true,
+        },
+      },
+    },
+  });
+  if (!user) return null;
+  return {
+    id: user.id,
+    email: user.email,
+    nombre: user.nombre,
+    username: user.username,
+    rol: user.rol,
+    estado: (user.deletedAt ? "soft_deleted" : "activo") as UsuarioEstado,
+    image: user.image,
+    emailVerified: user.emailVerified,
+    creadoEn: user.creadoEn,
+    fechaNac: user.fechaNac,
+    ubicacion: user.ubicacion,
+    perfilPublico: user.perfilPublico,
+    telefono: user.telefono,
+    ticketsCount: user._count.tickets,
+    conversionesAfiliadosCount: user._count.conversionesAfiliados,
+    suscripcionActiva: user.suscripciones[0]
+      ? {
+          plan: user.suscripciones[0].plan,
+          estado: user.suscripciones[0].estado,
+          activa: user.suscripciones[0].activa,
+          iniciada: user.suscripciones[0].iniciada,
+          proximoCobro: user.suscripciones[0].proximoCobro,
+        }
+      : null,
+  };
+}
+
+export interface CambiarRolInput {
+  usuarioId: string;
+  nuevoRol: "JUGADOR" | "ADMIN";
+}
+
+/**
+ * Cambia el rol de un usuario. El caller (server action / endpoint admin)
+ * debe llamar `logAuditoria` con motivo + diff antes/después.
+ */
+export async function cambiarRolUsuario(
+  input: CambiarRolInput,
+): Promise<{ rolAnterior: "JUGADOR" | "ADMIN"; rolNuevo: "JUGADOR" | "ADMIN" }> {
+  const user = await prisma.usuario.findUnique({
+    where: { id: input.usuarioId },
+    select: { rol: true, deletedAt: true },
+  });
+  if (!user) throw new DomainError("USUARIO_NO_ENCONTRADO", "Usuario no existe", 404);
+  if (user.deletedAt) {
+    throw new DomainError(
+      "USUARIO_ELIMINADO",
+      "No se puede cambiar el rol de un usuario eliminado",
+      409,
+    );
+  }
+  if (user.rol === input.nuevoRol) {
+    return { rolAnterior: user.rol, rolNuevo: user.rol };
+  }
+  await prisma.usuario.update({
+    where: { id: input.usuarioId },
+    data: { rol: input.nuevoRol },
+  });
+  return { rolAnterior: user.rol, rolNuevo: input.nuevoRol };
+}
+
+/**
+ * "Banear" un usuario: equivalente a soft-delete + invalidar sesiones.
+ * v3.1 no tiene flag separado de "banned" — el ban es definitivo. Si un
+ * día se necesita ban temporal, agregar campo en schema. El motivo va a
+ * auditoría (caller responsable).
+ *
+ * Decisión: aplicar el mismo path que `eliminarCuentaInmediato` modo SOFT
+ * (anonimiza PII + libera username) pero sin disparar email al usuario.
+ * Soft-delete admin = ban — el resultado funcional es idéntico desde la
+ * perspectiva del usuario (no puede iniciar sesión, pierde su perfil).
+ */
+export async function banearUsuario(usuarioId: string): Promise<void> {
+  const user = await prisma.usuario.findUnique({
+    where: { id: usuarioId },
+    select: { id: true, email: true, deletedAt: true, rol: true },
+  });
+  if (!user) throw new DomainError("USUARIO_NO_ENCONTRADO", "Usuario no existe", 404);
+  if (user.deletedAt) {
+    throw new DomainError(
+      "USUARIO_YA_INACTIVO",
+      "Este usuario ya estaba eliminado o baneado",
+      409,
+    );
+  }
+  if (user.rol === "ADMIN") {
+    throw new DomainError(
+      "NO_BANEAR_ADMIN",
+      "No se puede banear a otro admin desde la UI. Cambia rol antes.",
+      403,
+    );
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const anonEmail = `banned-${user.id.slice(0, 8)}-${Date.now()}@deleted.habla.local`;
+    const anonUsername = `banned_${user.id.slice(0, 10)}`;
+    await tx.usuario.update({
+      where: { id: user.id },
+      data: {
+        nombre: "Usuario suspendido",
+        email: anonEmail,
+        username: anonUsername,
+        usernameLocked: true,
+        ubicacion: null,
+        image: null,
+        deletedAt: new Date(),
+      },
+    });
+    await tx.account.deleteMany({ where: { userId: user.id } });
+    await tx.session.deleteMany({ where: { userId: user.id } });
+    await tx.preferenciasNotif.deleteMany({ where: { usuarioId: user.id } });
+    await tx.solicitudEliminacion.deleteMany({ where: { usuarioId: user.id } });
+    await tx.verificationToken.deleteMany({
+      where: { identifier: user.email },
+    });
+  });
+}
+
+/**
+ * Soft-delete admin: análogo a `eliminarCuentaInmediato` pero ejecutado
+ * por un admin en nombre del usuario (típicamente por solicitud manual o
+ * compliance). NO se puede deshacer.
+ */
+export async function softDeleteUsuarioAdmin(usuarioId: string): Promise<void> {
+  const user = await prisma.usuario.findUnique({
+    where: { id: usuarioId },
+    select: { id: true, email: true, deletedAt: true },
+  });
+  if (!user) throw new DomainError("USUARIO_NO_ENCONTRADO", "Usuario no existe", 404);
+  if (user.deletedAt) {
+    throw new DomainError(
+      "USUARIO_YA_ELIMINADO",
+      "Este usuario ya estaba eliminado",
+      409,
+    );
+  }
+  await prisma.$transaction(async (tx) => {
+    const anonEmail = `deleted-${user.id.slice(0, 8)}-${Date.now()}@deleted.habla.local`;
+    const anonUsername = `deleted_${user.id.slice(0, 10)}`;
+    await tx.usuario.update({
+      where: { id: user.id },
+      data: {
+        nombre: "Usuario eliminado",
+        email: anonEmail,
+        username: anonUsername,
+        usernameLocked: true,
+        ubicacion: null,
+        image: null,
+        deletedAt: new Date(),
+      },
+    });
+    await tx.account.deleteMany({ where: { userId: user.id } });
+    await tx.session.deleteMany({ where: { userId: user.id } });
+    await tx.preferenciasNotif.deleteMany({ where: { usuarioId: user.id } });
+    await tx.solicitudEliminacion.deleteMany({ where: { usuarioId: user.id } });
+    await tx.verificationToken.deleteMany({
+      where: { identifier: user.email },
+    });
+  });
+}

@@ -6,6 +6,7 @@ import { Barlow_Condensed, DM_Sans } from "next/font/google";
 import { ToastProvider } from "@/components/ui";
 import { SessionProviderClient } from "@/components/auth/SessionProviderClient";
 import { CookieBanner } from "@/components/CookieBanner";
+import { WebVitalsCollector } from "@/components/WebVitalsCollector";
 import "./globals.css";
 
 const barlow = Barlow_Condensed({
@@ -78,6 +79,7 @@ export default function RootLayout({
         <SessionProviderClient>
           <ToastProvider>{children}</ToastProvider>
           <CookieBanner />
+          <WebVitalsCollector />
         </SessionProviderClient>
       </body>
     </html>

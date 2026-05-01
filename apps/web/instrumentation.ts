@@ -738,6 +738,124 @@ export async function register() {
     }, SYNC_MEMBRESIA_INTERVAL_MS);
   }, 240_000);
 
+  // -------------------------------------------------------------------
+  // Job R — Evaluar alarmas KPI (Lote G). Tick cada 1h. Para cada
+  // `AlarmaConfiguracion` habilitada, calcula valor actual del KPI y
+  // crea/actualiza/auto-desactiva alarmas idempotente. Si severidad =
+  // CRITICAL al crear, manda email al admin (anti-spam: solo en la
+  // creación, no en updates).
+  // -------------------------------------------------------------------
+  const { evaluarAlarmas } = await import(
+    "./lib/services/alarmas.service"
+  );
+
+  const ALARMAS_INTERVAL_MS = 60 * 60 * 1000; // 1h
+
+  async function tickEvaluarAlarmas() {
+    try {
+      const r = await evaluarAlarmas();
+      if (
+        r.alarmasNuevas > 0 ||
+        r.alarmasAutoDesactivadas > 0 ||
+        r.errores > 0
+      ) {
+        logger.info(
+          { ...r, source: "cron:evaluar-alarmas" },
+          "[cron in-process] ciclo evaluar-alarmas",
+        );
+      }
+    } catch (err) {
+      logger.error(
+        { err, source: "cron:evaluar-alarmas" },
+        "[cron in-process] tick de evaluar-alarmas falló",
+      );
+    }
+  }
+
+  // Primera corrida 260s tras boot.
+  setTimeout(() => {
+    void tickEvaluarAlarmas();
+    setInterval(() => {
+      void tickEvaluarAlarmas();
+    }, ALARMAS_INTERVAL_MS);
+  }, 260_000);
+
+  // -------------------------------------------------------------------
+  // Job S — Lighthouse semanal (Lote G). Tick cada 1h. Sólo dispara
+  // cuando es lunes hora Lima Y hora ≥06:00 PET Y todavía no se corrió
+  // esta semana (chequeo via `lighthouseRun.fecha` más reciente con
+  // origen='cron' vs inicio de semana Lima).
+  //
+  // Corre PageSpeed Insights API contra 5 rutas críticas. Persiste
+  // resultado en `lighthouse_runs` para histórico. Throttle 5s entre
+  // rutas. Si PAGESPEED_API_KEY no está → service degrada graciosamente
+  // (no rompe el server).
+  // -------------------------------------------------------------------
+  const { correrLighthouseSemanal } = await import(
+    "./lib/services/vitals.service"
+  );
+  const { prisma } = await import("@habla/db");
+
+  const LIGHTHOUSE_INTERVAL_MS = 60 * 60 * 1000; // 1h
+  const LIGHTHOUSE_TARGET_LIMA_HOUR = 6;
+
+  async function yaCorrioLighthouseEstaSemana(now: Date): Promise<boolean> {
+    // Inicio de semana: domingo 00:00 PET.
+    const offsetUtcMin = -300; // Lima UTC-5
+    const limaNow = new Date(now.getTime() + offsetUtcMin * 60_000);
+    const dayOfWeek = limaNow.getUTCDay(); // 0=Sun
+    const inicioSemanaLima = new Date(limaNow);
+    inicioSemanaLima.setUTCDate(limaNow.getUTCDate() - dayOfWeek);
+    inicioSemanaLima.setUTCHours(0, 0, 0, 0);
+    // Volver a UTC
+    const inicioSemanaUtc = new Date(
+      inicioSemanaLima.getTime() - offsetUtcMin * 60_000,
+    );
+    const ultimo = await prisma.lighthouseRun.findFirst({
+      where: { origen: "cron", fecha: { gte: inicioSemanaUtc } },
+      orderBy: { fecha: "desc" },
+      select: { id: true },
+    });
+    return !!ultimo;
+  }
+
+  async function tickLighthouseSemanal() {
+    try {
+      const now = new Date();
+      const dayOfWeek = (() => {
+        const fmt = new Intl.DateTimeFormat("en-US", {
+          timeZone: "America/Lima",
+          weekday: "short",
+        });
+        return fmt.format(now);
+      })();
+      if (dayOfWeek !== "Mon") return;
+      if (horaLima(now) < LIGHTHOUSE_TARGET_LIMA_HOUR) return;
+      if (await yaCorrioLighthouseEstaSemana(now)) return;
+      if (!process.env.PAGESPEED_API_KEY) return; // skip silenciosamente
+
+      logger.info("[cron in-process] disparando Lighthouse semanal");
+      const r = await correrLighthouseSemanal();
+      logger.info(
+        { ...r, source: "cron:lighthouse-weekly" },
+        "[cron in-process] ciclo Lighthouse semanal completo",
+      );
+    } catch (err) {
+      logger.error(
+        { err, source: "cron:lighthouse-weekly" },
+        "[cron in-process] tick Lighthouse semanal falló",
+      );
+    }
+  }
+
+  // Primera corrida 280s tras boot.
+  setTimeout(() => {
+    void tickLighthouseSemanal();
+    setInterval(() => {
+      void tickLighthouseSemanal();
+    }, LIGHTHOUSE_INTERVAL_MS);
+  }, 280_000);
+
   logger.info(
     {
       cerrarTorneos: `${CERRAR_INTERVAL_MS / 1000}s`,
@@ -753,6 +871,8 @@ export async function register() {
       generarPicksPremium: `${PICKS_GEN_INTERVAL_MS / 1000 / 60}min`,
       evaluarPicksFinalizados: `${PICKS_EVAL_INTERVAL_MS / 1000 / 60}min`,
       syncMembresia: `${SYNC_MEMBRESIA_INTERVAL_MS / 1000 / 60}min`,
+      evaluarAlarmas: `${ALARMAS_INTERVAL_MS / 1000 / 60}min`,
+      lighthouseSemanal: `${LIGHTHOUSE_INTERVAL_MS / 1000 / 60}min (lunes ≥${LIGHTHOUSE_TARGET_LIMA_HOUR}:00 PET)`,
     },
     "cron in-process registrado",
   );
