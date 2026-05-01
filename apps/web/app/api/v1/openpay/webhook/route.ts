@@ -61,7 +61,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     req.headers.get("openpay-signature") ??
     null;
 
-  if (!verificarFirmaOpenPay(rawBody, signature)) {
+  if (!(await verificarFirmaOpenPay(rawBody, signature))) {
     logger.warn(
       { source: "openpay:webhook" },
       "POST /api/v1/openpay/webhook: firma inválida",

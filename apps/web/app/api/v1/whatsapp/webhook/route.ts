@@ -77,7 +77,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   const rawBody = await req.text();
   const signature = req.headers.get("x-hub-signature-256");
 
-  if (!verificarFirmaWhatsApp(rawBody, signature)) {
+  if (!(await verificarFirmaWhatsApp(rawBody, signature))) {
     logger.warn(
       { source: "whatsapp:webhook" },
       "POST /api/v1/whatsapp/webhook: firma inválida",
