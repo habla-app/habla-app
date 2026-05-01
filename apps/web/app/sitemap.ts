@@ -6,8 +6,11 @@
 //
 // Se sirve en /sitemap.xml.
 //
-// Excluye rutas privadas (/perfil, /mis-combinadas, /admin, /auth) y
-// endpoints API — esos van en robots.ts como Disallow.
+// Excluye rutas privadas (/perfil, /mis-predicciones, /admin, /auth,
+// /comunidad/torneo/[slug], /comunidad/[username]) y endpoints API —
+// esos van en robots.ts como Disallow. Lote C v3.1 renombró
+// /mis-combinadas → /mis-predicciones (redirect 301 vive en
+// next.config.js).
 
 import type { MetadataRoute } from "next";
 import { prisma } from "@habla/db";

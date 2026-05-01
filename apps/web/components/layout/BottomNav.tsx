@@ -50,8 +50,8 @@ const ITEMS_BASE: Item[] = [
     match: (p) =>
       p.startsWith("/comunidad") ||
       p.startsWith("/torneo") ||
-      p.startsWith("/mis-combinadas") ||
-      p.startsWith("/mis-predicciones"),
+      p.startsWith("/mis-predicciones") ||
+      p.startsWith("/mis-combinadas"), // legacy, redirect 301 a /mis-predicciones
   },
   {
     href: "/premium",

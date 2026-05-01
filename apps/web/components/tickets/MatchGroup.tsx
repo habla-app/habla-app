@@ -110,7 +110,7 @@ export function MatchGroup({
             <ComboLauncher
               torneoId={torneo.id}
               hasSession={hasSession}
-              callbackUrl="/mis-combinadas"
+              callbackUrl="/mis-predicciones"
               label="+ Otra combinada"
               variant="ghost"
               className="py-2 text-[12px]"

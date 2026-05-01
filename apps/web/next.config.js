@@ -72,15 +72,35 @@ const nextConfig = {
   },
 
   // -------------------------------------------------------------------
-  // Redirects — Lote B v3.1.
+  // Redirects — Lote B y Lote C v3.1.
   // /matches y /torneos pasaron a deprecarse (consolidados en /cuotas y
   // /comunidad). El tráfico de SEO acumulado se redirige 301 para no
   // perder ranking.
+  //
+  // Lote C agrega:
+  //   - /mis-combinadas → /mis-predicciones (rename del Lote 5).
+  //   - /torneos        → /comunidad (la lista plana de torneos pasa
+  //                       a integrarse con el leaderboard mensual).
+  //   - /torneo/:id     → resuelto en middleware.ts (necesita BD para
+  //                       mapear torneoId → partidoId; los redirects
+  //                       sincrónicos de Next no soportan async lookups).
   // -------------------------------------------------------------------
   async redirects() {
     return [
       { source: "/matches", destination: "/cuotas", permanent: true },
       { source: "/matches/:path*", destination: "/cuotas", permanent: true },
+      {
+        source: "/mis-combinadas",
+        destination: "/mis-predicciones",
+        permanent: true,
+      },
+      {
+        source: "/mis-combinadas/:path*",
+        destination: "/mis-predicciones",
+        permanent: true,
+      },
+      { source: "/torneos", destination: "/comunidad", permanent: true },
+      { source: "/torneos/:path*", destination: "/comunidad", permanent: true },
     ];
   },
 
