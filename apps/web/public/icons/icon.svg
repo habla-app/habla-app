@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Habla! brand mark — fallback SVG escalable. Sirve como icon estático
+  para herramientas que prefieran SVG (RSS readers, social previews,
+  cuando se desactiven los routes dinámicos de Next.js, etc).
+  Diseño: H! en gold sobre fondo blue-dark sin esquinas redondeadas
+  para soporte maskable. Safe zone respetada (centro 80%).
+  Lote I v3.1.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" fill="#001050"/>
+  <text
+    x="256"
+    y="256"
+    text-anchor="middle"
+    dominant-baseline="central"
+    font-family="Barlow Condensed, Arial Black, Helvetica, sans-serif"
+    font-weight="900"
+    font-size="290"
+    letter-spacing="-8"
+    fill="#FFB800"
+  >H!</text>
+</svg>

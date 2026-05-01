@@ -36,6 +36,7 @@ import { EstadoUsuarioBanner } from "@/components/home/EstadoUsuarioBanner";
 import { CasaReviewCardMini } from "@/components/mdx/CasaReviewCardMini";
 import { ArticleCard } from "@/components/home/ArticleCard";
 import { NewsletterCTA } from "@/components/marketing/NewsletterCTA";
+import { PWAInstallPrompt } from "@/components/ui/mobile/PWAInstallPrompt";
 
 export const dynamic = "force-dynamic";
 
@@ -191,6 +192,10 @@ export default async function HomePage() {
           <NewsletterCTA fuente="home" />
         </section>
       ) : null}
+
+      {/* Lote I — Banner PWA mobile-only sticky bottom. Self-renderiza
+          condicionalmente según `beforeinstallprompt` + dismiss state. */}
+      <PWAInstallPrompt />
     </div>
   );
 }

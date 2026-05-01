@@ -120,6 +120,11 @@ export function CasaLogo({ afiliado }: { afiliado: AfiliadoVista }) {
       <img
         src={afiliado.logoUrl}
         alt={`Logo de ${afiliado.nombre}`}
+        // Lote I: explicit dimensions + lazy/decoding async para CWV.
+        width={48}
+        height={48}
+        loading="lazy"
+        decoding="async"
         className="h-12 w-12 flex-shrink-0 rounded-sm bg-card object-contain shadow-sm"
       />
     );
