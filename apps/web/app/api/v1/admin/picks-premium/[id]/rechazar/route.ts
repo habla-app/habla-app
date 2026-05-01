@@ -16,6 +16,7 @@ import {
 } from "@/lib/services/errors";
 import { logger } from "@/lib/services/logger";
 import { track } from "@/lib/services/analytics.service";
+import { logAuditoria } from "@/lib/services/auditoria.service";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -83,6 +84,15 @@ export async function POST(
       evento: "pick_premium_rechazado",
       userId: adminUserId !== "cron" ? adminUserId : undefined,
       props: { pickId: pick.id, motivo: parsed.data.motivo.slice(0, 100) },
+    });
+    await logAuditoria({
+      actorId: adminUserId !== "cron" ? adminUserId ?? null : null,
+      actorEmail: session?.user?.email ?? null,
+      accion: "pick.rechazar",
+      entidad: "PickPremium",
+      entidadId: pick.id,
+      resumen: `Pick ${pick.id} rechazado: ${parsed.data.motivo.slice(0, 80)}`,
+      metadata: { partidoId: pick.partidoId, motivo: parsed.data.motivo },
     });
 
     return Response.json({ ok: true, pickId: pick.id });

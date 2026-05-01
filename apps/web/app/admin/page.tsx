@@ -1,19 +1,11 @@
-// /admin — dashboard del panel admin (Lote 5.1).
+// /admin — redirect al dashboard. Lote F (May 2026).
 //
-// Auth check ya lo hace el layout (admin/layout.tsx). Acá sólo presentación:
-// header consistente + AdminTorneosPanel (gestión de torneos + auto-import).
-import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { AdminTorneosPanel } from "@/components/admin/AdminTorneosPanel";
+// Antes (Lote 5.1) `/admin` mostraba el panel de torneos como vista raíz.
+// En v3.1 el dashboard de KPIs es la primera mirada cada mañana, así que
+// `/admin` redirige a `/admin/dashboard`. La gestión de torneos vive en
+// `/admin/torneos`.
+import { redirect } from "next/navigation";
 
-export default function AdminPage() {
-  return (
-    <>
-      <AdminPageHeader
-        icon="🏠"
-        title="Dashboard"
-        description="Importá partidos de api-football y creá torneos sobre los que estén disponibles. El leaderboard mensual y los premios viven en sus propias secciones."
-      />
-      <AdminTorneosPanel />
-    </>
-  );
+export default function AdminRoot() {
+  redirect("/admin/dashboard");
 }

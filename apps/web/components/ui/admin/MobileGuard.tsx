@@ -21,7 +21,10 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
-const DEFAULT_BREAKPOINT = 1024;
+// Lote F (May 2026): el spec del v3.1 fija el breakpoint en 1280px
+// (regla 13 del CLAUDE.md). Aceptamos override por prop para tests o
+// usos donde 1024px sea suficiente (admin pages livianas).
+const DEFAULT_BREAKPOINT = 1280;
 
 interface MobileGuardProps {
   children: ReactNode;
