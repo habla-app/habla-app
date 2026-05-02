@@ -81,6 +81,13 @@ function CoverImage({
         src={ogImage}
         alt={title}
         loading="lazy"
+        decoding="async"
+        // Lote I: width/height explícitos para reservar espacio antes de
+        // que cargue el bitmap. Evita CLS (token CWV target <0.1).
+        // Aspect ratio 16:10 — coincide con `h-40 w-full` de Tailwind
+        // cuando el container tiene 256px de ancho (común en grid 3-col).
+        width={400}
+        height={160}
         className="h-40 w-full object-cover"
       />
     );

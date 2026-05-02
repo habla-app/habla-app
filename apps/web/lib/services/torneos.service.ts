@@ -158,6 +158,78 @@ export async function obtener(
 }
 
 // ---------------------------------------------------------------------------
+// obtenerPorSlug — Lote C v3.1.
+//
+// Resuelve el torneo asociado a un partido a partir de un slug. En v3.1 el
+// slug operativo es `Partido.id` (no hay columna `slug` en la tabla
+// `partidos` — la mantenemos como decisión arquitectónica para evitar una
+// migración por una vista de SEO marginal). Llama a este wrapper la nueva
+// ruta `/comunidad/torneo/[slug]`; el redirect 301 desde `/torneo/[id]`
+// (legacy) usa `obtener(id)` y mapea a `partido.id`.
+//
+// Si el partido tiene varios torneos (raro en v3.1, pero técnicamente
+// posible), devuelve el más activo: ABIERTO > EN_JUEGO > CERRADO >
+// FINALIZADO > CANCELADO.
+// ---------------------------------------------------------------------------
+
+const ESTADO_PRIORIDAD: Record<EstadoTorneo, number> = {
+  ABIERTO: 0,
+  EN_JUEGO: 1,
+  CERRADO: 2,
+  FINALIZADO: 3,
+  CANCELADO: 4,
+};
+
+export async function obtenerPorSlug(
+  slug: string,
+  usuarioId?: string,
+): Promise<ObtenerResult | null> {
+  const partido = await prisma.partido.findUnique({
+    where: { id: slug },
+    select: { id: true },
+  });
+  if (!partido) return null;
+
+  const torneos = await prisma.torneo.findMany({
+    where: { partidoId: partido.id },
+    include: { partido: true },
+    orderBy: { creadoEn: "desc" },
+  });
+  if (torneos.length === 0) return null;
+
+  const torneo = torneos.sort((a, b) => {
+    const da = ESTADO_PRIORIDAD[a.estado] ?? 99;
+    const db = ESTADO_PRIORIDAD[b.estado] ?? 99;
+    return da - db;
+  })[0]!;
+
+  let miTicket: Ticket | null = null;
+  if (usuarioId) {
+    miTicket = await prisma.ticket.findFirst({
+      where: { torneoId: torneo.id, usuarioId },
+      orderBy: { creadoEn: "desc" },
+    });
+  }
+
+  return { torneo, miTicket };
+}
+
+/**
+ * Helper para el redirect 301 legacy `/torneo/:id` → `/comunidad/torneo/
+ * :partidoId` desde `middleware.ts`. Devuelve el partidoId del torneo o
+ * null si no existe (la middleware redirige a `/comunidad`).
+ */
+export async function partidoIdDeTorneoLegacy(
+  torneoId: string,
+): Promise<string | null> {
+  const t = await prisma.torneo.findUnique({
+    where: { id: torneoId },
+    select: { partidoId: true },
+  });
+  return t?.partidoId ?? null;
+}
+
+// ---------------------------------------------------------------------------
 // listarInscritos — devuelve los jugadores inscritos en un torneo + cuántos
 // tickets tienen + su nivel. Si el torneo no está ABIERTO, también incluye
 // las predicciones (antes del cierre se ocultan por privacidad competitiva).

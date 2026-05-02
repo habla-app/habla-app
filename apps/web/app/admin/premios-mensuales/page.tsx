@@ -15,7 +15,7 @@ import {
   type EstadoPremio,
   esEstadoValido,
 } from "@/lib/services/leaderboard.service";
-import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminTopbar } from "@/components/ui/admin/AdminTopbar";
 import { AdminPremiosMensualesPanel } from "@/components/admin/AdminPremiosMensualesPanel";
 
 export const dynamic = "force-dynamic";
@@ -37,10 +37,10 @@ export default async function AdminPremiosMensualesPage({
 
   return (
     <>
-      <AdminPageHeader
-        icon="💰"
+      <AdminTopbar
         title="Premios mensuales"
-        description="Estado de los pagos al Top 10 del leaderboard mensual. Marcá el estado conforme coordinás con cada ganador."
+        description="Top 10 del leaderboard · Flujo guiado: solicitar datos → marcar pagado → adjuntar comprobante. Cada acción queda en auditoría."
+        breadcrumbs={[{ label: "Operación" }, { label: "Premios mensuales" }]}
       />
       <AdminPremiosMensualesPanel
         premios={premios.map((p) => ({

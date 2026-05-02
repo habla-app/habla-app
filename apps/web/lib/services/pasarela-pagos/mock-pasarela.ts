@@ -1,6 +1,6 @@
-// Mock de la pasarela. Sin callers actualmente — queda como referencia
-// de la forma de la interfaz para tests futuros y para el adapter real
-// OpenPay del Lote 12.
+// Mock de la pasarela. Útil para tests de los services que dependen de
+// `PasarelaPagos` sin tocar OpenPay real. El adapter real es OpenPayAdapter
+// (Lote E, May 2026).
 
 import type {
   CrearCobroUnicoInput,
@@ -31,9 +31,26 @@ export class MockPasarelaPagos implements PasarelaPagos {
   async crearSuscripcion(
     _input: CrearSuscripcionInput,
   ): Promise<CrearSuscripcionResult> {
+    const id = `mock_sub_${nanoid(8)}`;
     return {
-      suscripcionId: `mock_sub_${nanoid(8)}`,
+      suscripcionId: id,
+      customerId: `mock_cus_${nanoid(8)}`,
       estado: "activa",
     };
+  }
+
+  async cancelarSuscripcion(_suscripcionPasarelaId: string): Promise<void> {
+    /* no-op */
+  }
+
+  async reembolsar(_cobroPasarelaId: string): Promise<void> {
+    /* no-op */
+  }
+
+  async verificarFirmaWebhook(
+    _rawBody: string,
+    _signature: string | null,
+  ): Promise<boolean> {
+    return true;
   }
 }

@@ -542,6 +542,140 @@ export async function obtenerMisStatsMensuales(
   };
 }
 
+// ---------------------------------------------------------------------------
+// /mis-predicciones — evolución mensual (Lote C v3.1)
+// ---------------------------------------------------------------------------
+
+export interface EvolucionMes {
+  /** YYYY-MM. */
+  mes: string;
+  /** Etiqueta corta para el chart ("Abr", "May"). */
+  etiqueta: string;
+  puntosTotal: number;
+  predicciones: number;
+  aciertoPct: number;
+}
+
+/**
+ * Evolución mes-a-mes del usuario sobre los últimos `meses` meses
+ * calendario en zona Lima (incluye el mes en curso). Cada bucket agrega
+ * `puntosFinales` de tickets en torneos FINALIZADOS cuyo `partido.
+ * fechaInicio` cae dentro del mes. `aciertoPct` se calcula como
+ * `posicionFinal <= 10 / total finalizados del mes`.
+ *
+ * Si el usuario no jugó en un mes determinado, ese bucket queda en 0.
+ * Devuelve los meses ordenados cronológicamente (más antiguo a más
+ * reciente) — el chart espera ese orden.
+ */
+export async function obtenerEvolucionMensual(
+  usuarioId: string,
+  input: { meses?: number } = {},
+): Promise<EvolucionMes[]> {
+  const meses = Math.max(2, Math.min(12, input.meses ?? 6));
+  const claves = ultimosMesesKeys(meses);
+
+  const tickets = await prisma.ticket.findMany({
+    where: {
+      usuarioId,
+      puntosFinales: { not: null },
+      torneo: {
+        estado: "FINALIZADO",
+        partido: {
+          fechaInicio: {
+            gte: getMonthBounds(claves[0]!).desde,
+            lt: getMonthBounds(claves[claves.length - 1]!).hasta,
+          },
+        },
+      },
+    },
+    select: {
+      puntosFinales: true,
+      posicionFinal: true,
+      torneo: {
+        select: {
+          partido: { select: { fechaInicio: true } },
+        },
+      },
+    },
+  });
+
+  const buckets = new Map<
+    string,
+    { puntos: number; total: number; top10: number }
+  >();
+  for (const k of claves) {
+    buckets.set(k, { puntos: 0, total: 0, top10: 0 });
+  }
+
+  for (const t of tickets) {
+    const k = mesKeyDe(t.torneo.partido.fechaInicio);
+    const b = buckets.get(k);
+    if (!b) continue;
+    b.puntos += t.puntosFinales ?? 0;
+    b.total += 1;
+    if (t.posicionFinal !== null && t.posicionFinal <= 10) b.top10 += 1;
+  }
+
+  return claves.map((mes) => {
+    const b = buckets.get(mes)!;
+    return {
+      mes,
+      etiqueta: etiquetaMesCorta(mes),
+      puntosTotal: b.puntos,
+      predicciones: b.total,
+      aciertoPct:
+        b.total > 0 ? Math.round((b.top10 / b.total) * 100) : 0,
+    };
+  });
+}
+
+function ultimosMesesKeys(n: number): string[] {
+  const claves: string[] = [];
+  const ahora = getMesKey();
+  let actual = ahora;
+  for (let i = 0; i < n; i++) {
+    claves.push(actual);
+    actual = mesAnteriorKey(actual);
+  }
+  return claves.reverse();
+}
+
+function mesAnteriorKey(mes: string): string {
+  const m = /^(\d{4})-(\d{2})$/.exec(mes);
+  if (!m) return mes;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const prevYear = mo === 1 ? y - 1 : y;
+  const prevMonth = mo === 1 ? 12 : mo - 1;
+  return `${prevYear}-${String(prevMonth).padStart(2, "0")}`;
+}
+
+function mesKeyDe(fecha: Date): string {
+  // Bucket por mes en zona Lima — consistente con getMonthBounds().
+  return getMesKey(fecha);
+}
+
+function etiquetaMesCorta(mes: string): string {
+  const m = /^(\d{4})-(\d{2})$/.exec(mes);
+  if (!m) return mes;
+  const idx = Number(m[2]) - 1;
+  const ETIQUETAS = [
+    "Ene",
+    "Feb",
+    "Mar",
+    "Abr",
+    "May",
+    "Jun",
+    "Jul",
+    "Ago",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dic",
+  ];
+  return ETIQUETAS[idx] ?? mes;
+}
+
 /**
  * Tickets del mes en curso de un usuario (torneos FINALIZADOS, con puntos
  * congelados). Para el tab "Mes en curso" de /mis-combinadas.

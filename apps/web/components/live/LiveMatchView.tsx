@@ -14,6 +14,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { CrossProductBanner } from "@/components/ui/mobile";
 import { LiveSwitcher } from "./LiveSwitcher";
 import { LiveLeagueFilter, type LigaChipInfo } from "./LiveLeagueFilter";
 import {
@@ -96,6 +97,15 @@ interface LiveMatchViewProps {
    *  de la banda motivacional cuando el tab activo es FINALIZADO
    *  (Bug #16). Null → CTA genérico a /matches. */
   proximoTorneoId?: string | null;
+  /** Lote C v3.1: slot opcional renderizado bajo el hero (entre LiveHero
+   *  y MiTicketCard). El page actual lo usa para inyectar el banner
+   *  AlertasPremium cuando el viewer es Premium o el teaser para no-
+   *  Premium. Pasar null/undefined oculta el slot. */
+  slotPremium?: import("react").ReactNode;
+  /** Lote C v3.1: slot opcional con un partidoSlug para mostrar el
+   *  cross-link a Producto B (`/partidos/[slug]`). Usado SOLO cuando hay
+   *  un partido en vivo activo. */
+  partidoSlugCrossLink?: string | null;
 }
 
 type TabKey = "ranking" | "stats" | "eventos";
@@ -110,6 +120,8 @@ export function LiveMatchView({
   finalizedCards,
   filtroActivo,
   proximoTorneoId = null,
+  slotPremium = null,
+  partidoSlugCrossLink = null,
 }: LiveMatchViewProps) {
   const router = useRouter();
   // Cuando el filtro deja tabs vacíos, torneoIdActivo es null y no
@@ -240,6 +252,19 @@ export function LiveMatchView({
             totalInscritos={totalInscritos}
             ultimosEventos={eventos.eventos.slice(-5).reverse()}
           />
+
+          {/* Lote C v3.1 — slot Premium (alertas en vivo o teaser). */}
+          {slotPremium ? <div className="mb-4">{slotPremium}</div> : null}
+
+          {/* Lote C v3.1 — cross-link a Producto B (vista de partido). */}
+          {partidoSlugCrossLink ? (
+            <div className="mb-4">
+              <CrossProductBanner
+                direction="C-to-B"
+                partidoSlug={partidoSlugCrossLink}
+              />
+            </div>
+          ) : null}
 
           {hasSession && miPosLocal && (
             <MiTicketCard

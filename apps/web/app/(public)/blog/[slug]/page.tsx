@@ -72,7 +72,7 @@ export default function ArticlePage({ params }: { params: Params }) {
     frontmatter.tags.includes("afiliacion");
 
   return (
-    <div className="mx-auto max-w-[1200px] px-4 py-10 md:px-6 md:py-14">
+    <div className="mx-auto w-full max-w-[1200px] px-4 py-6 md:px-6 md:py-10">
       <ArticleJsonLd doc={doc} />
       <TrackOnMount
         event="articulo_visto"
@@ -85,35 +85,35 @@ export default function ArticlePage({ params }: { params: Params }) {
       <div className="lg:flex lg:gap-10">
         <TOC headings={headings} />
         <article className="min-w-0 flex-1 lg:max-w-[760px]">
-          <header className="mb-8">
+          <header className="mb-6">
             <div className="mb-3 flex flex-wrap gap-1.5">
               {frontmatter.tags.slice(0, 3).map((t) => (
                 <span
                   key={t}
-                  className="inline-block rounded-sm bg-brand-blue-main/10 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.05em] text-brand-blue-main"
+                  className="inline-block rounded-sm bg-brand-blue-main/10 px-2 py-0.5 text-label-sm text-brand-blue-main"
                 >
                   {t}
                 </span>
               ))}
             </div>
-            <h1 className="mb-3 font-display text-[36px] font-black leading-tight text-dark md:text-[44px]">
+            <h1 className="mb-3 font-display text-display-lg leading-tight text-dark md:text-[40px]">
               {frontmatter.title}
             </h1>
-            <p className="text-[16px] leading-[1.6] text-body">
+            <p className="text-body-md leading-[1.6] text-body md:text-body-lg">
               {frontmatter.excerpt}
             </p>
-            <div className="mt-4 flex items-center gap-3 text-[12px] text-muted-d">
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-body-xs text-muted-d">
               <span className="font-bold text-dark">{frontmatter.author}</span>
               <span aria-hidden>·</span>
               <time dateTime={frontmatter.publishedAt}>
                 {formatDate(frontmatter.publishedAt)}
               </time>
-              {frontmatter.updatedAt !== frontmatter.publishedAt && (
+              {frontmatter.updatedAt !== frontmatter.publishedAt ? (
                 <>
                   <span aria-hidden>·</span>
                   <span>Actualizado {formatDate(frontmatter.updatedAt)}</span>
                 </>
-              )}
+              ) : null}
             </div>
           </header>
 

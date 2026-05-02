@@ -12,7 +12,7 @@
 
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminTopbar } from "@/components/ui/admin/AdminTopbar";
 import { AfiliadoForm } from "@/components/admin/AfiliadoForm";
 import {
   listarClicksDeAfiliado,
@@ -57,26 +57,14 @@ export default async function AdminAfiliadoDetallePage({
 
   return (
     <>
-      <AdminPageHeader
-        icon={afiliado.activo ? "🤝" : "🚫"}
+      <AdminTopbar
         title={afiliado.nombre}
-        description={
-          <>
-            <code className="rounded-sm bg-subtle px-1.5 py-0.5 font-mono">
-              /go/{afiliado.slug}
-            </code>{" "}
-            · <strong>{afiliado.modeloComision}</strong>
-            {afiliado.activo ? "" : " · INACTIVO"}
-          </>
-        }
-        actions={
-          <Link
-            href="/admin/afiliados"
-            className="text-[12px] font-bold uppercase tracking-[0.06em] text-muted-d hover:text-dark"
-          >
-            ← Volver a la lista
-          </Link>
-        }
+        description={`/go/${afiliado.slug} · ${afiliado.modeloComision}${afiliado.activo ? "" : " · INACTIVO"}`}
+        breadcrumbs={[
+          { label: "Operación" },
+          { label: "Afiliados", href: "/admin/afiliados" },
+          { label: afiliado.nombre },
+        ]}
       />
 
       {/* Stats del periodo */}

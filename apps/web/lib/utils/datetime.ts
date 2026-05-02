@@ -345,3 +345,20 @@ function capitalizeFirst(s: string): string {
 function isSameDay(a: Date, b: Date, tz: string): boolean {
   return getDayKey(a, tz) === getDayKey(b, tz);
 }
+
+/**
+ * Fecha larga en español Perú: "30 de abril de 2027". Sin hora.
+ * Usado en /premium/exito y /premium/mi-suscripcion para fechas de
+ * vencimiento. Default tz America/Lima.
+ */
+export function formatearFechaLargaPe(
+  date: Date | string,
+  tz: string = DEFAULT_TZ,
+): string {
+  return new Date(date).toLocaleDateString("es-PE", {
+    timeZone: tz,
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}

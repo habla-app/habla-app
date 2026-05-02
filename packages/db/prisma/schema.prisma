@@ -32,6 +32,10 @@ model Usuario {
   // muestra estado "Este usuario tiene perfil privado" (no expone stats ni
   // historial). Default true — los usuarios existentes quedan visibles.
   perfilPublico Boolean  @default(true)
+  // Lote E (May 2026): teléfono E.164 (+51XXXXXXXXX) capturado en checkout
+  // Premium para enviar picks 1:1 vía WhatsApp Business API. Opcional —
+  // suscriptores sin teléfono solo reciben los picks por el Channel manual.
+  telefono     String?
   creadoEn     DateTime  @default(now())
   deletedAt    DateTime? // Sub-Sprint 7: soft delete (anonimiza PII)
   // Campos requeridos por NextAuth Prisma Adapter
@@ -48,6 +52,8 @@ model Usuario {
   eventosAnalitica      EventoAnalitica[]
   clicksAfiliados       ClickAfiliado[]
   conversionesAfiliados ConversionAfiliado[]
+  suscripciones         Suscripcion[]
+  conversacionesBot     ConversacionBot[]
 
   @@map("usuarios")
 }
@@ -126,8 +132,9 @@ model Partido {
   liveExtra       Int? // injury time (1H/2H)
   liveUpdatedAt   DateTime? // timestamp del último setLiveStatus — TTL 30 min
 
-  torneos Torneo[]
-  eventos EventoPartido[]
+  torneos      Torneo[]
+  eventos      EventoPartido[]
+  picksPremium PickPremium[]
 
   @@map("partidos")
 }
@@ -251,6 +258,11 @@ model PreferenciasNotif {
   // notifSemanal. Se conserva por compatibilidad de datos hasta cleanup
   // posterior; ningún caller lo usa más a partir de Lote 10.
   emailSemanal      Boolean  @default(false)
+  // Lote E (May 2026): toggles Premium. Default true — los suscriptores
+  // reciben picks y alertas en vivo por bot WhatsApp 1:1 (además del
+  // Channel). Opt-out desde /perfil/preferencias.
+  notifPremiumPicks       Boolean  @default(true)
+  notifPremiumAlertasVivo Boolean  @default(true)
   actualizadoEn     DateTime @default(now()) @updatedAt
 
   @@map("preferencias_notif")
@@ -450,6 +462,8 @@ model Afiliado {
 
   clicks       ClickAfiliado[]
   conversiones ConversionAfiliado[]
+  picksPremium PickPremium[]
+  comisiones   ComisionAfiliacion[]
 
   @@map("afiliados")
 }
@@ -542,4 +556,521 @@ model DigestEnviado {
   creadoEn      DateTime  @default(now())
 
   @@map("digests_enviados")
+}
+
+// ==========================================
+// Lote E (May 2026) — Premium WhatsApp Channel
+// ==========================================
+//
+// Cuatro pilares:
+//
+//   - suscripciones        suscripción mensual/trimestral/anual a Premium.
+//                          Una sola activa por usuario. Lifecycle:
+//                          PENDIENTE → ACTIVA → CANCELANDO → VENCIDA. Pago
+//                          con OpenPay BBVA; webhook activa la fila tras el
+//                          primer cobro. Garantía 7 días con reembolso.
+//   - pagos_suscripcion    histórico de cobros (primer cobro + recurrentes).
+//                          1 fila por intento de cobro. Se cruza con OpenPay
+//                          via `openpayCobroId` (UNIQUE). Estado del pago,
+//                          últimos 4 dígitos, marca de tarjeta, etc.
+//   - miembros_channel     espejo de la membresía en el WhatsApp Channel.
+//                          Estado INVITADO/UNIDO/REINVITADO/REMOVIDO. WhatsApp
+//                          Channels no expone API de gestión de miembros, por
+//                          lo que la transición INVITADO→UNIDO la hace el cron
+//                          de sync (asume UNIDO tras 24h sin re-trigger).
+//   - picks_premium        picks generados por Claude API + aprobados por el
+//                          editor antes de publicarse al Channel. Estado
+//                          PENDIENTE → APROBADO/EDITADO_Y_APROBADO/RECHAZADO.
+//                          Resultado post-partido (GANADO/PERDIDO/NULO/PUSH)
+//                          lo marca el cron evaluador.
+//
+// Reglas duras (CLAUDE.md §14-19):
+//   - Cero datos de tarjeta tocan BD (ni el servidor). Tokenización con
+//     OpenPay.js client-side. Solo persistimos ultimosCuatro + marcaTarjeta.
+//   - Verificación de firma obligatoria en webhook (OpenPay HMAC-SHA256).
+//   - Idempotencia: webhook puede reintentar el mismo evento. Verificar
+//     estado antes de mutar (`if (suscripcion.activa) return;`).
+//   - Cero auto-publicación de picks. APROBACIÓN HUMANA obligatoria.
+
+model Suscripcion {
+  id                   String    @id @default(cuid())
+  usuarioId            String
+  usuario              Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  // Plan elegido. Precio en céntimos de soles (4900, 11900, 39900).
+  plan                 PlanPremium
+  precio               Int
+
+  // OpenPay tracking. `openpaySuscripcionId` único: una fila por
+  // suscripción real en OpenPay. Customer es reusable: si el usuario se
+  // resuscribe luego de cancelar, reusamos el customerId.
+  openpaySuscripcionId String?   @unique
+  openpayCustomerId    String?
+
+  // Lifecycle. `activa` es atajo derivado: TRUE mientras el acceso al
+  // Channel + bot esté vigente. Cron sync mantiene la coherencia.
+  estado               EstadoSuscripcion @default(PENDIENTE)
+  activa               Boolean   @default(false)
+  cancelada            Boolean   @default(false)
+
+  // Fechas críticas. `proximoCobro` es null si está cancelada (no más
+  // cobros). `vencimiento` puede diferir de `proximoCobro` si el user
+  // canceló: mantiene acceso hasta vencimiento sin nuevos cobros.
+  iniciada             DateTime  @default(now())
+  proximoCobro         DateTime?
+  vencimiento          DateTime?
+  canceladaEn          DateTime?
+  motivoCancela        String?
+
+  // Garantía 7 días. `enGarantia` se setea TRUE al crear; el cron sync
+  // (o el endpoint admin de reembolso) lo flippea cuando vence el plazo.
+  enGarantia           Boolean   @default(true)
+  reembolsoPedido      Boolean   @default(false)
+  reembolsoEn          DateTime?
+
+  pagos                PagoSuscripcion[]
+  miembrosChannel      MiembroChannel[]
+
+  creadoEn             DateTime  @default(now())
+  actualizadoEn        DateTime  @updatedAt
+
+  @@index([usuarioId, activa])
+  @@index([proximoCobro])
+  @@index([estado, vencimiento])
+  @@map("suscripciones")
+}
+
+enum PlanPremium {
+  MENSUAL
+  TRIMESTRAL
+  ANUAL
+}
+
+enum EstadoSuscripcion {
+  PENDIENTE   // Recién creada, esperando confirmación de pago vía webhook
+  ACTIVA      // Pago confirmado, acceso vigente
+  CANCELANDO  // Cancelada pero aún con acceso (hasta vencimiento)
+  VENCIDA     // Vencida sin renovación (cobro recurrente falló o canceló)
+  REEMBOLSADA // Reembolsada en garantía 7 días
+  FALLIDA     // Pago falló y OpenPay agotó reintentos
+}
+
+model PagoSuscripcion {
+  id              String    @id @default(cuid())
+  suscripcionId   String
+  suscripcion     Suscripcion @relation(fields: [suscripcionId], references: [id], onDelete: Cascade)
+
+  // OpenPay tracking. UNIQUE para idempotencia del webhook.
+  openpayCobroId  String    @unique
+  openpayMetodo   String?            // 'card' | 'bank_account' | etc.
+
+  monto           Int                 // céntimos de soles
+  estado          EstadoPago
+  intentos        Int       @default(1)
+
+  fecha           DateTime  @default(now())
+  acreditadoEn    DateTime?
+  rechazadoEn     DateTime?
+
+  // Datos de tarjeta para mostrar al usuario en /premium/mi-suscripcion
+  // (NUNCA datos sensibles — solo display).
+  ultimosCuatro   String?
+  marcaTarjeta    String?
+  codigoError     String?
+  mensajeError    String?
+
+  creadoEn        DateTime  @default(now())
+
+  @@index([suscripcionId, fecha(sort: Desc)])
+  @@map("pagos_suscripcion")
+}
+
+enum EstadoPago {
+  PENDIENTE
+  PAGADO
+  RECHAZADO
+  REEMBOLSADO
+  TIMEOUT
+}
+
+// Membresía en el WhatsApp Channel privado. Una suscripción ACTIVA debería
+// tener exactamente 1 fila MiembroChannel cuyo estado refleje su acceso al
+// Channel: INVITADO (envío link, esperando join), UNIDO (asumimos
+// confirmado tras 24h o por click manual del admin), REINVITADO (re-envío
+// del link tras N horas sin join), REMOVIDO (tras cancelación o churn).
+model MiembroChannel {
+  id              String    @id @default(cuid())
+  suscripcionId   String
+  suscripcion     Suscripcion @relation(fields: [suscripcionId], references: [id], onDelete: Cascade)
+  // Denormalizado para queries rápidas sin join.
+  usuarioId       String
+
+  estado          EstadoMembresia @default(INVITADO)
+  invitadoEn      DateTime  @default(now())
+  unidoEn         DateTime?
+  removidoEn      DateTime?
+
+  // Tracking de envíos del invite link.
+  invitesEnviados Int       @default(1)
+  ultimoInviteAt  DateTime  @default(now())
+
+  // Una sola fila ACTIVA por suscripción. Si el cron necesita transicionar
+  // INVITADO → REINVITADO → UNIDO usa update (no insert). Si la suscripción
+  // termina y vuelve a empezar, la nueva suscripción tendrá su propia fila.
+  @@unique([suscripcionId, estado])
+  @@index([usuarioId, estado])
+  @@map("miembros_channel")
+}
+
+enum EstadoMembresia {
+  INVITADO
+  UNIDO
+  REINVITADO
+  REMOVIDO
+}
+
+model PickPremium {
+  id                String    @id @default(cuid())
+  partidoId         String
+  partido           Partido   @relation(fields: [partidoId], references: [id], onDelete: Cascade)
+
+  // Mercado y recomendación
+  mercado           MercadoPick
+  // String libre: para 1X2 ('home'|'draw'|'away'), BTTS ('btts_si'|'btts_no'),
+  // OVER_UNDER_25 ('over'|'under'), TARJETA_ROJA ('roja_si'|'roja_no'),
+  // MARCADOR_EXACTO ('1-0'|'2-1'|...).
+  outcome           String
+  cuotaSugerida     Float
+  // Stake como fracción del bankroll (0.01-0.03 típicamente).
+  stakeSugerido     Float
+  // EV+ como fracción (0.05-0.30 típicamente). Null si no calculado.
+  evPctSugerido     Float?
+
+  // Casa con mejor cuota. Opcional — picks de mercados sin afiliado mapeado
+  // o cuando ninguna casa tiene la cuota recomendada.
+  casaRecomendadaId String?
+  casaRecomendada   Afiliado? @relation(fields: [casaRecomendadaId], references: [id], onDelete: SetNull)
+
+  // Razonamiento textual generado por Claude API. ~150 palabras esperadas.
+  razonamiento      String   @db.Text
+  // JSONB con stats clave que sustentan la recomendación. Forma esperada:
+  //   { h2h: string, formaReciente: string, factorClave: string }
+  // Pero string libre — el formato lo dicta el prompt y puede evolucionar.
+  estadisticas      Json?
+
+  // Fuente del pick. CLAUDE_API es la default (cron generador); EDITOR_MANUAL
+  // queda para que el admin pueda crear picks a mano desde Lote F.
+  generadoPor       FuentePick
+  generadoEn        DateTime  @default(now())
+
+  // Aprobación. `aprobado` es atajo derivado de `estado` para indexes y
+  // queries rápidas. Cero auto-publicación: SIEMPRE pasa por humano.
+  estado            EstadoPick @default(PENDIENTE)
+  aprobado          Boolean    @default(false)
+  aprobadoPor       String?
+  aprobadoEn        DateTime?
+  rechazadoMotivo   String?
+
+  // Distribución al Channel + bot 1:1. `enviadoAlChannel` se setea cuando
+  // al menos un envío 1:1 fue exitoso. El admin sigue copiando el mensaje
+  // manualmente al Channel hasta que Meta libere API de Channels.
+  enviadoAlChannel  Boolean   @default(false)
+  enviadoEn         DateTime?
+  channelMessageId  String?
+
+  // Resultado post-partido. Lo marca el cron evaluador (cada hora) cuando
+  // el partido pasa a FINALIZADO.
+  resultadoFinal    ResultadoPick?
+  evaluadoEn        DateTime?
+
+  // Fecha base para ordenamiento en feed admin. Se setea al crear.
+  fechaPublicacion  DateTime  @default(now())
+
+  creadoEn          DateTime  @default(now())
+  actualizadoEn     DateTime  @updatedAt
+
+  @@index([partidoId, aprobado])
+  @@index([estado, fechaPublicacion(sort: Desc)])
+  @@index([aprobado, resultadoFinal])
+  @@map("picks_premium")
+}
+
+enum MercadoPick {
+  RESULTADO_1X2
+  BTTS
+  OVER_UNDER_25
+  TARJETA_ROJA
+  MARCADOR_EXACTO
+}
+
+enum FuentePick {
+  CLAUDE_API
+  EDITOR_MANUAL
+}
+
+enum EstadoPick {
+  PENDIENTE
+  APROBADO
+  EDITADO_Y_APROBADO
+  RECHAZADO
+}
+
+enum ResultadoPick {
+  GANADO
+  PERDIDO
+  NULO
+  PUSH
+}
+
+// Bot conversacional 1:1 vía WhatsApp Business API. Cada usuario que escriba
+// al número del bot abre una `ConversacionBot`. La cerramos (cerrada=true)
+// si el user no escribe en >7 días. Próximo mensaje del mismo número abre
+// nueva conversación.
+model ConversacionBot {
+  id              String    @id @default(cuid())
+  usuarioId       String?
+  usuario         Usuario?  @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  // Phone E.164 — siempre presente (lo provee el webhook de WhatsApp).
+  whatsappFrom    String
+  ultimoMensajeAt DateTime  @default(now())
+  cerrada         Boolean   @default(false)
+
+  mensajes        MensajeBot[]
+  creadoEn        DateTime  @default(now())
+
+  @@index([whatsappFrom, cerrada])
+  @@index([usuarioId, cerrada])
+  @@map("conversaciones_bot")
+}
+
+model MensajeBot {
+  id              String    @id @default(cuid())
+  conversacionId  String
+  conversacion    ConversacionBot @relation(fields: [conversacionId], references: [id], onDelete: Cascade)
+
+  rol             RolMensaje
+  contenido       String   @db.Text
+  // ID en WhatsApp para correlacionar con webhooks de status.
+  whatsappMsgId   String?
+
+  // Metadata si el mensaje fue generado por IA (rol=ASSISTANT).
+  generadoConIA   Boolean   @default(false)
+  modeloIA        String?
+  tokensUsados    Int?
+  // Si el mensaje del bot incluyó marker [DERIVAR_HUMANO] en respuesta y
+  // se notificó al admin por email.
+  fueDerivado     Boolean   @default(false)
+
+  creadoEn        DateTime  @default(now())
+
+  @@index([conversacionId, creadoEn])
+  @@map("mensajes_bot")
+}
+
+enum RolMensaje {
+  USER
+  ASSISTANT
+}
+
+// ==========================================
+// Lote F (May 2026) — Auditoría admin
+// ==========================================
+//
+// Registra cada acción admin destructiva o sensible (aprobar pick,
+// cancelar suscripción, reembolsar, marcar premio pagado, editar campañas
+// de newsletter, banear miembro, etc.). Regla 21 del CLAUDE.md:
+// auditoría 100%, nunca se sample-ea.
+//
+// `actorId` queda NULLABLE: si el actor fue un cron one-shot autenticado
+// con CRON_SECRET, no hay user real. `actorEmail` es la copia denormalizada
+// para no perder rastro si el usuario admin se elimina luego.
+
+model AuditoriaAdmin {
+  id          String   @id @default(cuid())
+  actorId     String?  // userId del admin que ejecutó la acción
+  actorEmail  String?  // snapshot del email para preservar trazabilidad
+  accion      String   // ej: "pick.aprobar", "suscripcion.cancelar", "premio.marcar_pagado"
+  entidad     String   // ej: "PickPremium", "Suscripcion", "PremioMensual"
+  entidadId   String?  // id del row mutado (cuando aplica)
+  resumen     String?  // descripción breve human-readable
+  metadata    Json?    // diff o contexto (ej: { motivo, montoOriginal, montoNuevo })
+  creadoEn    DateTime @default(now())
+
+  @@index([creadoEn(sort: Desc)])
+  @@index([entidad, creadoEn(sort: Desc)])
+  @@index([actorId, creadoEn(sort: Desc)])
+  @@map("auditoria_admin")
+}
+
+// ==========================================
+// Lote G (May 2026) — Admin desktop análisis
+// ==========================================
+//
+// Seis modelos:
+//
+//   - metricas_vitales       Core Web Vitals (LCP/INP/CLS) capturados por
+//                            web-vitals client lib. Sample 10% en cliente
+//                            para no saturar BD bajo tráfico real.
+//   - lighthouse_runs        Histórico de corridas Lighthouse (manual o
+//                            cron semanal con PageSpeed Insights API).
+//                            Score 0-100 por categoría + raw JSON.
+//   - costos_operativos      Costos mensuales editables por admin
+//                            (Anthropic, Resend, Railway, salarios, etc.)
+//                            UNIQUE (mes, categoria). Monto en céntimos PEN.
+//   - comisiones_afiliacion  Pagos de comisión que reportan las casas a
+//                            Habla! mensualmente. UNIQUE (mes, afiliadoId).
+//   - alarmas                Alarmas activas/desactivadas. Tipo (KPI /
+//                            EVENTO_CRITICO / MANUAL) + severidad. CRITICAL
+//                            dispara email; warn/info solo BD.
+//   - alarmas_config         Thresholds editables por KPI. El cron
+//                            evaluar-alarmas (1h) los lee, calcula valores
+//                            actuales y crea/desactiva alarmas idempotente.
+
+model MetricaVital {
+  id              String   @id @default(cuid())
+  // 'LCP' | 'INP' | 'CLS' | 'FCP' | 'TTFB' (Web Vitals oficiales).
+  nombre          String
+  // Valor en ms (LCP/INP/FCP/TTFB) o score sin unidad (CLS).
+  valor           Float
+  // Pathname de la página donde se midió. Ej. "/partidos/[slug]" reemplazado
+  // por el real ej. "/partidos/manchester-vs-liverpool". Hard cap 200 chars.
+  ruta            String
+  // 'mobile' | 'desktop' | 'tablet' inferido del UA.
+  deviceType      String?
+  // '4g' | '3g' | 'wifi' | 'slow-2g' del Network Information API (best-effort).
+  connectionType  String?
+  // UA truncado para análisis ad-hoc; no PII.
+  userAgent       String?
+  fecha           DateTime @default(now())
+
+  @@index([nombre, fecha(sort: Desc)])
+  @@index([ruta, nombre, fecha(sort: Desc)])
+  @@map("metricas_vitales")
+}
+
+model LighthouseRun {
+  id              String   @id @default(cuid())
+  ruta            String   // ej. "/", "/partidos/[slug]", "/comunidad", "/premium"
+  device          String   // 'mobile' | 'desktop'
+  // Scores 0-100 (PageSpeed Insights ya los normaliza).
+  performance     Int
+  accessibility   Int
+  bestPractices   Int
+  seo             Int
+  // Métricas crudas en ms (LCP / INP / CLS si están disponibles).
+  lcpMs           Int?
+  inpMs           Int?
+  cls             Float?
+  // Origen de la corrida.
+  origen          String   @default("cron") // 'cron' | 'manual'
+  // Email del admin que disparó (manual) o null (cron).
+  disparadoPor    String?
+  // Notas opcionales (ej. "post-deploy de Lote G").
+  notas           String?
+  fecha           DateTime @default(now())
+
+  @@index([ruta, device, fecha(sort: Desc)])
+  @@index([fecha(sort: Desc)])
+  @@map("lighthouse_runs")
+}
+
+model CostoOperativo {
+  id            String    @id @default(cuid())
+  // Formato YYYY-MM. Único por (mes, categoría) para idempotencia.
+  mes           String
+  // String libre: "anthropic_api" | "openpay_pasarela" | "whatsapp_api" |
+  // "resend" | "railway" | "cloudflare" | "salarios" | "premios_liga" |
+  // "marketing_paid" | "otros" | etc.
+  categoria     String
+  // Monto en céntimos PEN. 1 sol = 100. Permite Decimal-friendly sin Decimal.
+  monto         Int
+  notas         String?
+  // userId del admin que registró el costo. Snapshot — no FK.
+  registradoPor String?
+  registradoEn  DateTime  @default(now())
+  // Última edición (admin puede corregir post-cierre).
+  editadoEn     DateTime  @updatedAt
+
+  @@unique([mes, categoria])
+  @@index([mes])
+  @@map("costos_operativos")
+}
+
+model ComisionAfiliacion {
+  id            String    @id @default(cuid())
+  mes           String                  // YYYY-MM
+  afiliadoId    String
+  afiliado      Afiliado  @relation(fields: [afiliadoId], references: [id], onDelete: Cascade)
+  // Monto pagado por la casa al banco de Habla! ese mes (céntimos PEN).
+  monto         Int
+  // FTDs reportados que dispararon esa comisión (informativo).
+  ftdsContados  Int       @default(0)
+  notas         String?
+  registradoPor String?                  // userId del admin que registró
+  registradoEn  DateTime  @default(now())
+
+  @@unique([mes, afiliadoId])
+  @@index([mes])
+  @@index([afiliadoId, mes])
+  @@map("comisiones_afiliacion")
+}
+
+model Alarma {
+  id                  String         @id @default(cuid())
+  tipo                TipoAlarma
+  severidad           SeveridadAlarma
+  titulo              String
+  descripcion         String         @db.Text
+  // ID del KPI cuando tipo=KPI_THRESHOLD. Ej. 'conv_visita_registro'.
+  metricId            String?
+  // Datos contextuales (ej. {valorActual, threshold, ventanaMin, source}).
+  contexto            Json?
+  // Lifecycle.
+  activa              Boolean        @default(true)
+  desactivadaEn       DateTime?
+  desactivadaPor      String?              // null si auto-desactivada por cron
+  motivoDesactivacion String?
+  creadaEn            DateTime       @default(now())
+
+  @@index([activa, severidad, creadaEn(sort: Desc)])
+  @@index([metricId, activa])
+  @@map("alarmas")
+}
+
+enum TipoAlarma {
+  KPI_THRESHOLD
+  EVENTO_CRITICO
+  MANUAL
+}
+
+enum SeveridadAlarma {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+model AlarmaConfiguracion {
+  id              String          @id @default(cuid())
+  metricId        String          @unique     // ej. 'conv_visita_registro'
+  // Etiqueta human-readable del KPI (snapshot, así no requiere lookup).
+  metricLabel     String
+  // thresholdMin: alarma si valor < min. thresholdMax: alarma si valor > max.
+  // Ambos opcionales (algún KPI puede tener solo uno). Si los dos son null
+  // → config inerte (skipped por el cron).
+  thresholdMin    Float?
+  thresholdMax    Float?
+  // Duración en minutos que el valor debe estar fuera de threshold para
+  // disparar. 60-180 razonable para KPIs estables; 0 = instantáneo.
+  duracionMinutos Int             @default(60)
+  severidad       SeveridadAlarma @default(WARNING)
+  habilitada      Boolean         @default(true)
+  // Resumen humano que se incluye en la descripción de la alarma cuando
+  // dispara. Ej. "Conversión visita→registro cayó debajo de 2%".
+  notasInternas   String?
+  creadoEn        DateTime        @default(now())
+  actualizadoEn   DateTime        @updatedAt
+
+  @@index([habilitada, metricId])
+  @@map("alarmas_config")
 }

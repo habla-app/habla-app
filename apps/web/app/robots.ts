@@ -1,10 +1,19 @@
 // robots.ts — Next.js App Router Metadata Files API.
 // Se sirve en /robots.txt.
 //
-// Política:
-//   - Indexamos: home, matches, torneos públicos, /legal/*, /ayuda/*,
-//     y todas las rutas editoriales del grupo (public) (Lote 8).
-//   - No indexamos: áreas privadas, auth, API, uploads, admin.
+// Política (Lote J — v3.1):
+//   - Indexamos: home, /cuotas, /partidos/*, /live-match (público),
+//     /legal/*, /ayuda/*, /premium, y todas las rutas editoriales del
+//     grupo (public).
+//   - No indexamos: áreas privadas (/perfil, /mis-predicciones,
+//     /comunidad/torneo/[slug], /comunidad/mes/[mes]), legacy
+//     /torneo/[id] (redirige 301 a privado), auth, API, uploads, admin.
+//
+// Nota: el path `/comunidad/[username]` (perfil público de un tipster)
+// queda accesible para Google sin entrada explícita en allow porque
+// `/comunidad` ya cubre el prefijo. La ruta `/comunidad/torneo/` queda
+// excluida por estar en disallow (más específica gana en interpretación
+// permisiva, pero por seguridad la dejamos explícita).
 
 import type { MetadataRoute } from "next";
 
@@ -17,8 +26,8 @@ export default function robots(): MetadataRoute.Robots {
         userAgent: "*",
         allow: [
           "/",
-          "/matches",
-          "/torneo/",
+          "/cuotas",
+          "/partidos/",
           "/live-match",
           "/legal/",
           "/ayuda/",
@@ -31,15 +40,26 @@ export default function robots(): MetadataRoute.Robots {
           "/guias/",
           "/pronosticos",
           "/pronosticos/",
-          "/partidos/",
-          "/cuotas",
           "/comunidad",
+          // Lote B v3.1 — Premium landing público
+          "/premium",
+          "/suscribir",
         ],
         disallow: [
           "/admin",
           "/admin/",
           "/perfil",
+          "/mis-predicciones",
           "/mis-combinadas",
+          "/comunidad/torneo/",
+          "/comunidad/mes/",
+          // Legacy del Lote 0 — redirige 301 a /comunidad/torneo/[slug]
+          // (privada). No indexar la URL antigua.
+          "/torneo/",
+          // Premium privadas (post-suscripción)
+          "/premium/checkout",
+          "/premium/exito",
+          "/premium/mi-suscripcion",
           "/api/",
           "/auth/",
           "/uploads/",

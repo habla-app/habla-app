@@ -30,7 +30,7 @@ export function MisTicketsTabs({ active, counts }: MisTicketsTabsProps) {
     const params = new URLSearchParams(sp?.toString() ?? "");
     if (tab === "activas") params.delete("tab");
     else params.set("tab", tab);
-    router.replace(`/mis-combinadas${params.toString() ? `?${params.toString()}` : ""}`);
+    router.replace(`/mis-predicciones${params.toString() ? `?${params.toString()}` : ""}`);
   }
 
   const countByValue: Record<TicketsTab, number> = {

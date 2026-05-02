@@ -508,3 +508,192 @@ export function cuentaEliminadaTemplate(input: CuentaEliminadaInput) {
   return { subject, html, text };
 }
 
+// ============================================================================
+// Lote E (May 2026) — Premium emails
+// ============================================================================
+
+const PLAN_LABEL: Record<"MENSUAL" | "TRIMESTRAL" | "ANUAL", string> = {
+  MENSUAL: "Mensual",
+  TRIMESTRAL: "Trimestral",
+  ANUAL: "Anual",
+};
+
+const PLAN_PRECIO: Record<"MENSUAL" | "TRIMESTRAL" | "ANUAL", number> = {
+  MENSUAL: 49,
+  TRIMESTRAL: 119,
+  ANUAL: 399,
+};
+
+function fmtFechaEs(date: Date): string {
+  try {
+    return date.toLocaleDateString("es-PE", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+      timeZone: "America/Lima",
+    });
+  } catch {
+    return date.toISOString().slice(0, 10);
+  }
+}
+
+export interface BienvenidaPremiumInput {
+  nombre: string;
+  plan: "MENSUAL" | "TRIMESTRAL" | "ANUAL";
+  proximoCobro: Date;
+  channelLink: string | null;
+}
+
+export function bienvenidaPremiumTemplate(input: BienvenidaPremiumInput) {
+  const subject = `🎉 ¡Bienvenido a Habla! Premium!`;
+  const planLabel = PLAN_LABEL[input.plan];
+  const proxFecha = fmtFechaEs(input.proximoCobro);
+  const channelButton = input.channelLink
+    ? ctaButton("📱 Unirme al WhatsApp Channel", input.channelLink)
+    : `<div style="background:#F5F7FC;border-left:4px solid #FFB800;padding:14px 16px;border-radius:8px;margin:16px 0;font-size:13px;color:rgba(0,16,80,0.85);line-height:1.5;">
+        Te enviaremos el link al WhatsApp Channel privado en las próximas 24 horas.
+       </div>`;
+
+  const html = wrapEmail(
+    subject,
+    `<h1 style="margin:0 0 8px;font-size:26px;color:#001050;">🎉 ¡Bienvenido, ${escapeHtml(input.nombre)}!</h1>
+    <p style="margin:0 0 16px;font-size:16px;color:rgba(0,16,80,0.85);line-height:1.55;">
+      Tu suscripción <strong>Habla! Premium ${escapeHtml(planLabel)}</strong> está <strong>activa</strong>.
+    </p>
+    <div style="background:linear-gradient(135deg,#FFF8E1,#FFFDF5);border:1.5px solid #FFB800;border-radius:14px;padding:20px;margin:20px 0;">
+      <h2 style="margin:0 0 12px;font-size:16px;color:#001050;">Lo que ahora tienes:</h2>
+      <ul style="margin:0;padding-left:22px;font-size:14px;color:rgba(0,16,80,0.85);line-height:1.7;">
+        <li><strong>2-4 picks/día</strong> con razonamiento estadístico y EV+</li>
+        <li><strong>Casa con mejor cuota</strong> incluida en cada pick</li>
+        <li><strong>Alertas en vivo</strong> durante partidos top</li>
+        <li><strong>Bot FAQ 24/7</strong> en WhatsApp 1:1</li>
+        <li><strong>Resumen semanal</strong> los lunes</li>
+      </ul>
+    </div>
+    ${channelButton}
+    <h2 style="margin:24px 0 8px;font-size:18px;color:#001050;">Detalles de tu suscripción</h2>
+    <ul style="margin:0 0 16px;padding-left:22px;font-size:14px;color:rgba(0,16,80,0.85);line-height:1.7;">
+      <li>Plan: <strong>${escapeHtml(planLabel)}</strong> (S/ ${PLAN_PRECIO[input.plan]})</li>
+      <li>Próximo cobro: <strong>${escapeHtml(proxFecha)}</strong></li>
+      <li>Garantía: <strong>7 días sin compromiso</strong></li>
+    </ul>
+    <div style="background:#F5F7FC;border-left:4px solid #0052CC;padding:14px 16px;border-radius:8px;margin:16px 0;font-size:13px;color:rgba(0,16,80,0.85);line-height:1.5;">
+      Puedes gestionar tu suscripción en cualquier momento desde
+      <a href="${BASE_URL}/premium/mi-suscripcion" style="color:#001050;font-weight:700;">tu panel</a>.
+    </div>
+    <p style="margin:24px 0 0;font-size:12px;color:rgba(0,16,80,0.58);text-align:center;line-height:1.5;">
+      Apuesta responsable. Línea Tugar (gratuita): 0800-19009.
+    </p>`,
+  );
+
+  const text = `¡Bienvenido a Habla! Premium, ${input.nombre}!
+Tu plan ${planLabel} está activo. Próximo cobro: ${proxFecha}.
+${input.channelLink ? `Únete al Channel: ${input.channelLink}` : "Te enviaremos el link al WhatsApp Channel en las próximas 24h."}
+Gestiona tu suscripción: ${BASE_URL}/premium/mi-suscripcion
+Apuesta responsable. Línea Tugar: 0800-19009.`;
+
+  return { subject, html, text };
+}
+
+export interface RenovacionPremiumInput {
+  nombre: string;
+  plan: "MENSUAL" | "TRIMESTRAL" | "ANUAL";
+  proximoCobro: Date;
+  monto: number; // céntimos de soles
+}
+
+export function renovacionPremiumTemplate(input: RenovacionPremiumInput) {
+  const planLabel = PLAN_LABEL[input.plan];
+  const subject = `✅ Cobro confirmado · Habla! Premium ${planLabel}`;
+  const montoSoles = (input.monto / 100).toFixed(2);
+  const proxFecha = fmtFechaEs(input.proximoCobro);
+
+  const html = wrapEmail(
+    subject,
+    `<h1 style="margin:0 0 8px;font-size:24px;color:#001050;">✅ Cobro confirmado</h1>
+    <p style="margin:0 0 16px;font-size:15px;color:rgba(0,16,80,0.85);line-height:1.5;">
+      ${escapeHtml(input.nombre)}, confirmamos el cobro de tu suscripción
+      <strong>Habla! Premium ${escapeHtml(planLabel)}</strong>.
+    </p>
+    <div style="background:#F5F7FC;border-radius:12px;padding:16px;margin:16px 0;">
+      <div style="display:flex;justify-content:space-between;font-size:14px;color:rgba(0,16,80,0.85);line-height:1.7;">
+        <span>Monto cobrado</span><span style="font-weight:700;">S/ ${montoSoles}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:14px;color:rgba(0,16,80,0.85);line-height:1.7;">
+        <span>Plan</span><span style="font-weight:700;">${escapeHtml(planLabel)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:14px;color:rgba(0,16,80,0.85);line-height:1.7;">
+        <span>Próximo cobro</span><span style="font-weight:700;">${escapeHtml(proxFecha)}</span>
+      </div>
+    </div>
+    ${ctaButton("Ver mi suscripción", `${BASE_URL}/premium/mi-suscripcion`)}
+    <p style="margin:24px 0 0;font-size:12px;color:rgba(0,16,80,0.58);text-align:center;line-height:1.5;">
+      Si no reconoces este cobro, escríbenos a <a href="mailto:soporte@hablaplay.com" style="color:#001050;">soporte@hablaplay.com</a>.
+    </p>`,
+  );
+
+  const text = `Cobro confirmado: S/ ${montoSoles} (${planLabel}). Próximo cobro: ${proxFecha}. Ver: ${BASE_URL}/premium/mi-suscripcion`;
+  return { subject, html, text };
+}
+
+export interface ReembolsoPremiumInput {
+  nombre: string;
+  monto: number; // céntimos
+}
+
+export function reembolsoPremiumTemplate(input: ReembolsoPremiumInput) {
+  const montoSoles = (input.monto / 100).toFixed(2);
+  const subject = `↩️ Reembolso procesado · S/ ${montoSoles}`;
+  const html = wrapEmail(
+    subject,
+    `<h1 style="margin:0 0 8px;font-size:24px;color:#001050;">↩️ Reembolso procesado</h1>
+    <p style="margin:0 0 16px;font-size:15px;color:rgba(0,16,80,0.85);line-height:1.5;">
+      ${escapeHtml(input.nombre)}, procesamos el reembolso completo de tu suscripción Habla! Premium.
+    </p>
+    <div style="background:#F5F7FC;border-radius:12px;padding:16px;margin:16px 0;text-align:center;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:rgba(0,16,80,0.7);">Monto reembolsado</div>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:40px;font-weight:900;color:#001050;line-height:1;margin:8px 0;">S/ ${montoSoles}</div>
+    </div>
+    <p style="margin:16px 0;font-size:14px;color:rgba(0,16,80,0.85);line-height:1.5;">
+      El reembolso aparecerá en tu cuenta en <strong>3 a 7 días hábiles</strong>, según tu banco.
+    </p>
+    <p style="margin:16px 0;font-size:14px;color:rgba(0,16,80,0.85);line-height:1.5;">
+      Tu acceso al WhatsApp Channel y al bot Premium se desactivó. Si querés volver más adelante:
+    </p>
+    ${ctaButton("Volver a Premium", `${BASE_URL}/premium`)}
+    <p style="margin:24px 0 0;font-size:12px;color:rgba(0,16,80,0.58);text-align:center;line-height:1.5;">
+      Cualquier consulta: soporte@hablaplay.com
+    </p>`,
+  );
+  const text = `Reembolso procesado: S/ ${montoSoles}. Aparecerá en tu cuenta en 3-7 días hábiles. Volver a Premium: ${BASE_URL}/premium`;
+  return { subject, html, text };
+}
+
+export interface FalloPagoPremiumInput {
+  nombre: string;
+  motivo: string;
+}
+
+export function falloPagoPremiumTemplate(input: FalloPagoPremiumInput) {
+  const subject = `⚠️ No pudimos procesar tu pago · Habla! Premium`;
+  const html = wrapEmail(
+    subject,
+    `<h1 style="margin:0 0 8px;font-size:24px;color:#001050;">⚠️ Pago rechazado</h1>
+    <p style="margin:0 0 16px;font-size:15px;color:rgba(0,16,80,0.85);line-height:1.5;">
+      ${escapeHtml(input.nombre)}, intentamos cobrar tu suscripción a Habla! Premium pero el pago fue rechazado.
+    </p>
+    <div style="background:#FEF2F2;border-left:4px solid #DC2626;padding:14px 16px;border-radius:8px;margin:16px 0;font-size:14px;color:rgba(0,16,80,0.85);line-height:1.5;">
+      Motivo: ${escapeHtml(input.motivo)}
+    </div>
+    <p style="margin:16px 0;font-size:14px;color:rgba(0,16,80,0.85);line-height:1.5;">
+      Si querés activar Premium, intentá de nuevo desde la web — podés probar otra tarjeta o método.
+    </p>
+    ${ctaButton("Reintentar suscripción", `${BASE_URL}/premium/checkout`)}
+    <p style="margin:24px 0 0;font-size:12px;color:rgba(0,16,80,0.58);text-align:center;line-height:1.5;">
+      Cualquier consulta: soporte@hablaplay.com
+    </p>`,
+  );
+  const text = `Tu pago fue rechazado. Motivo: ${input.motivo}. Reintentar: ${BASE_URL}/premium/checkout`;
+  return { subject, html, text };
+}
+

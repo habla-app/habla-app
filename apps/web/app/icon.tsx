@@ -1,8 +1,11 @@
-// Icono principal del sitio — generado dinámicamente via ImageResponse.
-// Next.js lo sirve en `/icon?<hash>` y lo inyecta como <link rel="icon">.
+// Icono principal del sitio (192×192) — generado dinámicamente via
+// ImageResponse. Next.js lo sirve en `/icon?<hash>` y lo inyecta como
+// <link rel="icon">.
 //
-// Placeholder brand — reemplazar con asset gráfico final (ver TODO en
-// CLAUDE.md §SEO).
+// Lote I v3.1 (1 may 2026): refresh para soporte maskable PWA — borde
+// recto (sin borderRadius) y H! centrado dentro de safe zone (40%
+// radius). El OS aplica su propia máscara (círculo Android, squircle
+// iOS) al instalar como PWA.
 
 import { ImageResponse } from "next/og";
 
@@ -26,7 +29,6 @@ export default async function Icon() {
           fontWeight: 900,
           letterSpacing: "-0.03em",
           fontFamily: "sans-serif",
-          borderRadius: 36,
         }}
       >
         H!

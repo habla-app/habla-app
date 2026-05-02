@@ -25,6 +25,7 @@ import {
   type PartidoLive,
 } from "@/lib/services/live-matches.service";
 import { getLiveStatus } from "@/lib/services/live-partido-status.cache";
+import { detectarEstadoUsuario } from "@/lib/services/estado-usuario.service";
 import {
   LIGA_CHIP_LABELS,
   LIGA_SLUGS_ORDER,
@@ -37,6 +38,7 @@ import {
 } from "@/components/live/LiveMatchView";
 import type { FinalizedMatchCard } from "@/components/live/LiveFinalizedSection";
 import type { LigaChipInfo } from "@/components/live/LiveLeagueFilter";
+import { AlertasPremium } from "@/components/live/AlertasPremium";
 import { buildFinalizedWinnerChips } from "@/components/live/finalized-winner-chips";
 
 interface Props {
@@ -201,6 +203,12 @@ export default async function LiveMatchPage({ searchParams }: Props) {
       : null,
   };
 
+  // Lote C v3.1 — Premium slot + cross-link a Producto B.
+  const estadoUsuario = await detectarEstadoUsuario(session?.user?.id);
+  const esPremium = estadoUsuario === "premium";
+  const partidoSlugCrossLink =
+    activeTab.estado === "EN_VIVO" ? activeTab.partidoId : null;
+
   return (
     <LiveMatchView
       tabs={activeTabs}
@@ -212,6 +220,12 @@ export default async function LiveMatchPage({ searchParams }: Props) {
       finalizedCards={finalizedCards}
       filtroActivo={ligaSlug !== null}
       proximoTorneoId={proximoTorneoId}
+      slotPremium={
+        activeTab.estado === "EN_VIVO" ? (
+          <AlertasPremium esPremium={esPremium} />
+        ) : null
+      }
+      partidoSlugCrossLink={partidoSlugCrossLink}
     />
   );
 }
@@ -335,7 +349,7 @@ function EmptyLive() {
           Cuando arranque algún torneo, el ranking en tiempo real aparece acá.
         </p>
         <a
-          href="/matches"
+          href="/cuotas"
           className="mt-5 inline-flex items-center justify-center gap-2 rounded-md bg-brand-gold px-5 py-3 font-display text-[14px] font-extrabold uppercase tracking-[0.04em] text-black shadow-gold-btn transition-colors hover:bg-brand-gold-light"
         >
           Ver partidos próximos

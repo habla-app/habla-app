@@ -22,6 +22,7 @@ import {
   ValidacionFallida,
 } from "@/lib/services/errors";
 import { logger } from "@/lib/services/logger";
+import { logAuditoria } from "@/lib/services/auditoria.service";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -64,6 +65,18 @@ export async function POST(req: NextRequest) {
     const semana = parsed.data.semana ?? getSemanaIsoKey();
     const aprobadoPor = session?.user?.email ?? "cron-secret";
     const result = await aprobarYEnviarDigest({ semana, aprobadoPor });
+
+    // Auditoría 100% — regla 21 del CLAUDE.md
+    await logAuditoria({
+      actorId: session?.user?.id ?? null,
+      actorEmail: session?.user?.email ?? null,
+      accion: "newsletter.aprobar_y_enviar",
+      entidad: "DigestEnviado",
+      entidadId: semana,
+      resumen: `Digest semana ${semana} aprobado y enviado`,
+      metadata: { ...result },
+    });
+
     logger.info(result, "POST /api/v1/admin/newsletter/aprobar");
     return Response.json({ data: result });
   } catch (err) {

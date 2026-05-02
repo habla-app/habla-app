@@ -1,62 +1,56 @@
-// StatsGrid — pstat cards del mockup `.profile-stats-grid`.
+// StatsGrid — 6 stats del perfil (Lote C v3.1, refactor del Lote 11).
+// Spec: docs/ux-spec/03-pista-usuario-autenticada/perfil.spec.md.
 //
-// Lote 11 (May 2026): 6 stats (Predicciones · Aciertos · % Acierto ·
-// Mejor mes · Posición histórica · Nivel). Combina datos de
-// `PerfilCompleto` (ya cubre torneos jugados / mejor puesto / nivel) y
-// `MisStatsMensuales` del Lote 5 (mejor mes histórico). Si el usuario
-// nunca ganó un mes, el campo cae a "—".
+// Cambios vs Lote 11:
+//   - Grid mobile 3-columnas (era 2-columnas), aprovecha la tipografía
+//     `text-num-*` para que los números más largos no rompan el layout.
+//   - Cada card tiene padding más compacto pensado para 375px.
+//   - Stats: Predicciones · Aciertos · % Acierto · Mejor mes · Pos.
+//     histórica · Nivel.
+//   - Cero hex hardcodeados.
 
 import type { PerfilCompleto } from "@/lib/services/usuarios.service";
 import type { MisStatsMensuales } from "@/lib/services/leaderboard.service";
 
 interface StatsGridProps {
   perfil: PerfilCompleto;
-  /** Stats mensuales (Lote 5). Si el usuario nunca ganó un mes,
-   *  `mejorMes` es null. */
   mensual?: MisStatsMensuales | null;
 }
 
 export function StatsGrid({ perfil, mensual }: StatsGridProps) {
   const { stats, nivel } = perfil;
 
-  const pills: Array<{
-    icon: string;
+  const items: Array<{
     value: string;
     label: string;
     tone: "neutral" | "gold" | "green" | "purple" | "blue";
   }> = [
     {
-      icon: "🎯",
       value: stats.jugadas.toString(),
       label: "Predicciones",
       tone: "neutral",
     },
     {
-      icon: "🏆",
       value: stats.ganadas.toString(),
-      label: "Aciertos (Top 10)",
+      label: "Aciertos",
       tone: "gold",
     },
     {
-      icon: "📈",
       value: `${stats.aciertoPct}%`,
-      label: "% Acierto",
+      label: "Acierto",
       tone: "green",
     },
     {
-      icon: "🥇",
       value: mensual?.mejorMes ? `#${mensual.mejorMes.posicion}` : "—",
       label: "Mejor mes",
       tone: "blue",
     },
     {
-      icon: "⭐",
-      value: stats.mejorPuesto ? `${stats.mejorPuesto}°` : "—",
+      value: stats.mejorPuesto ? `#${stats.mejorPuesto}` : "—",
       label: "Pos. histórica",
       tone: "purple",
     },
     {
-      icon: nivel.actual.emoji,
       value: nivel.actual.label,
       label: "Nivel",
       tone: "gold",
@@ -64,21 +58,19 @@ export function StatsGrid({ perfil, mensual }: StatsGridProps) {
   ];
 
   return (
-    <section className="mb-6 grid grid-cols-2 gap-2.5 md:grid-cols-3 lg:grid-cols-6">
-      {pills.map((p) => (
-        <PStat key={p.label} {...p} />
+    <section className="grid grid-cols-3 gap-2 bg-card px-4 py-4">
+      {items.map((it) => (
+        <StatCard key={it.label} {...it} />
       ))}
     </section>
   );
 }
 
-function PStat({
-  icon,
+function StatCard({
   value,
   label,
   tone,
 }: {
-  icon: string;
   value: string;
   label: string;
   tone: "neutral" | "gold" | "green" | "purple" | "blue";
@@ -94,16 +86,13 @@ function PStat({
             ? "text-brand-blue-main"
             : "text-dark";
   return (
-    <div className="rounded-md border border-light bg-card px-2 py-3.5 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <div aria-hidden className="mb-1 text-xl leading-none">
-        {icon}
-      </div>
+    <div className="rounded-md bg-subtle px-2 py-3 text-center">
       <div
-        className={`font-display text-[18px] font-black leading-tight md:text-[20px] ${valueCls}`}
+        className={`font-display text-[22px] font-black leading-none ${valueCls}`}
       >
         {value}
       </div>
-      <div className="mt-1 text-[10px] font-bold uppercase leading-tight tracking-[0.05em] text-muted-d">
+      <div className="mt-1.5 text-label-sm font-bold uppercase tracking-[0.04em] text-muted-d">
         {label}
       </div>
     </div>

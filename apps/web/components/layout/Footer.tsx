@@ -10,11 +10,17 @@
 import Link from "next/link";
 
 const PRODUCTO_LINKS: Array<{ label: string; href: string }> = [
+  { label: "Partidos y cuotas", href: "/cuotas" },
   { label: "Pronósticos", href: "/pronosticos" },
+  { label: "Liga Habla!", href: "/comunidad" },
   { label: "Casas autorizadas", href: "/casas" },
-  { label: "Comunidad", href: "/comunidad" },
-  { label: "Cuotas", href: "/cuotas" },
   { label: "Newsletter", href: "/suscribir" },
+];
+
+const PREMIUM_LINKS: Array<{ label: string; href: string }> = [
+  { label: "Probar Premium", href: "/premium" },
+  { label: "¿Cómo funciona?", href: "/premium#como-funciona" },
+  { label: "Garantía 7 días", href: "/premium#garantia" },
 ];
 
 const EDITORIAL_LINKS: Array<{ label: string; href: string }> = [
@@ -78,8 +84,8 @@ export function Footer() {
 
   return (
     <footer className="border-t border-dark-border bg-dark-surface text-white">
-      {/* GRID 4 COLUMNAS */}
-      <div className="mx-auto grid max-w-[1400px] gap-10 px-6 py-12 md:grid-cols-2 md:py-16 lg:grid-cols-4 lg:gap-8 lg:py-20">
+      {/* GRID 5 COLUMNAS */}
+      <div className="mx-auto grid max-w-[1400px] gap-10 px-6 py-12 md:grid-cols-2 md:py-16 lg:grid-cols-5 lg:gap-8 lg:py-20">
         {/* Col 1 — Marca + redes */}
         <div>
           <div className="mb-3 flex items-center gap-2.5">
@@ -92,7 +98,7 @@ export function Footer() {
             <span className="font-display text-[26px] font-black">Habla!</span>
           </div>
           <p className="mb-4 text-[14px] leading-[1.6] text-dark-muted">
-            Comunidad gratuita de pronósticos deportivos en Perú.
+            Habla! · Todas las fijas en una.
           </p>
           <ul className="flex items-center gap-2.5">
             {REDES_SOCIALES.map((r) => (
@@ -130,7 +136,29 @@ export function Footer() {
           </ul>
         </div>
 
-        {/* Col 3 — Editorial */}
+        {/* Col 3 — Premium */}
+        <div>
+          <h3 className="mb-4 font-display text-[13px] font-bold uppercase tracking-wider text-brand-gold">
+            Premium
+          </h3>
+          <p className="mb-3 text-[12px] leading-[1.55] text-dark-muted">
+            Picks por WhatsApp con razonamiento estadístico.
+          </p>
+          <ul className="space-y-2.5 text-[14px] text-dark-muted">
+            {PREMIUM_LINKS.map((l) => (
+              <li key={l.href}>
+                <Link
+                  href={l.href}
+                  className="transition-colors hover:text-white"
+                >
+                  {l.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Col 4 — Editorial */}
         <div>
           <h3 className="mb-4 font-display text-[13px] font-bold uppercase tracking-wider text-brand-gold">
             Editorial
@@ -149,7 +177,7 @@ export function Footer() {
           </ul>
         </div>
 
-        {/* Col 4 — Legal */}
+        {/* Col 5 — Legal */}
         <div>
           <h3 className="mb-4 font-display text-[13px] font-bold uppercase tracking-wider text-brand-gold">
             Legal

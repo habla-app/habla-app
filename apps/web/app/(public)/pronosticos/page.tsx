@@ -20,20 +20,22 @@ export default function PronosticosIndexPage() {
   const ligas = pronosticos.getMetaEntries();
 
   return (
-    <div className="mx-auto max-w-[1200px] px-4 py-10 md:px-6 md:py-14">
-      <header className="mb-8">
-        <h1 className="mb-3 font-display text-[40px] font-black leading-tight text-dark md:text-[48px]">
-          Pronósticos
+    <div className="mx-auto w-full max-w-[1200px] px-4 py-6 md:px-6 md:py-10">
+      <header className="mb-6">
+        <p className="mb-2 inline-block rounded-sm bg-brand-blue-main/10 px-2.5 py-1 text-label-sm text-brand-blue-main">
+          🎯 Pronósticos editoriales
+        </p>
+        <h1 className="font-display text-display-lg leading-tight text-dark md:text-[40px]">
+          Análisis por liga
         </h1>
-        <p className="max-w-[720px] text-[16px] leading-[1.7] text-body">
-          Análisis editorial de los partidos próximos, fecha por fecha, liga
-          por liga. Cada liga abre con la previa de la fecha en curso y se
-          actualiza durante la semana.
+        <p className="mt-2 text-body-md leading-[1.55] text-body">
+          Liga 1 Perú, Champions, La Liga, Premier — cada liga con su previa
+          de la fecha en curso.
         </p>
       </header>
 
       {ligas.length === 0 ? (
-        <p className="rounded-md border border-light bg-card px-5 py-10 text-center text-[14px] text-muted-d">
+        <p className="rounded-md border border-light bg-card px-5 py-10 text-center text-body-sm text-muted-d">
           Estamos preparando los primeros pronósticos. Volvé pronto.
         </p>
       ) : (
@@ -42,7 +44,7 @@ export default function PronosticosIndexPage() {
             <Link
               key={l.liga}
               href={`/pronosticos/${l.liga}`}
-              className="group flex items-center gap-4 rounded-md border border-light bg-card p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+              className="touch-target group flex items-center gap-4 rounded-md border border-light bg-card p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md md:p-5"
             >
               <span
                 aria-hidden
@@ -51,10 +53,10 @@ export default function PronosticosIndexPage() {
                 ⚽
               </span>
               <div className="min-w-0 flex-1">
-                <h2 className="m-0 font-display text-[18px] font-extrabold leading-tight text-dark group-hover:text-brand-blue-main">
+                <h2 className="m-0 font-display text-display-sm leading-tight text-dark group-hover:text-brand-blue-main">
                   {l.nombre}
                 </h2>
-                <p className="mt-0.5 text-[12px] text-muted-d">
+                <p className="mt-0.5 text-body-xs text-muted-d">
                   Pronósticos editoriales
                 </p>
               </div>
