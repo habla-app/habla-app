@@ -17,8 +17,15 @@
 //
 // Si api-football devuelve error para una liga, se loguea y seguimos
 // con las demás (una liga caída no tumba la corrida completa).
+//
+// Lote L v3.2 (May 2026): detecta transiciones críticas para enviar
+// notificaciones por email a los usuarios con tickets activos:
+//   - Cambio de `fechaInicio` (decisión §4.9.3): partido pospuesto.
+//     Email PartidoPospuesto + reset de Torneo.cierreAt.
+//   - Transición de estado a CANCELADO (decisión §4.9.4): cero puntos
+//     para todos. Email PartidoCancelado.
 
-import { prisma } from "@habla/db";
+import { prisma, type EstadoPartido } from "@habla/db";
 import {
   LIGAS_ACTIVAS,
   DIAS_VENTANA_IMPORT,
@@ -32,6 +39,11 @@ import { fixtureToPartidoInput } from "./partidos.mapper";
 import { getSeasonForLeague } from "./seasons.cache";
 import { CIERRE_MIN_BEFORE } from "./torneos.service";
 import { logger } from "./logger";
+import { sendEmail } from "@/lib/email/send";
+import {
+  PartidoCancelado,
+  PartidoPospuesto,
+} from "@/lib/email/templates";
 
 export interface ImportLigaResult {
   liga: string;
@@ -129,10 +141,16 @@ async function procesarFixtures(
     // preferimos el nombre canónico de nuestra config para evitar drift.
     input.liga = liga.nombre;
 
-    // ── 1. UPSERT partido ──
-    const existia = await prisma.partido.findUnique({
+    // ── 1. UPSERT partido (detectando transiciones críticas) ──
+    // Lote L v3.2: leemos el row previo con campos suficientes para detectar
+    // pospuesto (fechaInicio cambió) y cancelado (estado pasó a CANCELADO).
+    const previo = await prisma.partido.findUnique({
       where: { externalId: input.externalId },
-      select: { id: true },
+      select: {
+        id: true,
+        fechaInicio: true,
+        estado: true,
+      },
     });
 
     const partido = await prisma.partido.upsert({
@@ -153,8 +171,28 @@ async function procesarFixtures(
       },
     });
 
-    if (existia) partidosActualizados += 1;
-    else partidosCreados += 1;
+    if (previo) {
+      partidosActualizados += 1;
+      // Lote L v3.2: detección de transiciones — fire-and-forget, no
+      // bloquea el batch ni rompe la corrida si los emails fallan.
+      void detectarYNotificarTransiciones({
+        partidoId: partido.id,
+        ligaNombre: liga.nombre,
+        equipoLocal: input.equipoLocal,
+        equipoVisita: input.equipoVisita,
+        fechaInicioPrevia: previo.fechaInicio,
+        fechaInicioNueva: input.fechaInicio,
+        estadoPrevio: previo.estado,
+        estadoNuevo: input.estado,
+      }).catch((err) => {
+        logger.error(
+          { err, partidoId: partido.id, source: "partidos-import:transiciones" },
+          "detectarYNotificarTransiciones falló",
+        );
+      });
+    } else {
+      partidosCreados += 1;
+    }
 
     // ── 2. CREAR torneo si no existe (regla dura) ──
     // Solo creamos torneo para partidos que todavía pueden jugarse. Si
@@ -187,3 +225,171 @@ async function procesarFixtures(
 
   return { partidosCreados, partidosActualizados, torneosCreados };
 }
+
+// ---------------------------------------------------------------------------
+// Lote L v3.2: detección y notificación de transiciones críticas
+// ---------------------------------------------------------------------------
+
+/** Tolerancia para considerar que `fechaInicio` "cambió" — evita falsos
+ *  positivos por jitter de api-football (segundos de diferencia entre runs). */
+const FECHA_INICIO_TOLERANCIA_MS = 60_000; // 1 minuto
+
+interface TransicionInput {
+  partidoId: string;
+  ligaNombre: string;
+  equipoLocal: string;
+  equipoVisita: string;
+  fechaInicioPrevia: Date;
+  fechaInicioNueva: Date;
+  estadoPrevio: EstadoPartido;
+  estadoNuevo: EstadoPartido;
+}
+
+/**
+ * Detecta dos transiciones críticas y notifica por email a los usuarios con
+ * tickets activos en torneos del partido:
+ *
+ *   1. Cambio de `fechaInicio` (decisión §4.9.3): partido pospuesto. Email
+ *      `PartidoPospuesto`. Adicionalmente actualiza `Torneo.cierreAt` para
+ *      que el cron de cierre respete el nuevo kickoff y el ticket siga
+ *      editable hasta el nuevo horario.
+ *   2. Transición de estado a CANCELADO (decisión §4.9.4): cero puntos
+ *      para todos. Email `PartidoCancelado`. Los puntos no se mutan acá —
+ *      el evaluador `puntuacion.service` ya respeta el estado CANCELADO.
+ *
+ * Ambos casos se ejecutan independiente; un partido cancelado además puede
+ * haber cambiado de fecha (raro, pero pasa) — mandamos los dos emails
+ * separados si así fuera, son notificaciones distintas.
+ */
+async function detectarYNotificarTransiciones(
+  input: TransicionInput,
+): Promise<void> {
+  const fechaCambio =
+    Math.abs(
+      input.fechaInicioNueva.getTime() - input.fechaInicioPrevia.getTime(),
+    ) > FECHA_INICIO_TOLERANCIA_MS;
+  const transicionACancelado =
+    input.estadoNuevo === "CANCELADO" && input.estadoPrevio !== "CANCELADO";
+
+  if (!fechaCambio && !transicionACancelado) return;
+
+  // Cargar usuarios con tickets activos en torneos de este partido. Filtramos
+  // a usuarios no eliminados y con email.
+  const tickets = await prisma.ticket.findMany({
+    where: {
+      torneo: {
+        partidoId: input.partidoId,
+        estado: { in: ["ABIERTO", "CERRADO", "EN_JUEGO"] },
+      },
+      usuario: { deletedAt: null, email: { not: "" } },
+    },
+    select: {
+      id: true,
+      usuario: { select: { id: true, email: true, username: true } },
+    },
+  });
+
+  const partidoNombre = `${input.equipoLocal} vs ${input.equipoVisita}`;
+  // Slug del partido: el mapeo formal partido↔slug vive en Lote M (vista
+  // /liga/[slug]). Hasta entonces, dejamos null y el email apunta a /liga.
+  const partidoSlug: string | null = null;
+
+  // 1. Pospuesto — actualizar cierreAt y mandar email
+  if (fechaCambio && !transicionACancelado) {
+    const nuevoCierre = new Date(
+      input.fechaInicioNueva.getTime() - CIERRE_MIN_BEFORE * 60 * 1000,
+    );
+    await prisma.torneo.updateMany({
+      where: {
+        partidoId: input.partidoId,
+        estado: { in: ["ABIERTO", "CERRADO"] },
+      },
+      data: { cierreAt: nuevoCierre, estado: "ABIERTO" },
+    });
+
+    logger.info(
+      {
+        partidoId: input.partidoId,
+        antes: input.fechaInicioPrevia.toISOString(),
+        ahora: input.fechaInicioNueva.toISOString(),
+        ticketsActivos: tickets.length,
+        source: "partidos-import:transiciones",
+      },
+      "transicion: partido pospuesto, cierreAt actualizado",
+    );
+
+    for (const t of tickets) {
+      try {
+        await sendEmail({
+          to: t.usuario.email,
+          subject: PartidoPospuesto.subject,
+          react: PartidoPospuesto({
+            username: t.usuario.username,
+            partidoNombre,
+            ligaNombre: input.ligaNombre,
+            fechaAnterior: input.fechaInicioPrevia,
+            fechaNueva: input.fechaInicioNueva,
+            partidoSlug,
+          }),
+          categoria: "onboarding",
+          tags: [
+            { name: "trigger", value: "partido_pospuesto" },
+            { name: "partidoId", value: input.partidoId.slice(0, 60) },
+          ],
+        });
+      } catch (err) {
+        logger.warn(
+          {
+            err,
+            usuarioId: t.usuario.id,
+            partidoId: input.partidoId,
+            source: "partidos-import:transiciones",
+          },
+          "PartidoPospuesto: envío falló (no bloqueante)",
+        );
+      }
+    }
+  }
+
+  // 2. Cancelado — mandar email (puntos los maneja puntuacion.service)
+  if (transicionACancelado) {
+    logger.info(
+      {
+        partidoId: input.partidoId,
+        ticketsActivos: tickets.length,
+        source: "partidos-import:transiciones",
+      },
+      "transicion: partido cancelado",
+    );
+
+    for (const t of tickets) {
+      try {
+        await sendEmail({
+          to: t.usuario.email,
+          subject: PartidoCancelado.subject,
+          react: PartidoCancelado({
+            username: t.usuario.username,
+            partidoNombre,
+            ligaNombre: input.ligaNombre,
+          }),
+          categoria: "onboarding",
+          tags: [
+            { name: "trigger", value: "partido_cancelado" },
+            { name: "partidoId", value: input.partidoId.slice(0, 60) },
+          ],
+        });
+      } catch (err) {
+        logger.warn(
+          {
+            err,
+            usuarioId: t.usuario.id,
+            partidoId: input.partidoId,
+            source: "partidos-import:transiciones",
+          },
+          "PartidoCancelado: envío falló (no bloqueante)",
+        );
+      }
+    }
+  }
+}
+
