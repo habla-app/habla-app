@@ -1,15 +1,12 @@
 "use client";
 
-// NavLinks — Lote 11 (May 2026). Pivot editorial.
+// NavLinks — Lote 11 (May 2026) → Lote K v3.2 rebrand.
 //
-// Simplificado a 5 items: Inicio · Pronósticos · Casas · Comunidad · Blog.
-// Los items "Partidos", "En vivo" y "Mis combinadas" ya no aparecen en el
-// nav desktop — el acceso a partidos vive en el BottomNav mobile (5 items
-// del Lote 3) y en CTAs internos de la home y `/matches`. "En vivo" se
-// reduce a un dot rojo discreto al lado de "Inicio" cuando hay partidos
-// jugándose ahora; el link sigue accesible vía /live-match desde otros
-// puntos de la UI (sidebar /matches, etc.) pero sin contar como un item
-// del nav top.
+// Lote K v3.2: rebrand de URLs de pista usuario.
+//   /casas      → /reviews-y-guias/casas (+ tab guías).
+//   /comunidad  → /liga.
+// Resto sin cambio. El match prefix sigue catchando los paths viejos
+// para preservar active state durante el redirect 301.
 //
 // Contraste WCAG AA: hereda de la versión anterior (text-white/80 sobre
 // navy `bg-dark-surface`), corregido para no usar el `--dark-muted` del
@@ -41,14 +38,21 @@ const LINKS: NavLinkDef[] = [
     match: (p) => p.startsWith("/pronosticos"),
   },
   {
-    href: "/casas",
-    label: "Casas",
-    match: (p) => p.startsWith("/casas"),
+    href: "/reviews-y-guias",
+    label: "Reviews y guías",
+    match: (p) =>
+      p.startsWith("/reviews-y-guias") ||
+      p.startsWith("/casas") ||
+      p.startsWith("/guias"),
   },
   {
-    href: "/comunidad",
-    label: "Comunidad",
-    match: (p) => p.startsWith("/comunidad"),
+    href: "/liga",
+    label: "Liga",
+    match: (p) =>
+      p.startsWith("/liga") ||
+      p.startsWith("/jugador") ||
+      p.startsWith("/comunidad") ||
+      p.startsWith("/torneo"),
   },
   {
     href: "/blog",

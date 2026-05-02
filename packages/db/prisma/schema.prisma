@@ -36,6 +36,11 @@ model Usuario {
   // Premium para enviar picks 1:1 vía WhatsApp Business API. Opcional —
   // suscriptores sin teléfono solo reciben los picks por el Channel manual.
   telefono     String?
+  // Lote K v3.2 (May 2026): número Yape (E.164 sin +). Capturado SOLO al ganar
+  // Top 10 mensual de la Liga Habla!. Decisión §1.3 del análisis: premio
+  // publicitario, no renta laboral — datos mínimos, sin DNI, sin cuenta
+  // bancaria, sin Reniec, sin cifrado especial.
+  yapeNumero   String?
   creadoEn     DateTime  @default(now())
   deletedAt    DateTime? // Sub-Sprint 7: soft delete (anonimiza PII)
   // Campos requeridos por NextAuth Prisma Adapter
@@ -132,11 +137,29 @@ model Partido {
   liveExtra       Int? // injury time (1H/2H)
   liveUpdatedAt   DateTime? // timestamp del último setLiveStatus — TTL 30 min
 
-  torneos      Torneo[]
-  eventos      EventoPartido[]
-  picksPremium PickPremium[]
+  // Lote K (May 2026) — Filtros del admin v3.2.
+  //   - mostrarAlPublico (Filtro 1): si TRUE, el partido aparece en /las-fijas
+  //     y dispara generación de AnalisisPartido. Default FALSE — todos los
+  //     partidos importados quedan ocultos hasta curación manual.
+  //   - elegibleLiga (Filtro 2): si TRUE, el partido entra en la pool de la
+  //     Liga Habla! del mes (combinables por usuarios). Default FALSE.
+  //   - visibilidadOverride: override de la regla de 7 días para listing
+  //     /liga (forzar_visible / forzar_oculto / null=sigue regla 7d).
+  mostrarAlPublico    Boolean              @default(false)
+  elegibleLiga        Boolean              @default(false)
+  visibilidadOverride VisibilidadOverride?
+
+  torneos         Torneo[]
+  eventos         EventoPartido[]
+  picksPremium    PickPremium[]
+  analisisPartido AnalisisPartido?
 
   @@map("partidos")
+}
+
+enum VisibilidadOverride {
+  forzar_visible
+  forzar_oculto
 }
 
 model EventoPartido {
@@ -222,10 +245,26 @@ model Ticket {
   // raro). Backfill: tickets con posicionFinal NOT NULL recibieron
   // `puntosFinales = puntosTotal` en la migración.
   puntosFinales      Int?
+  // Lote K v3.2 (May 2026): contador de ediciones. El usuario puede editar
+  // su combinada hasta el kickoff (decisión §4.9.5 del análisis). Cada
+  // PUT /api/v1/tickets/[id] incrementa este contador. Alimenta el KPI
+  // "ediciones promedio por combinada" del dashboard del Lote O. Default 0
+  // — los tickets viejos quedan en 0 hasta su próxima edición.
+  numEdiciones       Int           @default(0)
   creadoEn           DateTime      @default(now())
 
   // Un usuario no puede tener 2 tickets identicos en el mismo torneo
+  // (regla legacy del Lote 0).
   @@unique([usuarioId, torneoId, predResultado, predBtts, predMas25, predTarjetaRoja, predMarcadorLocal, predMarcadorVisita])
+  // Lote K v3.2: una combinada por jugador por torneo (decisión §4.9.1 del
+  // análisis). En v3.2 cada Torneo representa exactamente un Partido elegible
+  // de la Liga Habla! del mes, por lo que (usuarioId, torneoId) implica
+  // (usuarioId, partidoId). Esta restricción bloquea a nivel BD que un
+  // usuario tenga dos tickets activos para el mismo partido — incluso si por
+  // un bug del frontend se intentara, la BD lo rechaza. La unique anterior
+  // (con todas las predicciones) queda redundante pero no se elimina para
+  // mantener migración aditiva pura.
+  @@unique([usuarioId, torneoId])
   @@map("tickets")
 }
 
@@ -1073,4 +1112,109 @@ model AlarmaConfiguracion {
 
   @@index([habilitada, metricId])
   @@map("alarmas_config")
+}
+
+// ==========================================
+// Lote K v3.2 (May 2026) — AnalisisPartido (objeto rico del motor)
+// ==========================================
+//
+// Decisiones §1.1 y §1.2 del análisis-repo-vs-mockup-v3.2.md: una sola
+// plantilla `/las-fijas/[slug]` con bloques condicionales según estado
+// de auth (visitor / free / socios). Cero duplicación de datos: un único
+// objeto rico por partido. PickPremium del canal WhatsApp lee de
+// AnalisisPartido aprobado para componer su mensaje (Lote L).
+//
+// Diferencia con PickPremium (Lote E):
+//   - PickPremium: pick simple para el canal WhatsApp. 1 mercado + razonamiento
+//     corto + cuota recomendada. Distribuido 1:1.
+//   - AnalisisPartido: objeto rico completo del análisis del partido.
+//     1X2 + probabilidades + análisis básico + combinada óptima + razonamiento
+//     detallado + análisis profundo de goles + análisis profundo de tarjetas
+//     + mercados secundarios. Renderizado por bloques en /las-fijas/[slug].
+//
+// Reglas duras (CLAUDE.md §18, §22 y nuevas reglas v3.2):
+//   - Cero auto-publicación: PENDIENTE → APROBADO/RECHAZADO via /admin/picks.
+//   - promptVersion + inputsJSON OBLIGATORIOS: sin esto, el motor opera a
+//     ciegas (no se puede comparar performance entre versiones de prompt
+//     ni reproducir/debuggear un análisis individual).
+//   - Si un partido se desactiva (Filtro 1 OFF) y tenía análisis aprobado,
+//     pasa a ARCHIVADO. La URL pública responde HTTP 410 Gone (no 404)
+//     para que Google retire la URL del índice limpiamente.
+
+model AnalisisPartido {
+  id           String  @id @default(cuid())
+  partidoId    String  @unique
+  partido      Partido @relation(fields: [partidoId], references: [id], onDelete: Cascade)
+
+  // -------------------------------------------------------------------
+  // Contenido generado por el motor (objeto rico)
+  // -------------------------------------------------------------------
+  // Free + Socios:
+  pronostico1x2  String // 'LOCAL' | 'EMPATE' | 'VISITA'
+  // Forma esperada: { local: number, empate: number, visita: number }
+  // — probabilidades 0-1 que suman 1.
+  probabilidades Json
+  // Forma esperada: { mercado: 'LOCAL'|'EMPATE'|'VISITA', cuota: number,
+  // casa: string }. Mejor cuota disponible al momento de la generación.
+  mejorCuota     Json
+  // Texto Markdown — visible Free+Socios. Cubre: forma reciente, H2H,
+  // lesiones, contexto del partido. ~150-300 palabras.
+  analisisBasico String @db.Text
+
+  // Solo Socios:
+  // Forma esperada: { mercados: [{ mercado, outcome, cuota }], cuotaTotal,
+  // stake, evPlus }. Combinada recomendada con EV+ ≥ 5%.
+  combinadaOptima     Json?
+  // Razonamiento detallado del análisis. Markdown. ~300-500 palabras.
+  razonamiento        String? @db.Text
+  // Forma esperada: { goles_esperados_local, goles_esperados_visita,
+  // explicacion: string, factores: [string] }.
+  analisisGoles       Json?
+  // Forma esperada: { tarjetas_esperadas_total, riesgo_roja: 'BAJO'|'MEDIO'|'ALTO',
+  // explicacion: string, factores: [string] }.
+  analisisTarjetas    Json?
+  // Forma esperada: [{ mercado, cuota, value, casa }] — mercados con value
+  // detectado (BTTS, ±2.5, marcador exacto, etc.) además del 1X2.
+  mercadosSecundarios Json?
+
+  // -------------------------------------------------------------------
+  // Metadata operativa de aprobación
+  // -------------------------------------------------------------------
+  estado          EstadoAnalisis @default(PENDIENTE)
+  // Versión del prompt usada para generar este análisis. Ej. 'v3.2.0'.
+  // OBLIGATORIO desde el día 1 — ver §4.3 del análisis.
+  promptVersion   String
+  // Snapshot completo de inputs vistos por Claude API: cuotas implícitas,
+  // xG promedio, H2H, lesiones reportadas, alineaciones probables, etc.
+  // OBLIGATORIO desde el día 1 — permite reproducir/debuggear y comparar
+  // performance del motor entre versiones de prompt.
+  inputsJSON      Json
+  generadoEn      DateTime       @default(now())
+  aprobadoPor     String?
+  aprobadoEn      DateTime?
+  rechazadoMotivo String?
+  // Si Filtro 1 se desactiva sobre un partido con análisis aprobado, el
+  // análisis pasa a ARCHIVADO. La vista /las-fijas/[slug] responde 410 Gone.
+  archivadoEn     DateTime?
+
+  // -------------------------------------------------------------------
+  // Telemetría del motor (alimenta /admin/motor en Lote P)
+  // -------------------------------------------------------------------
+  latenciaMs   Int?
+  tokensInput  Int?
+  tokensOutput Int?
+
+  creadoEn      DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@index([estado])
+  @@index([generadoEn(sort: Desc)])
+  @@map("analisis_partido")
+}
+
+enum EstadoAnalisis {
+  PENDIENTE
+  APROBADO
+  RECHAZADO
+  ARCHIVADO
 }

@@ -13,10 +13,12 @@
 import type { ReactNode } from "react";
 import { auth } from "@/lib/auth";
 import { contarLiveMatches } from "@/lib/services/live-matches.service";
+import { obtenerEstadoAuthServer } from "@/lib/services/auth-state.service";
 import { logger } from "@/lib/services/logger";
 import { PublicHeaderV31 } from "@/components/layout/PublicHeaderV31";
 import { Footer } from "@/components/layout/Footer";
 import { BottomNav } from "@/components/layout/BottomNav";
+import { AuthStateProvider } from "@/components/auth/AuthStateProvider";
 
 async function obtenerLiveCount(): Promise<number> {
   try {
@@ -38,12 +40,19 @@ export default async function PublicLayout({
   const liveCount = await obtenerLiveCount();
   const isAuthenticated = !!session?.user;
 
+  // Lote K v3.2: estado de auth resuelto server-side y propagado vía
+  // <AuthStateProvider> para que descendientes client-side usen
+  // useAuthState() / <AuthGate> sin re-fetch ni round-trips.
+  const estadoAuth = await obtenerEstadoAuthServer(session?.user?.id ?? null);
+
   return (
-    <div className="flex min-h-screen flex-col bg-page">
-      <PublicHeaderV31 />
-      <main className="flex-1 pb-24 lg:pb-10">{children}</main>
-      <Footer />
-      <BottomNav liveDot={liveCount > 0} isAuthenticated={isAuthenticated} />
-    </div>
+    <AuthStateProvider initialState={estadoAuth}>
+      <div className="flex min-h-screen flex-col bg-page">
+        <PublicHeaderV31 />
+        <main className="flex-1 pb-24 lg:pb-10">{children}</main>
+        <Footer />
+        <BottomNav liveDot={liveCount > 0} isAuthenticated={isAuthenticated} />
+      </div>
+    </AuthStateProvider>
   );
 }

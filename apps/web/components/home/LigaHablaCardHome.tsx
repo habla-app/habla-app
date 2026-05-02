@@ -36,7 +36,7 @@ export function LigaHablaCardHome({
         ? `Tu posición #${miPosicion} →`
         : "Hacer mi predicción";
   const ctaHref =
-    estado === "anonimo" ? "/auth/signup?callbackUrl=/comunidad" : "/comunidad";
+    estado === "anonimo" ? "/auth/signup?callbackUrl=/liga" : "/liga";
 
   return (
     <Card

@@ -107,7 +107,7 @@ export default async function HomePage() {
           title="Próximos partidos"
           subtitle="Los partidos top de las próximas 24 horas con sus mejores cuotas"
           ctaLabel="Ver todos →"
-          ctaHref="/cuotas"
+          ctaHref="/las-fijas"
         />
         {partidosDelDia.length === 0 ? (
           <EmptyPartidosDelDia />
@@ -138,7 +138,7 @@ export default async function HomePage() {
           title="Top tipsters del mes"
           subtitle={`${capitalize(leaderboard.nombreMes)} · S/ 1,250 en premios para el Top 10`}
           ctaLabel="Ver leaderboard →"
-          ctaHref="/comunidad"
+          ctaHref="/liga"
           tone="blue"
         />
         <LeaderboardPreview
@@ -157,7 +157,7 @@ export default async function HomePage() {
             title="Casas autorizadas top"
             subtitle="Operadores autorizados por MINCETUR · reviews editoriales sin maquillaje"
             ctaLabel="Ver todas →"
-            ctaHref="/casas"
+            ctaHref="/reviews-y-guias/casas"
           />
           <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
             {casasTop.map((c) => (

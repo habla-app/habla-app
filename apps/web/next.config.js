@@ -72,35 +72,84 @@ const nextConfig = {
   },
 
   // -------------------------------------------------------------------
-  // Redirects — Lote B y Lote C v3.1.
-  // /matches y /torneos pasaron a deprecarse (consolidados en /cuotas y
-  // /comunidad). El tráfico de SEO acumulado se redirige 301 para no
-  // perder ranking.
+  // Redirects 301 — Lote K v3.2 (May 2026) + legados Lote B/C.
   //
-  // Lote C agrega:
-  //   - /mis-combinadas → /mis-predicciones (rename del Lote 5).
-  //   - /torneos        → /comunidad (la lista plana de torneos pasa
-  //                       a integrarse con el leaderboard mensual).
-  //   - /torneo/:id     → resuelto en middleware.ts (necesita BD para
-  //                       mapear torneoId → partidoId; los redirects
-  //                       sincrónicos de Next no soportan async lookups).
+  // El rebrand v3.2 cambia URLs de pista usuario:
+  //   /cuotas               → /las-fijas
+  //   /partidos/[slug]      → /las-fijas/[slug]
+  //   /casas, /casas/[slug] → /reviews-y-guias/casas/...
+  //   /guias, /guias/[slug] → /reviews-y-guias/guias/...
+  //   /comunidad            → /liga
+  //   /comunidad/torneo/:s  → /liga/:s
+  //   /comunidad/[username] → /jugador/[username]
+  //   /comunidad/mes/:m     → /liga/mes/:m
+  //   /premium              → /socios
+  //   /premium/checkout     → /socios/checkout
+  //   /premium/exito        → /socios/exito
+  //   /premium/mi-suscrip…  → /socios-hub
+  //
+  // Eliminadas en Lote K (redirect 301 a destino razonable):
+  //   /suscribir            → /socios
+  //   /perfil/eliminar      → /perfil (eliminación inline en Lote N)
+  //
+  // Decisión §4.4: redirect 301 inmediato desde el día 1 del rebrand.
+  // La autoridad SEO se transfiere a las URLs nuevas. El navegador
+  // entiende "esto se mudó permanentemente" y cero contenido duplicado.
+  //
+  // ORDEN: las rutas más específicas van primero (Next.js evalúa primer
+  // match). Por ejemplo `/comunidad/torneo/:slug` debe ir antes que
+  // `/comunidad/:username` porque "torneo" matchearía como username.
+  //
+  // /torneo/:id legacy se resuelve en `app/(main)/torneo/[id]/page.tsx`
+  // (Server Component) porque requiere lookup BD para mapear torneoId →
+  // partidoId — los redirects sincrónicos de Next no soportan async.
+  // Auto-redirect Socio → /socios-hub también vive en page.tsx
+  // (Server Component) porque el middleware edge no puede leer Prisma.
   // -------------------------------------------------------------------
   async redirects() {
     return [
-      { source: "/matches", destination: "/cuotas", permanent: true },
-      { source: "/matches/:path*", destination: "/cuotas", permanent: true },
-      {
-        source: "/mis-combinadas",
-        destination: "/mis-predicciones",
-        permanent: true,
-      },
-      {
-        source: "/mis-combinadas/:path*",
-        destination: "/mis-predicciones",
-        permanent: true,
-      },
-      { source: "/torneos", destination: "/comunidad", permanent: true },
-      { source: "/torneos/:path*", destination: "/comunidad", permanent: true },
+      // === Lote K v3.2 — Las Fijas ===
+      { source: "/cuotas", destination: "/las-fijas", permanent: true },
+      { source: "/cuotas/:path*", destination: "/las-fijas/:path*", permanent: true },
+      { source: "/partidos", destination: "/las-fijas", permanent: true },
+      { source: "/partidos/:slug", destination: "/las-fijas/:slug", permanent: true },
+
+      // === Lote K v3.2 — Reviews y Guías ===
+      { source: "/casas", destination: "/reviews-y-guias/casas", permanent: true },
+      { source: "/casas/:path*", destination: "/reviews-y-guias/casas/:path*", permanent: true },
+      { source: "/guias", destination: "/reviews-y-guias/guias", permanent: true },
+      { source: "/guias/:path*", destination: "/reviews-y-guias/guias/:path*", permanent: true },
+
+      // === Lote K v3.2 — Liga + Jugador (orden estricto) ===
+      // Específicas primero — `torneo` y `mes` matchearían como username.
+      { source: "/comunidad/torneo/:slug", destination: "/liga/:slug", permanent: true },
+      { source: "/comunidad/torneo", destination: "/liga", permanent: true },
+      { source: "/comunidad/mes/:path*", destination: "/liga/mes/:path*", permanent: true },
+      { source: "/comunidad/mes", destination: "/liga/mes", permanent: true },
+      { source: "/comunidad/:username", destination: "/jugador/:username", permanent: true },
+      { source: "/comunidad", destination: "/liga", permanent: true },
+
+      // === Lote K v3.2 — Socios ===
+      { source: "/premium/mi-suscripcion", destination: "/socios-hub", permanent: true },
+      { source: "/premium/mi-suscripcion/:path*", destination: "/socios-hub", permanent: true },
+      { source: "/premium/checkout", destination: "/socios/checkout", permanent: true },
+      { source: "/premium/checkout/:path*", destination: "/socios/checkout/:path*", permanent: true },
+      { source: "/premium/exito", destination: "/socios/exito", permanent: true },
+      { source: "/premium/exito/:path*", destination: "/socios/exito/:path*", permanent: true },
+      { source: "/premium", destination: "/socios", permanent: true },
+
+      // === Lote K v3.2 — Eliminadas ===
+      { source: "/suscribir", destination: "/socios", permanent: true },
+      { source: "/perfil/eliminar/:path*", destination: "/perfil", permanent: true },
+      { source: "/perfil/eliminar", destination: "/perfil", permanent: true },
+
+      // === Lote B/C legados — actualizados a destinos v3.2 ===
+      { source: "/matches", destination: "/las-fijas", permanent: true },
+      { source: "/matches/:path*", destination: "/las-fijas", permanent: true },
+      { source: "/mis-combinadas", destination: "/mis-predicciones", permanent: true },
+      { source: "/mis-combinadas/:path*", destination: "/mis-predicciones", permanent: true },
+      { source: "/torneos", destination: "/liga", permanent: true },
+      { source: "/torneos/:path*", destination: "/liga", permanent: true },
     ];
   },
 

@@ -1,15 +1,14 @@
 "use client";
 
-// BottomNav v3.1 — pista usuario unificada (Lote B).
-// Spec: docs/ux-spec/00-design-system/componentes-mobile.md §2 +
-// docs/ux-spec/02-pista-usuario-publica/00-layout-y-nav.spec.md.
+// BottomNav v3.2 — pista usuario unificada (Lote K · rebrand del Lote B).
+// Spec: docs/habla-mockup-v3.2.html (mobile · 5 ítems en BottomNav).
 //
-// 5 ítems oficiales del modelo v3.1: Inicio · Partidos · Liga · Premium ·
+// 5 ítems oficiales del modelo v3.2: Inicio · Las Fijas · Liga · Socios ·
 // Perfil. Sticky bottom, oculto >=lg (los desktops usan navegación top).
 // Touch targets ≥44px (h-16). Detección de active path con `usePathname`.
 // El ítem "Perfil" redirige a /auth/signin si no hay session, a /perfil
 // si la hay — esto unifica la experiencia entre la capa pública y la
-// autenticada (decisión arquitectónica del Lote B).
+// autenticada (decisión arquitectónica del Lote B preservada en v3.2).
 //
 // Live indicator: dot rojo junto a "Inicio" si hay partido en vivo. La
 // prop `liveDot` la propaga el layout server-side via consulta a
@@ -33,10 +32,15 @@ const ITEMS_BASE: Item[] = [
     match: (p) => p === "/",
   },
   {
-    href: "/cuotas",
-    label: "Partidos",
+    // Lote K v3.2: /cuotas + /partidos consolidados en /las-fijas. Las URLs
+    // viejas (/cuotas, /partidos, /matches) redirigen 301 a /las-fijas;
+    // mantenemos el match para que el item siga marcado activo durante el
+    // hop momentáneo del redirect.
+    href: "/las-fijas",
+    label: "Las Fijas",
     icon: "⚽",
     match: (p) =>
+      p.startsWith("/las-fijas") ||
       p.startsWith("/cuotas") ||
       p.startsWith("/partidos") ||
       p.startsWith("/matches") ||
@@ -44,20 +48,27 @@ const ITEMS_BASE: Item[] = [
       p.startsWith("/pronosticos"),
   },
   {
-    href: "/comunidad",
+    // Lote K v3.2: /comunidad → /liga. /comunidad/torneo/[slug] → /liga/[slug].
+    // /comunidad/[username] → /jugador/[username]. /comunidad/mes → /liga/mes.
+    href: "/liga",
     label: "Liga",
     icon: "🏆",
     match: (p) =>
-      p.startsWith("/comunidad") ||
+      p.startsWith("/liga") ||
+      p.startsWith("/jugador") ||
+      p.startsWith("/comunidad") || // legacy, redirect 301 a /liga
       p.startsWith("/torneo") ||
       p.startsWith("/mis-predicciones") ||
-      p.startsWith("/mis-combinadas"), // legacy, redirect 301 a /mis-predicciones
+      p.startsWith("/mis-combinadas"), // legacy, redirect 301
   },
   {
-    href: "/premium",
-    label: "Premium",
+    // Lote K v3.2: /premium → /socios. /premium/mi-suscripcion → /socios-hub.
+    href: "/socios",
+    label: "Socios",
     icon: "💎",
-    match: (p) => p.startsWith("/premium"),
+    match: (p) =>
+      p.startsWith("/socios") ||
+      p.startsWith("/premium"), // legacy, redirect 301 a /socios
   },
 ];
 
@@ -71,12 +82,16 @@ interface Props {
 export function BottomNav({ liveDot = false, isAuthenticated = false }: Props) {
   const pathname = usePathname() ?? "/";
 
-  // Oculto en /auth/*, /admin/* y /premium/exito (tienen layouts propios o
+  // Oculto en /auth/*, /admin/* y /socios/exito (tienen layouts propios o
   // foco crítico). El post-pago suprime BottomNav para que el CTA verde de
   // unirse al WhatsApp Channel sea la única acción visible.
+  // Lote K v3.2: rebrand /premium/exito → /socios/exito. Mantenemos el
+  // match al path viejo por si alguien aterriza durante el redirect 301.
   if (
     pathname.startsWith("/auth") ||
     pathname.startsWith("/admin") ||
+    pathname === "/socios/exito" ||
+    pathname.startsWith("/socios/exito/") ||
     pathname === "/premium/exito" ||
     pathname.startsWith("/premium/exito/")
   ) {
