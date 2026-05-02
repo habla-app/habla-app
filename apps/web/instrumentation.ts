@@ -856,6 +856,95 @@ export async function register() {
     }, LIGHTHOUSE_INTERVAL_MS);
   }, 280_000);
 
+  // -------------------------------------------------------------------
+  // Job T — Generación de AnalisisPartido enriquecido (Lote L v3.2). Tick
+  // cada 4h. Procesa hasta 3 partidos próximos (36h ahead) con Filtro 1
+  // ON sin análisis APROBADO. La generación inmediata al activar Filtro 1
+  // sigue ocurriendo desde el endpoint PATCH /admin/partidos/[id]/filtros;
+  // este cron es la red de seguridad para casos de fallo / Filtro 1 ya
+  // activo desde la importación.
+  //
+  // Cero auto-publicación: cada análisis queda en estado PENDIENTE para
+  // que el editor lo apruebe desde /admin/picks (Lote O).
+  //
+  // Fail-soft: si ANTHROPIC_API_KEY no está configurada, el service
+  // skip-ea silenciosamente con log warn.
+  // -------------------------------------------------------------------
+  const { generarAnalisisDelDia } = await import(
+    "./lib/services/analisis-partido-generador.service"
+  );
+
+  const ANALISIS_GEN_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4h
+
+  async function tickGenerarAnalisis() {
+    try {
+      const r = await generarAnalisisDelDia();
+      if (
+        r.partidosProcesados > 0 ||
+        r.analisisCreados > 0 ||
+        r.errores > 0
+      ) {
+        logger.info(
+          { ...r, source: "cron:analisis-partido:gen" },
+          "[cron in-process] ciclo generar-analisis",
+        );
+      }
+    } catch (err) {
+      logger.error(
+        { err, source: "cron:analisis-partido:gen" },
+        "[cron in-process] tick de generar-analisis falló",
+      );
+    }
+  }
+
+  // Primera corrida 300s tras boot — deja al sistema estabilizarse, al
+  // import de partidos (Job C, 30s) y al refresh de odds (Job N, 45s)
+  // tener al menos un ciclo cada uno.
+  setTimeout(() => {
+    void tickGenerarAnalisis();
+    setInterval(() => {
+      void tickGenerarAnalisis();
+    }, ANALISIS_GEN_INTERVAL_MS);
+  }, 300_000);
+
+  // -------------------------------------------------------------------
+  // Job U — Evaluación de AnalisisPartido aprobados (Lote L v3.2). Tick
+  // cada 1h. Para cada análisis APROBADO cuyo partido ya pasó a
+  // FINALIZADO o CANCELADO en las últimas 48h, calcula resultados por
+  // mercado y los acumula en la tabla in-memory que alimenta
+  // /admin/motor (Lote P).
+  // -------------------------------------------------------------------
+  const { evaluarAnalisisFinalizados } = await import(
+    "./lib/services/analisis-partido-evaluador.service"
+  );
+
+  const ANALISIS_EVAL_INTERVAL_MS = 60 * 60 * 1000; // 1h
+
+  async function tickEvaluarAnalisis() {
+    try {
+      const r = await evaluarAnalisisFinalizados();
+      if (r.evaluados > 0 || r.cancelados > 0 || r.candidatos > 0) {
+        logger.info(
+          { ...r, source: "cron:analisis-partido:eval" },
+          "[cron in-process] ciclo evaluar-analisis",
+        );
+      }
+    } catch (err) {
+      logger.error(
+        { err, source: "cron:analisis-partido:eval" },
+        "[cron in-process] tick de evaluar-analisis falló",
+      );
+    }
+  }
+
+  // Primera corrida 320s tras boot.
+  setTimeout(() => {
+    void tickEvaluarAnalisis();
+    setInterval(() => {
+      void tickEvaluarAnalisis();
+    }, ANALISIS_EVAL_INTERVAL_MS);
+  }, 320_000);
+
   logger.info(
     {
       cerrarTorneos: `${CERRAR_INTERVAL_MS / 1000}s`,
@@ -873,6 +962,8 @@ export async function register() {
       syncMembresia: `${SYNC_MEMBRESIA_INTERVAL_MS / 1000 / 60}min`,
       evaluarAlarmas: `${ALARMAS_INTERVAL_MS / 1000 / 60}min`,
       lighthouseSemanal: `${LIGHTHOUSE_INTERVAL_MS / 1000 / 60}min (lunes ≥${LIGHTHOUSE_TARGET_LIMA_HOUR}:00 PET)`,
+      generarAnalisisPartido: `${ANALISIS_GEN_INTERVAL_MS / 1000 / 60}min`,
+      evaluarAnalisisFinalizados: `${ANALISIS_EVAL_INTERVAL_MS / 1000 / 60}min`,
     },
     "cron in-process registrado",
   );

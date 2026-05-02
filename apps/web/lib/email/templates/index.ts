@@ -32,3 +32,10 @@ export type { PremioMensualPagadoProps } from "./PremioMensualPagado";
 
 export { EliminacionConfirmada } from "./EliminacionConfirmada";
 export type { EliminacionConfirmadaProps } from "./EliminacionConfirmada";
+
+// Lote L v3.2 (May 2026) — partidos pospuestos / cancelados.
+export { PartidoPospuesto } from "./PartidoPospuesto";
+export type { PartidoPospuestoProps } from "./PartidoPospuesto";
+
+export { PartidoCancelado } from "./PartidoCancelado";
+export type { PartidoCanceladoProps } from "./PartidoCancelado";
