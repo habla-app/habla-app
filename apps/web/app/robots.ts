@@ -1,19 +1,21 @@
 // robots.ts — Next.js App Router Metadata Files API.
 // Se sirve en /robots.txt.
 //
-// Política (Lote J — v3.1):
-//   - Indexamos: home, /cuotas, /partidos/*, /live-match (público),
-//     /legal/*, /ayuda/*, /premium, y todas las rutas editoriales del
-//     grupo (public).
-//   - No indexamos: áreas privadas (/perfil, /mis-predicciones,
-//     /comunidad/torneo/[slug], /comunidad/mes/[mes]), legacy
-//     /torneo/[id] (redirige 301 a privado), auth, API, uploads, admin.
+// Lote K v3.2 (May 2026): rebrand de URLs públicas. URLs viejas
+// (/cuotas, /partidos/, /casas/, /guias/, /comunidad, /premium,
+// /suscribir) ya no existen como pages — son redirects 301 hacia las
+// nuevas URLs. No se listan ni en allow ni en disallow porque ya no
+// devuelven contenido propio.
 //
-// Nota: el path `/comunidad/[username]` (perfil público de un tipster)
-// queda accesible para Google sin entrada explícita en allow porque
-// `/comunidad` ya cubre el prefijo. La ruta `/comunidad/torneo/` queda
-// excluida por estar en disallow (más específica gana en interpretación
-// permisiva, pero por seguridad la dejamos explícita).
+// Política v3.2:
+//   - Indexamos: /, /las-fijas, /las-fijas/[slug], /reviews-y-guias/*,
+//     /pronosticos/*, /blog/*, /liga (listing público), /socios (venta),
+//     /live-match, /legal/*, /ayuda/*.
+//   - No indexamos: rutas privadas (/perfil, /mis-predicciones, /admin,
+//     /auth, /liga/[slug] partido detalle, /liga/mes/, /jugador/[username]
+//     perfil público requerido login, /socios-hub, /socios/checkout,
+//     /socios/exito, /uploads), endpoints API, y la URL legacy /torneo/
+//     (redirect 301 a privado).
 
 import type { MetadataRoute } from "next";
 
@@ -26,24 +28,19 @@ export default function robots(): MetadataRoute.Robots {
         userAgent: "*",
         allow: [
           "/",
-          "/cuotas",
-          "/partidos/",
+          "/las-fijas",
+          "/las-fijas/",
           "/live-match",
           "/legal/",
           "/ayuda/",
-          // Lote 8 — rutas editoriales públicas
           "/blog",
           "/blog/",
-          "/casas",
-          "/casas/",
-          "/guias",
-          "/guias/",
+          "/reviews-y-guias",
+          "/reviews-y-guias/",
           "/pronosticos",
           "/pronosticos/",
-          "/comunidad",
-          // Lote B v3.1 — Premium landing público
-          "/premium",
-          "/suscribir",
+          "/liga",
+          "/socios",
         ],
         disallow: [
           "/admin",
@@ -51,15 +48,16 @@ export default function robots(): MetadataRoute.Robots {
           "/perfil",
           "/mis-predicciones",
           "/mis-combinadas",
-          "/comunidad/torneo/",
-          "/comunidad/mes/",
-          // Legacy del Lote 0 — redirige 301 a /comunidad/torneo/[slug]
-          // (privada). No indexar la URL antigua.
+          // Privadas v3.2 — Liga (detalle, mes, jugador) requieren login
+          "/liga/mes/",
+          "/jugador/",
+          // Socios Hub + flujo post-compra
+          "/socios-hub",
+          "/socios/checkout",
+          "/socios/exito",
+          // Legacy del Lote 0 — redirect 301 a /liga/[partidoId] (privada).
+          // No indexar la URL antigua.
           "/torneo/",
-          // Premium privadas (post-suscripción)
-          "/premium/checkout",
-          "/premium/exito",
-          "/premium/mi-suscripcion",
           "/api/",
           "/auth/",
           "/uploads/",

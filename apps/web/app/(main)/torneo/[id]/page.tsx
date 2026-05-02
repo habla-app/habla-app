@@ -1,13 +1,15 @@
-// /torneo/[id] — Lote C v3.1: redirect SSR 301 al nuevo URL del Lote C.
-// Spec: docs/ux-spec/03-pista-usuario-autenticada/comunidad-torneo-slug.spec.md.
+// /torneo/[id] — Legacy redirect 301 (Lote 0 → v3.2).
 //
-// El URL viejo `/torneo/[id]` (Lote 0) usa el `Torneo.id` (cuid). El URL
-// nuevo `/comunidad/torneo/[slug]` usa el `Partido.id`. Como Next.js
-// redirects sincrónicos en `next.config.js` no pueden hacer lookups de
-// BD para mapear el id, este Server Component hace el lookup vía Prisma
-// y emite un redirect 301 server-side.
+// Histórico:
+//   - Lote 0:  URL original `/torneo/[id]` con `Torneo.id` (cuid).
+//   - Lote C:  rebrand a `/comunidad/torneo/[slug]` (slug = `Partido.id`).
+//   - Lote K v3.2: rebrand final a `/liga/[slug]` (slug = `Partido.id`).
 //
-// Si el torneoId no existe, redirige a /comunidad (la home del Producto C).
+// Como Next.js redirects sincrónicos no pueden hacer lookups de BD para
+// mapear `Torneo.id` → `Partido.id`, este Server Component hace el lookup
+// vía Prisma y emite un redirect 301 server-side.
+//
+// Si el torneoId no existe, redirige a /liga (la home de la Liga Habla!).
 // Esta page NO renderiza UI — solo redirige.
 
 import { permanentRedirect } from "next/navigation";
@@ -26,8 +28,6 @@ export default async function TorneoLegacyRedirect({ params }: Props) {
   } catch {
     partidoId = null;
   }
-  const destino = partidoId
-    ? `/comunidad/torneo/${partidoId}`
-    : "/comunidad";
+  const destino = partidoId ? `/liga/${partidoId}` : "/liga";
   permanentRedirect(destino);
 }

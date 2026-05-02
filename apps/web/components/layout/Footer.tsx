@@ -9,23 +9,26 @@
 
 import Link from "next/link";
 
+// Lote K v3.2 (May 2026): rebrand de URLs y de la columna "Premium" a
+// "Socios". /suscribir eliminada del footer (era newsletter; el flujo
+// se integra en pages individuales del Lote 10). /casas y /guias pasan
+// a /reviews-y-guias/*.
 const PRODUCTO_LINKS: Array<{ label: string; href: string }> = [
-  { label: "Partidos y cuotas", href: "/cuotas" },
+  { label: "Las Fijas", href: "/las-fijas" },
   { label: "Pronósticos", href: "/pronosticos" },
-  { label: "Liga Habla!", href: "/comunidad" },
-  { label: "Casas autorizadas", href: "/casas" },
-  { label: "Newsletter", href: "/suscribir" },
+  { label: "Liga Habla!", href: "/liga" },
+  { label: "Reviews y guías", href: "/reviews-y-guias" },
 ];
 
-const PREMIUM_LINKS: Array<{ label: string; href: string }> = [
-  { label: "Probar Premium", href: "/premium" },
-  { label: "¿Cómo funciona?", href: "/premium#como-funciona" },
-  { label: "Garantía 7 días", href: "/premium#garantia" },
+const SOCIOS_LINKS: Array<{ label: string; href: string }> = [
+  { label: "Hacete Socio", href: "/socios" },
+  { label: "¿Cómo funciona?", href: "/socios#como-funciona" },
+  { label: "Garantía 7 días", href: "/socios#garantia" },
 ];
 
 const EDITORIAL_LINKS: Array<{ label: string; href: string }> = [
   { label: "Blog", href: "/blog" },
-  { label: "Guías", href: "/guias" },
+  { label: "Guías", href: "/reviews-y-guias/guias" },
   { label: "Análisis del Mundial", href: "/blog?tag=mundial" },
   { label: "Liga 1 Perú", href: "/blog?tag=liga-1" },
 ];
@@ -136,16 +139,16 @@ export function Footer() {
           </ul>
         </div>
 
-        {/* Col 3 — Premium */}
+        {/* Col 3 — Socios */}
         <div>
           <h3 className="mb-4 font-display text-[13px] font-bold uppercase tracking-wider text-brand-gold">
-            Premium
+            Socios
           </h3>
           <p className="mb-3 text-[12px] leading-[1.55] text-dark-muted">
             Picks por WhatsApp con razonamiento estadístico.
           </p>
           <ul className="space-y-2.5 text-[14px] text-dark-muted">
-            {PREMIUM_LINKS.map((l) => (
+            {SOCIOS_LINKS.map((l) => (
               <li key={l.href}>
                 <Link
                   href={l.href}

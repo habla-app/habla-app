@@ -1,19 +1,31 @@
 // Sitemap dinámico — Next.js App Router Metadata Files API.
 //
-// Lote 2 — SEO base. Lote 3 — agrega /legal/*. Lote 8 — agrega rutas
-// editoriales públicas (/blog, /casas, /guias, /pronosticos, /partidos,
-// /cuotas) y leagues de pronósticos. Lote J — remueve URLs legacy
-// `/torneo/[id]` (redirigen 301 a `/comunidad/torneo/[slug]` que es
-// privada; tenerlas en sitemap genera "Soft 404" en Google Search
-// Console).
+// Lote K v3.2 (May 2026): rebrand de URLs públicas. URLs viejas
+// (/cuotas, /partidos/, /casas/, /guias/, /comunidad, /premium) se
+// retiran del sitemap y existen solo como redirects 301 (next.config.js).
+// El sitemap usa exclusivamente URLs nuevas v3.2.
 //
-// Se sirve en /sitemap.xml.
+// URLs públicas indexables (Lote K v3.2):
+//   /                                  Home
+//   /las-fijas                         (lista — fusión de /cuotas + /partidos)
+//   /las-fijas/[slug]                  (detalle por partido editorial)
+//   /reviews-y-guias                   (hub Reviews + Guías)
+//   /reviews-y-guias/casas             (lista casas autorizadas)
+//   /reviews-y-guias/casas/[slug]      (review individual)
+//   /reviews-y-guias/guias             (lista guías editoriales)
+//   /reviews-y-guias/guias/[slug]      (guía individual)
+//   /pronosticos                       (lista pronósticos)
+//   /pronosticos/[liga]                (pronósticos por liga)
+//   /blog, /blog/[slug]                (blog editorial)
+//   /liga                              (Liga Habla! listing público)
+//   /socios                            (página de venta Socios)
+//   /live-match                        (pública — live-match general)
+//   /ayuda/faq, /legal/*               (estáticas)
 //
 // Excluye rutas privadas (/perfil, /mis-predicciones, /admin, /auth,
-// /comunidad/torneo/[slug], /comunidad/mes/[mes]) y endpoints API —
-// esos van en robots.ts como Disallow. Lote C v3.1 renombró
-// /mis-combinadas → /mis-predicciones (redirect 301 vive en
-// next.config.js).
+// /liga/[slug], /liga/mes/, /jugador/[username], /socios-hub,
+// /socios/checkout, /socios/exito) y endpoints API — esos van en
+// robots.ts como Disallow.
 
 import type { MetadataRoute } from "next";
 import * as articles from "@/lib/content/articles";
@@ -32,17 +44,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const estaticas: MetadataRoute.Sitemap = [
     { url: `${BASE_URL}/`, lastModified: now, changeFrequency: "daily", priority: 1.0 },
-    { url: `${BASE_URL}/cuotas`, lastModified: now, changeFrequency: "hourly", priority: 0.9 },
+    { url: `${BASE_URL}/las-fijas`, lastModified: now, changeFrequency: "hourly", priority: 0.9 },
     { url: `${BASE_URL}/live-match`, lastModified: now, changeFrequency: "hourly", priority: 0.8 },
     { url: `${BASE_URL}/ayuda/faq`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
-    // Lote 8 — rutas listing del grupo (public)
     { url: `${BASE_URL}/blog`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
-    { url: `${BASE_URL}/casas`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
-    { url: `${BASE_URL}/guias`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
+    { url: `${BASE_URL}/reviews-y-guias`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
+    { url: `${BASE_URL}/reviews-y-guias/casas`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
+    { url: `${BASE_URL}/reviews-y-guias/guias`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
     { url: `${BASE_URL}/pronosticos`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
-    { url: `${BASE_URL}/comunidad`, lastModified: now, changeFrequency: "daily", priority: 0.6 },
-    { url: `${BASE_URL}/premium`, lastModified: now, changeFrequency: "weekly", priority: 0.6 },
-    { url: `${BASE_URL}/suscribir`, lastModified: now, changeFrequency: "monthly", priority: 0.4 },
+    { url: `${BASE_URL}/liga`, lastModified: now, changeFrequency: "daily", priority: 0.7 },
+    { url: `${BASE_URL}/socios`, lastModified: now, changeFrequency: "weekly", priority: 0.6 },
   ];
 
   // Fecha de vigencia v1.0 de los documentos legales (24 abr 2026).
@@ -70,7 +81,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
   const guiasEntries: MetadataRoute.Sitemap = guias.getAll().map((d) => ({
-    url: `${BASE_URL}/guias/${d.frontmatter.slug}`,
+    url: `${BASE_URL}/reviews-y-guias/guias/${d.frontmatter.slug}`,
     lastModified: new Date(d.frontmatter.updatedAt),
     changeFrequency: "monthly" as const,
     priority: 0.6,
@@ -97,7 +108,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         ? new Date(doc.frontmatter.updatedAt)
         : new Date(e.publishedAt);
       return {
-        url: `${BASE_URL}/partidos/${e.slug}`,
+        url: `${BASE_URL}/las-fijas/${e.slug}`,
         lastModified: lastMod,
         changeFrequency: "daily" as const,
         priority: 0.7,
@@ -112,7 +123,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     const reviews = await casas.getAll();
     casasEntries = reviews.map((r) => ({
-      url: `${BASE_URL}/casas/${r.doc.frontmatter.slug}`,
+      url: `${BASE_URL}/reviews-y-guias/casas/${r.doc.frontmatter.slug}`,
       lastModified: new Date(r.doc.frontmatter.updatedAt),
       changeFrequency: "monthly" as const,
       priority: 0.7,
@@ -121,13 +132,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Si la BD se cae, dejamos las casas afuera del sitemap. Las pages
     // siguen accesibles individualmente.
   }
-
-  // Lote J — torneos legacy removidos del sitemap. La URL nueva
-  // `/comunidad/torneo/[slug]` es privada (requiere auth para predecir
-  // sin revelar la cuota mejor casa antes del cierre). No indexable.
-  // El SEO público de partidos vive en `/partidos/[slug]` (vista
-  // editorial pública con `<PartidoHero>` + cuotas + pick Premium
-  // teaser), ya incluida arriba.
 
   return [
     ...estaticas,

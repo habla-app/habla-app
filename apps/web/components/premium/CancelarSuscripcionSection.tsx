@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/Button";
 import {
   cancelarMiSuscripcion,
   reactivarMiSuscripcion,
-} from "@/app/(public)/premium/mi-suscripcion/actions";
+} from "@/app/(public)/socios-hub/actions";
 import { formatearFechaLargaPe } from "@/lib/utils/datetime";
 
 type Modo = "activa" | "cancelando";

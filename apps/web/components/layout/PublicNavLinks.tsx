@@ -1,12 +1,17 @@
 "use client";
 
-// PublicNavLinks — Lote 8.
+// PublicNavLinks — Lote 8 → Lote K v3.2.
 //
 // Links del header público. Mismo lenguaje visual que `NavLinks` del
 // NavBar logueado (token de contraste WCAG AA, hover tint). En mobile
 // se compactan en un menú hamburguesa simple (details/summary nativo,
 // cero JS extra) — el público no es la pantalla principal en mobile,
 // pero queremos que igual se pueda navegar entre pages.
+//
+// Lote K v3.2: rebrand de URLs (cuotas→las-fijas, casas+guias→
+// reviews-y-guias, comunidad→liga, premium→socios). Match prefix sigue
+// catchando los paths viejos para preservar active state durante el
+// redirect 301 momentáneo desde URLs en caché del browser.
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -18,21 +23,42 @@ interface NavLinkDef {
 }
 
 const LINKS: NavLinkDef[] = [
-  { href: "/cuotas", label: "Partidos", match: (p) => p.startsWith("/cuotas") || p.startsWith("/partidos") },
+  {
+    href: "/las-fijas",
+    label: "Las Fijas",
+    match: (p) =>
+      p.startsWith("/las-fijas") ||
+      p.startsWith("/cuotas") ||
+      p.startsWith("/partidos"),
+  },
   {
     href: "/pronosticos",
     label: "Pronósticos",
     match: (p) => p.startsWith("/pronosticos"),
   },
-  { href: "/casas", label: "Casas", match: (p) => p.startsWith("/casas") },
   {
-    href: "/comunidad",
-    label: "Liga",
-    match: (p) => p.startsWith("/comunidad") || p.startsWith("/torneo"),
+    href: "/reviews-y-guias",
+    label: "Reviews y guías",
+    match: (p) =>
+      p.startsWith("/reviews-y-guias") ||
+      p.startsWith("/casas") ||
+      p.startsWith("/guias"),
   },
-  { href: "/premium", label: "Premium", match: (p) => p.startsWith("/premium") },
+  {
+    href: "/liga",
+    label: "Liga",
+    match: (p) =>
+      p.startsWith("/liga") ||
+      p.startsWith("/jugador") ||
+      p.startsWith("/comunidad") ||
+      p.startsWith("/torneo"),
+  },
+  {
+    href: "/socios",
+    label: "Socios",
+    match: (p) => p.startsWith("/socios") || p.startsWith("/premium"),
+  },
   { href: "/blog", label: "Blog", match: (p) => p.startsWith("/blog") },
-  { href: "/guias", label: "Guías", match: (p) => p.startsWith("/guias") },
 ];
 
 const INACTIVE = "text-white/80 hover:bg-white/[0.06] hover:text-white";

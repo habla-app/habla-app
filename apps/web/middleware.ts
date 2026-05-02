@@ -1,27 +1,33 @@
-// Middleware unificado — Lote 1 agrega rate limiting sobre el middleware
-// de auth preexistente.
+// Middleware unificado — Lote K v3.2 (May 2026).
 //
 // TRES RESPONSABILIDADES:
 //   1) Rate limiting para rutas /api/* (con tiers por endpoint).
 //   2) Protección de rutas autenticadas: /perfil, /mis-predicciones,
-//      /admin (Lote C v3.1 renombró /mis-combinadas → /mis-predicciones,
-//      el redirect 301 vive en next.config). Más el redirect a
-//      /auth/completar-perfil si el usuario está logueado pero sin
-//      @handle definitivo.
-//   3) Redirect 301 dinámico de /torneo/:id → /comunidad/torneo/:partidoId
-//      (Lote C v3.1, requiere lookup BD para mapear el id legacy del
-//      torneo al partidoId del slug nuevo).
+//      /admin. Más el redirect a /auth/completar-perfil si el usuario
+//      está logueado pero sin @handle definitivo.
+//   3) Redirect 301 dinámico de /torneo/:id → /liga/:partidoId
+//      (Lote 0 → v3.2). Vive en `app/(main)/torneo/[id]/page.tsx`
+//      (Server Component nodejs runtime) porque requiere Prisma para
+//      mapear `Torneo.id` → `Partido.id`. El middleware edge NO puede.
 //
 // La rama de rate-limit retorna antes de entrar a la lógica de auth, por
 // lo que las rutas /api/* nunca ejecutan `auth()` aquí — los route
 // handlers llaman `auth()` ellos mismos cuando necesitan sesión.
 //
-// Rutas públicas (sin login): /, /cuotas, /partidos/[slug], /casas,
-// /blog, /guias, /pronosticos. NO se listan en el matcher.
-// Lote B (v3.1): /matches eliminada — su tráfico se redirige a /cuotas
-// vía Next.js redirect en next.config (mantiene compat de SEO).
+// Rutas públicas (sin login): /, /las-fijas, /las-fijas/[slug],
+// /reviews-y-guias/*, /blog, /pronosticos, /liga (listing), /socios.
+// NO se listan en el matcher.
 //
-// Registro formal (Abr 2026): si el usuario está logueado pero con
+// Auto-redirect Socio → /socios-hub: vive en `app/(public)/socios/page.tsx`
+// (Server Component, decisión §4.8 del análisis-repo-vs-mockup-v3.2.md).
+// El middleware edge no puede leer Prisma para detectar suscripción
+// activa, por eso el redirect server-side ocurre dentro del Server
+// Component antes de pintar UI.
+//
+// Lote K v3.2: redirects 301 estáticos masivos (cuotas→las-fijas,
+// premium→socios, comunidad→liga, etc.) viven en `next.config.js`.
+//
+// Registro formal: si el usuario está logueado pero con
 // `usernameLocked=false` (OAuth primera vez), redirect a
 // /auth/completar-perfil.
 
@@ -36,13 +42,12 @@ import { checkLimit } from "@/lib/rate-limit";
 // se duplica literal en `config.matcher` abajo — el test valida que no
 // driften entre sí.
 //
-// Lote C v3.1: agregamos /mis-predicciones (rename de /mis-combinadas).
 // /torneo/:id legacy NO entra al matcher de auth — la page server-side
 // (`app/(main)/torneo/[id]/page.tsx`) hace su propio redirect 301 a
-// /comunidad/torneo/:partidoId sin requerir auth. /mis-combinadas queda
-// en la lista por compat con sesiones que aún tengan la URL en caché del
-// browser — Next dispara el redirect del next.config y el matcher no
-// llega a ejecutarse.
+// /liga/:partidoId sin requerir auth. /mis-combinadas queda en la lista
+// por compat con sesiones que aún tengan la URL en caché del browser —
+// Next dispara el redirect del next.config y el matcher no llega a
+// ejecutarse.
 export const PROTECTED_MATCHERS = [
   "/perfil/:path*",
   "/mis-combinadas/:path*",
@@ -187,10 +192,12 @@ export default auth(async (req) => {
   // mismos si necesitan sesión.
   if (pathname.startsWith("/api/")) return;
 
-  // Lote C v3.1 — el redirect 301 dinámico /torneo/:id legacy →
-  // /comunidad/torneo/:partidoId vive en `app/(main)/torneo/[id]/page.tsx`
+  // Lote K v3.2: el redirect 301 dinámico /torneo/:id legacy →
+  // /liga/:partidoId vive en `app/(main)/torneo/[id]/page.tsx`
   // (Server Component runtime nodejs) porque el middleware corre en edge
   // y NO puede importar Prisma. La page redirige y NO renderiza UI.
+  // El auto-redirect Socio → /socios-hub vive en
+  // `app/(public)/socios/page.tsx` por la misma razón.
 
   const isLoggedIn = !!req.auth;
   const session = req.auth;
@@ -235,9 +242,6 @@ export default auth(async (req) => {
 export const config = {
   // Lista literal — Next.js no acepta spread aquí (parser estático).
   // Mantener en sync con PROTECTED_MATCHERS arriba.
-  // Lote 1: agregamos /api/:path* para rate limiting (auth gating skippea
-  // /api/* en el handler arriba).
-  // Lote C v3.1: agregamos /mis-predicciones (rename de /mis-combinadas).
   matcher: [
     "/perfil/:path*",
     "/mis-combinadas/:path*",

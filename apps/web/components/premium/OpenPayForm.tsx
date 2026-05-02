@@ -25,7 +25,7 @@ import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { track } from "@/lib/analytics";
 import type { PlanKey } from "@/lib/premium-planes";
-import { procesarCheckout } from "@/app/(public)/premium/checkout/actions";
+import { procesarCheckout } from "@/app/(public)/socios/checkout/actions";
 
 declare global {
   interface Window {
@@ -330,7 +330,7 @@ export function OpenPayForm({
                 plan: plan.key,
                 suscripcionId: result.suscripcionId,
               });
-              router.push(`/premium/exito?suscripcionId=${result.suscripcionId}`);
+              router.push(`/socios/exito?suscripcionId=${result.suscripcionId}`);
               return;
             }
             // Error del server (ej. ya tiene suscripción activa).
