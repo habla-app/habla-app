@@ -715,3 +715,185 @@ export async function DELETE(_req: NextRequest): Promise<Response> {
     return toErrorResponse(err);
   }
 }
+
+// ---------------------------------------------------------------------------
+// GET — Diagnóstico
+// ---------------------------------------------------------------------------
+//
+// Retorna conteos de partidos demo en BD y de partidos que matchean los
+// filtros de las vistas /las-fijas y /liga. Sirve para verificar si el
+// seed dejó los datos como esperamos vs si hay algún disconnect entre
+// seed y query.
+
+export async function GET(_req: NextRequest): Promise<Response> {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) throw new NoAutenticado();
+    if (session.user.rol !== "ADMIN") {
+      throw new NoAutorizado(
+        "Solo administradores pueden consultar el diagnóstico.",
+      );
+    }
+
+    const partidosDemo = await prisma.partido.findMany({
+      where: { externalId: { startsWith: DEMO_PREFIX } },
+      select: {
+        id: true,
+        externalId: true,
+        liga: true,
+        equipoLocal: true,
+        equipoVisita: true,
+        fechaInicio: true,
+        estado: true,
+        mostrarAlPublico: true,
+        elegibleLiga: true,
+        visibilidadOverride: true,
+        analisisPartido: {
+          select: {
+            estado: true,
+            inputsJSON: true,
+          },
+        },
+        torneos: {
+          select: { id: true, estado: true, totalInscritos: true },
+        },
+      },
+    });
+
+    const ahora = new Date();
+    const en7dLimite = new Date(
+      ahora.getTime() + 7 * 24 * 60 * 60 * 1000,
+    );
+
+    const detalle = partidosDemo.map((p) => {
+      const inputs =
+        p.analisisPartido?.inputsJSON &&
+        typeof p.analisisPartido.inputsJSON === "object" &&
+        p.analisisPartido.inputsJSON !== null
+          ? (p.analisisPartido.inputsJSON as Record<string, unknown>)
+          : null;
+      const tieneCuotasReferenciales = !!(
+        inputs && inputs.cuotasReferenciales
+      );
+      const torneoNoCancelado =
+        p.torneos.find((t) => t.estado !== "CANCELADO") ?? null;
+
+      // Replica del query de listarFijas() (mostrarAlPublico=true + ventana
+      // 3h atrás/14d adelante).
+      const ventanaLasFijas =
+        p.fechaInicio.getTime() >= ahora.getTime() - 3 * 60 * 60 * 1000 &&
+        p.fechaInicio.getTime() <= ahora.getTime() + 14 * 24 * 60 * 60 * 1000;
+      const apareceEnLasFijas =
+        p.mostrarAlPublico &&
+        ["PROGRAMADO", "EN_VIVO", "FINALIZADO"].includes(p.estado) &&
+        ventanaLasFijas;
+
+      // Replica del query de obtenerListaLiga() (elegibleLiga + visibilidad
+      // 7d + estado).
+      const visibilidadOk =
+        p.visibilidadOverride !== "forzar_oculto" &&
+        (p.fechaInicio < en7dLimite ||
+          p.visibilidadOverride === "forzar_visible");
+      const apareceEnLigaProximos =
+        p.elegibleLiga &&
+        p.estado === "PROGRAMADO" &&
+        p.fechaInicio > ahora &&
+        visibilidadOk;
+      const apareceEnLigaEnVivo =
+        p.elegibleLiga &&
+        p.estado === "EN_VIVO" &&
+        p.visibilidadOverride !== "forzar_oculto";
+      const apareceEnLigaTerminados =
+        p.elegibleLiga &&
+        p.estado === "FINALIZADO" &&
+        p.fechaInicio.getTime() >= ahora.getTime() - 7 * 24 * 60 * 60 * 1000 &&
+        p.visibilidadOverride !== "forzar_oculto";
+
+      return {
+        externalId: p.externalId,
+        partido: `${p.equipoLocal} vs ${p.equipoVisita}`,
+        liga: p.liga,
+        fechaInicio: p.fechaInicio.toISOString(),
+        offsetHorasDesdeAhora:
+          Math.round(
+            ((p.fechaInicio.getTime() - ahora.getTime()) / 3600000) * 10,
+          ) / 10,
+        estado: p.estado,
+        mostrarAlPublico: p.mostrarAlPublico,
+        elegibleLiga: p.elegibleLiga,
+        visibilidadOverride: p.visibilidadOverride,
+        analisisEstado: p.analisisPartido?.estado ?? null,
+        tieneCuotasReferenciales,
+        torneoActivo: torneoNoCancelado
+          ? {
+              id: torneoNoCancelado.id,
+              estado: torneoNoCancelado.estado,
+              totalInscritos: torneoNoCancelado.totalInscritos,
+            }
+          : null,
+        // Resultados de los filtros (qué vistas debería aparecer):
+        deberiaAparecerEn: {
+          lasFijasLista: apareceEnLasFijas,
+          ligaProximos: apareceEnLigaProximos,
+          ligaEnVivo: apareceEnLigaEnVivo,
+          ligaTerminados: apareceEnLigaTerminados,
+        },
+      };
+    });
+
+    // Conteos agregados.
+    const resumen = {
+      partidosDemo: partidosDemo.length,
+      conMostrarAlPublico: partidosDemo.filter((p) => p.mostrarAlPublico).length,
+      conElegibleLiga: partidosDemo.filter((p) => p.elegibleLiga).length,
+      porEstado: {
+        PROGRAMADO: partidosDemo.filter((p) => p.estado === "PROGRAMADO").length,
+        EN_VIVO: partidosDemo.filter((p) => p.estado === "EN_VIVO").length,
+        FINALIZADO: partidosDemo.filter((p) => p.estado === "FINALIZADO").length,
+        CANCELADO: partidosDemo.filter((p) => p.estado === "CANCELADO").length,
+      },
+      conAnalisisAprobado: partidosDemo.filter(
+        (p) => p.analisisPartido?.estado === "APROBADO",
+      ).length,
+      conCuotasReferenciales: detalle.filter((d) => d.tieneCuotasReferenciales)
+        .length,
+      conTorneoActivo: detalle.filter((d) => d.torneoActivo !== null).length,
+      // Conteos del filtro de cada vista.
+      apareceEnLasFijas: detalle.filter((d) => d.deberiaAparecerEn.lasFijasLista)
+        .length,
+      apareceEnLigaProximos: detalle.filter(
+        (d) => d.deberiaAparecerEn.ligaProximos,
+      ).length,
+      apareceEnLigaEnVivo: detalle.filter((d) => d.deberiaAparecerEn.ligaEnVivo)
+        .length,
+      apareceEnLigaTerminados: detalle.filter(
+        (d) => d.deberiaAparecerEn.ligaTerminados,
+      ).length,
+    };
+
+    // Tickets en torneos demo (alimenta ranking).
+    const torneoIds = partidosDemo
+      .flatMap((p) => p.torneos.map((t) => t.id))
+      .filter((id): id is string => Boolean(id));
+    const ticketsCount = torneoIds.length
+      ? await prisma.ticket.count({
+          where: { torneoId: { in: torneoIds } },
+        })
+      : 0;
+
+    return Response.json({
+      data: {
+        ok: true,
+        ahora: ahora.toISOString(),
+        resumen: {
+          ...resumen,
+          ticketsEnTorneosDemo: ticketsCount,
+        },
+        detalle,
+      },
+    });
+  } catch (err) {
+    logger.error({ err }, "GET /api/v1/admin/dev/seed-fijas-demo falló");
+    return toErrorResponse(err);
+  }
+}

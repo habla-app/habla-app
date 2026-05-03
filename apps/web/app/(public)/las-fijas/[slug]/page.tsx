@@ -100,9 +100,14 @@ export default async function FijaDetallePage({
     ? mapCombinadaOptima(analisis.combinadaOptima, analisis.mercadosSecundarios)
     : null;
 
-  // Filas del comparador. Si no tenemos snapshot aún, fallback a una sola
-  // fila con la mejor cuota del análisis.
-  const filasComparador = construirFilasComparador(analisis?.mejorCuota ?? null);
+  // Filas del comparador. Si tenemos `cuotasReferenciales` del análisis
+  // (motor v3.2 las inyecta vía inputsJSON), las aplicamos a la fila de la
+  // casa best. Las otras 4 casas mantienen las cuotas referenciales del
+  // mockup (en producción real, vendrían de obtenerOddsCacheadas — Lote 9).
+  const filasComparador = construirFilasComparador(
+    analisis?.mejorCuota ?? null,
+    resolved.cuotasReferenciales ?? null,
+  );
 
   return (
     <div className="mockup-container">
@@ -147,6 +152,15 @@ export default async function FijaDetallePage({
           pronostico={analisis.pronostico1x2}
           probabilidades={analisis.probabilidades}
           mejorCuota={analisis.mejorCuota}
+          cuotas1X2={
+            resolved.cuotasReferenciales
+              ? {
+                  local: resolved.cuotasReferenciales.local,
+                  empate: resolved.cuotasReferenciales.empate,
+                  visita: resolved.cuotasReferenciales.visita,
+                }
+              : undefined
+          }
           equipoLocal={partido.equipoLocal}
           equipoVisita={partido.equipoVisita}
           ceboCombinada={ceboCombinada}
@@ -306,6 +320,14 @@ function mapCombinadaOptima(
 
 function construirFilasComparador(
   mejor: { mercado: string; cuota: number; casa: string } | null,
+  snap: {
+    local: number | null;
+    empate: number | null;
+    visita: number | null;
+    over25: number | null;
+    bttsSi: number | null;
+    bestCasa: string | null;
+  } | null,
 ): {
   casa: string;
   sigla: string;
@@ -316,8 +338,10 @@ function construirFilasComparador(
   over25: number | null;
   bttsSi: number | null;
 }[] {
-  // Filas referenciales del mockup (5 casas autorizadas MINCETUR). Si tenemos
-  // mejor cuota del análisis, marcamos la fila correspondiente.
+  // Filas base con cuotas referenciales del mockup para las 5 casas
+  // autorizadas MINCETUR. Estos son los valores de fallback si el análisis
+  // no trae cuotasReferenciales — en producción real, vendrían de
+  // obtenerOddsCacheadas() del Lote 9.
   const base = [
     { casa: "Betano", sigla: "BT", color: "#DC2626", local: 2.1, empate: 3.3, visita: 3.4, over25: 1.85, bttsSi: 1.75 },
     { casa: "Betsson", sigla: "BS", color: "#0EA5E9", local: 2.05, empate: 3.4, visita: 3.3, over25: 1.8, bttsSi: 1.78 },
@@ -325,9 +349,57 @@ function construirFilasComparador(
     { casa: "Doradobet", sigla: "DR", color: "#0A2080", local: 2.05, empate: 3.3, visita: 3.4, over25: 1.78, bttsSi: 1.74 },
     { casa: "1xBet", sigla: "1X", color: "#FF7A00", local: 2.08, empate: 3.35, visita: 3.38, over25: 1.83, bttsSi: 1.76 },
   ];
-  if (mejor) {
-    // Override la fila que matchea por casa (si existe) con el valor real
-    // del mercado correspondiente.
+
+  // Si tenemos snapshot del análisis (motor v3.2) usamos esos valores como
+  // anchor para la casa best — el resto de las filas mantiene sus cuotas
+  // referenciales del mockup pero ajustadas en magnitud relativa a las
+  // reales (escalando proporcionalmente).
+  if (snap && snap.bestCasa) {
+    const bestCasaLower = snap.bestCasa.toLowerCase();
+    const bestIdx = base.findIndex((b) =>
+      b.casa.toLowerCase().includes(bestCasaLower) ||
+      bestCasaLower.includes(b.casa.toLowerCase()),
+    );
+    if (bestIdx >= 0) {
+      // La fila best toma EXACTAMENTE las cuotas snapshot.
+      const filaBest = { ...base[bestIdx] };
+      if (snap.local !== null) filaBest.local = snap.local;
+      if (snap.empate !== null) filaBest.empate = snap.empate;
+      if (snap.visita !== null) filaBest.visita = snap.visita;
+      if (snap.over25 !== null) filaBest.over25 = snap.over25;
+      if (snap.bttsSi !== null) filaBest.bttsSi = snap.bttsSi;
+      base[bestIdx] = filaBest;
+
+      // Las otras 4 casas se ajustan proporcionalmente para que las cuotas
+      // sean coherentes con la magnitud real (ej. si el snapshot dice
+      // local=7.5, no queremos que las otras casas muestren local=2.1).
+      // Usamos el ratio entre la cuota snapshot y la cuota base original
+      // de la casa best para escalar las demás.
+      const escalas = {
+        local: snap.local !== null ? snap.local / 2.1 : 1,
+        empate: snap.empate !== null ? snap.empate / 3.3 : 1,
+        visita: snap.visita !== null ? snap.visita / 3.4 : 1,
+        over25: snap.over25 !== null ? snap.over25 / 1.85 : 1,
+        bttsSi: snap.bttsSi !== null ? snap.bttsSi / 1.75 : 1,
+      };
+      base.forEach((b, i) => {
+        if (i === bestIdx) return; // ya seteada
+        if (escalas.local !== 1)
+          b.local = Math.round(b.local * escalas.local * 100) / 100;
+        if (escalas.empate !== 1)
+          b.empate = Math.round(b.empate * escalas.empate * 100) / 100;
+        if (escalas.visita !== 1)
+          b.visita = Math.round(b.visita * escalas.visita * 100) / 100;
+        if (escalas.over25 !== 1)
+          b.over25 = Math.round(b.over25 * escalas.over25 * 100) / 100;
+        if (escalas.bttsSi !== 1)
+          b.bttsSi = Math.round(b.bttsSi * escalas.bttsSi * 100) / 100;
+      });
+    }
+  } else if (mejor) {
+    // Fallback (sin snapshot): override solo la cuota del mercado en la
+    // fila de la casa best, las otras filas mantienen mockup. Es lo que
+    // hacía el código anterior — preservado para compatibilidad.
     const idx = base.findIndex(
       (b) => b.casa.toLowerCase() === mejor.casa.toLowerCase(),
     );
@@ -340,6 +412,7 @@ function construirFilasComparador(
       base[idx] = fila;
     }
   }
+
   return base;
 }
 

@@ -328,6 +328,11 @@ export interface FijaDetalleResolved {
     analisisTarjetas: unknown | null;
     mercadosSecundarios: unknown | null;
   } | null;
+  /** Snapshot de cuotas referenciales (1X2 + ±2.5 + BTTS) leído de
+   *  `analisisPartido.inputsJSON.cuotasReferenciales`. Alimenta el
+   *  ResumenEjecutivo (3 cuotas) y el ComparadorTabla (cuotas base) en
+   *  /las-fijas/[slug]. Null si el análisis no las trae. */
+  cuotasReferenciales?: CuotasSnapshot | null;
   /** Slug canónico del partido — útil para 301 si el visitante usó alias. */
   slugCanonico?: string;
 }
@@ -387,6 +392,7 @@ export async function resolverFijaPorSlug(
           analisisTarjetas: true,
           mercadosSecundarios: true,
           archivadoEn: true,
+          inputsJSON: true,
         },
       },
     },
@@ -425,6 +431,20 @@ export async function resolverFijaPorSlug(
         }
       : null;
 
+  // Cuotas referenciales para el ResumenEjecutivo y el ComparadorTabla.
+  // Solo las exponemos si el análisis está APROBADO (mismo gating que el
+  // resto del bloque). Reusa el helper compartido con `listarFijas()`.
+  const pronosticoForCuotas =
+    analisisAprobado?.pronostico1x2 ?? null;
+  const cuotasReferenciales =
+    a && a.estado === "APROBADO"
+      ? derivarCuotasSnapshot(
+          a.inputsJSON,
+          a.mejorCuota,
+          pronosticoForCuotas,
+        )
+      : null;
+
   return {
     estado: "found",
     partido: {
@@ -442,6 +462,7 @@ export async function resolverFijaPorSlug(
       liveStatusShort: match.liveStatusShort,
     },
     analisisAprobado,
+    cuotasReferenciales,
     slugCanonico: slug,
   };
 }

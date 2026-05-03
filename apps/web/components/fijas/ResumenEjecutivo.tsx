@@ -36,6 +36,15 @@ interface Props {
   pronostico: "LOCAL" | "EMPATE" | "VISITA";
   probabilidades: { local?: number; empate?: number; visita?: number };
   mejorCuota: { mercado: string; cuota: number; casa: string };
+  /** Cuotas 1X2 de las 3 columnas de la grilla de probabilidades. Cada
+   *  una puede ser null si el análisis no las trae. La cuota Local NO es
+   *  necesariamente la cuota del pronóstico — es la cuota del mercado
+   *  Local, que se renderiza en la celda Local sin importar el pronóstico. */
+  cuotas1X2?: {
+    local: number | null;
+    empate: number | null;
+    visita: number | null;
+  };
   equipoLocal: string;
   equipoVisita: string;
   /** Cebo a mostrar bajo blur cuando NO es socio. */
@@ -50,6 +59,7 @@ export function ResumenEjecutivo({
   pronostico,
   probabilidades,
   mejorCuota,
+  cuotas1X2,
   equipoLocal,
   equipoVisita,
   ceboCombinada,
@@ -76,6 +86,17 @@ export function ResumenEjecutivo({
       ? "Registrate gratis para desbloquear →"
       : "Hacete Socio para desbloquear →";
 
+  // Cuotas 1X2 con backfill: si cuotas1X2 no llega (análisis viejo sin
+  // cuotasReferenciales), usamos mejorCuota para la celda del pronóstico
+  // y dejamos las otras dos en null para que se rendericen como "—".
+  const mcMercado = mejorCuota.mercado.toUpperCase();
+  const cuotaLocal =
+    cuotas1X2?.local ?? (mcMercado === "LOCAL" ? mejorCuota.cuota : null);
+  const cuotaEmpate =
+    cuotas1X2?.empate ?? (mcMercado === "EMPATE" ? mejorCuota.cuota : null);
+  const cuotaVisita =
+    cuotas1X2?.visita ?? (mcMercado === "VISITA" ? mejorCuota.cuota : null);
+
   // Estructura común (todo el resumen-ejecutivo). Diferencia: el bloque final
   // cambia según auth. Hacemos render duplicado dentro de AuthGate igual al
   // mockup que tiene .resumen-ejecutivo.not-socios-only y .socios-only.
@@ -96,10 +117,16 @@ export function ResumenEjecutivo({
             probLocal={probLocal}
             probEmpate={probEmpate}
             probVisita={probVisita}
-            cuotaLocal={mejorCuota.cuota.toFixed(2)}
+            cuotaLocal={cuotaLocal}
+            cuotaEmpate={cuotaEmpate}
+            cuotaVisita={cuotaVisita}
           />
 
-          <MejorCuotaBanner casa={mejorCuota.casa} cuota={mejorCuota.cuota} />
+          <MejorCuotaBanner
+            mercado={mejorCuota.mercado}
+            casa={mejorCuota.casa}
+            cuota={mejorCuota.cuota}
+          />
 
           <div className="resumen-pick-socios">
             <div className="resumen-pick-socios-title">
@@ -131,10 +158,16 @@ export function ResumenEjecutivo({
             probLocal={probLocal}
             probEmpate={probEmpate}
             probVisita={probVisita}
-            cuotaLocal={mejorCuota.cuota.toFixed(2)}
+            cuotaLocal={cuotaLocal}
+            cuotaEmpate={cuotaEmpate}
+            cuotaVisita={cuotaVisita}
           />
 
-          <MejorCuotaBanner casa={mejorCuota.casa} cuota={mejorCuota.cuota} />
+          <MejorCuotaBanner
+            mercado={mejorCuota.mercado}
+            casa={mejorCuota.casa}
+            cuota={mejorCuota.cuota}
+          />
 
           {combinadaOptima ? (
             <PickSociosUnlocked combinada={combinadaOptima} />
@@ -171,20 +204,43 @@ function ProbGrid({
   probEmpate,
   probVisita,
   cuotaLocal,
+  cuotaEmpate,
+  cuotaVisita,
 }: {
   pron: "LOCAL" | "EMPATE" | "VISITA";
   probLocal: number;
   probEmpate: number;
   probVisita: number;
-  cuotaLocal: string;
+  cuotaLocal: number | null;
+  cuotaEmpate: number | null;
+  cuotaVisita: number | null;
 }) {
   return (
     <div className="resumen-prob-grid">
-      <ProbCell label="Local" pct={probLocal} cuota={cuotaLocal} selected={pron === "LOCAL"} />
-      <ProbCell label="Empate" pct={probEmpate} cuota="—" selected={pron === "EMPATE"} />
-      <ProbCell label="Visita" pct={probVisita} cuota="—" selected={pron === "VISITA"} />
+      <ProbCell
+        label="Local"
+        pct={probLocal}
+        cuota={fmtCuota(cuotaLocal)}
+        selected={pron === "LOCAL"}
+      />
+      <ProbCell
+        label="Empate"
+        pct={probEmpate}
+        cuota={fmtCuota(cuotaEmpate)}
+        selected={pron === "EMPATE"}
+      />
+      <ProbCell
+        label="Visita"
+        pct={probVisita}
+        cuota={fmtCuota(cuotaVisita)}
+        selected={pron === "VISITA"}
+      />
     </div>
   );
+}
+
+function fmtCuota(c: number | null): string {
+  return c !== null ? c.toFixed(2) : "—";
 }
 
 function ProbCell({
@@ -210,12 +266,28 @@ function ProbCell({
   );
 }
 
-function MejorCuotaBanner({ casa, cuota }: { casa: string; cuota: number }) {
+function MejorCuotaBanner({
+  mercado,
+  casa,
+  cuota,
+}: {
+  mercado: string;
+  casa: string;
+  cuota: number;
+}) {
+  // El label refleja el mercado del pronóstico (Local/Empate/Visita), no
+  // hardcoded a "Local". Mockup line 2834.
+  const labelMercado =
+    mercado.toUpperCase() === "EMPATE"
+      ? "Empate"
+      : mercado.toUpperCase() === "VISITA"
+        ? "Visita"
+        : "Local";
   return (
     <div className="resumen-mejor-cuota">
       <div style={{ fontSize: 20 }}>🏆</div>
       <div className="resumen-mejor-cuota-text">
-        <strong>Mejor cuota Local</strong> ·{" "}
+        <strong>Mejor cuota {labelMercado}</strong> ·{" "}
         <span className="resumen-mejor-cuota-casa">
           {casa} @ {cuota.toFixed(2)}
         </span>
