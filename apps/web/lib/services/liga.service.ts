@@ -52,6 +52,13 @@ function visibilidadWhere(): Prisma.PartidoWhereInput {
   // Regla 7d + override (decisión §4.2):
   //   (fechaInicio < NOW() + 7d OR visibilidadOverride = 'forzar_visible')
   //   AND visibilidadOverride != 'forzar_oculto'
+  //
+  // CUIDADO: en Prisma 5.x, `{ not: "value" }` sobre un campo nullable
+  // EXCLUYE los nulls (semántica SQL — `NULL != value` devuelve NULL, no
+  // TRUE). Como `visibilidadOverride` es nullable y la mayoría de los
+  // partidos lo tienen en null (default), hay que escribir el filtro como
+  // `OR: [null, { not: "forzar_oculto" }]` para incluir explícitamente los
+  // nulls.
   const limite = new Date(Date.now() + VENTANA_PROXIMOS_DIAS * 24 * 60 * 60 * 1000);
   return {
     AND: [
@@ -61,6 +68,25 @@ function visibilidadWhere(): Prisma.PartidoWhereInput {
           { visibilidadOverride: "forzar_visible" },
         ],
       },
+      {
+        OR: [
+          { visibilidadOverride: null },
+          { visibilidadOverride: { not: "forzar_oculto" } },
+        ],
+      },
+    ],
+  };
+}
+
+/**
+ * Helper compartido: filtro "no esté forzado a oculto" que SÍ incluye nulls.
+ * Usar este en cualquier query que filtre por visibilidad — el `not` directo
+ * de Prisma sobre nullable excluye nulls (ver comentario en `visibilidadWhere`).
+ */
+function noEstaForzadoOculto(): Prisma.PartidoWhereInput {
+  return {
+    OR: [
+      { visibilidadOverride: null },
       { visibilidadOverride: { not: "forzar_oculto" } },
     ],
   };
@@ -94,7 +120,7 @@ export async function obtenerListaLiga(
     where: {
       elegibleLiga: true,
       estado: "EN_VIVO",
-      visibilidadOverride: { not: "forzar_oculto" },
+      ...noEstaForzadoOculto(),
     },
     select: BASE_SELECT,
     orderBy: { fechaInicio: "desc" },
@@ -107,7 +133,7 @@ export async function obtenerListaLiga(
       elegibleLiga: true,
       estado: "FINALIZADO",
       fechaInicio: { gte: desdeFinalizados },
-      visibilidadOverride: { not: "forzar_oculto" },
+      ...noEstaForzadoOculto(),
     },
     select: BASE_SELECT,
     orderBy: { fechaInicio: "desc" },
@@ -293,7 +319,7 @@ export async function resolverLigaPorSlug(
     where: {
       elegibleLiga: true,
       fechaInicio: { gte, lte },
-      visibilidadOverride: { not: "forzar_oculto" },
+      ...noEstaForzadoOculto(),
     },
     select: {
       id: true,
