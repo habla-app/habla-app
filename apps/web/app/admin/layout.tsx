@@ -13,6 +13,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@habla/db";
 import { AdminLayoutShell } from "@/components/ui/admin/AdminLayoutShell";
 import { obtenerLeaderboardMesActual } from "@/lib/services/leaderboard.service";
+import { obtenerVinculacionesPendientesCount } from "@/lib/services/vinculaciones.service";
 
 export const metadata = {
   title: "Admin · Habla!",
@@ -32,20 +33,22 @@ export default async function AdminLayout({
   const ahora = new Date();
   const en7d = new Date(ahora.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-  const [partidosSinFiltro1, picksPendientes, alarmasActivas, ligaTopPendientes] = await Promise.all([
-    // Partidos próximos 7d que aún no pasaron Filtro 1 (mostrarAlPublico=false)
-    prisma.partido
-      .count({
-        where: {
-          fechaInicio: { gte: ahora, lte: en7d },
-          mostrarAlPublico: false,
-        },
-      })
-      .catch(() => 0),
-    prisma.pickPremium.count({ where: { estado: "PENDIENTE" } }).catch(() => 0),
-    prisma.alarma.count({ where: { activa: true } }).catch(() => 0),
-    contarTop10Pendientes(),
-  ]);
+  const [partidosSinFiltro1, picksPendientes, alarmasActivas, ligaTopPendientes, vinculacionesPendientes] =
+    await Promise.all([
+      // Partidos próximos 7d que aún no pasaron Filtro 1 (mostrarAlPublico=false)
+      prisma.partido
+        .count({
+          where: {
+            fechaInicio: { gte: ahora, lte: en7d },
+            mostrarAlPublico: false,
+          },
+        })
+        .catch(() => 0),
+      prisma.pickPremium.count({ where: { estado: "PENDIENTE" } }).catch(() => 0),
+      prisma.alarma.count({ where: { activa: true } }).catch(() => 0),
+      contarTop10Pendientes(),
+      obtenerVinculacionesPendientesCount(),
+    ]);
 
   const username = await prisma.usuario
     .findUnique({
@@ -66,6 +69,7 @@ export default async function AdminLayout({
         partidos: partidosSinFiltro1,
         picksPendientes,
         ligaVerificacionPendientes: ligaTopPendientes,
+        vinculacionesPendientes,
         alarmasActivas,
       }}
     >
