@@ -1,121 +1,84 @@
-// /comunidad/torneo/[slug] — Producto C v3.1 (Lote C, rewrite del legacy
-// /torneo/[id]). Spec:
-// docs/ux-spec/03-pista-usuario-autenticada/comunidad-torneo-slug.spec.md.
+// /liga/[slug] — Lote M v3.2 (May 2026).
+// Spec: docs/habla-mockup-v3.2.html § page-liga-detail.
 //
-// Vista crítica de la pista autenticada. El "torneo" en v3.1 es el evento
-// de Liga Habla! sincronizado con un partido específico — la URL nueva usa
-// el ID del partido como slug (no hay columna `slug` en la tabla `partidos`,
-// decisión arquitectónica para evitar migración por una vista de SEO
-// marginal). El redirect 301 desde /torneo/[id] vive en `middleware.ts`.
+// Vista crítica del Producto C (La Liga Habla!) — detalle del partido con
+// ranking en vivo, mi combinada (CTA hacer/editar), cross-link a Las Fijas.
 //
-// Estructura mobile-first:
-//   - <TorneoHero>         hero gradient navy → blue + cross-link a Producto B
-//   - <PrediccionForm>     5 mercados + sticky CTA "Enviar mi predicción"
-//   - <PremiumInline>      banner promo Premium (oculto si Premium)
-//   - <AffiliateInline>    cuota mejor casa según predicción 1X2
-//   - <LeaderboardTorneoPreview>  Top 5 + posición del viewer
-//
-// Servicios reutilizados:
-//   - obtenerPorSlug (Lote C, wrapper sobre torneos.service)
-//   - obtenerOddsCacheadas (Lote 9)
-//   - obtenerLeaderboardMesActual (Lote 5)
-//   - detectarEstadoUsuario (Lote B)
-// Lote E reemplazará el `pickPremium = null` por la query real.
+// Consolidación: reemplaza la coexistencia previa de /comunidad/torneo/[slug]
+// (estática) + /live-match (en vivo). En v3.2 una sola URL maneja PROGRAMADO,
+// EN_VIVO y FINALIZADO. El ranking se renderiza paginado con sticky-bottom
+// (decisiones §4.10 + §4.11). El modal de combinada respeta las 9 reglas
+// integrales §4.9.
 
-import { redirect } from "next/navigation";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { obtenerPorSlug } from "@/lib/services/torneos.service";
-import { obtenerLeaderboardMesActual } from "@/lib/services/leaderboard.service";
-import { obtenerOddsCacheadas } from "@/lib/services/odds-cache.service";
-import { detectarEstadoUsuario } from "@/lib/services/estado-usuario.service";
-import { obtenerPickAprobadoDePartido } from "@/lib/services/picks-premium-publicos.service";
+import { resolverLigaPorSlug } from "@/lib/services/liga.service";
+import { listarRanking } from "@/lib/services/ranking.service";
 import { TrackOnMount } from "@/components/analytics/TrackOnMount";
 import { TorneoHero } from "@/components/torneo/TorneoHero";
-import { PrediccionForm } from "@/components/torneo/PrediccionForm";
-import { PremiumInline } from "@/components/torneo/PremiumInline";
-import { AffiliateInline } from "@/components/torneo/AffiliateInline";
-import { LeaderboardTorneoPreview } from "@/components/torneo/LeaderboardTorneoPreview";
-import { PickWrapper } from "@/components/ui/premium";
+import { LigaDetalleClient } from "@/components/liga/LigaDetalleClient";
+import {
+  RankingPaginado,
+  type RankingFila,
+} from "@/components/liga/RankingPaginado";
 
 interface Props {
   params: { slug: string };
+  searchParams?: { modal?: string };
 }
 
 export const dynamic = "force-dynamic";
 
-export default async function TorneoPage({ params }: Props) {
+export default async function LigaDetallePage({ params }: Props) {
   const session = await auth();
-  if (!session?.user?.id) {
-    redirect(`/auth/signin?callbackUrl=/liga/${params.slug}`);
+  const usuarioId = session?.user?.id ?? null;
+
+  const r = await resolverLigaPorSlug(params.slug, usuarioId ?? undefined);
+  if (r.estado !== "found" || !r.partido || !r.torneo) {
+    notFound();
   }
 
-  const data = await obtenerPorSlug(params.slug, session.user.id);
-  if (!data) notFound();
+  const partido = r.partido;
+  const torneo = r.torneo;
+  const miTicket = r.miTicket;
+  const enVivo = partido.estado === "EN_VIVO";
+  const finalizado = partido.estado === "FINALIZADO";
+  const cancelado = partido.estado === "CANCELADO";
+  const editable =
+    !cancelado && !finalizado && !enVivo && partido.fechaInicio.getTime() > Date.now();
 
-  const { torneo, miTicket } = data;
-  const { partido } = torneo;
+  const rankingData = await listarRanking(torneo.id, {
+    limit: 200,
+    usuarioId: usuarioId ?? undefined,
+  }).catch(() => null);
 
-  // Cargas paralelas no críticas — si fallan, la vista renderiza sin esa
-  // sección.
-  const [cuotas, leaderboardMes, estadoUsuario, pickPremium] =
-    await Promise.all([
-      obtenerOddsCacheadas(partido.id).catch(() => null),
-      obtenerLeaderboardMesActual({ usuarioIdActual: session.user.id }).catch(
-        () => null,
-      ),
-      detectarEstadoUsuario(session.user.id),
-      obtenerPickAprobadoDePartido(partido.id),
-    ]);
+  const filas: RankingFila[] = rankingData
+    ? rankingData.ranking.map((r) => ({
+        rank: r.rank,
+        ticketId: r.ticketId,
+        usuarioId: r.usuarioId,
+        username: r.username,
+        nombre: r.nombre,
+        puntosTotal: r.puntosTotal,
+        aciertos: contarAciertos(r.puntosDetalle),
+        totalMercados: 5,
+      }))
+    : [];
 
-  const esPremium = estadoUsuario === "premium";
-  const tienePred = miTicket !== null && !esPlaceholder(miTicket);
-  const partidoEnVivo = partido.estado === "EN_VIVO";
-  const partidoFinalizado = partido.estado === "FINALIZADO";
-  const cierreYaPaso = torneo.cierreAt.getTime() <= Date.now();
-  const formDisabled = cierreYaPaso || partidoEnVivo || partidoFinalizado;
-
-  // Mejor cuota según predicción del usuario (sincroniza el affiliate inline).
-  const mejorCuota = cuotas
-    ? resolverMejorCuotaSegunPred(cuotas, miTicket?.predResultado ?? "LOCAL")
-    : null;
-
-  // Top 5 del leaderboard mensual + posición del viewer.
-  const top5 = (leaderboardMes?.filas ?? []).slice(0, 5).map((f) => ({
-    posicion: f.posicion,
-    userId: f.userId,
-    username: f.username,
-    puntos: f.puntos,
-    esPremium: false,
-    premioSoles:
-      f.posicion === 1
-        ? 500
-        : f.posicion <= 3
-          ? 200
-          : f.posicion <= 10
-            ? 50
-            : undefined,
-  }));
-  const miFila = leaderboardMes?.miFila
-    ? {
-        posicion: leaderboardMes.miFila.posicion,
-        userId: leaderboardMes.miFila.userId,
-        username: leaderboardMes.miFila.username,
-        puntos: leaderboardMes.miFila.puntos,
-        esViewer: true,
-      }
-    : null;
+  const totalInscritos = rankingData?.totalInscritos ?? torneo.totalInscritos;
+  const miPosicion = rankingData?.miPosicion?.posicion ?? null;
 
   return (
-    <div data-testid="comunidad-torneo-slug" className="pb-24">
+    <div className="space-y-3 pb-24">
       <TrackOnMount
-        event="torneo_visto"
+        event="liga_detalle_visto"
         props={{
           torneoId: torneo.id,
           partidoId: partido.id,
           slug: params.slug,
           partido: `${partido.equipoLocal} vs ${partido.equipoVisita}`,
-          inscritos: torneo.totalInscritos,
+          inscritos: totalInscritos,
         }}
       />
 
@@ -123,161 +86,154 @@ export default async function TorneoPage({ params }: Props) {
         partidoSlug={params.slug}
         equipoLocal={partido.equipoLocal}
         equipoVisita={partido.equipoVisita}
-        totalInscritos={torneo.totalInscritos}
+        totalInscritos={totalInscritos}
         cierreAt={torneo.cierreAt}
         estado={
-          partidoEnVivo
-            ? "EN_VIVO"
-            : partidoFinalizado
+          cancelado
+            ? "CANCELADO"
+            : finalizado
               ? "FINALIZADO"
-              : (torneo.estado as
-                  | "ABIERTO"
-                  | "EN_JUEGO"
-                  | "CERRADO"
-                  | "FINALIZADO"
-                  | "CANCELADO")
+              : enVivo
+                ? "EN_VIVO"
+                : (torneo.estado as "ABIERTO" | "EN_JUEGO" | "CERRADO")
         }
         marcadorLocal={partido.golesLocal}
         marcadorVisita={partido.golesVisita}
       />
 
-      <section className="bg-card px-4 py-5">
-        <h2 className="mb-3 flex items-center gap-2 font-display text-display-sm font-bold uppercase tracking-[0.04em] text-dark">
-          <span aria-hidden>🎯</span>
-          Tu predicción
-        </h2>
-        <PrediccionForm
-          torneoId={torneo.id}
-          partidoSlug={params.slug}
-          equipoLocal={partido.equipoLocal}
-          equipoVisita={partido.equipoVisita}
-          prediccionInicial={
-            miTicket
-              ? {
-                  predResultado: miTicket.predResultado,
-                  predBtts: miTicket.predBtts,
-                  predMas25: miTicket.predMas25,
-                  predTarjetaRoja: miTicket.predTarjetaRoja,
-                  predMarcadorLocal: miTicket.predMarcadorLocal,
-                  predMarcadorVisita: miTicket.predMarcadorVisita,
-                }
-              : null
-          }
-          disabled={formDisabled}
-          yaEnviada={tienePred}
-        />
-      </section>
-
-      {/* Pick Premium del partido — desbloqueado si Premium, teaser si no.
-          Solo se renderiza si hay un pick aprobado para este partido. */}
-      {pickPremium || esPremium ? (
-        <div className="px-4">
-          <PickWrapper
-            pick={pickPremium}
-            estadoUsuario={estadoUsuario}
-            mode="section"
-            utmSource="torneo"
-            email={session.user.email ?? null}
+      {cancelado ? (
+        <PartidoCancelado />
+      ) : (
+        <div className="mx-auto w-full max-w-[1100px] space-y-3 md:px-6">
+          <LigaDetalleClient
+            torneoId={torneo.id}
+            ticketId={miTicket?.id ?? null}
+            predIniciales={
+              miTicket && !miTicket.esPlaceholder
+                ? {
+                    predResultado: miTicket.predResultado,
+                    predBtts: miTicket.predBtts,
+                    predMas25: miTicket.predMas25,
+                    predTarjetaRoja: miTicket.predTarjetaRoja,
+                    predMarcadorLocal: miTicket.predMarcadorLocal,
+                    predMarcadorVisita: miTicket.predMarcadorVisita,
+                  }
+                : null
+            }
+            partidoNombre={`${partido.equipoLocal} vs ${partido.equipoVisita}`}
+            equipoLocal={partido.equipoLocal}
+            equipoVisita={partido.equipoVisita}
+            cierreAt={torneo.cierreAt.toISOString()}
+            combinada={
+              miTicket
+                ? {
+                    predResultado: miTicket.predResultado,
+                    predBtts: miTicket.predBtts,
+                    predMas25: miTicket.predMas25,
+                    predTarjetaRoja: miTicket.predTarjetaRoja,
+                    predMarcadorLocal: miTicket.predMarcadorLocal,
+                    predMarcadorVisita: miTicket.predMarcadorVisita,
+                    puntosTotal: miTicket.puntosTotal,
+                    puntosResultado: miTicket.puntosResultado,
+                    puntosBtts: miTicket.puntosBtts,
+                    puntosMas25: miTicket.puntosMas25,
+                    puntosTarjeta: miTicket.puntosTarjeta,
+                    puntosMarcador: miTicket.puntosMarcador,
+                    numEdiciones: miTicket.numEdiciones,
+                    esPlaceholder: miTicket.esPlaceholder,
+                  }
+                : null
+            }
+            editable={editable}
+            finalizado={finalizado}
+            requiereLogin={!usuarioId}
           />
-        </div>
-      ) : null}
 
-      {!esPremium ? (
-        <div className="py-2">
-          <PremiumInline />
-        </div>
-      ) : null}
-
-      {mejorCuota ? (
-        <div className="py-3">
-          <AffiliateInline
-            casaSlug={mejorCuota.casa}
-            casaNombre={mejorCuota.casaNombre}
-            cuotaValor={mejorCuota.odd}
-            outcomeLabel={mejorCuota.label}
-            partidoId={partido.id}
-            outcome={mejorCuota.outcomeKey}
+          <RankingPaginado
+            filas={filas}
+            totalInscritos={totalInscritos}
+            miUsuarioId={usuarioId}
+            miPosicion={miPosicion}
+            hasSession={!!usuarioId}
           />
-        </div>
-      ) : null}
 
-      <section className="bg-card px-4 py-5">
-        <h2 className="mb-3 flex items-center gap-2 font-display text-display-sm font-bold uppercase tracking-[0.04em] text-dark">
-          <span aria-hidden>🏅</span>
-          Leaderboard del mes
-        </h2>
-        <LeaderboardTorneoPreview
-          filas={top5}
-          miFila={miFila}
-          showPremioLineAfter={3}
-        />
-      </section>
+          <CrossLinkAFijas slug={params.slug} />
+        </div>
+      )}
+
+      <p className="mx-auto max-w-[1100px] px-4 pt-4 text-center text-body-xs text-muted-d md:px-6">
+        🎲 Apostar es entretenimiento, no una fuente de ingresos. Si sentís
+        que perdiste el control, contactá la Línea Tugar al{" "}
+        <a href="tel:0800-19009" className="underline hover:text-brand-blue-main">
+          0800-19009
+        </a>
+        .
+      </p>
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Helpers locales
-// ---------------------------------------------------------------------------
-
-function esPlaceholder(t: {
-  predResultado: string;
-  predBtts: boolean;
-  predMas25: boolean;
-  predTarjetaRoja: boolean;
-  predMarcadorLocal: number;
-  predMarcadorVisita: number;
-}): boolean {
+function CrossLinkAFijas({ slug }: { slug: string }) {
   return (
-    t.predResultado === "LOCAL" &&
-    t.predBtts === false &&
-    t.predMas25 === false &&
-    t.predTarjetaRoja === false &&
-    t.predMarcadorLocal === 0 &&
-    t.predMarcadorVisita === 0
+    <Link
+      href={`/las-fijas/${slug}`}
+      className="my-3 mx-4 flex items-center justify-between gap-3 rounded-md border-2 border-brand-blue-main/20 bg-brand-blue-main/[0.04] p-4 transition-colors hover:border-brand-blue-main/40 hover:bg-brand-blue-main/[0.08] md:mx-0"
+    >
+      <div className="flex items-center gap-3">
+        <span aria-hidden className="text-2xl">
+          🎯
+        </span>
+        <div>
+          <p className="font-display text-display-xs font-bold text-dark">
+            Mirá el análisis y el comparador
+          </p>
+          <p className="text-body-xs text-muted-d">
+            Pronóstico Habla!, mejores cuotas y análisis del partido
+          </p>
+        </div>
+      </div>
+      <span aria-hidden className="text-brand-blue-main">
+        →
+      </span>
+    </Link>
   );
 }
 
-interface MejorCuotaResolved {
-  casa: string;
-  casaNombre: string;
-  odd: number;
-  label: string;
-  outcomeKey: "1" | "X" | "2";
+function PartidoCancelado() {
+  return (
+    <div className="mx-auto w-full max-w-[640px] px-4 py-12 text-center md:py-16">
+      <div aria-hidden className="mb-4 text-5xl">
+        ⚠️
+      </div>
+      <h1 className="font-display text-display-md font-black text-dark">
+        Este partido fue cancelado
+      </h1>
+      <p className="mt-3 text-body-md text-body">
+        Las predicciones quedaron sin efecto. No se descuentan ni suman puntos
+        del ranking del mes.
+      </p>
+      <Link
+        href="/liga"
+        className="mt-5 inline-flex items-center justify-center rounded-md bg-brand-gold px-5 py-3 font-display text-label-md font-extrabold uppercase text-black shadow-gold-btn transition-all hover:-translate-y-px hover:bg-brand-gold-light"
+      >
+        Volver a la Liga
+      </Link>
+    </div>
+  );
 }
 
-function resolverMejorCuotaSegunPred(
-  cuotas: Awaited<ReturnType<typeof obtenerOddsCacheadas>>,
-  pred: "LOCAL" | "EMPATE" | "VISITA",
-): MejorCuotaResolved | null {
-  if (!cuotas) return null;
-  const m = cuotas.mercados["1X2"];
-  if (pred === "LOCAL" && m.local) {
-    return {
-      casa: m.local.casa,
-      casaNombre: m.local.casaNombre,
-      odd: m.local.odd,
-      label: "Local gana",
-      outcomeKey: "1",
-    };
-  }
-  if (pred === "EMPATE" && m.empate) {
-    return {
-      casa: m.empate.casa,
-      casaNombre: m.empate.casaNombre,
-      odd: m.empate.odd,
-      label: "Empate",
-      outcomeKey: "X",
-    };
-  }
-  if (pred === "VISITA" && m.visita) {
-    return {
-      casa: m.visita.casa,
-      casaNombre: m.visita.casaNombre,
-      odd: m.visita.odd,
-      label: "Visita gana",
-      outcomeKey: "2",
-    };
-  }
-  return null;
+function contarAciertos(detalle: {
+  resultado: number;
+  btts: number;
+  mas25: number;
+  tarjeta: number;
+  marcador: number;
+}): number {
+  let n = 0;
+  if (detalle.resultado > 0) n += 1;
+  if (detalle.btts > 0) n += 1;
+  if (detalle.mas25 > 0) n += 1;
+  if (detalle.tarjeta > 0) n += 1;
+  if (detalle.marcador > 0) n += 1;
+  return n;
 }
