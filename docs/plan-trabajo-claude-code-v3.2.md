@@ -467,6 +467,216 @@ El alcance de cada uno (qué vistas cubre) sigue como estaba en el plan v2.0.
 
 ---
 
+# Lote U — Pulido funcional pre-lanzamiento
+
+**Branch**: `feat/lote-u-pulido-funcional`
+
+### Objetivo
+
+Cerrar todos los pendientes funcionales detectados en la auditoría post Lotes K-P. La web ya tiene fidelidad visual al mockup pero hay botones que no actúan, links rotos, opciones de UI que no tienen backend, y comportamiento incorrecto en email verification. Este lote resuelve todo eso.
+
+Cero cambios visuales al mockup. Cero Tailwind utility en componentes nuevos/tocados. Las clases nominadas del mockup (en `mockup-styles.css`) son las que aplican.
+
+### Alcance del lote (12 ítems)
+
+#### U.1 — Acordeones FAQ del Socios (`/socios`)
+
+**Problema**: en `apps/web/app/(public)/socios/page.tsx` el bloque FAQ tiene 5 preguntas como `<div class="faq-item"><div class="faq-q">¿Pregunta?</div></div>` — solo título, sin respuesta y sin lógica de expansión.
+
+**Solución**:
+- Crear `apps/web/components/socios/SociosFaqList.tsx` (cliente).
+- Definir array de FAQs con pregunta + respuesta. Las 5 preguntas existentes en la página + posibles complementarias del mockup. Verificar la sección FAQ en `docs/habla-mockup-v3.2.html` § `page-socios` para confirmar copy y cantidad exacta.
+- State local `openIndex: number | null`. Click en `.faq-q` alterna `openIndex`.
+- Aplicar clase `.faq-item.open` cuando coincide; el CSS `.faq-a` ya está en `mockup-styles.css` (Lote R).
+- Reemplazar el bloque estático del page por `<SociosFaqList />`.
+
+#### U.2 — Botón "Volver" en detalles de Reviews y Guías
+
+**Problema**: en `/reviews-y-guias/casas/[slug]` y `/reviews-y-guias/guias/[slug]` no hay forma de regresar al hub.
+
+**Solución**:
+- Verificar primero si el mockup `docs/habla-mockup-v3.2.html` define el botón de volver en algún lado (buscar "← Volver" o `breadcrumb`). Si lo define, usar ese HTML/clases. Si no, usar un breadcrumb mínimo:
+  ```tsx
+  <Link href="/reviews-y-guias" className="back-link">← Volver a Reviews y Guías</Link>
+  ```
+- Si la clase `.back-link` no existe en `mockup-styles.css`, agregarla con estilos minimal (color azul, font-size 13px, margin-bottom 16px). NO crear sistema de breadcrumbs complejo.
+- Agregar el link al inicio del JSX de ambas páginas de detalle.
+
+#### U.3 — Edición inline de nombre y ubicación en `/perfil`
+
+**Problema**: en `/perfil`, los botones "Editar" del nombre y ubicación son `<button type="button">` sin onClick.
+
+**Solución**:
+- Crear `apps/web/components/perfil/CuentaEditableField.tsx` (cliente).
+- Props: `label`, `valor` (string|null), `field` (`"nombre"`|`"ubicacion"`|`"image"`), `placeholder`.
+- State local: `modo: "view" | "edit"`, `valorEditando: string`.
+- En modo "view" muestra `{valor || "—"} <button class="cuenta-edit-btn">Editar</button>`. Click activa modo "edit".
+- En modo "edit" muestra `<input>` con clase del mockup (verificar si existe `.cuenta-edit-input` en mockup-styles, si no usar input minimal con `.input` o crear clase) + `<button>Guardar</button>` + `<button>Cancelar</button>`.
+- Guardar: PATCH `/api/v1/usuarios/me` con `{ [field]: valor }`. El endpoint ya acepta `nombre`, `ubicacion`, `image`. Al éxito, actualiza UI y router.refresh().
+- Cancelar: vuelve a modo "view" sin guardar.
+- Reemplazar las dos rows actuales (Nombre, Ubicación) en `apps/web/app/(main)/perfil/page.tsx` por `<CuentaEditableField>`.
+
+#### U.4 — Email Google OAuth marca emailVerified automáticamente
+
+**Problema**: usuarios que ingresan con Google OAuth tienen `Usuario.emailVerified` en NULL aunque Google ya verificó el email. En `/perfil` aparece "Sin verificar".
+
+**Solución**:
+- Editar `apps/web/lib/auth.ts`. Agregar/extender el callback `signIn` o `events.signIn` (lo que sea consistente con la versión de NextAuth v5 del repo):
+  ```ts
+  events: {
+    async signIn({ user, account }) {
+      if (account?.provider === "google" && user.id) {
+        // Si emailVerified está null, setear a now()
+        const dbUser = await prisma.usuario.findUnique({
+          where: { id: user.id },
+          select: { emailVerified: true },
+        });
+        if (dbUser && !dbUser.emailVerified) {
+          await prisma.usuario.update({
+            where: { id: user.id },
+            data: { emailVerified: new Date() },
+          });
+        }
+      }
+    },
+  },
+  ```
+- Esto cubre nuevos logins. Para usuarios existentes el fix se aplica en su próximo login.
+- Verificar que el flujo de magic link Resend (que SÍ verifica el email correctamente) no se rompe.
+
+#### U.5 — Eliminar toggle de notificaciones push
+
+**Problema**: el toggle de notificaciones push en `/perfil` no tiene backend.
+
+**Solución**:
+- Editar `apps/web/components/perfil/CuentaTogglesClient.tsx`. Eliminar:
+  - El state `push` y `togglePush`.
+  - El bloque JSX completo `<div className="cuenta-toggle-row">` correspondiente a "Notificaciones push".
+- El componente queda con solo 2 toggles: "Perfil público" y "Notificaciones por email".
+
+#### U.6 — Eliminar botón "Cambiar contraseña"
+
+**Problema**: el botón existe pero el sistema de auth es Google + magic link, no hay password.
+
+**Solución**:
+- Editar `apps/web/app/(main)/perfil/page.tsx`. Eliminar la línea:
+  ```tsx
+  <button type="button" className="btn btn-ghost btn-sm" style={{ justifyContent: "flex-start" }}>🔒 Cambiar contraseña</button>
+  ```
+
+#### U.7 — Eliminar botón "Descargar mis datos"
+
+**Problema**: apunta a `/api/v1/usuarios/me/exportar` que no existe.
+
+**Solución**:
+- Editar `apps/web/app/(main)/perfil/page.tsx`. Eliminar la línea:
+  ```tsx
+  <a href="/api/v1/usuarios/me/exportar" className="btn btn-ghost btn-sm" style={{ justifyContent: "flex-start" }}>📥 Descargar mis datos</a>
+  ```
+- **NO eliminar** el endpoint `/api/v1/usuarios/me/datos-download/` que sí funciona — queda como infraestructura para uso futuro o cumplimiento legal vía admin.
+
+#### U.8 — Modal de confirmación inline para eliminar cuenta
+
+**Problema**: el botón apunta a `/perfil/eliminar` que el Lote K eliminó como página.
+
+**Solución**:
+- Crear `apps/web/components/perfil/EliminarCuentaButton.tsx` (cliente).
+- Renderiza `<button class="btn btn-ghost btn-sm">🗑 Eliminar mi cuenta</button>` con color `var(--pred-wrong)`.
+- Click abre modal de confirmación con:
+  - Título: "Eliminar mi cuenta".
+  - Descripción de qué se borra (perfil, predicciones, suscripciones canceladas, etc.).
+  - Input "Escribí tu @username para confirmar".
+  - Botón "Cancelar" + botón "Eliminar permanentemente" (deshabilitado hasta que el username coincida).
+- Al confirmar: DELETE `/api/v1/usuarios/me/eliminar` (verificar primero que el endpoint existe; si no, crearlo en este lote).
+- Al éxito: `signOut({ redirect: true, callbackUrl: "/" })`.
+- Editar `apps/web/app/(main)/perfil/page.tsx` reemplazando el `<Link href="/perfil/eliminar">` por `<EliminarCuentaButton username={perfil.username} />`.
+
+#### U.9 — Modal Yape para captura del Top 10 ganador
+
+**Problema**: el sistema captura `yapeNumero` solo cuando el usuario entra al Top 10, pero no hay UI que se lo pida.
+
+**Solución**:
+- Crear `apps/web/components/perfil/YapeCapturaBanner.tsx` (cliente).
+- Renderiza un banner persistente en `/perfil` SOLO si:
+  - El usuario ganó algún `PremioMensual` con estado `PENDIENTE_DATOS`.
+  - Y `Usuario.yapeNumero` es null.
+- Banner: hero gold con "🎉 ¡Ganaste S/X en {mes}! Ingresá tu número de Yape para coordinar el pago."
+- Click abre modal con:
+  - Input numérico de 9 dígitos para Yape.
+  - Validación: `^9\d{8}$`.
+  - Texto legal: "Esto es un premio publicitario. Solo necesitamos tu Yape para enviarte el pago. No compartiremos tu número."
+- Submit: PATCH `/api/v1/usuarios/me/yape` con `{ yapeNumero }`. Crear ese endpoint si no existe (en `apps/web/app/api/v1/usuarios/me/yape/route.ts`):
+  - Valida formato.
+  - Actualiza `Usuario.yapeNumero`.
+  - Logger.info para que admin se entere (opcional: email a admin o entrada en `EventoAnalitica`).
+- Al éxito, oculta el banner y muestra toast "Listo. Te contactaremos por email cuando se acredite el pago."
+- Cablear el `<YapeCapturaBanner>` en `/perfil/page.tsx` después del header.
+
+**Nota**: si el modelo `PremioMensual` aún no tiene un estado claro de "pendiente de datos del ganador", verificar y agregar columna boolean `datosCompletos` o equivalente. Usar logger para registrar la captura.
+
+#### U.10 — Verificar auto-redirect Socio → /socios-hub
+
+**Problema**: el Lote K documentó este redirect server-side en middleware. Verificar que sigue funcionando.
+
+**Solución**:
+- Abrir `apps/web/middleware.ts`. Verificar que existe el bloque que redirige `/socios` a `/socios-hub` cuando el usuario es Socio activo.
+- Si no existe o se rompió: implementarlo:
+  ```ts
+  if (pathname === "/socios" && estadoAuth === "socios") {
+    return NextResponse.redirect(new URL("/socios-hub", req.url));
+  }
+  ```
+- Si ya existe: documentarlo en el reporte como "verificado".
+
+#### U.11 — Sitemap actualizado con URLs nuevas
+
+**Problema**: `apps/web/app/sitemap.ts` puede estar referenciando URLs viejas.
+
+**Solución**:
+- Abrir `apps/web/app/sitemap.ts`.
+- Verificar que solo aparecen URLs nuevas: `/`, `/las-fijas`, `/las-fijas/[slug]`, `/liga`, `/liga/[slug]`, `/socios`, `/reviews-y-guias`, `/reviews-y-guias/casas/[slug]`, `/reviews-y-guias/guias/[slug]`, `/jugador/[username]`, `/perfil` (NO indexable, omitir).
+- Eliminar referencias a `/cuotas`, `/partidos`, `/casas`, `/guias`, `/comunidad`, `/premium` si las hubiera.
+- Las URLs dinámicas (`[slug]`, `[username]`) se generan iterando sobre la BD.
+
+#### U.12 — Robots.txt actualizado
+
+**Problema**: posibles disallow de URLs que ya no existen, o falta de disallow para URLs sensibles nuevas.
+
+**Solución**:
+- Abrir `apps/web/app/robots.ts`.
+- Disallow:
+  - `/admin/`
+  - `/api/`
+  - `/auth/`
+  - `/perfil` (privacidad)
+  - `/socios-hub` (privacidad)
+  - `/socios/checkout`, `/socios/exito` (privacidad)
+  - URLs viejas legacy (`/cuotas`, `/partidos`, `/casas`, `/guias`, `/comunidad`, `/premium`) si NO están manejadas por redirect 301 (si lo están, dejar que el 301 las cubra y NO disallow).
+- Allow todo lo demás (`/las-fijas`, `/liga`, `/reviews-y-guias`, `/jugador`, etc.).
+
+### Restricciones del Lote U
+
+- **Cero clases Tailwind utility** en los componentes nuevos/tocados. Solo clases del mockup en `mockup-styles.css`.
+- **Cero cambios visuales** al mockup. Las modificaciones son funcionales.
+- **Si una clase CSS necesaria no existe en `mockup-styles.css`**: agregarla minimal, documentando en el reporte.
+- **Migración**: si U.9 requiere agregar columna `PremioMensual.datosCompletos`, usar `--create-only`.
+
+### Criterios de cierre del Lote U
+
+- Los 12 ítems resueltos según especificado.
+- Las eliminaciones (U.5, U.6, U.7) limpias: sin código muerto, sin rutas huérfanas.
+- `pnpm tsc --noEmit` y `pnpm lint` pasan limpios.
+- Push a main + reporte post-lote.
+- Sección 7 del reporte (Verificación de fidelidad) confirma:
+  - Componentes nuevos creados.
+  - Botones eliminados.
+  - Endpoints nuevos creados (si aplica para U.8 y U.9).
+  - Verificación visual contra el mockup en `/perfil`, `/socios`, `/reviews-y-guias/casas/[slug]`, `/reviews-y-guias/guias/[slug]`.
+- CLAUDE.md actualizado: agregar Lote U a la tabla de roadmap K-P + nota corta 1-línea.
+
+---
+
+
 # Prompt base para invocar cada lote
 
 Cada lote es una sesión nueva e independiente. El prompt para Claude Code:
