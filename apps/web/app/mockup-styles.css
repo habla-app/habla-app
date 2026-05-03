@@ -131,9 +131,16 @@
   border-bottom: 1px solid var(--dark-border);
   display: flex; align-items: center; justify-content: space-between;
   flex-shrink: 0;
-  padding: 0 24px; height: var(--header-h);
+  padding: env(safe-area-inset-top) calc(24px + env(safe-area-inset-right)) 0 calc(24px + env(safe-area-inset-left));
+  height: calc(var(--header-h) + env(safe-area-inset-top));
+  position: sticky; top: 0; z-index: 30;
 }
-@media (max-width: 767px) { .app-header { padding: 0 16px; height: 56px; } }
+@media (max-width: 767px) {
+  .app-header {
+    padding: env(safe-area-inset-top) calc(16px + env(safe-area-inset-right)) 0 calc(16px + env(safe-area-inset-left));
+    height: calc(56px + env(safe-area-inset-top));
+  }
+}
 
 .app-header-left { display: flex; align-items: center; gap: 32px; }
 .logo {
@@ -198,8 +205,8 @@
   position: fixed; bottom: 0; left: 0; right: 0;
   background: var(--bg-card);
   border-top: 1px solid var(--border-light);
-  height: var(--bottomnav-h);
-  padding: 8px 4px;
+  height: calc(var(--bottomnav-h) + env(safe-area-inset-bottom));
+  padding: 8px calc(4px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(4px + env(safe-area-inset-left));
   z-index: 50;
 }
 @media (max-width: 767px) {
@@ -216,9 +223,11 @@
 .bn-item.active { color: var(--blue-main); }
 .bn-icon { font-size: 20px; line-height: 1; }
 
-/* Padding-bottom para que el contenido no quede tapado por el bottom-nav */
+/* Padding-bottom para que el contenido no quede tapado por el bottom-nav.
+   Suma `env(safe-area-inset-bottom)` para iPhone con home indicator. */
 @media (max-width: 767px) {
-  .mockup-page { padding-bottom: calc(var(--bottomnav-h) + 16px); }
+  .mockup-page,
+  .mockup-container { padding-bottom: calc(var(--bottomnav-h) + 16px + env(safe-area-inset-bottom)); }
 }
 
 /* ============================================================================
