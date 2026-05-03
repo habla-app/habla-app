@@ -1,30 +1,43 @@
 "use client";
 
-// UserMenu — avatar circular dorado (36x36 según `.avatar` del mockup) con
-// dropdown light flotante. Client Component porque maneja estado de apertura
-// y cierre por click fuera.
+// UserMenu — Lote S v3.2 · portación literal del avatar dropdown del mockup
+// (docs/habla-mockup-v3.2.html líneas 2149-2202).
 //
-// Registro formal (Abr 2026): header del dropdown muestra `@username` en
-// vez de `nombre`. Si `usernameLocked=false` (OAuth sin completar),
-// muestra CTA "Elegí tu @handle →" linkeando a /auth/completar-perfil.
+// Estructura:
+//   .avatar-wrap > .avatar-mini.avatar-trigger (botón circular dorado)
+//                > .avatar-dropdown.open (panel flotante con header + stats + items)
 //
-// Mini-lote 7.6: el handler de "Cerrar sesión" hace `signOut({ redirect:
-// false })` y luego hard reload manual. El default de NextAuth (redirect
-// automático) silenciaba 429 del rate limit y dejaba la cookie sin
-// borrar — síntoma "el botón no responde". El hard reload garantiza que
-// el SSR vea la cookie nueva y los Server Components renderen el header
-// como visitante.
+// Las clases CSS son las del mockup (definidas en mockup-styles.css por el
+// Lote R). Cero Tailwind utility en este componente.
+//
+// Estados de auth manejados via <AuthGate>:
+//   - badge "💎 Socio"     → socios-only
+//   - badge "Free"          → solo free (state="free")
+//   - item "Mi hub Socios"  → socios-only
+//   - item "Hacerme Socio"  → free-only (state="free")
+//
+// Lógica preservada de la versión previa:
+//   - Click fuera y ESC cierran el dropdown.
+//   - Cerrar sesión: signOut con redirect:false + hard reload (mini-lote 7.6).
+
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
+import { AuthGate } from "@/components/auth/AuthGate";
 
 interface UserMenuProps {
   iniciales: string;
   username: string;
   usernameLocked: boolean;
   email: string;
-  /** Lote 8: muestra el item "⚙️ Panel admin" si rol=ADMIN. Solo lo ven admins. */
-  esAdmin?: boolean;
+  /** Posición mensual (#N mes). Si no se pasa, no se muestra el badge. */
+  posicionMes?: number;
+  /** Stats del mes (puntos / acierto% / # predicciones). Defaults a "—". */
+  puntosMes?: number | string;
+  porcAciertoMes?: number | string;
+  prediccionesMes?: number | string;
+  /** Notificaciones no leídas (default 0, oculto si 0). */
+  notificaciones?: number;
 }
 
 export function UserMenu({
@@ -32,7 +45,11 @@ export function UserMenu({
   username,
   usernameLocked,
   email,
-  esAdmin = false,
+  posicionMes,
+  puntosMes = "—",
+  porcAciertoMes = "—",
+  prediccionesMes = "—",
+  notificaciones = 0,
 }: UserMenuProps) {
   const [abierto, setAbierto] = useState(false);
   const [cerrandoSesion, setCerrandoSesion] = useState(false);
@@ -44,10 +61,8 @@ export function UserMenu({
     try {
       await signOut({ redirect: false, callbackUrl: "/" });
     } catch {
-      // signOut nunca rechaza con redirect:false, pero por si NextAuth
-      // tira un edge: igual hacemos el hard reload abajo. El cookie ya
-      // se borró en el server o no se borró y el reload muestra el
-      // estado real de la sesión.
+      // Mini-lote 7.6: signOut con redirect:false no rechaza, pero por si
+      // NextAuth tira un edge, igual hacemos hard reload abajo.
     }
     window.location.href = "/";
   }
@@ -70,80 +85,140 @@ export function UserMenu({
     };
   }, [abierto]);
 
+  const handleLabel = usernameLocked && username ? `@${username}` : "@nuevo_usuario";
+
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="avatar-wrap" style={{ position: "relative" }}>
       <button
         type="button"
+        className="avatar-mini avatar-trigger"
         aria-label="Menú de usuario"
         aria-expanded={abierto}
         aria-haspopup="menu"
         onClick={() => setAbierto((v) => !v)}
-        className="flex h-9 w-9 items-center justify-center rounded-full bg-gold-diagonal text-[14px] font-extrabold text-black shadow-gold transition-transform hover:scale-105"
       >
-        {iniciales}
+        <span>{iniciales}</span>
       </button>
 
-      {abierto && (
-        <div
-          role="menu"
-          className="absolute right-0 top-11 z-50 w-60 overflow-hidden rounded-md border border-light bg-card shadow-lg"
-        >
-          <div className="border-b border-light px-4 py-3">
-            {usernameLocked && username ? (
-              <p className="truncate text-sm font-semibold text-dark">
-                @{username}
-              </p>
-            ) : (
-              <Link
-                href="/auth/completar-perfil"
-                onClick={() => setAbierto(false)}
-                className="block truncate text-sm font-semibold text-brand-blue-main hover:underline"
-              >
-                Elegí tu @handle →
-              </Link>
-            )}
-            <p className="truncate text-[11px] text-muted-d">{email}</p>
+      <div
+        className={abierto ? "avatar-dropdown open" : "avatar-dropdown"}
+        role="menu"
+      >
+        <div className="avatar-dd-header">
+          <div className="avatar-dd-avatar">{iniciales}</div>
+          <div>
+            <div className="avatar-dd-name">
+              {usernameLocked && username ? (
+                handleLabel
+              ) : (
+                <Link
+                  href="/auth/completar-perfil"
+                  onClick={() => setAbierto(false)}
+                  style={{ color: "inherit" }}
+                >
+                  Elegí tu @handle →
+                </Link>
+              )}
+            </div>
+            <div className="avatar-dd-email">{email}</div>
+            <div className="avatar-dd-badges">
+              <AuthGate state="socios">
+                <span className="badge badge-gold">💎 Socio</span>
+              </AuthGate>
+              <AuthGate state="free">
+                <span className="badge badge-blue">Free</span>
+              </AuthGate>
+              {posicionMes !== undefined && (
+                <span className="badge badge-blue">#{posicionMes} mes</span>
+              )}
+            </div>
           </div>
-          <Link
-            href="/perfil"
-            onClick={() => setAbierto(false)}
-            role="menuitem"
-            className="block px-4 py-2.5 text-sm text-body transition-colors hover:bg-subtle"
-          >
-            Mi perfil
-          </Link>
-          <Link
-            href="/mis-predicciones"
-            onClick={() => setAbierto(false)}
-            role="menuitem"
-            className="block px-4 py-2.5 text-sm text-body transition-colors hover:bg-subtle"
-          >
-            Mis predicciones
-          </Link>
-          {esAdmin && (
-            <Link
-              href="/admin"
-              onClick={() => setAbierto(false)}
-              role="menuitem"
-              className="block border-t border-light px-4 py-2.5 text-sm font-semibold text-brand-blue-main transition-colors hover:bg-subtle"
-            >
-              ⚙️ Panel admin
-            </Link>
-          )}
-          <button
-            type="button"
-            role="menuitem"
-            disabled={cerrandoSesion}
-            onClick={() => {
-              setAbierto(false);
-              void cerrarSesion();
-            }}
-            className="block w-full border-t border-light px-4 py-2.5 text-left text-sm font-semibold text-danger transition-colors hover:bg-subtle disabled:cursor-wait disabled:opacity-60"
-          >
-            {cerrandoSesion ? "Cerrando sesión…" : "Cerrar sesión"}
-          </button>
         </div>
-      )}
+
+        <div className="avatar-dd-stats">
+          <div className="avatar-dd-stat">
+            <div className="avatar-dd-stat-val">{puntosMes}</div>
+            <div className="avatar-dd-stat-lbl">Pts mes</div>
+          </div>
+          <div className="avatar-dd-stat">
+            <div className="avatar-dd-stat-val">{porcAciertoMes}</div>
+            <div className="avatar-dd-stat-lbl">Acierto</div>
+          </div>
+          <div className="avatar-dd-stat">
+            <div className="avatar-dd-stat-val">{prediccionesMes}</div>
+            <div className="avatar-dd-stat-lbl">Predicc.</div>
+          </div>
+        </div>
+
+        <div className="avatar-dd-divider"></div>
+
+        <Link
+          className="avatar-dd-item"
+          href="/perfil"
+          onClick={() => setAbierto(false)}
+          role="menuitem"
+        >
+          <span>👤</span> Mi perfil y cuenta
+        </Link>
+
+        <AuthGate state="socios">
+          <Link
+            className="avatar-dd-item"
+            href="/socios-hub"
+            onClick={() => setAbierto(false)}
+            role="menuitem"
+          >
+            <span>💎</span> Mi hub Socios
+          </Link>
+        </AuthGate>
+
+        <AuthGate state="free">
+          <Link
+            className="avatar-dd-item"
+            href="/socios"
+            onClick={() => setAbierto(false)}
+            role="menuitem"
+          >
+            <span>💎</span> Hacerme Socio
+          </Link>
+        </AuthGate>
+
+        <Link
+          className="avatar-dd-item"
+          href="/perfil#notificaciones"
+          onClick={() => setAbierto(false)}
+          role="menuitem"
+        >
+          <span>📨</span> Notificaciones
+          {notificaciones > 0 && (
+            <span className="avatar-dd-counter">{notificaciones}</span>
+          )}
+        </Link>
+
+        <div className="avatar-dd-divider"></div>
+
+        <Link
+          className="avatar-dd-item"
+          href="/ayuda/faq"
+          onClick={() => setAbierto(false)}
+          role="menuitem"
+        >
+          <span>📚</span> Centro de ayuda
+        </Link>
+
+        <button
+          type="button"
+          className="avatar-dd-item avatar-dd-signout"
+          role="menuitem"
+          disabled={cerrandoSesion}
+          onClick={() => {
+            setAbierto(false);
+            void cerrarSesion();
+          }}
+        >
+          <span>↪</span> {cerrandoSesion ? "Cerrando sesión…" : "Cerrar sesión"}
+        </button>
+      </div>
     </div>
   );
 }

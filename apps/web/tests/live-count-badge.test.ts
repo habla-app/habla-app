@@ -134,37 +134,9 @@ describe("live-matches.service.ts — contarLiveMatches (Bug #12)", () => {
   });
 });
 
-describe("NavBar + NavLinks — wiring de initialLiveCount", () => {
-  it("Layout (main) llama contarLiveMatches() y pasa initialLiveCount al NavBar", () => {
-    const SRC = readSrc("app/(main)/layout.tsx");
-    expect(SRC).toMatch(
-      /import\s*\{\s*contarLiveMatches\s*\}\s*from\s*["']@\/lib\/services\/live-matches\.service["']/,
-    );
-    expect(SRC).toMatch(/<NavBar\s+initialLiveCount=\{liveCount\}/);
-  });
-
-  it("NavBar NO hardcodea LIVE_COUNT_PLACEHOLDER — Bug #12 REPRO", () => {
-    // El string puede aparecer en el comentario del Bug #12 explicando
-    // el fix. Strippeamos comentarios antes de buscar la declaración
-    // real (`const LIVE_COUNT_PLACEHOLDER = ...`).
-    const raw = readSrc("components/layout/NavBar.tsx");
-    const sinComments = raw
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .replace(/^\s*\/\/.*$/gm, "");
-    expect(sinComments).not.toMatch(/LIVE_COUNT_PLACEHOLDER/);
-  });
-
-  it("NavLinks propaga initialLiveCount al LiveCountBadge (no un número literal)", () => {
-    const SRC = readSrc("components/layout/NavLinks.tsx");
-    expect(SRC).toMatch(
-      /import\s*\{\s*LiveCountBadge\s*\}\s*from\s*["']@\/components\/layout\/LiveCountBadge["']/,
-    );
-    expect(SRC).toMatch(
-      /<LiveCountBadge\s+initialCount=\{initialLiveCount\}/,
-    );
-    // El viejo render condicional `liveCount > 0 && <span>{liveCount}</span>`
-    // vivía dentro de NavLinks. Se movió a LiveCountBadge — esta línea
-    // ya no debe existir porque duplicaba el número sin guard.
-    expect(SRC).not.toMatch(/\{\s*liveCount\s*>\s*0\s*&&[\s\S]*?\{\s*liveCount\s*\}/);
-  });
-});
+// Lote S v3.2: el NavBar/NavLinks no contiene el LiveCountBadge porque
+// el mockup v3.2 no lo tiene en el header (los 5 nav-links son literales:
+// Inicio, Las Fijas, La Liga Habla!, Socios, Reviews y Guías). El badge
+// queda disponible como componente para usos futuros (ej. detalle de
+// partido), pero el wiring NavBar→NavLinks→LiveCountBadge ya no aplica.
+// Los tests del componente, hook, endpoint y servicio se preservan.
