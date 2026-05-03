@@ -148,7 +148,7 @@ export default async function ReviewsYGuiasPage() {
   const tagsBase = ["Todas", "Bankroll", "Mercados", "Casas", "Estrategia", "Beginners"];
 
   return (
-    <div className="container">
+    <div className="mockup-container">
       <div className="page-title">Reviews y Guías</div>
       <div className="page-subtitle">Casas autorizadas MINCETUR · Guías para apostar mejor</div>
 

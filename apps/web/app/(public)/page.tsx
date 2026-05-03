@@ -121,7 +121,7 @@ export default async function HomePage() {
   const miPosicion = leaderboard.miFila?.posicion ?? null;
 
   return (
-    <div className="container">
+    <div className="mockup-container">
 
       {/* Hero · server-side branching para evitar queries innecesarias en cada
           variante. Las clases visitor-only/logged-only/socios-only del mockup

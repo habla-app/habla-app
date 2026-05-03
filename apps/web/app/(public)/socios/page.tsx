@@ -40,7 +40,7 @@ export default async function SociosLandingPage() {
   }
 
   return (
-    <div className="container">
+    <div className="mockup-container">
 
       {/* Hero */}
       <div className="socios-hero">

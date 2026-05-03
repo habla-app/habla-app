@@ -206,7 +206,7 @@ export default async function SociosHubPage() {
   const cuotaPromLabel = cuotaProm === null ? "—" : cuotaProm.toFixed(2);
 
   return (
-    <div className="container">
+    <div className="mockup-container">
 
       {/* Hero hub */}
       <div className="socios-hub-hero">

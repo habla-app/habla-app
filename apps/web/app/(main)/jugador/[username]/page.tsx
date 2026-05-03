@@ -204,7 +204,7 @@ export default async function JugadorPage({ params }: Props) {
   const aciertoLabel = `${Math.round(perfil.stats.aciertoPct)}%`;
 
   return (
-    <div className="container">
+    <div className="mockup-container">
       <Link
         href="/liga"
         style={{ fontSize: 12, color: "var(--blue-main)", fontWeight: 700, marginBottom: 14, display: "inline-block" }}
@@ -343,7 +343,7 @@ export default async function JugadorPage({ params }: Props) {
 
 function PerfilPrivado({ username }: { username: string }) {
   return (
-    <div className="container">
+    <div className="mockup-container">
       <Link
         href="/liga"
         style={{ fontSize: 12, color: "var(--blue-main)", fontWeight: 700, marginBottom: 14, display: "inline-block" }}

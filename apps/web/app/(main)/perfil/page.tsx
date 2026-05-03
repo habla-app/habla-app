@@ -129,7 +129,7 @@ export default async function PerfilPage() {
     : 0;
 
   return (
-    <div className="container">
+    <div className="mockup-container">
 
       {/* Hero perfil */}
       <div className="perfil-hero">
