@@ -1,26 +1,33 @@
-// KPISeccion — agrupación de KPIs en grid 4 columnas. Lote F (May 2026).
-// Spec: docs/ux-spec/05-pista-admin-operacion/dashboard.spec.md.
+// KPISeccion — Lote O (May 2026): port literal del mockup
+// `docs/habla-mockup-v3.2.html` § admin-kpi-section.
+// HTML idéntico al mockup, clases del mockup (admin-kpi-section /
+// admin-kpi-section-header / admin-kpi-section-title /
+// admin-kpi-section-meta / admin-kpi-grid).
 import type { KpisGrupo } from "@/lib/services/admin-kpis.service";
 import { KPICard } from "./KPICard";
 
 interface KPISeccionProps {
   grupo: KpisGrupo;
+  /** Subtítulo opcional de la sección (mockup: admin-kpi-section-meta). */
+  meta?: string;
+  /** Drill-down opcional para algunos KPIs (ej. motor → /admin/motor). */
+  drillDownHref?: string;
 }
 
-export function KPISeccion({ grupo }: KPISeccionProps) {
+export function KPISeccion({ grupo, meta, drillDownHref }: KPISeccionProps) {
   return (
-    <section className="mb-8">
-      <h2 className="mb-3 text-admin-section text-dark">
-        <span aria-hidden className="mr-2">
-          {grupo.emoji}
-        </span>
-        {grupo.titulo}
-      </h2>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+    <div className="admin-kpi-section">
+      <div className="admin-kpi-section-header">
+        <h2 className="admin-kpi-section-title">
+          {grupo.emoji} {grupo.titulo}
+        </h2>
+        {meta && <span className="admin-kpi-section-meta">{meta}</span>}
+      </div>
+      <div className="admin-kpi-grid">
         {grupo.kpis.map((k) => (
-          <KPICard key={k.id} kpi={k} />
+          <KPICard key={k.id} kpi={k} drillDownHref={drillDownHref} />
         ))}
       </div>
-    </section>
+    </div>
   );
 }

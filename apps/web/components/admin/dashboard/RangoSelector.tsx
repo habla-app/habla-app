@@ -1,20 +1,22 @@
 "use client";
 
-// RangoSelector — selector de rango temporal para el dashboard. Lote F.
-// Spec: docs/ux-spec/05-pista-admin-operacion/dashboard.spec.md.
+// RangoSelector — Lote O (May 2026): port literal del mockup
+// `docs/habla-mockup-v3.2.html` § admin-rango-selector (líneas 4949-4954).
+// HTML idéntico al mockup, clases del mockup (admin-rango-selector /
+// admin-rango-btn / admin-rango-btn.active) que viven en
+// `apps/web/app/mockup-styles.css` desde el Lote R.
 //
-// 4 presets canónicos: Últimos 7 / Últimos 30 / Mes en curso / Mes anterior.
+// Labels literales del mockup: "7d", "30d", "Mes actual", "Mes anterior".
 // Estado en URL param `?rango=...` para que el rango sea linkeable +
 // bookmark-able.
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import type { Rango } from "@/lib/services/admin-kpis.service";
-import { cn } from "@/lib/utils/cn";
 
 const PRESETS: ReadonlyArray<{ value: Rango; label: string }> = [
-  { value: "7d", label: "Últimos 7d" },
-  { value: "30d", label: "Últimos 30d" },
-  { value: "mes_actual", label: "Mes en curso" },
+  { value: "7d", label: "7d" },
+  { value: "30d", label: "30d" },
+  { value: "mes_actual", label: "Mes actual" },
   { value: "mes_anterior", label: "Mes anterior" },
 ];
 
@@ -33,20 +35,15 @@ export function RangoSelector({ rangoActual }: RangoSelectorProps) {
   }
 
   return (
-    <div className="inline-flex items-center gap-1 rounded-sm border border-admin-table-border bg-admin-card-bg p-0.5">
+    <div className="admin-rango-selector">
       {PRESETS.map((p) => {
         const active = p.value === rangoActual;
         return (
           <Link
             key={p.value}
             href={buildHref(p.value)}
+            className={`admin-rango-btn${active ? " active" : ""}`}
             aria-pressed={active}
-            className={cn(
-              "rounded-sm px-3 py-1.5 text-admin-meta font-bold transition-colors",
-              active
-                ? "bg-brand-blue-main text-white"
-                : "text-muted-d hover:text-dark",
-            )}
           >
             {p.label}
           </Link>

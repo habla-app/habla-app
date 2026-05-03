@@ -143,6 +143,10 @@ const nextConfig = {
       { source: "/perfil/eliminar/:path*", destination: "/perfil", permanent: true },
       { source: "/perfil/eliminar", destination: "/perfil", permanent: true },
 
+      // === Lote O v3.2 — Admin operación renombrado ===
+      { source: "/admin/picks-premium", destination: "/admin/picks", permanent: true },
+      { source: "/admin/picks-premium/:path*", destination: "/admin/picks/:path*", permanent: true },
+
       // === Lote B/C legados — actualizados a destinos v3.2 ===
       { source: "/matches", destination: "/las-fijas", permanent: true },
       { source: "/matches/:path*", destination: "/las-fijas", permanent: true },

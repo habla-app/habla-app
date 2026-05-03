@@ -1,33 +1,36 @@
 "use client";
 
-// AdminLayoutShell — wrapper que aplica el layout v3.1 admin (sidebar
-// lateral 240px + main area). Lote F (May 2026). Spec:
-// docs/ux-spec/05-pista-admin-operacion/00-layout-admin.spec.md.
+// AdminLayoutShell — Lote O (May 2026): port literal del shell admin del
+// mockup `docs/habla-mockup-v3.2.html` § admin-shell (líneas 4803-4933).
+// HTML idéntico al mockup, clases del mockup (admin-shell, admin-sidebar,
+// admin-sidebar-*, admin-main, admin-mobile-guard, logo-mark) que viven
+// en `apps/web/app/mockup-styles.css` desde el Lote R.
 //
-// Por qué client component: el sidebar lee `usePathname` para destacar
-// el item activo + `<MobileGuard>` necesita `useEffect` para medir
-// viewport. El layout en sí (auth check) sigue siendo server component
-// (`app/admin/layout.tsx`) que envuelve a este shell.
+// Comportamiento del mobile guard: inline en el HTML (display:none por
+// default + @media (max-width:1279px) { display:flex }). NO usa el
+// `<MobileGuard>` JS del Lote A — el mockup lo resuelve con CSS puro y
+// el shell siempre se renderiza.
 //
-// Acepta `counters` que vienen del padre server component (ej. picks
-// pendientes, alarmas activas) — los counts no se calculan acá para no
-// bloquear el render del shell.
+// Counters dinámicos (partidos / picks / liga-verificacion / alarmas) se
+// reciben desde el server component padre via prop y se pintan en los
+// `admin-sidebar-item-counter`.
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
 import { signOut } from "next-auth/react";
-
-import { AdminSidebar, type AdminSidebarSection } from "./AdminSidebar";
-import { MobileGuard } from "./MobileGuard";
+import type { ReactNode } from "react";
 
 export interface AdminLayoutCounters {
+  partidos?: number;
   picksPendientes?: number;
+  ligaVerificacionPendientes?: number;
+  vinculacionesPendientes?: number;
   alarmasActivas?: number;
 }
 
 export interface AdminLayoutUser {
   name: string;
   email: string;
+  username?: string | null;
   image?: string | null;
 }
 
@@ -37,37 +40,72 @@ interface AdminLayoutShellProps {
   children: ReactNode;
 }
 
-export function AdminLayoutShell({
-  user,
-  counters,
-  children,
-}: AdminLayoutShellProps) {
+interface SidebarItem {
+  label: string;
+  href: string;
+  icon: string;
+  counter?: number;
+}
+
+interface SidebarSection {
+  label?: string;
+  items: SidebarItem[];
+}
+
+function isActive(currentPath: string, href: string): boolean {
+  if (href === "/admin/dashboard") return currentPath === "/admin" || currentPath === "/admin/dashboard";
+  return currentPath === href || currentPath.startsWith(href + "/");
+}
+
+export function AdminLayoutShell({ user, counters, children }: AdminLayoutShellProps) {
   const pathname = usePathname() ?? "/admin";
 
-  const sections: AdminSidebarSection[] = [
+  const sections: SidebarSection[] = [
     {
       items: [{ label: "Dashboard", href: "/admin/dashboard", icon: "🏠" }],
     },
     {
-      label: "OPERACIÓN",
+      label: "MOTOR DE FIJAS",
       items: [
+        { label: "Partidos", href: "/admin/partidos", icon: "⚽", counter: counters?.partidos },
         {
-          label: "Picks Premium",
-          href: "/admin/picks-premium",
+          label: "Cola de validación",
+          href: "/admin/picks",
           icon: "🎯",
           counter: counters?.picksPendientes,
-          counterTone: "red",
         },
-        { label: "Channel WhatsApp", href: "/admin/channel-whatsapp", icon: "💬" },
-        { label: "Suscripciones", href: "/admin/suscripciones", icon: "💎" },
-        { label: "Afiliados", href: "/admin/afiliados", icon: "🤝" },
-        { label: "Conversiones", href: "/admin/conversiones", icon: "💵" },
-        { label: "Newsletter", href: "/admin/newsletter", icon: "📨" },
+        { label: "Salud del motor", href: "/admin/motor", icon: "🤖" },
+        { label: "Free vs Socios", href: "/admin/paywall", icon: "🔓" },
+      ],
+    },
+    {
+      label: "LIGA",
+      items: [
+        { label: "Torneo del mes", href: "/admin/liga-admin", icon: "🏆" },
         {
-          label: "Premios mensuales",
-          href: "/admin/premios-mensuales",
-          icon: "🏆",
+          label: "Verificación Top 10",
+          href: "/admin/liga-verificacion",
+          icon: "✅",
+          counter: counters?.ligaVerificacionPendientes,
         },
+        { label: "Pagos premios", href: "/admin/premios-mensuales", icon: "💰" },
+      ],
+    },
+    {
+      label: "MONETIZACIÓN",
+      items: [
+        { label: "Embudo de conversión", href: "/admin/embudo", icon: "📥" },
+        {
+          label: "Vinculaciones servicios",
+          href: "/admin/vinculaciones",
+          icon: "🔗",
+          counter: counters?.vinculacionesPendientes,
+        },
+        { label: "Suscripciones", href: "/admin/suscripciones", icon: "💎" },
+        { label: "Channel WhatsApp", href: "/admin/channel-whatsapp", icon: "💬" },
+        { label: "Afiliados", href: "/admin/afiliados", icon: "🤝" },
+        { label: "Conversiones FTD", href: "/admin/conversiones", icon: "💵" },
+        { label: "Newsletter", href: "/admin/newsletter", icon: "📨" },
       ],
     },
     {
@@ -83,15 +121,7 @@ export function AdminLayoutShell({
           href: "/admin/alarmas",
           icon: "🚨",
           counter: counters?.alarmasActivas,
-          counterTone: "red",
         },
-        { label: "Leaderboard", href: "/admin/leaderboard", icon: "📈" },
-      ],
-    },
-    {
-      label: "CONTENIDO",
-      items: [
-        { label: "Torneos", href: "/admin/torneos", icon: "⚽" },
       ],
     },
     {
@@ -104,53 +134,78 @@ export function AdminLayoutShell({
     },
   ];
 
-  const initials = user.name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p.charAt(0).toUpperCase())
-    .join("") || "A";
+  const initials =
+    user.name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p.charAt(0).toUpperCase())
+      .join("") || "A";
+
+  const usernameDisplay = user.username ? `@${user.username}` : user.email;
 
   return (
-    <MobileGuard minWidth={1280}>
-      <div className="grid min-h-screen grid-cols-[240px_1fr] bg-admin-content-bg">
-        <AdminSidebar
-          currentPath={pathname}
-          sections={sections}
-          footer={
-            <div className="space-y-2">
-              <Link
-                href="/"
-                className="flex items-center gap-2 px-1 py-1 text-admin-meta text-admin-sidebar-text-muted transition-colors hover:text-white"
-              >
-                <span aria-hidden>←</span>
-                Volver a la app
-              </Link>
-              <div className="flex items-center gap-2 px-1 pt-1">
-                <span
-                  aria-hidden
-                  className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-[11px] font-bold text-white"
-                >
-                  {initials}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-admin-meta text-white">
-                    {user.name}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => signOut({ callbackUrl: "/" })}
-                    className="text-[10px] uppercase tracking-[0.06em] text-admin-sidebar-text-muted transition-colors hover:text-white"
-                  >
-                    Cerrar sesión
-                  </button>
-                </div>
-              </div>
-            </div>
-          }
-        />
-        <main className="min-w-0 px-6 py-6">{children}</main>
+    <div className="admin-shell">
+      <div className="admin-mobile-guard">
+        <h3>🖥️ Admin solo en desktop</h3>
+        <p>El panel de administración está optimizado para desktop (1280px+). Cambia a Desktop para acceder.</p>
       </div>
-    </MobileGuard>
+
+      <aside className="admin-sidebar">
+        <div className="admin-sidebar-header">
+          <div className="admin-sidebar-logo">
+            <span className="logo-mark">⊕</span>
+            <span>Habla!</span>
+          </div>
+          <span className="admin-sidebar-badge">Admin Panel</span>
+        </div>
+
+        {sections.map((section, sIdx) => (
+          <div key={sIdx} className="admin-sidebar-section">
+            {section.label && <div className="admin-sidebar-section-label">{section.label}</div>}
+            {section.items.map((item) => {
+              const active = isActive(pathname, item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`admin-sidebar-item${active ? " active" : ""}`}
+                  aria-current={active ? "page" : undefined}
+                >
+                  <span className="admin-sidebar-item-icon">{item.icon}</span> {item.label}
+                  {item.counter !== undefined && item.counter > 0 && (
+                    <span className="admin-sidebar-item-counter">
+                      {item.counter > 99 ? "99+" : item.counter}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+        ))}
+
+        <div className="admin-sidebar-footer">
+          <Link href="/" className="admin-sidebar-footer-back">
+            ← Volver a la app
+          </Link>
+          <div className="admin-sidebar-user">
+            <div className="admin-sidebar-user-avatar">{initials}</div>
+            <div className="admin-sidebar-user-info">
+              <div className="admin-sidebar-user-name">{usernameDisplay}</div>
+              <button
+                type="button"
+                className="admin-sidebar-user-signout"
+                onClick={() => signOut({ callbackUrl: "/" })}
+                style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0 }}
+              >
+                Cerrar sesión
+              </button>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <main className="admin-main">{children}</main>
+    </div>
   );
 }
