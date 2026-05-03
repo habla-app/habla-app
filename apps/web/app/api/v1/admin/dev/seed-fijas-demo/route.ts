@@ -28,6 +28,7 @@ import { logger } from "@/lib/services/logger";
 import { logAuditoria } from "@/lib/services/auditoria.service";
 import { listarFijas } from "@/lib/services/las-fijas.service";
 import { obtenerListaLiga } from "@/lib/services/liga.service";
+import { calcularPuntosTicket } from "@/lib/services/puntuacion.service";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -439,7 +440,158 @@ const FIJAS_DEMO: FijaDemo[] = [
     razonamiento: "",
     elegibleLiga: false,
   },
+  {
+    // Partido FINALIZADO ayer — alimenta `RankingMensualTabla` (que requiere
+    // tickets con puntosFinales sobre torneos FINALIZADO). Ver mockup line
+    // 3469 (Arsenal 2-1 Fulham · "+12 pts" · top tipster @cracker_lima 19pts).
+    externalId: `${DEMO_PREFIX}7`,
+    liga: "Premier League",
+    equipoLocal: "Arsenal",
+    equipoVisita: "Fulham",
+    fechaOffsetHoras: -24, // ayer
+    estado: "FINALIZADO",
+    golesLocal: 2,
+    golesVisita: 1,
+    liveElapsed: 90,
+    liveStatusShort: "FT",
+    round: "26ma fecha",
+    pronostico: "LOCAL",
+    probabilidades: { local: 0.55, empate: 0.25, visita: 0.2 },
+    mejorCuota: { mercado: "LOCAL", cuota: 1.85, casa: "Betano" },
+    cuotasReferenciales: {
+      local: 1.85,
+      empate: 3.6,
+      visita: 4.2,
+      over25: 1.7,
+      under25: 2.1,
+      bttsSi: 1.62,
+      bttsNo: 2.25,
+      bestCasa: "Betano",
+      bestSigla: "BT",
+      bestColor: "#DC2626",
+    },
+    analisisBasico:
+      "Forma reciente últimos 5 local: G G G E G.\n" +
+      "Forma reciente últimos 5 visita: P E P P G.\n" +
+      "Cara a cara últimos 5: 4 victorias del local, 1 empate, 0 victorias del visita. Promedio de goles por partido 2.6.\n" +
+      "Lesiones local: 1 lesionado (no titular).\n" +
+      "Lesiones visita: 2 lesionados.",
+    combinadaOptima: null,
+    analisisGoles: null,
+    analisisTarjetas: null,
+    mercadosSecundarios: [],
+    razonamiento: "",
+    elegibleLiga: true,
+  },
 ];
+
+// ---------------------------------------------------------------------------
+// Tipsters demo — Parche 3
+// ---------------------------------------------------------------------------
+// 20 usuarios fake identificables por prefijo en email + username. Cada uno
+// se inscribe en cada Torneo elegible para Liga, con predicciones
+// determinísticas (semilla = índice). Tickets sobre torneos FINALIZADO
+// reciben puntos calculados con `calcularPuntosTicket()` (mismo algoritmo
+// del motor real) — alimenta `RankingMensualTabla` (que requiere
+// `puntosFinales` sobre torneos FINALIZADO).
+// Tickets sobre EN_VIVO también reciben puntos parciales — alimenta
+// `RankingPaginado` de /liga/[slug].
+// Tickets sobre PROGRAMADO quedan en cero — esperan kickoff.
+
+const TIPSTER_EMAIL_PREFIX = "demo_tipster_";
+const TIPSTER_EMAIL_DOMAIN = "@hablademo.local";
+const TIPSTER_USERNAME_PREFIX = "demo_tipster_";
+const TIPSTERS_DEMO_COUNT = 20;
+
+// Ciudades para variar el campo `ubicacion`. Sin valor de negocio — solo
+// para que la lista de tipsters tenga diversidad visual.
+const CIUDADES_DEMO = [
+  "Lima",
+  "Arequipa",
+  "Trujillo",
+  "Cusco",
+  "Piura",
+  "Chiclayo",
+  "Iquitos",
+  "Huaral",
+  "Tacna",
+  "Huancavelica",
+];
+
+interface TipsterDemo {
+  idx: number; // 1..N
+  email: string;
+  username: string;
+  nombre: string;
+  ubicacion: string;
+}
+
+function tipstersDemo(): TipsterDemo[] {
+  return Array.from({ length: TIPSTERS_DEMO_COUNT }, (_, i) => {
+    const idx = i + 1;
+    const padded = String(idx).padStart(2, "0");
+    return {
+      idx,
+      email: `${TIPSTER_EMAIL_PREFIX}${padded}${TIPSTER_EMAIL_DOMAIN}`,
+      username: `${TIPSTER_USERNAME_PREFIX}${padded}`,
+      nombre: `Tipster Demo ${padded}`,
+      ubicacion: CIUDADES_DEMO[i % CIUDADES_DEMO.length]!,
+    };
+  });
+}
+
+// PRNG determinístico — mismo seed produce siempre las mismas predicciones.
+// `mulberry32` con seed combinado de tipsterIdx + partidoIdx.
+function rng(seed: number): () => number {
+  let s = seed | 0;
+  return () => {
+    s = (s + 0x6d2b79f5) | 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+interface PredsGeneradas {
+  predResultado: "LOCAL" | "EMPATE" | "VISITA";
+  predBtts: boolean;
+  predMas25: boolean;
+  predTarjetaRoja: boolean;
+  predMarcadorLocal: number;
+  predMarcadorVisita: number;
+}
+
+/**
+ * Predicciones determinísticas para un tipster sobre un partido demo. El
+ * algoritmo "biases" un porcentaje de tipsters hacia el pronóstico Habla!
+ * (≈55% acierta el resultado) — refleja un mercado donde el favorito
+ * suele ganar más de la mitad de las veces.
+ */
+function generarPredicciones(
+  tipsterIdx: number,
+  partidoIdx: number,
+  pronostico: "LOCAL" | "EMPATE" | "VISITA",
+): PredsGeneradas {
+  const r = rng(tipsterIdx * 1000 + partidoIdx);
+  const aciertaResultado = r() < 0.55; // 55% acierta resultado
+  const predResultado = aciertaResultado
+    ? pronostico
+    : (() => {
+        const otros = (
+          ["LOCAL", "EMPATE", "VISITA"] as const
+        ).filter((x) => x !== pronostico);
+        return otros[Math.floor(r() * otros.length)]!;
+      })();
+  return {
+    predResultado,
+    predBtts: r() < 0.5,
+    predMas25: r() < 0.55, // ligero sesgo a más-2.5
+    predTarjetaRoja: r() < 0.25, // 25% predice "sí roja"
+    predMarcadorLocal: Math.floor(r() * 4), // 0-3
+    predMarcadorVisita: Math.floor(r() * 4),
+  };
+}
 
 // ---------------------------------------------------------------------------
 // POST — Sembrar
@@ -600,6 +752,153 @@ export async function POST(_req: NextRequest): Promise<Response> {
       }
     }
 
+    // -----------------------------------------------------------------
+    // Sembrar tipsters demo + tickets — alimenta los rankings.
+    // -----------------------------------------------------------------
+    const tipsters = tipstersDemo();
+    let tipstersCreados = 0;
+    let tipstersActualizados = 0;
+
+    const tipstersResueltos: { idx: number; userId: string }[] = [];
+    for (const t of tipsters) {
+      const existente = await prisma.usuario.findUnique({
+        where: { email: t.email },
+        select: { id: true },
+      });
+      if (existente) {
+        await prisma.usuario.update({
+          where: { id: existente.id },
+          data: {
+            nombre: t.nombre,
+            username: t.username,
+            ubicacion: t.ubicacion,
+            tycAceptadosAt: ahora,
+            verificado: true,
+            usernameLocked: true,
+          },
+        });
+        tipstersResueltos.push({ idx: t.idx, userId: existente.id });
+        tipstersActualizados += 1;
+      } else {
+        const creado = await prisma.usuario.create({
+          data: {
+            email: t.email,
+            nombre: t.nombre,
+            username: t.username,
+            ubicacion: t.ubicacion,
+            tycAceptadosAt: ahora,
+            verificado: true,
+            usernameLocked: true,
+            rol: "JUGADOR",
+          },
+          select: { id: true },
+        });
+        tipstersResueltos.push({ idx: t.idx, userId: creado.id });
+        tipstersCreados += 1;
+      }
+    }
+
+    // Releer torneos elegibles (ya creados arriba) + sus partidos para
+    // calcular puntos.
+    const torneosElegibles = await prisma.torneo.findMany({
+      where: {
+        partido: { externalId: { startsWith: DEMO_PREFIX } },
+        estado: { not: "CANCELADO" },
+      },
+      include: {
+        partido: {
+          select: {
+            externalId: true,
+            estado: true,
+            golesLocal: true,
+            golesVisita: true,
+            btts: true,
+            mas25Goles: true,
+            huboTarjetaRoja: true,
+          },
+        },
+      },
+    });
+
+    let ticketsCreados = 0;
+    let ticketsActualizados = 0;
+
+    for (const torneo of torneosElegibles) {
+      const partidoIdx = parseInt(
+        torneo.partido.externalId.replace(DEMO_PREFIX, ""),
+        10,
+      );
+      const fija = FIJAS_DEMO.find(
+        (f) => f.externalId === torneo.partido.externalId,
+      );
+      if (!fija) continue;
+      const esLive = torneo.partido.estado === "EN_VIVO";
+      const esFin = torneo.partido.estado === "FINALIZADO";
+
+      const snapshotPartido = {
+        golesLocal: torneo.partido.golesLocal,
+        golesVisita: torneo.partido.golesVisita,
+        btts: torneo.partido.btts,
+        mas25Goles: torneo.partido.mas25Goles,
+        huboTarjetaRoja: torneo.partido.huboTarjetaRoja,
+        estado: torneo.partido.estado,
+      };
+
+      for (const t of tipstersResueltos) {
+        const preds = generarPredicciones(t.idx, partidoIdx, fija.pronostico);
+        const puntos =
+          esLive || esFin ? calcularPuntosTicket(preds, snapshotPartido) : null;
+
+        const ticketExistente = await prisma.ticket.findFirst({
+          where: { usuarioId: t.userId, torneoId: torneo.id },
+          select: { id: true },
+        });
+
+        const dataBase = {
+          predResultado: preds.predResultado,
+          predBtts: preds.predBtts,
+          predMas25: preds.predMas25,
+          predTarjetaRoja: preds.predTarjetaRoja,
+          predMarcadorLocal: preds.predMarcadorLocal,
+          predMarcadorVisita: preds.predMarcadorVisita,
+          puntosTotal: puntos?.total ?? 0,
+          puntosResultado: puntos?.resultado ?? 0,
+          puntosBtts: puntos?.btts ?? 0,
+          puntosMas25: puntos?.mas25 ?? 0,
+          puntosTarjeta: puntos?.tarjeta ?? 0,
+          puntosMarcador: puntos?.marcador ?? 0,
+          // FIN: setea puntosFinales (alimenta el leaderboard mensual).
+          puntosFinales: esFin ? puntos?.total ?? 0 : null,
+        };
+
+        if (ticketExistente) {
+          await prisma.ticket.update({
+            where: { id: ticketExistente.id },
+            data: dataBase,
+          });
+          ticketsActualizados += 1;
+        } else {
+          await prisma.ticket.create({
+            data: {
+              ...dataBase,
+              usuarioId: t.userId,
+              torneoId: torneo.id,
+            },
+          });
+          ticketsCreados += 1;
+        }
+      }
+
+      // Actualizar `totalInscritos` del torneo al conteo real.
+      const conteo = await prisma.ticket.count({
+        where: { torneoId: torneo.id },
+      });
+      await prisma.torneo.update({
+        where: { id: torneo.id },
+        data: { totalInscritos: conteo },
+      });
+    }
+
     await logAuditoria({
       actorId: session.user.id,
       actorEmail: session.user.email ?? null,
@@ -608,17 +907,29 @@ export async function POST(_req: NextRequest): Promise<Response> {
       entidadId: "dev-seed",
       resumen: `Sembrados ${FIJAS_DEMO.length} partidos demo + análisis aprobados${
         torneosCreados > 0 ? ` + ${torneosCreados} torneos` : ""
-      }`,
+      } + ${tipstersCreados + tipstersActualizados} tipsters + ${ticketsCreados + ticketsActualizados} tickets`,
       metadata: {
         creados,
         actualizados,
         torneosCreados,
+        tipstersCreados,
+        tipstersActualizados,
+        ticketsCreados,
+        ticketsActualizados,
         externalIds: FIJAS_DEMO.map((f) => f.externalId),
       },
     });
 
     logger.info(
-      { creados, actualizados, torneosCreados },
+      {
+        creados,
+        actualizados,
+        torneosCreados,
+        tipstersCreados,
+        tipstersActualizados,
+        ticketsCreados,
+        ticketsActualizados,
+      },
       "POST /api/v1/admin/dev/seed-fijas-demo OK",
     );
 
@@ -628,9 +939,12 @@ export async function POST(_req: NextRequest): Promise<Response> {
         creados,
         actualizados,
         torneosCreados,
+        tipstersCreados,
+        tipstersActualizados,
+        ticketsCreados,
+        ticketsActualizados,
         externalIds: FIJAS_DEMO.map((f) => f.externalId),
-        mensaje:
-          "6 partidos demo creados con AnalisisPartido APROBADO. Para limpiar, hacé DELETE al mismo endpoint.",
+        mensaje: `${FIJAS_DEMO.length} partidos demo + ${tipstersCreados + tipstersActualizados} tipsters + ${ticketsCreados + ticketsActualizados} tickets. Para limpiar, hacé DELETE al mismo endpoint.`,
       },
     });
   } catch (err) {
@@ -657,33 +971,62 @@ export async function DELETE(_req: NextRequest): Promise<Response> {
       select: { id: true, externalId: true },
     });
 
-    if (partidosDemo.length === 0) {
+    // Tipsters demo (independientes — pueden existir aunque no haya partidos).
+    const tipstersDemoEnBD = await prisma.usuario.findMany({
+      where: { email: { startsWith: TIPSTER_EMAIL_PREFIX } },
+      select: { id: true, email: true },
+    });
+
+    if (partidosDemo.length === 0 && tipstersDemoEnBD.length === 0) {
       return Response.json({
         data: {
           ok: true,
-          eliminados: 0,
-          mensaje: "No había partidos demo para eliminar.",
+          partidosEliminados: 0,
+          tipstersEliminados: 0,
+          mensaje: "No había datos demo para eliminar.",
         },
       });
     }
 
     const partidoIds = partidosDemo.map((p) => p.id);
+    const tipsterIds = tipstersDemoEnBD.map((t) => t.id);
 
-    // Borrar en orden — Tickets son blocker si existen, pero la regla del
-    // demo es que no se inscriben usuarios reales. Si hubiera Tickets,
-    // los borramos primero (cascade no aplica porque Torneo→Ticket es FK).
+    // Borrar en orden — primero relaciones (Ticket), después contenedores
+    // (Torneo, Partido, Usuario).
     await prisma.$transaction(async (tx) => {
+      // Tickets: tanto los de torneos demo como los de tipsters demo (por
+      // si un tipster demo se inscribió en un torneo no-demo, aunque no
+      // debería pasar).
       await tx.ticket.deleteMany({
-        where: { torneo: { partidoId: { in: partidoIds } } },
+        where: {
+          OR: [
+            ...(partidoIds.length
+              ? [{ torneo: { partidoId: { in: partidoIds } } }]
+              : []),
+            ...(tipsterIds.length ? [{ usuarioId: { in: tipsterIds } }] : []),
+          ],
+        },
       });
-      await tx.torneo.deleteMany({
-        where: { partidoId: { in: partidoIds } },
-      });
-      // AnalisisPartido tiene onDelete: Cascade desde Partido — se borra solo.
-      // EventoPartido también tiene onDelete: Cascade.
-      await tx.partido.deleteMany({
-        where: { id: { in: partidoIds } },
-      });
+      if (partidoIds.length) {
+        await tx.torneo.deleteMany({
+          where: { partidoId: { in: partidoIds } },
+        });
+        // AnalisisPartido tiene onDelete: Cascade — se borra solo.
+        // EventoPartido también tiene onDelete: Cascade.
+        await tx.partido.deleteMany({ where: { id: { in: partidoIds } } });
+      }
+      if (tipsterIds.length) {
+        // Las dependencias del Usuario que NO tienen onDelete: Cascade
+        // bloquean el delete. Limpiamos las opcionales para los tipsters
+        // demo (son fake — no tienen sesiones, suscripciones, etc.).
+        await tx.session.deleteMany({
+          where: { userId: { in: tipsterIds } },
+        });
+        await tx.account.deleteMany({
+          where: { userId: { in: tipsterIds } },
+        });
+        await tx.usuario.deleteMany({ where: { id: { in: tipsterIds } } });
+      }
     });
 
     await logAuditoria({
@@ -692,24 +1035,30 @@ export async function DELETE(_req: NextRequest): Promise<Response> {
       accion: "dev.seed_fijas_demo.eliminar",
       entidad: "Partido",
       entidadId: "dev-seed",
-      resumen: `Eliminados ${partidosDemo.length} partidos demo + análisis + torneos`,
+      resumen: `Eliminados ${partidosDemo.length} partidos demo + ${tipstersDemoEnBD.length} tipsters demo`,
       metadata: {
-        eliminados: partidosDemo.length,
+        partidosEliminados: partidosDemo.length,
+        tipstersEliminados: tipstersDemoEnBD.length,
         externalIds: partidosDemo.map((p) => p.externalId),
+        tipsterEmails: tipstersDemoEnBD.map((t) => t.email),
       },
     });
 
     logger.info(
-      { eliminados: partidosDemo.length },
+      {
+        partidosEliminados: partidosDemo.length,
+        tipstersEliminados: tipstersDemoEnBD.length,
+      },
       "DELETE /api/v1/admin/dev/seed-fijas-demo OK",
     );
 
     return Response.json({
       data: {
         ok: true,
-        eliminados: partidosDemo.length,
+        partidosEliminados: partidosDemo.length,
+        tipstersEliminados: tipstersDemoEnBD.length,
         externalIds: partidosDemo.map((p) => p.externalId),
-        mensaje: `${partidosDemo.length} partidos demo + sus análisis + torneos eliminados.`,
+        mensaje: `${partidosDemo.length} partidos + ${tipstersDemoEnBD.length} tipsters demo eliminados (con sus tickets, torneos y análisis).`,
       },
     });
   } catch (err) {
@@ -883,6 +1232,21 @@ export async function GET(_req: NextRequest): Promise<Response> {
         })
       : 0;
 
+    // Tipsters demo y sus tickets (separados de torneos demo, para
+    // distinguir "tipsters huérfanos" de "tipsters con tickets activos").
+    const tipstersDemoEnBD = await prisma.usuario.count({
+      where: { email: { startsWith: TIPSTER_EMAIL_PREFIX } },
+    });
+    const ticketsDeTipstersDemo = await prisma.ticket.count({
+      where: { usuario: { email: { startsWith: TIPSTER_EMAIL_PREFIX } } },
+    });
+    const ticketsConPuntosFinales = await prisma.ticket.count({
+      where: {
+        usuario: { email: { startsWith: TIPSTER_EMAIL_PREFIX } },
+        puntosFinales: { not: null },
+      },
+    });
+
     // ----- Llamadas REALES a los servicios -----
     // Si los conteos del resumen JS-side dicen que X partidos deberían
     // aparecer pero los servicios reales devuelven 0, hay un disconnect
@@ -962,6 +1326,9 @@ export async function GET(_req: NextRequest): Promise<Response> {
         resumen: {
           ...resumen,
           ticketsEnTorneosDemo: ticketsCount,
+          tipstersDemo: tipstersDemoEnBD,
+          ticketsDeTipstersDemo,
+          ticketsConPuntosFinales, // alimenta RankingMensualTabla
         },
         // Verdad operacional — qué devuelven los servicios que la página
         // usa. Si esto difiere de "resumen", hay un bug de query.
