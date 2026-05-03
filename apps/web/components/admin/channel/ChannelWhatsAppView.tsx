@@ -81,7 +81,7 @@ export function ChannelWhatsAppView({
         title="Últimos picks enviados"
         actions={
           <Link
-            href="/admin/picks-premium?estado=APROBADO"
+            href="/admin/picks?estado=APROBADO"
             className="text-admin-meta font-bold text-brand-blue-main hover:underline"
           >
             Ver todos →
@@ -105,7 +105,7 @@ export function ChannelWhatsAppView({
               label: "Partido",
               render: (r) => (
                 <Link
-                  href={`/admin/picks-premium?id=${r.id}`}
+                  href={`/admin/picks?id=${r.id}`}
                   className="text-dark hover:underline"
                 >
                   {r.equipoLocal} vs {r.equipoVisita}

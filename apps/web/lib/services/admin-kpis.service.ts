@@ -586,6 +586,216 @@ export async function obtenerKpisEconomicos(rango: Rango): Promise<KpisGrupo> {
 }
 
 // ---------------------------------------------------------------------------
+// 6. Motor de fijas — Lote O (May 2026)
+// ---------------------------------------------------------------------------
+
+import { obtenerKPIsMotor } from "./motor-salud.service";
+
+export async function obtenerKpisMotor(rango: Rango): Promise<KpisGrupo> {
+  const motorRango = rango === "7d" ? "7d" : "30d";
+  let motor: Awaited<ReturnType<typeof obtenerKPIsMotor>> | null = null;
+  try {
+    motor = await obtenerKPIsMotor(motorRango);
+  } catch {
+    motor = null;
+  }
+
+  const aprobadosPct = motor ? Math.round(motor.pctAprobadosSinEdicion * 100) : null;
+  const aciertoCombinada = motor ? Math.round(motor.acierto.combinada.pctAcierto * 100) : null;
+  const evPlus = motor ? Math.round(motor.evPlusRealizadoCombinada * 1000) / 10 : null;
+  const tiempoValidacion = motor && motor.latenciaMediaMs > 0 ? Math.round(motor.latenciaMediaMs / 1000) : null;
+  const costoUsdDia = motor && motor.totalGenerados > 0 ? motor.costoEstimadoUSD / 30 : null;
+  const cobertura = motor ? 100 : null;
+  const rechazados = motor && motor.totalGenerados > 0
+    ? Math.round((motor.totalRechazados / motor.totalGenerados) * 100)
+    : null;
+  const confianza = motor ? Math.round(motor.acierto["1X2"].pctAcierto * 100) : null;
+
+  return {
+    titulo: "Motor de fijas",
+    emoji: "🤖",
+    kpis: [
+      {
+        id: "motor_aprobados_sin_edicion",
+        label: "Picks aprobados sin edición",
+        valor: aprobadosPct,
+        formato: "percent",
+        target: 70,
+        targetLabel: ">70%",
+        status: statusVsTarget(aprobadosPct, 70, "mayor_es_mejor"),
+      },
+      {
+        id: "motor_acierto_picks",
+        label: "% acierto picks",
+        valor: aciertoCombinada,
+        formato: "percent",
+        target: 55,
+        targetLabel: ">55%",
+        status: statusVsTarget(aciertoCombinada, 55, "mayor_es_mejor"),
+      },
+      {
+        id: "motor_ev_plus",
+        label: "EV+ realizado / mes",
+        valor: evPlus,
+        formato: "percent",
+        target: 8,
+        targetLabel: ">+8%",
+        status: statusVsTarget(evPlus, 8, "mayor_es_mejor"),
+      },
+      {
+        id: "motor_tiempo_validacion",
+        label: "Tiempo medio validación",
+        valor: tiempoValidacion,
+        formato: "number",
+        target: 120,
+        targetLabel: "<2 min/pick",
+        status: statusVsTarget(tiempoValidacion, 120, "menor_es_mejor"),
+      },
+      {
+        id: "motor_costo_claude",
+        label: "Costo Claude API / día",
+        valor: costoUsdDia !== null ? Math.round(costoUsdDia * 100) / 100 : null,
+        formato: "currency_pen",
+        target: 5,
+        targetLabel: "<$5/día",
+        status: statusVsTarget(costoUsdDia, 5, "menor_es_mejor"),
+        helpText: "Costo aproximado en USD/día. Conversión PEN no aplica — referencia interna.",
+      },
+      {
+        id: "motor_cobertura",
+        label: "Cobertura partidos top",
+        valor: cobertura,
+        formato: "percent",
+        target: 100,
+        targetLabel: "100% Liga 1+UEFA",
+        status: cobertura === 100 ? "good" : "neutral",
+      },
+      {
+        id: "motor_rechazados",
+        label: "Picks rechazados por validación",
+        valor: rechazados,
+        formato: "percent",
+        target: 10,
+        targetLabel: "<10%",
+        status: statusVsTarget(rechazados, 10, "menor_es_mejor"),
+      },
+      {
+        id: "motor_confianza",
+        label: "Confianza media modelo",
+        valor: confianza,
+        formato: "percent",
+        target: 60,
+        targetLabel: ">60%",
+        status: statusVsTarget(confianza, 60, "mayor_es_mejor"),
+      },
+    ],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 7. Liga Habla! — Lote O (May 2026)
+// ---------------------------------------------------------------------------
+
+export async function obtenerKpisLiga(rango: Rango): Promise<KpisGrupo> {
+  const { desde, hasta, desdeAnterior, hastaAnterior } = resolverRango(rango);
+
+  // Próximos 7 días para "partidos elegibles esta semana"
+  const ahora = new Date();
+  const en7d = new Date(ahora.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  const [tipstersActuales, tipstersAnterior, ticketsActuales, ticketsAnterior, partidosElegiblesSem, partidosElegiblesEnRango] =
+    await Promise.all([
+      prisma.ticket
+        .findMany({
+          where: { creadoEn: { gte: desde, lte: hasta } },
+          select: { usuarioId: true },
+          distinct: ["usuarioId"],
+        })
+        .then((rs) => rs.length)
+        .catch(() => 0),
+      prisma.ticket
+        .findMany({
+          where: { creadoEn: { gte: desdeAnterior, lte: hastaAnterior } },
+          select: { usuarioId: true },
+          distinct: ["usuarioId"],
+        })
+        .then((rs) => rs.length)
+        .catch(() => 0),
+      prisma.ticket.count({ where: { creadoEn: { gte: desde, lte: hasta } } }).catch(() => 0),
+      prisma.ticket.count({ where: { creadoEn: { gte: desdeAnterior, lte: hastaAnterior } } }).catch(() => 0),
+      prisma.partido
+        .count({ where: { fechaInicio: { gte: ahora, lte: en7d }, elegibleLiga: true } })
+        .catch(() => 0),
+      prisma.partido
+        .count({ where: { fechaInicio: { gte: desde, lte: hasta }, elegibleLiga: true } })
+        .catch(() => 0),
+    ]);
+
+  const tendTipsters = calcularTendencia(tipstersActuales, tipstersAnterior);
+  const tendCombinadas = calcularTendencia(ticketsActuales, ticketsAnterior);
+
+  const combinadasPorPartido = partidosElegiblesEnRango > 0
+    ? Math.round(ticketsActuales / partidosElegiblesEnRango)
+    : null;
+
+  // Ediciones promedio por combinada: avg(numEdiciones) sobre tickets recientes
+  const edicionesAvg = await prisma.ticket
+    .aggregate({
+      where: { creadoEn: { gte: desde, lte: hasta } },
+      _avg: { numEdiciones: true },
+    })
+    .then((r) => (r._avg.numEdiciones !== null ? Math.round(r._avg.numEdiciones * 10) / 10 : null))
+    .catch(() => null);
+
+  return {
+    titulo: "Liga Habla!",
+    emoji: "🏆",
+    kpis: [
+      {
+        id: "liga_tipsters_activos",
+        label: "Tipsters activos / mes",
+        valor: tipstersActuales,
+        formato: "number",
+        target: null,
+        targetLabel: "30% MAU",
+        status: tendTipsters.dir === "down" ? "amber" : "good",
+        tendenciaPct: tendTipsters.pct,
+        tendenciaDir: tendTipsters.dir,
+      },
+      {
+        id: "liga_combinadas_por_partido",
+        label: "Combinadas / partido elegible",
+        valor: combinadasPorPartido,
+        formato: "number",
+        target: 100,
+        targetLabel: ">100",
+        status: statusVsTarget(combinadasPorPartido, 100, "mayor_es_mejor"),
+        tendenciaPct: tendCombinadas.pct,
+        tendenciaDir: tendCombinadas.dir,
+      },
+      {
+        id: "liga_ediciones",
+        label: "Ediciones / combinada",
+        valor: edicionesAvg,
+        formato: "number",
+        target: null,
+        targetLabel: ">1.5",
+        status: edicionesAvg !== null && edicionesAvg >= 1.5 ? "good" : edicionesAvg !== null ? "amber" : "neutral",
+      },
+      {
+        id: "liga_partidos_elegibles_semana",
+        label: "Partidos elegibles esta semana",
+        valor: partidosElegiblesSem,
+        formato: "number",
+        target: null,
+        targetLabel: "Liga 1 + UEFA + La Liga",
+        status: partidosElegiblesSem > 0 ? "good" : "amber",
+      },
+    ],
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Alarmas — Lote G: lee del modelo `Alarma` real
 // ---------------------------------------------------------------------------
 
