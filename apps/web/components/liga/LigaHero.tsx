@@ -40,7 +40,11 @@ export function LigaHero({
           <div className="liga-hero-stat-lbl">Días al cierre</div>
         </div>
       </div>
-      <Link href="/liga#proximos" className="btn btn-primary">
+      <Link
+        href="/liga#proximos"
+        className="btn btn-primary"
+        style={{ background: "var(--gold)", color: "#000" }}
+      >
         Hacer mi primera predicción →
       </Link>
     </div>

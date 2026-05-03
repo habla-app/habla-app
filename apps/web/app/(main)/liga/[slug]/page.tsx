@@ -18,6 +18,7 @@ import { listarRanking } from "@/lib/services/ranking.service";
 import { TrackOnMount } from "@/components/analytics/TrackOnMount";
 import { PartidoHero } from "@/components/partido/PartidoHero";
 import { LigaDetalleClient } from "@/components/liga/LigaDetalleClient";
+import { PartidoStatsCard } from "@/components/liga/PartidoStatsCard";
 import {
   RankingPaginado,
   type RankingFila,
@@ -172,6 +173,23 @@ export default async function LigaDetallePage({ params }: Props) {
         finalizado={finalizado}
         requiereLogin={!usuarioId}
       />
+
+      {enVivo ? (
+        <PartidoStatsCard
+          local={{
+            posesion: null,
+            tiros: null,
+            corners: null,
+            tarjetasAmarillas: null,
+          }}
+          visita={{
+            posesion: null,
+            tiros: null,
+            corners: null,
+            tarjetasAmarillas: null,
+          }}
+        />
+      ) : null}
 
       <RankingPaginado
         filas={filas}

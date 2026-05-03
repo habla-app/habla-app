@@ -266,7 +266,9 @@ export function ComboModalV32({
             </div>
             <div className="modal-combinada-meta">
               {torneo.partidoNombre} · cierre en{" "}
-              <strong>{cerrado ? "00:00:00" : countdown}</strong>
+              <strong style={{ color: "var(--live)" }}>
+                {cerrado ? "00:00:00" : countdown}
+              </strong>
             </div>
           </div>
           <button
@@ -294,7 +296,7 @@ export function ComboModalV32({
             </div>
             <div className="market-options triple">
               <OptBtn
-                label={cortoNombre(torneo.equipoLocal)}
+                label="Local"
                 selected={preds.predResultado === "LOCAL"}
                 onClick={() => setPreds((p) => ({ ...p, predResultado: "LOCAL" }))}
               />
@@ -304,7 +306,7 @@ export function ComboModalV32({
                 onClick={() => setPreds((p) => ({ ...p, predResultado: "EMPATE" }))}
               />
               <OptBtn
-                label={cortoNombre(torneo.equipoVisita)}
+                label="Visita"
                 selected={preds.predResultado === "VISITA"}
                 onClick={() => setPreds((p) => ({ ...p, predResultado: "VISITA" }))}
               />
@@ -571,8 +573,3 @@ function totalPuntosMaximo(): number {
   );
 }
 
-function cortoNombre(nombre: string): string {
-  const limpio = nombre.trim();
-  if (limpio.length <= 10) return limpio;
-  return limpio.split(/\s+/)[0] ?? limpio.slice(0, 8);
-}
