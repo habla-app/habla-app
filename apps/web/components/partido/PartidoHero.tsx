@@ -1,18 +1,17 @@
-// PartidoHero — hero de la vista /partidos/[slug]. Lote B v3.1.
-// Spec: docs/ux-spec/02-pista-usuario-publica/partidos-slug.spec.md.
+// PartidoHero — Lote Q v3.2 (May 2026): port 1:1 desde
+// docs/habla-mockup-v3.2.html § page-fijas-detail (.partido-hero, lines 2778-2799).
 //
-// Hero mobile-first con gradient stadium + radial dorado. Variantes según
-// el estado del partido:
+// Estructura del mockup:
+//   .partido-hero
+//     .partido-hero-meta — liga · ronda + fecha
+//     .partido-hero-teams — escudo + nombre por lado, "VS" en el medio
+//     .partido-countdown — bloques con número grande + label "días/hrs/min"
 //
-// - programado: countdown chip + escudos + nombres + fecha/hora.
-// - en_vivo:    chip "EN VIVO" + marcador + minuto.
-// - finalizado: chip "FIN" + marcador final.
-//
-// `<MobileHeader variant="transparent">` se monta encima — este hero no
-// trae logo ni back button, se asume que el page wrapper los provee.
+// Hero variant programado: countdown.
+// Hero variant en_vivo: marcadores + chip EN VIVO.
+// Hero variant finalizado: marcadores + chip FIN.
 
-import { Badge } from "@/components/ui";
-import { getTeamColor, getTeamInitials } from "@/lib/utils/team-colors";
+import { getTeamInitials } from "@/lib/utils/team-colors";
 
 type EstadoPartido = "programado" | "en_vivo" | "finalizado";
 
@@ -26,6 +25,8 @@ interface Props {
   marcadorLocal?: number | null;
   marcadorVisita?: number | null;
   minuto?: number | null;
+  /** Subtítulo opcional ("27ma fecha", "Cuartos final"). */
+  ronda?: string | null;
 }
 
 export function PartidoHero({
@@ -33,136 +34,115 @@ export function PartidoHero({
   equipoLocal,
   equipoVisita,
   fechaInicio,
-  estadio,
   estado = "programado",
   marcadorLocal,
   marcadorVisita,
   minuto,
+  ronda,
 }: Props) {
-  const localColor = getTeamColor(equipoLocal);
-  const visitaColor = getTeamColor(equipoVisita);
+  const enVivo = estado === "en_vivo";
+  const finalizado = estado === "finalizado";
+  const ligaTexto = ronda ? `🏆 ${liga} · ${ronda}` : `🏆 ${liga}`;
+  const fechaTexto = formatFechaCorta(fechaInicio);
 
   return (
-    <section
-      role="banner"
-      className="relative overflow-hidden bg-gradient-to-b from-brand-blue-dark via-[#000530] to-[#000420] px-4 py-7 text-white md:px-8 md:py-10"
-    >
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-gold-soft-glow opacity-50"
-      />
-      <span
-        aria-hidden
-        className="pointer-events-none absolute right-[-30px] top-[-30px] -rotate-[15deg] select-none text-[180px] leading-none opacity-[0.05] md:text-[260px]"
-      >
-        ⚽
-      </span>
-
-      <div className="relative">
-        {/* Chips: liga + estado */}
-        <div className="mb-5 flex flex-wrap items-center gap-2">
-          <Badge variant="info" size="sm">
-            🏆 {liga}
-          </Badge>
-          {estado === "en_vivo" ? (
-            <Badge variant="live" size="sm">
-              ● EN VIVO {minuto !== null && minuto !== undefined ? `· ${minuto}'` : ""}
-            </Badge>
-          ) : estado === "finalizado" ? (
-            <Badge variant="neutral" size="sm">
-              FIN
-            </Badge>
+    <div className="partido-hero">
+      <div className="partido-hero-meta">
+        <span>
+          {enVivo ? (
+            <>
+              <span className="live-dot" /> {ligaTexto} · {minuto ?? 0}&apos;
+            </>
           ) : (
-            <Badge variant="urgent-high" size="sm">
-              {formatChipFecha(fechaInicio)}
-            </Badge>
+            ligaTexto
           )}
-        </div>
-
-        {/* Equipos + marcador */}
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 md:gap-6">
-          <Equipo
-            nombre={equipoLocal}
-            bg={localColor.bg}
-            fg={localColor.fg}
-          />
-
-          <div className="flex flex-col items-center gap-1 text-center">
-            {estado === "programado" ? (
-              <span className="font-display text-display-lg font-black text-white/40">
-                VS
-              </span>
-            ) : (
-              <span className="font-display text-display-xl font-black tabular-nums text-white">
-                {marcadorLocal ?? 0} - {marcadorVisita ?? 0}
-              </span>
-            )}
-          </div>
-
-          <Equipo
-            nombre={equipoVisita}
-            bg={visitaColor.bg}
-            fg={visitaColor.fg}
-          />
-        </div>
-
-        {/* Estadio + fecha */}
-        <p className="mt-5 text-center text-body-sm text-white/70">
-          {estadio ? `${estadio} · ` : ""}
-          {formatFechaCompleta(fechaInicio)}
-        </p>
+        </span>
+        <span>
+          {enVivo ? (
+            <span
+              className="estado-badge estado-vivo"
+              style={{
+                background: "rgba(255,61,61,.2)",
+                color: "#FFB3B3",
+                border: "1px solid rgba(255,61,61,.4)",
+              }}
+            >
+              EN VIVO
+            </span>
+          ) : finalizado ? (
+            <span className="estado-badge estado-fin">FIN</span>
+          ) : (
+            fechaTexto
+          )}
+        </span>
       </div>
-    </section>
-  );
-}
 
-function Equipo({
-  nombre,
-  bg,
-  fg,
-}: {
-  nombre: string;
-  bg: string;
-  fg: string;
-}) {
-  return (
-    <div className="text-center">
-      <div
-        aria-hidden
-        className="mx-auto mb-2 flex h-16 w-16 items-center justify-center rounded-full font-display text-display-md font-black shadow-md md:h-20 md:w-20"
-        style={{ background: bg, color: fg }}
-      >
-        {getTeamInitials(nombre)}
+      <div className="partido-hero-teams">
+        <div className="team-block">
+          <div className="team-shield">{getTeamInitials(equipoLocal)}</div>
+          <div className="team-name">{equipoLocal}</div>
+          {(enVivo || finalizado) && marcadorLocal !== null && marcadorLocal !== undefined ? (
+            <div
+              className={`partido-hero-marcador ${marcadorLocal > (marcadorVisita ?? 0) ? "gold" : "white"}`}
+            >
+              {marcadorLocal}
+            </div>
+          ) : null}
+        </div>
+        <div className="partido-vs">{enVivo || finalizado ? "-" : "VS"}</div>
+        <div className="team-block">
+          <div className="team-shield">{getTeamInitials(equipoVisita)}</div>
+          <div className="team-name">{equipoVisita}</div>
+          {(enVivo || finalizado) && marcadorVisita !== null && marcadorVisita !== undefined ? (
+            <div
+              className={`partido-hero-marcador ${marcadorVisita > (marcadorLocal ?? 0) ? "gold" : "white"}`}
+            >
+              {marcadorVisita}
+            </div>
+          ) : null}
+        </div>
       </div>
-      <p className="line-clamp-2 font-display text-display-sm uppercase leading-tight text-white">
-        {nombre}
-      </p>
+
+      {!enVivo && !finalizado ? (
+        <CountdownBlock fechaInicio={fechaInicio} />
+      ) : null}
     </div>
   );
 }
 
-function formatChipFecha(d: Date): string {
-  const ms = d.getTime() - Date.now();
-  if (ms < 0) return "Empezó";
-  const min = Math.floor(ms / 60000);
-  if (min < 60) return `Cierra en ${min} min`;
-  const horas = Math.floor(min / 60);
-  if (horas < 24) return `En ${horas}h`;
-  return d.toLocaleDateString("es-PE", {
-    timeZone: "America/Lima",
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  });
+function CountdownBlock({ fechaInicio }: { fechaInicio: Date }) {
+  const ms = Math.max(0, fechaInicio.getTime() - Date.now());
+  const totalMin = Math.floor(ms / 60000);
+  const dias = Math.floor(totalMin / (60 * 24));
+  const hrs = Math.floor((totalMin % (60 * 24)) / 60);
+  const min = totalMin % 60;
+  return (
+    <div className="partido-countdown">
+      <div>
+        <div className="countdown-num">{dias}</div>
+        <div style={{ marginTop: 4 }}>días</div>
+      </div>
+      <div>
+        <div className="countdown-num">{String(hrs).padStart(2, "0")}</div>
+        <div style={{ marginTop: 4 }}>hrs</div>
+      </div>
+      <div>
+        <div className="countdown-num">{String(min).padStart(2, "0")}</div>
+        <div style={{ marginTop: 4 }}>min</div>
+      </div>
+    </div>
+  );
 }
 
-function formatFechaCompleta(d: Date): string {
-  return d.toLocaleString("es-PE", {
-    timeZone: "America/Lima",
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+function formatFechaCorta(d: Date): string {
+  return d
+    .toLocaleString("es-PE", {
+      timeZone: "America/Lima",
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    })
+    .replace(",", " ·")
+    .concat(" hora Lima");
 }

@@ -1,13 +1,14 @@
-// FijasList — Lote M v3.2 (May 2026).
-// Spec: docs/habla-mockup-v3.2.html § page-fijas-list (mobile cards + desktop table).
+// FijasList — Lote Q v3.2 (May 2026): port 1:1 desde docs/habla-mockup-v3.2.html
+// § page-fijas-list. La estructura HTML, las clases CSS y los textos provienen
+// directamente del mockup. Reemplazá solo los datos hardcodeados por datos
+// reales preservando el layout. NO usar componentes UI del repo si su HTML
+// difiere del mockup.
 //
-// Renderiza la lista de Las Fijas con paridad mobile + desktop:
-//   - Mobile: cards verticales apiladas (`md:hidden`)
-//   - Desktop: tabla densa (`hidden md:block`)
-// Cada partido linkea a /las-fijas/[slug].
+// Mobile (≤767px): cards `.fija-card` con `.fija-card-cuotas` mini-grid.
+// Desktop (≥768px): tabla densa `.fijas-list-table` con scroll horizontal
+//                   en mobile (no se ven a la vez).
 
 import Link from "next/link";
-import { Badge } from "@/components/ui";
 import type { FijaListItem } from "@/lib/services/las-fijas.service";
 
 interface Props {
@@ -20,183 +21,306 @@ export function FijasList({ partidos }: Props) {
   }
   return (
     <>
-      <FijasCardsMobile partidos={partidos} />
       <FijasTableDesktop partidos={partidos} />
+      <FijasCardsMobile partidos={partidos} />
     </>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Mobile — cards verticales
-// ---------------------------------------------------------------------------
-
-function FijasCardsMobile({ partidos }: Props) {
-  return (
-    <ul className="space-y-3 md:hidden" aria-label="Próximas fijas">
-      {partidos.map((p) => (
-        <li key={p.id}>
-          <FijaCard partido={p} />
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function FijaCard({ partido }: { partido: FijaListItem }) {
-  const enVivo = partido.estado === "EN_VIVO";
-  const probPct =
-    partido.probabilidadPronostico !== null
-      ? Math.round(partido.probabilidadPronostico * 100)
-      : null;
-  return (
-    <Link
-      href={`/las-fijas/${partido.slug}`}
-      className={`block rounded-md border bg-card shadow-sm transition-all hover:-translate-y-px hover:shadow-md ${
-        enVivo
-          ? "border-light border-l-[4px] border-l-urgent-critical"
-          : "border-light"
-      }`}
-    >
-      <div className="flex items-start justify-between gap-3 p-4">
-        <div className="min-w-0 flex-1">
-          <p className="mb-1 text-label-sm uppercase tracking-[0.04em] text-muted-d">
-            🏆 {partido.liga} · {formatFechaCorta(partido.fechaInicio)}
-          </p>
-          <p className="line-clamp-1 font-display text-display-xs font-bold text-dark">
-            {partido.equipoLocal} vs {partido.equipoVisita}
-          </p>
-        </div>
-        <BadgeFila enVivo={enVivo} pron={partido.pronostico1x2} probPct={probPct} />
-      </div>
-    </Link>
-  );
-}
-
-function BadgeFila({
-  enVivo,
-  pron,
-  probPct,
-}: {
-  enVivo: boolean;
-  pron: "LOCAL" | "EMPATE" | "VISITA" | null;
-  probPct: number | null;
-}) {
-  if (enVivo) {
-    return (
-      <Badge variant="live" size="sm">
-        ● EN VIVO
-      </Badge>
-    );
-  }
-  if (pron && probPct !== null) {
-    const label =
-      pron === "LOCAL" ? "Local" : pron === "EMPATE" ? "Empate" : "Visita";
-    return (
-      <span className="rounded-full bg-brand-blue-main/10 px-2.5 py-1 font-display text-label-sm font-bold text-brand-blue-main">
-        {label} {probPct}%
-      </span>
-    );
-  }
-  return null;
-}
-
-// ---------------------------------------------------------------------------
-// Desktop — tabla densa
+// Desktop tabla (mockup line 2574-2674)
 // ---------------------------------------------------------------------------
 
 function FijasTableDesktop({ partidos }: Props) {
   return (
     <div className="hidden md:block">
-      <div className="overflow-hidden rounded-md border border-light bg-card shadow-sm">
-        <table className="w-full text-left">
-          <thead className="border-b border-light bg-subtle/60">
-            <tr className="text-label-sm uppercase tracking-[0.04em] text-muted-d">
-              <th className="px-4 py-3 font-bold">Liga · Hora</th>
-              <th className="px-4 py-3 font-bold">Partido</th>
-              <th className="px-4 py-3 text-center font-bold">Pronóstico Habla!</th>
-              <th className="px-4 py-3 text-right font-bold">Acción</th>
-            </tr>
-          </thead>
-          <tbody>
-            {partidos.map((p) => (
-              <FilaTabla key={p.id} partido={p} />
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <table className="fijas-list-table">
+        <thead>
+          <tr>
+            <th>Liga · Hora</th>
+            <th>Partido</th>
+            <th className="center" colSpan={3}>
+              1X2
+            </th>
+            <th className="center">±2.5</th>
+            <th className="center">BTTS</th>
+            <th>Mejor cuota</th>
+            <th></th>
+          </tr>
+          <tr>
+            <th></th>
+            <th></th>
+            <th className="center">Local</th>
+            <th className="center">Empate</th>
+            <th className="center">Visita</th>
+            <th className="center">Más / Menos</th>
+            <th className="center">Sí / No</th>
+            <th></th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {partidos.map((p) => (
+            <FilaTabla key={p.id} partido={p} />
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
 
 function FilaTabla({ partido }: { partido: FijaListItem }) {
   const enVivo = partido.estado === "EN_VIVO";
-  const finalizado = partido.estado === "FINALIZADO";
-  const probPct =
-    partido.probabilidadPronostico !== null
-      ? Math.round(partido.probabilidadPronostico * 100)
-      : null;
+  const horaTexto = formatHora(partido.fechaInicio, partido.estado, partido.liveElapsed);
+  const cuotas = derivarCuotas(partido);
+  const ligaShort = formatLigaCorta(partido.liga);
+  const navHref = `/las-fijas/${partido.slug}`;
+
   return (
-    <tr
-      className={`border-b border-light/60 transition-colors hover:bg-subtle/50 ${
-        enVivo ? "bg-urgent-critical-bg/30" : ""
-      }`}
-    >
-      <td className="px-4 py-3 align-middle">
-        <p className="text-label-sm font-bold uppercase tracking-[0.04em] text-dark">
-          {partido.liga}
-        </p>
-        <p className="text-body-xs text-muted-d">
-          {formatFechaCorta(partido.fechaInicio)}
-        </p>
-      </td>
-      <td className="px-4 py-3 align-middle">
-        <p className="font-display text-label-md font-bold text-dark">
-          {partido.equipoLocal} vs {partido.equipoVisita}
-        </p>
-        {finalizado && partido.golesLocal !== null && partido.golesVisita !== null ? (
-          <p className="text-body-xs text-muted-d">
-            Final · {partido.golesLocal}-{partido.golesVisita}
-          </p>
-        ) : null}
-      </td>
-      <td className="px-4 py-3 text-center align-middle">
-        {enVivo ? (
-          <Badge variant="live" size="sm">
-            ● EN VIVO
-          </Badge>
-        ) : partido.pronostico1x2 && probPct !== null ? (
-          <span className="rounded-full bg-brand-blue-main/10 px-3 py-1 font-display text-label-sm font-bold text-brand-blue-main">
-            {pronLabel(partido.pronostico1x2)} {probPct}%
-          </span>
-        ) : (
-          <span className="text-body-xs text-muted-d">—</span>
-        )}
-      </td>
-      <td className="px-4 py-3 text-right align-middle">
-        <Link
-          href={`/las-fijas/${partido.slug}`}
-          className="inline-flex items-center gap-1 rounded-sm border border-strong bg-card px-3 py-1.5 font-display text-label-sm font-bold text-body transition-colors hover:border-brand-blue-main hover:text-brand-blue-main"
+    <tr className="fijas-row">
+      <td>
+        <div className="cell-liga">
+          {enVivo ? <span className="live-dot" /> : null}
+          {ligaShort}
+        </div>
+        <div
+          className="cell-hora"
+          style={enVivo ? { color: "var(--live)" } : undefined}
         >
-          Análisis →
+          {horaTexto}
+        </div>
+      </td>
+      <td>
+        <div className="cell-equipos">
+          {partido.equipoLocal} <span className="vs">vs</span>{" "}
+          {partido.equipoVisita}
+        </div>
+      </td>
+      <td className="center">
+        <CuotaCell value={cuotas.local} best={cuotas.bestKey === "local"} />
+      </td>
+      <td className="center">
+        <CuotaCell value={cuotas.empate} best={cuotas.bestKey === "empate"} />
+      </td>
+      <td className="center">
+        <CuotaCell value={cuotas.visita} best={cuotas.bestKey === "visita"} />
+      </td>
+      <td className="center">
+        <CuotaCell value={cuotas.over25} />
+        <span className="cuota-sep"> / </span>
+        <CuotaCell value={cuotas.under25} />
+      </td>
+      <td className="center">
+        <CuotaCell value={cuotas.bttsSi} />
+        <span className="cuota-sep"> / </span>
+        <CuotaCell value={cuotas.bttsNo} />
+      </td>
+      <td>
+        <div className="cell-casa">
+          <div
+            className="casa-mini-logo"
+            style={cuotas.bestCasaColor ? { background: cuotas.bestCasaColor } : undefined}
+          >
+            {cuotas.bestCasaSigla}
+          </div>
+          {cuotas.bestCasaNombre}
+        </div>
+      </td>
+      <td>
+        <Link
+          href={navHref}
+          className="cta-fila"
+          style={enVivo ? { color: "var(--live)" } : undefined}
+        >
+          {enVivo ? "EN VIVO" : "Análisis"}
         </Link>
       </td>
     </tr>
   );
 }
 
-function pronLabel(p: "LOCAL" | "EMPATE" | "VISITA"): string {
-  return p === "LOCAL" ? "Local" : p === "EMPATE" ? "Empate" : "Visita";
+function CuotaCell({ value, best = false }: { value: string; best?: boolean }) {
+  return <span className={`cuota-cell${best ? " best" : ""}`}>{value}</span>;
 }
 
-function formatFechaCorta(d: Date): string {
-  return d.toLocaleString("es-PE", {
+// ---------------------------------------------------------------------------
+// Mobile cards (mockup line 2677-2765)
+// ---------------------------------------------------------------------------
+
+function FijasCardsMobile({ partidos }: Props) {
+  return (
+    <div className="fijas-list-mobile md:hidden">
+      {partidos.map((p) => (
+        <FijaCard key={p.id} partido={p} />
+      ))}
+    </div>
+  );
+}
+
+function FijaCard({ partido }: { partido: FijaListItem }) {
+  const enVivo = partido.estado === "EN_VIVO";
+  const horaTexto = formatHora(partido.fechaInicio, partido.estado, partido.liveElapsed);
+  const cuotas = derivarCuotas(partido);
+  const ligaShort = formatLigaCorta(partido.liga);
+  const probPct =
+    partido.probabilidadPronostico !== null
+      ? Math.round(partido.probabilidadPronostico * 100)
+      : null;
+  const badgeLabel = badgePronostico(partido.pronostico1x2, probPct);
+
+  return (
+    <Link href={`/las-fijas/${partido.slug}`} className={`fija-card${enVivo ? " live" : ""}`}>
+      <div className="fija-card-top">
+        <div>
+          <div className="fija-card-meta">
+            {enVivo ? <span className="live-dot" /> : null}
+            {ligaShort} · {horaTexto}
+          </div>
+          <div className="fija-card-equipos">
+            {partido.equipoLocal} vs {partido.equipoVisita}
+          </div>
+        </div>
+        {enVivo ? (
+          <span className="badge badge-live">EN VIVO</span>
+        ) : badgeLabel ? (
+          <span className="badge badge-blue">{badgeLabel}</span>
+        ) : null}
+      </div>
+      <div className="fija-card-cuotas">
+        <div className="fija-mini-cuota">
+          <div className="fija-mini-cuota-label">Local</div>
+          <div className="fija-mini-cuota-val">{cuotas.local}</div>
+        </div>
+        <div className="fija-mini-cuota">
+          <div className="fija-mini-cuota-label">Empate</div>
+          <div className="fija-mini-cuota-val">{cuotas.empate}</div>
+        </div>
+        <div className="fija-mini-cuota">
+          <div className="fija-mini-cuota-label">Visita</div>
+          <div className="fija-mini-cuota-val">{cuotas.visita}</div>
+        </div>
+      </div>
+      <div className="fija-card-bottom">
+        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+          <div
+            className="casa-mini-logo"
+            style={cuotas.bestCasaColor ? { background: cuotas.bestCasaColor } : undefined}
+          >
+            {cuotas.bestCasaSigla}
+          </div>
+          <span style={{ color: "var(--text-muted-d)" }}>
+            mejor en {cuotas.bestCasaNombre}
+          </span>
+        </div>
+        <span className="cta-fila" style={enVivo ? { color: "var(--live)" } : undefined}>
+          {enVivo ? "EN VIVO" : "Análisis"}
+        </span>
+      </div>
+    </Link>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Helpers de formato
+// ---------------------------------------------------------------------------
+
+function badgePronostico(
+  pron: "LOCAL" | "EMPATE" | "VISITA" | null,
+  probPct: number | null,
+): string | null {
+  if (!pron || probPct === null) return null;
+  const label = pron === "LOCAL" ? "Local" : pron === "EMPATE" ? "Empate" : "Visita";
+  return `${label} ${probPct}%`;
+}
+
+function formatHora(
+  fecha: Date,
+  estado: "PROGRAMADO" | "EN_VIVO" | "FINALIZADO",
+  liveElapsed: number | null,
+): string {
+  if (estado === "EN_VIVO") {
+    return liveElapsed !== null ? `${liveElapsed}'` : "EN VIVO";
+  }
+  // Hoy/Mañana/etc relativo a hora Lima.
+  const ahoraLima = new Date(
+    new Date().toLocaleString("en-US", { timeZone: "America/Lima" }),
+  );
+  const fechaLima = new Date(
+    fecha.toLocaleString("en-US", { timeZone: "America/Lima" }),
+  );
+  const hoy = ahoraLima.toDateString();
+  const manana = new Date(ahoraLima.getTime() + 24 * 60 * 60 * 1000).toDateString();
+  const hora = fecha.toLocaleTimeString("es-PE", {
+    timeZone: "America/Lima",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  if (fechaLima.toDateString() === hoy) return `Hoy ${hora}`;
+  if (fechaLima.toDateString() === manana) return `Mañana ${hora}`;
+  return fecha.toLocaleString("es-PE", {
     timeZone: "America/Lima",
     weekday: "short",
     day: "numeric",
-    month: "short",
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatLigaCorta(liga: string): string {
+  // Heurística simple para pegar emoji + nombre corto (mockup: "🏆 Premier",
+  // "🇵🇪 Liga 1"). Si la liga ya tiene emoji al inicio se respeta.
+  const lower = liga.toLowerCase();
+  if (lower.includes("liga 1") || lower.includes("perú")) return `🇵🇪 ${liga}`;
+  return `🏆 ${liga}`;
+}
+
+// ---------------------------------------------------------------------------
+// Derivar cuotas: las cuotas reales viven en CuotasComparator (Lote 9). Acá
+// usamos el snapshot del análisis aprobado si existe, o placeholders "—"
+// para no tirar la fila. Mantenemos el shape del mockup (5 cuotas + best).
+// ---------------------------------------------------------------------------
+
+interface Cuotas {
+  local: string;
+  empate: string;
+  visita: string;
+  over25: string;
+  under25: string;
+  bttsSi: string;
+  bttsNo: string;
+  bestKey: "local" | "empate" | "visita" | null;
+  bestCasaSigla: string;
+  bestCasaNombre: string;
+  bestCasaColor: string | null;
+}
+
+function derivarCuotas(partido: FijaListItem): Cuotas {
+  // El servicio actual no expone cuotas comparadas (eso vive en
+  // obtenerOddsCacheadas, llamado desde el detalle). Mientras no se inyecte
+  // un snapshot en `FijaListItem`, mostramos "—" en las celdas y solo
+  // resaltamos el pronóstico Habla! como "best" cuando hay análisis.
+  const pron = partido.pronostico1x2;
+  return {
+    local: "—",
+    empate: "—",
+    visita: "—",
+    over25: "—",
+    under25: "—",
+    bttsSi: "—",
+    bttsNo: "—",
+    bestKey:
+      pron === "LOCAL"
+        ? "local"
+        : pron === "EMPATE"
+          ? "empate"
+          : pron === "VISITA"
+            ? "visita"
+            : null,
+    bestCasaSigla: "—",
+    bestCasaNombre: "—",
+    bestCasaColor: null,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -205,24 +329,19 @@ function formatFechaCorta(d: Date): string {
 
 function FijasEmpty() {
   return (
-    <div className="mx-auto max-w-[640px] rounded-md border border-light bg-card px-5 py-12 text-center shadow-sm">
-      <div aria-hidden className="mb-3 text-5xl">
-        🌙
-      </div>
-      <p className="m-0 font-display text-display-md text-dark">
-        Hoy no hay fijas cubiertas
-      </p>
-      <p className="mx-auto mt-3 max-w-[480px] text-body-sm leading-[1.55] text-muted-d">
+    <div className="estado-vacio">
+      <div className="estado-vacio-icono">🌙</div>
+      <h2 className="estado-vacio-titulo">Hoy no hay fijas cubiertas</h2>
+      <p className="estado-vacio-desc">
         Estamos esperando que arranquen las próximas fechas de las ligas
         cubiertas. Mientras tanto, mirá quiénes están peleando el ranking del
         mes en la Liga Habla!.
       </p>
-      <Link
-        href="/liga"
-        className="touch-target mt-5 inline-flex items-center gap-1.5 rounded-md bg-brand-gold px-5 py-2.5 text-label-md text-black shadow-gold-btn transition-all hover:-translate-y-px hover:bg-brand-gold-light"
-      >
-        Ver el ranking del mes →
-      </Link>
+      <div className="estado-vacio-ctas">
+        <Link href="/liga" className="btn btn-primary">
+          Ver el ranking del mes →
+        </Link>
+      </div>
     </div>
   );
 }

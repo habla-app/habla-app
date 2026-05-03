@@ -1,30 +1,25 @@
 "use client";
-// ComboModalV32 — Lote M v3.2 (May 2026).
-// Spec: docs/habla-mockup-v3.2.html § modal-combinada.
+// ComboModalV32 — Lote Q v3.2 (May 2026): port 1:1 desde
+// docs/habla-mockup-v3.2.html § modal-combinada (líneas 7585-7679).
 //
-// Modal de combinada con las 9 sub-decisiones §4.9 cableadas:
-//   - 4.9.1 Unique BD: si BD rechaza con 409, mostramos error claro.
-//   - 4.9.2 Validación servidor antes del kickoff: el botón se deshabilita
-//     en cliente al kickoff (countdown llega a 0); si igual el usuario
-//     guarda, el endpoint rechaza con TORNEO_CERRADO.
-//   - 4.9.5 Eliminación voluntaria: prop `puedeEliminar` muestra botón en
-//     el footer (solo cuando ya hay combinada). Confirmación inline.
-//   - 4.9.6 Las 5 predicciones obligatorias (validado en cliente +
-//     re-validado por el endpoint via Zod).
-//   - 4.9.7 numEdiciones se incrementa en el endpoint PUT.
-//   - 4.9.8 Privacidad: las combinadas ajenas NUNCA se muestran (este
-//     componente solo edita la del usuario actual).
+// Estructura del mockup:
+//   .modal-combinada-backdrop
+//     .modal-combinada-sheet
+//       .modal-combinada-header (drag handle + título + meta countdown + close)
+//       .modal-combinada-body
+//         <p.modal-combinada-intro> "Armá tu combinada con las 5 predicciones..."
+//         5x .market-row con .market-row-header + .market-options
+//         .modal-help-box (i + Total posible)
+//       .modal-combinada-footer (cancelar + guardar)
 //
-// Decisión de UX: bottom sheet en mobile, centrado en desktop. El componente
-// `<Modal>` ya provee el portal — solo cuidamos el padding y el max-width.
+// Reglas §4.9 (validación servidor + numEdiciones + 5 obligatorias + eliminar
+// hasta kickoff) cableadas tal cual el componente Lote M.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Modal } from "@/components/ui/Modal";
+import { createPortal } from "react-dom";
 import { authedFetch } from "@/lib/api-client";
 import { PUNTOS } from "@habla/shared";
-import { PredCard } from "./PredCard";
-import { ScorePicker } from "./ScorePicker";
 
 export interface ComboPredIniciales {
   predResultado: "LOCAL" | "EMPATE" | "VISITA";
@@ -47,9 +42,7 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   torneo: ComboTorneoInfo | null;
-  /** Si existe, el modal opera en modo edición sobre este ticket. */
   ticketId?: string | null;
-  /** Predicciones precargadas (para modo edición). */
   predIniciales?: ComboPredIniciales | null;
   onSaved?: () => void;
 }
@@ -98,7 +91,10 @@ export function ComboModalV32({
   const [status, setStatus] = useState<Status>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [countdown, setCountdown] = useState<string>("--:--");
+  const [countdown, setCountdown] = useState<string>("--:--:--");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -129,15 +125,24 @@ export function ComboModalV32({
     return () => clearInterval(id);
   }, [isOpen, torneo]);
 
-  // El countdown ya re-renderiza cada segundo, así que la comparación contra
-  // Date.now() en el render es suficiente para detectar el corte. Excluimos
-  // countdown del array de deps a propósito: solo lo usamos como trigger.
+  // Body scroll lock + ESC para cerrar
+  useEffect(() => {
+    if (!isOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [isOpen, onClose]);
+
   const cerrado = torneo
     ? new Date(torneo.cierreAt).getTime() <= Date.now()
     : false;
-  // countdown se referencia para que el linter entienda que es un trigger
-  // intencional del re-render. Sin esta línea, los lints podrían marcar
-  // countdown como variable no usada.
   void countdown;
 
   const completo =
@@ -145,16 +150,6 @@ export function ComboModalV32({
     preds.predBtts !== undefined &&
     preds.predMas25 !== undefined &&
     preds.predTarjetaRoja !== undefined;
-
-  const puntosMax = useMemo(() => {
-    let total = 0;
-    if (preds.predResultado !== undefined) total += PUNTOS.RESULTADO;
-    if (preds.predBtts !== undefined) total += PUNTOS.BTTS;
-    if (preds.predMas25 !== undefined) total += PUNTOS.MAS_25_GOLES;
-    if (preds.predTarjetaRoja !== undefined) total += PUNTOS.TARJETA_ROJA;
-    total += PUNTOS.MARCADOR_EXACTO;
-    return total;
-  }, [preds]);
 
   const handleSubmit = useCallback(async () => {
     if (!torneo) return;
@@ -250,185 +245,260 @@ export function ComboModalV32({
     }
   }, [ticketId, router, onSaved, onClose]);
 
-  if (!torneo) return null;
+  if (!mounted || !isOpen || !torneo) return null;
 
-  return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      label={modoEdicion ? "Editar mi combinada" : "Crear combinada"}
-      maxWidth="520px"
+  const sheet = (
+    <div
+      className="modal-combinada-backdrop open"
+      style={{ display: "flex" }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-label={modoEdicion ? "Editar mi combinada" : "Crear combinada"}
     >
-      <div className="bg-card">
-        {/* Header */}
-        <div className="relative bg-gradient-to-br from-brand-blue-mid via-brand-blue-main to-brand-blue-dark px-6 pb-4 pt-5 text-white md:px-7 md:pb-5 md:pt-6">
+      <div className="modal-combinada-sheet">
+        <div className="modal-combinada-header">
+          <div>
+            <div className="modal-combinada-title">
+              {modoEdicion ? "Editar mi combinada" : "Tu combinada"}
+            </div>
+            <div className="modal-combinada-meta">
+              {torneo.partidoNombre} · cierre en{" "}
+              <strong>{cerrado ? "00:00:00" : countdown}</strong>
+            </div>
+          </div>
           <button
             type="button"
+            className="modal-close"
             onClick={onClose}
             aria-label="Cerrar"
-            className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-[18px] text-white transition-colors hover:bg-white/30"
           >
-            <span aria-hidden>×</span>
+            ×
           </button>
-          <p className="mb-1 text-label-sm font-bold uppercase tracking-[0.08em] text-white/70">
-            🎯 {modoEdicion ? "Editar mi combinada" : "Tu combinada"}
-          </p>
-          <h2 className="mb-2 font-display text-display-sm font-extrabold leading-tight md:text-display-md">
-            {torneo.partidoNombre}
-          </h2>
-          <p className="text-body-xs uppercase tracking-[0.05em] text-white/70">
-            Cierre en{" "}
-            <span
-              className={
-                cerrado ? "text-urgent-critical-bg" : "text-brand-gold-light"
-              }
-            >
-              {cerrado ? "00:00" : countdown}
-            </span>
-          </p>
         </div>
 
-        {/* Body */}
-        <div className="max-h-[60vh] overflow-y-auto px-6 py-5 md:px-7 md:py-6">
-          <p className="mb-4 rounded-sm bg-alert-info-bg px-3 py-2 text-body-xs text-alert-info-text">
-            ℹ️ Armá tu combinada con las 5 predicciones. Podés modificarla
-            cuantas veces quieras hasta el kickoff. Después queda fija.
+        <div className="modal-combinada-body">
+          <p className="modal-combinada-intro">
+            Armá tu combinada con las 5 predicciones. Podés{" "}
+            <strong>modificarla cuantas veces quieras</strong> hasta el kickoff.
+            Después queda fija.
           </p>
 
-          <PredCard<Resultado>
-            question="1 · ¿Quién gana?"
-            points={PUNTOS.RESULTADO}
-            selected={preds.predResultado}
-            onSelect={(v) => setPreds((p) => ({ ...p, predResultado: v }))}
-            options={[
-              { label: cortoNombre(torneo.equipoLocal), value: "LOCAL" },
-              { label: "Empate", value: "EMPATE" },
-              { label: cortoNombre(torneo.equipoVisita), value: "VISITA" },
-            ]}
-          />
-          <PredCard<boolean>
-            question="2 · ¿Ambos equipos anotan?"
-            points={PUNTOS.BTTS}
-            selected={preds.predBtts}
-            onSelect={(v) => setPreds((p) => ({ ...p, predBtts: v }))}
-            options={[
-              { label: "Sí", value: true },
-              { label: "No", value: false, isNegative: true },
-            ]}
-          />
-          <PredCard<boolean>
-            question="3 · ¿Más de 2.5 goles?"
-            points={PUNTOS.MAS_25_GOLES}
-            selected={preds.predMas25}
-            onSelect={(v) => setPreds((p) => ({ ...p, predMas25: v }))}
-            options={[
-              { label: "Más", value: true },
-              { label: "Menos", value: false, isNegative: true },
-            ]}
-          />
-          <PredCard<boolean>
-            question="4 · ¿Habrá tarjeta roja?"
-            points={PUNTOS.TARJETA_ROJA}
-            selected={preds.predTarjetaRoja}
-            onSelect={(v) => setPreds((p) => ({ ...p, predTarjetaRoja: v }))}
-            options={[
-              { label: "Sí", value: true },
-              { label: "No", value: false, isNegative: true },
-            ]}
-          />
-          <PredCard<string>
-            question="5 · Marcador exacto"
-            points={PUNTOS.MARCADOR_EXACTO}
-            selected={`${preds.predMarcadorLocal}-${preds.predMarcadorVisita}`}
-            onSelect={() => {
-              /* never */
-            }}
-            options={[]}
-          >
-            <ScorePicker
-              nombreLocal={cortoNombre(torneo.equipoLocal)}
-              nombreVisita={cortoNombre(torneo.equipoVisita)}
-              golesLocal={preds.predMarcadorLocal}
-              golesVisita={preds.predMarcadorVisita}
-              onChange={(local, visita) =>
-                setPreds((p) => ({
-                  ...p,
-                  predMarcadorLocal: local,
-                  predMarcadorVisita: visita,
-                }))
-              }
-            />
-            <p className="mt-2 text-body-xs text-muted-d">
-              El más difícil pero el que más puntos da.
-            </p>
-          </PredCard>
+          {/* Mercado 1: Resultado */}
+          <div className="market-row">
+            <div className="market-row-header">
+              <div className="market-row-label">1 · Resultado</div>
+              <span className="market-row-pts">{PUNTOS.RESULTADO} pts</span>
+            </div>
+            <div className="market-options triple">
+              <OptBtn
+                label={cortoNombre(torneo.equipoLocal)}
+                selected={preds.predResultado === "LOCAL"}
+                onClick={() => setPreds((p) => ({ ...p, predResultado: "LOCAL" }))}
+              />
+              <OptBtn
+                label="Empate"
+                selected={preds.predResultado === "EMPATE"}
+                onClick={() => setPreds((p) => ({ ...p, predResultado: "EMPATE" }))}
+              />
+              <OptBtn
+                label={cortoNombre(torneo.equipoVisita)}
+                selected={preds.predResultado === "VISITA"}
+                onClick={() => setPreds((p) => ({ ...p, predResultado: "VISITA" }))}
+              />
+            </div>
+          </div>
+
+          {/* Mercado 2: Ambos anotan */}
+          <div className="market-row">
+            <div className="market-row-header">
+              <div className="market-row-label">2 · Ambos anotan</div>
+              <span className="market-row-pts">{PUNTOS.BTTS} pts</span>
+            </div>
+            <div className="market-options binary">
+              <OptBtn
+                label="Sí"
+                selected={preds.predBtts === true}
+                onClick={() => setPreds((p) => ({ ...p, predBtts: true }))}
+              />
+              <OptBtn
+                label="No"
+                selected={preds.predBtts === false}
+                onClick={() => setPreds((p) => ({ ...p, predBtts: false }))}
+              />
+            </div>
+          </div>
+
+          {/* Mercado 3: Más / Menos 2.5 */}
+          <div className="market-row">
+            <div className="market-row-header">
+              <div className="market-row-label">3 · Total goles</div>
+              <span className="market-row-pts">{PUNTOS.MAS_25_GOLES} pts</span>
+            </div>
+            <div className="market-options binary">
+              <OptBtn
+                label="Más de 2.5"
+                selected={preds.predMas25 === true}
+                onClick={() => setPreds((p) => ({ ...p, predMas25: true }))}
+              />
+              <OptBtn
+                label="Menos de 2.5"
+                selected={preds.predMas25 === false}
+                onClick={() => setPreds((p) => ({ ...p, predMas25: false }))}
+              />
+            </div>
+          </div>
+
+          {/* Mercado 4: Tarjeta roja */}
+          <div className="market-row">
+            <div className="market-row-header">
+              <div className="market-row-label">4 · ¿Habrá tarjeta roja?</div>
+              <span className="market-row-pts">{PUNTOS.TARJETA_ROJA} pts</span>
+            </div>
+            <div className="market-options binary">
+              <OptBtn
+                label="Sí"
+                selected={preds.predTarjetaRoja === true}
+                onClick={() =>
+                  setPreds((p) => ({ ...p, predTarjetaRoja: true }))
+                }
+              />
+              <OptBtn
+                label="No"
+                selected={preds.predTarjetaRoja === false}
+                onClick={() =>
+                  setPreds((p) => ({ ...p, predTarjetaRoja: false }))
+                }
+              />
+            </div>
+          </div>
+
+          {/* Mercado 5: Marcador exacto */}
+          <div className="market-row">
+            <div className="market-row-header">
+              <div className="market-row-label">5 · Marcador exacto</div>
+              <span className="market-row-pts">{PUNTOS.MARCADOR_EXACTO} pts</span>
+            </div>
+            <div className="market-options score">
+              <input
+                className="score-input"
+                type="number"
+                min={0}
+                max={9}
+                value={preds.predMarcadorLocal}
+                onChange={(e) =>
+                  setPreds((p) => ({
+                    ...p,
+                    predMarcadorLocal: clamp(parseInt(e.target.value) || 0),
+                  }))
+                }
+                aria-label={`Goles ${torneo.equipoLocal}`}
+              />
+              <span className="score-vs">-</span>
+              <input
+                className="score-input"
+                type="number"
+                min={0}
+                max={9}
+                value={preds.predMarcadorVisita}
+                onChange={(e) =>
+                  setPreds((p) => ({
+                    ...p,
+                    predMarcadorVisita: clamp(parseInt(e.target.value) || 0),
+                  }))
+                }
+                aria-label={`Goles ${torneo.equipoVisita}`}
+              />
+            </div>
+            <div className="modal-score-hint">
+              El más difícil pero el que más puntos da
+            </div>
+          </div>
+
+          <div className="modal-help-box">
+            <span style={{ fontSize: 16, flexShrink: 0 }}>ℹ️</span>
+            <span>
+              Total posible: <strong>{totalPuntosMaximo()} puntos</strong>. Suma
+              para subir en el ranking del mes y entrar al Top 10 que cobra
+              S/1,250.
+            </span>
+          </div>
 
           {errorMsg ? (
             <p
               role="alert"
-              className={`mt-3 rounded-sm border px-3 py-2 text-body-sm ${
-                status === "closed"
-                  ? "border-alert-warning-border bg-alert-warning-bg text-alert-warning-text"
-                  : "border-alert-danger-border bg-alert-danger-bg text-alert-danger-text"
-              }`}
+              style={{
+                marginTop: 12,
+                padding: "10px 12px",
+                borderRadius: 8,
+                background:
+                  status === "closed"
+                    ? "var(--alert-warning-bg)"
+                    : "var(--alert-danger-bg)",
+                color:
+                  status === "closed"
+                    ? "var(--alert-warning-text)"
+                    : "var(--alert-danger-text)",
+                fontSize: 13,
+                border: `1px solid ${
+                  status === "closed"
+                    ? "var(--alert-warning-border)"
+                    : "var(--alert-danger-border)"
+                }`,
+              }}
             >
               {errorMsg}
             </p>
           ) : null}
         </div>
 
-        {/* Footer */}
-        <div className="flex flex-col gap-2 border-t border-light bg-card px-6 py-4 md:flex-row md:items-center md:justify-between md:px-7">
-          <div className="flex items-center gap-2">
-            <span className="rounded-full bg-brand-gold/15 px-2.5 py-1 font-display text-label-sm font-extrabold text-brand-gold-dark">
-              {puntosMax} pts máx
-            </span>
-            {modoEdicion && !confirmDelete ? (
-              <button
-                type="button"
-                onClick={() => setConfirmDelete(true)}
-                className="text-body-xs text-muted-d underline-offset-2 transition-colors hover:text-urgent-critical hover:underline"
-                disabled={status === "submitting" || status === "deleting"}
-              >
-                Eliminar combinada
-              </button>
-            ) : null}
-          </div>
-
+        <div className="modal-combinada-footer">
           {confirmDelete ? (
-            <div className="flex w-full flex-col gap-2 md:w-auto md:flex-row md:items-center">
-              <span className="text-body-xs text-muted-d md:mr-2">
-                ¿Seguro que querés eliminar?
-              </span>
+            <>
               <button
                 type="button"
+                className="btn btn-ghost"
                 onClick={() => setConfirmDelete(false)}
-                className="touch-target flex-1 rounded-md border border-strong bg-card px-4 py-2.5 font-display text-label-sm font-bold text-body transition-colors hover:border-brand-blue-main hover:text-brand-blue-main md:flex-none"
                 disabled={status === "deleting"}
               >
                 Cancelar
               </button>
               <button
                 type="button"
+                className="btn"
+                style={{ background: "var(--pred-wrong)", color: "#fff" }}
                 onClick={handleDelete}
-                className="touch-target flex-1 rounded-md bg-urgent-critical px-4 py-2.5 font-display text-label-sm font-extrabold uppercase text-white transition-all hover:-translate-y-px md:flex-none"
                 disabled={status === "deleting"}
               >
                 {status === "deleting" ? "Eliminando…" : "Sí, eliminar"}
               </button>
-            </div>
+            </>
           ) : (
-            <div className="flex w-full flex-col gap-2 md:w-auto md:flex-row md:items-center">
+            <>
+              {modoEdicion ? (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => setConfirmDelete(true)}
+                  disabled={status === "submitting"}
+                >
+                  Eliminar combinada
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={onClose}
+                  disabled={status === "submitting"}
+                >
+                  Cancelar
+                </button>
+              )}
               <button
                 type="button"
-                onClick={onClose}
-                className="touch-target flex-1 rounded-md border border-strong bg-card px-4 py-3 font-display text-label-md font-bold text-body transition-colors hover:border-brand-blue-main hover:text-brand-blue-main md:flex-none"
-                disabled={status === "submitting"}
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
+                className="btn btn-primary"
                 onClick={handleSubmit}
                 disabled={
                   cerrado ||
@@ -436,7 +506,6 @@ export function ComboModalV32({
                   status === "submitting" ||
                   status === "success"
                 }
-                className="touch-target flex-1 rounded-md bg-brand-gold px-5 py-3 font-display text-label-md font-extrabold uppercase tracking-[0.04em] text-black shadow-gold-cta transition-all hover:-translate-y-px hover:bg-brand-gold-light disabled:cursor-not-allowed disabled:opacity-60 md:flex-none"
               >
                 {status === "submitting"
                   ? "Guardando…"
@@ -446,24 +515,60 @@ export function ComboModalV32({
                       ? "Actualizar combinada"
                       : "Guardar combinada"}
               </button>
-            </div>
+            </>
           )}
         </div>
       </div>
-    </Modal>
+    </div>
   );
+
+  return createPortal(sheet, document.body);
+}
+
+function OptBtn({
+  label,
+  selected,
+  onClick,
+}: {
+  label: string;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`market-opt${selected ? " selected" : ""}`}
+      onClick={onClick}
+    >
+      {label}
+    </button>
+  );
+}
+
+function clamp(n: number): number {
+  if (Number.isNaN(n)) return 0;
+  if (n < 0) return 0;
+  if (n > 9) return 9;
+  return Math.floor(n);
 }
 
 function formatoCountdown(cierre: Date | string): string {
   const diff = new Date(cierre).getTime() - Date.now();
-  if (diff <= 0) return "00:00";
+  if (diff <= 0) return "00:00:00";
   const horas = Math.floor(diff / (60 * 60 * 1000));
   const mins = Math.floor((diff / 60_000) % 60);
   const secs = Math.floor((diff / 1000) % 60);
-  if (horas > 0) {
-    return `${String(horas).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-  }
-  return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  return `${String(horas).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
+function totalPuntosMaximo(): number {
+  return (
+    PUNTOS.RESULTADO +
+    PUNTOS.BTTS +
+    PUNTOS.MAS_25_GOLES +
+    PUNTOS.TARJETA_ROJA +
+    PUNTOS.MARCADOR_EXACTO
+  );
 }
 
 function cortoNombre(nombre: string): string {

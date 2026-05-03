@@ -1,14 +1,14 @@
-// /liga/[slug] — Lote M v3.2 (May 2026).
-// Spec: docs/habla-mockup-v3.2.html § page-liga-detail.
+// /liga/[slug] — Lote Q v3.2 (May 2026): port 1:1 desde
+// docs/habla-mockup-v3.2.html § page-liga-detail (líneas 3522-3760).
 //
-// Vista crítica del Producto C (La Liga Habla!) — detalle del partido con
-// ranking en vivo, mi combinada (CTA hacer/editar), cross-link a Las Fijas.
-//
-// Consolidación: reemplaza la coexistencia previa de /comunidad/torneo/[slug]
-// (estática) + /live-match (en vivo). En v3.2 una sola URL maneja PROGRAMADO,
-// EN_VIVO y FINALIZADO. El ranking se renderiza paginado con sticky-bottom
-// (decisiones §4.10 + §4.11). El modal de combinada respeta las 9 reglas
-// integrales §4.9.
+// Estructura del mockup:
+//   container
+//     ← La Liga (back link)
+//     .partido-hero (PartidoHero — vista LIVE con marcadores)
+//     .mi-combinada-card (MiCombinadaCard via LigaDetalleClient)
+//     .section-bar + .partido-stats-card (datos del partido en vivo)
+//     .section-bar + #ranking-live-container (RankingPaginado)
+//     .liga-inline-banner (cross-link a Las Fijas)
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -16,7 +16,7 @@ import { auth } from "@/lib/auth";
 import { resolverLigaPorSlug } from "@/lib/services/liga.service";
 import { listarRanking } from "@/lib/services/ranking.service";
 import { TrackOnMount } from "@/components/analytics/TrackOnMount";
-import { TorneoHero } from "@/components/torneo/TorneoHero";
+import { PartidoHero } from "@/components/partido/PartidoHero";
 import { LigaDetalleClient } from "@/components/liga/LigaDetalleClient";
 import {
   RankingPaginado,
@@ -46,7 +46,10 @@ export default async function LigaDetallePage({ params }: Props) {
   const finalizado = partido.estado === "FINALIZADO";
   const cancelado = partido.estado === "CANCELADO";
   const editable =
-    !cancelado && !finalizado && !enVivo && partido.fechaInicio.getTime() > Date.now();
+    !cancelado &&
+    !finalizado &&
+    !enVivo &&
+    partido.fechaInicio.getTime() > Date.now();
 
   const rankingData = await listarRanking(torneo.id, {
     limit: 200,
@@ -69,8 +72,28 @@ export default async function LigaDetallePage({ params }: Props) {
   const totalInscritos = rankingData?.totalInscritos ?? torneo.totalInscritos;
   const miPosicion = rankingData?.miPosicion?.posicion ?? null;
 
+  if (cancelado) {
+    return (
+      <div className="mockup-container">
+        <Link
+          href="/liga"
+          style={{
+            fontSize: 12,
+            color: "var(--blue-main)",
+            fontWeight: 700,
+            marginBottom: 14,
+            display: "inline-block",
+          }}
+        >
+          ← La Liga
+        </Link>
+        <PartidoCancelado />
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-3 pb-24">
+    <div className="mockup-container">
       <TrackOnMount
         event="liga_detalle_visto"
         props={{
@@ -82,89 +105,112 @@ export default async function LigaDetallePage({ params }: Props) {
         }}
       />
 
-      <TorneoHero
-        partidoSlug={params.slug}
+      <Link
+        href="/liga"
+        style={{
+          fontSize: 12,
+          color: "var(--blue-main)",
+          fontWeight: 700,
+          marginBottom: 14,
+          display: "inline-block",
+        }}
+      >
+        ← La Liga
+      </Link>
+
+      <PartidoHero
+        liga={partido.liga}
         equipoLocal={partido.equipoLocal}
         equipoVisita={partido.equipoVisita}
-        totalInscritos={totalInscritos}
-        cierreAt={torneo.cierreAt}
-        estado={
-          cancelado
-            ? "CANCELADO"
-            : finalizado
-              ? "FINALIZADO"
-              : enVivo
-                ? "EN_VIVO"
-                : (torneo.estado as "ABIERTO" | "EN_JUEGO" | "CERRADO")
-        }
+        fechaInicio={partido.fechaInicio}
+        estado={enVivo ? "en_vivo" : finalizado ? "finalizado" : "programado"}
         marcadorLocal={partido.golesLocal}
         marcadorVisita={partido.golesVisita}
+        minuto={partido.liveElapsed ?? null}
       />
 
-      {cancelado ? (
-        <PartidoCancelado />
-      ) : (
-        <div className="mx-auto w-full max-w-[1100px] space-y-3 md:px-6">
-          <LigaDetalleClient
-            torneoId={torneo.id}
-            ticketId={miTicket?.id ?? null}
-            predIniciales={
-              miTicket && !miTicket.esPlaceholder
-                ? {
-                    predResultado: miTicket.predResultado,
-                    predBtts: miTicket.predBtts,
-                    predMas25: miTicket.predMas25,
-                    predTarjetaRoja: miTicket.predTarjetaRoja,
-                    predMarcadorLocal: miTicket.predMarcadorLocal,
-                    predMarcadorVisita: miTicket.predMarcadorVisita,
-                  }
-                : null
-            }
-            partidoNombre={`${partido.equipoLocal} vs ${partido.equipoVisita}`}
-            equipoLocal={partido.equipoLocal}
-            equipoVisita={partido.equipoVisita}
-            cierreAt={torneo.cierreAt.toISOString()}
-            combinada={
-              miTicket
-                ? {
-                    predResultado: miTicket.predResultado,
-                    predBtts: miTicket.predBtts,
-                    predMas25: miTicket.predMas25,
-                    predTarjetaRoja: miTicket.predTarjetaRoja,
-                    predMarcadorLocal: miTicket.predMarcadorLocal,
-                    predMarcadorVisita: miTicket.predMarcadorVisita,
-                    puntosTotal: miTicket.puntosTotal,
-                    puntosResultado: miTicket.puntosResultado,
-                    puntosBtts: miTicket.puntosBtts,
-                    puntosMas25: miTicket.puntosMas25,
-                    puntosTarjeta: miTicket.puntosTarjeta,
-                    puntosMarcador: miTicket.puntosMarcador,
-                    numEdiciones: miTicket.numEdiciones,
-                    esPlaceholder: miTicket.esPlaceholder,
-                  }
-                : null
-            }
-            editable={editable}
-            finalizado={finalizado}
-            requiereLogin={!usuarioId}
-          />
+      <LigaDetalleClient
+        torneoId={torneo.id}
+        ticketId={miTicket?.id ?? null}
+        predIniciales={
+          miTicket && !miTicket.esPlaceholder
+            ? {
+                predResultado: miTicket.predResultado,
+                predBtts: miTicket.predBtts,
+                predMas25: miTicket.predMas25,
+                predTarjetaRoja: miTicket.predTarjetaRoja,
+                predMarcadorLocal: miTicket.predMarcadorLocal,
+                predMarcadorVisita: miTicket.predMarcadorVisita,
+              }
+            : null
+        }
+        partidoNombre={`${partido.equipoLocal} vs ${partido.equipoVisita}`}
+        equipoLocal={partido.equipoLocal}
+        equipoVisita={partido.equipoVisita}
+        cierreAt={torneo.cierreAt.toISOString()}
+        combinada={
+          miTicket
+            ? {
+                predResultado: miTicket.predResultado,
+                predBtts: miTicket.predBtts,
+                predMas25: miTicket.predMas25,
+                predTarjetaRoja: miTicket.predTarjetaRoja,
+                predMarcadorLocal: miTicket.predMarcadorLocal,
+                predMarcadorVisita: miTicket.predMarcadorVisita,
+                puntosTotal: miTicket.puntosTotal,
+                puntosResultado: miTicket.puntosResultado,
+                puntosBtts: miTicket.puntosBtts,
+                puntosMas25: miTicket.puntosMas25,
+                puntosTarjeta: miTicket.puntosTarjeta,
+                puntosMarcador: miTicket.puntosMarcador,
+                numEdiciones: miTicket.numEdiciones,
+                esPlaceholder: miTicket.esPlaceholder,
+              }
+            : null
+        }
+        editable={editable}
+        finalizado={finalizado}
+        requiereLogin={!usuarioId}
+      />
 
-          <RankingPaginado
-            filas={filas}
-            totalInscritos={totalInscritos}
-            miUsuarioId={usuarioId}
-            miPosicion={miPosicion}
-            hasSession={!!usuarioId}
-          />
+      <RankingPaginado
+        filas={filas}
+        totalInscritos={totalInscritos}
+        miUsuarioId={usuarioId}
+        miPosicion={miPosicion}
+        hasSession={!!usuarioId}
+      />
 
-          <CrossLinkAFijas slug={params.slug} />
+      <div className="liga-inline-banner" style={{ marginTop: 24 }}>
+        <div className="liga-inline-banner-icon">🎯</div>
+        <div className="liga-inline-banner-text">
+          <div className="liga-inline-banner-title">
+            Mira el análisis y comparador
+          </div>
+          <div className="liga-inline-banner-desc">
+            Ficha completa, cuotas comparadas y pronóstico Habla! del partido
+          </div>
         </div>
-      )}
+        <Link href={`/las-fijas/${params.slug}`} className="btn btn-secondary">
+          Ver fija →
+        </Link>
+      </div>
 
-      <p className="mx-auto max-w-[1100px] px-4 pt-4 text-center text-body-xs text-muted-d md:px-6">
-        🎲 Apostar es entretenimiento, no una fuente de ingresos. Si sentís
-        que perdiste el control, contactá la Línea Tugar al{" "}
-        <a href="tel:0800-19009" className="underline hover:text-brand-blue-main">
+      <p
+        style={{
+          marginTop: 24,
+          textAlign: "center",
+          fontSize: 11,
+          color: "var(--text-muted-d)",
+          lineHeight: 1.6,
+        }}
+      >
+        🎲 Apostar es entretenimiento, no una fuente de ingresos. Si sentís que
+        perdiste el control, contactá la Línea Tugar al{" "}
+        <a
+          href="tel:0800-19009"
+          style={{ color: "var(--blue-main)", textDecoration: "underline" }}
+        >
           0800-19009
         </a>
         .
@@ -173,51 +219,20 @@ export default async function LigaDetallePage({ params }: Props) {
   );
 }
 
-function CrossLinkAFijas({ slug }: { slug: string }) {
-  return (
-    <Link
-      href={`/las-fijas/${slug}`}
-      className="my-3 mx-4 flex items-center justify-between gap-3 rounded-md border-2 border-brand-blue-main/20 bg-brand-blue-main/[0.04] p-4 transition-colors hover:border-brand-blue-main/40 hover:bg-brand-blue-main/[0.08] md:mx-0"
-    >
-      <div className="flex items-center gap-3">
-        <span aria-hidden className="text-2xl">
-          🎯
-        </span>
-        <div>
-          <p className="font-display text-display-xs font-bold text-dark">
-            Mirá el análisis y el comparador
-          </p>
-          <p className="text-body-xs text-muted-d">
-            Pronóstico Habla!, mejores cuotas y análisis del partido
-          </p>
-        </div>
-      </div>
-      <span aria-hidden className="text-brand-blue-main">
-        →
-      </span>
-    </Link>
-  );
-}
-
 function PartidoCancelado() {
   return (
-    <div className="mx-auto w-full max-w-[640px] px-4 py-12 text-center md:py-16">
-      <div aria-hidden className="mb-4 text-5xl">
-        ⚠️
-      </div>
-      <h1 className="font-display text-display-md font-black text-dark">
-        Este partido fue cancelado
-      </h1>
-      <p className="mt-3 text-body-md text-body">
+    <div className="estado-vacio">
+      <div className="estado-vacio-icono">⚠️</div>
+      <h1 className="estado-vacio-titulo">Este partido fue cancelado</h1>
+      <p className="estado-vacio-desc">
         Las predicciones quedaron sin efecto. No se descuentan ni suman puntos
         del ranking del mes.
       </p>
-      <Link
-        href="/liga"
-        className="mt-5 inline-flex items-center justify-center rounded-md bg-brand-gold px-5 py-3 font-display text-label-md font-extrabold uppercase text-black shadow-gold-btn transition-all hover:-translate-y-px hover:bg-brand-gold-light"
-      >
-        Volver a la Liga
-      </Link>
+      <div className="estado-vacio-ctas">
+        <Link href="/liga" className="btn btn-primary">
+          Volver a la Liga
+        </Link>
+      </div>
     </div>
   );
 }

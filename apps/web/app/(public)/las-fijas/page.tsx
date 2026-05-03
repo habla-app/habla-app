@@ -1,19 +1,18 @@
-// /las-fijas — Lote M v3.2 (May 2026).
-// Spec: docs/habla-mockup-v3.2.html § page-fijas-list.
+// /las-fijas — Lote Q v3.2 (May 2026): port 1:1 desde
+// docs/habla-mockup-v3.2.html § page-fijas-list.
 //
-// Reescritura completa del Lote B (que solo mostraba comparador de cuotas
-// vía obtenerOddsCacheadas y MDX). En v3.2 esta vista es el listado curado
-// del admin: solo aparecen partidos con `mostrarAlPublico = true` (Filtro 1)
-// y cada fila usa el AnalisisPartido APROBADO si existe para mostrar el
-// pronóstico Habla! 1X2 + probabilidad.
+// Estructura del mockup:
+//   <div class="container">
+//     <div class="page-title">Las Fijas</div>
+//     <div class="page-subtitle">…</div>
+//     <div class="fijas-filters"> chips + search </div>
+//     <table class="fijas-list-table">…</table>
+//     <div class="fijas-list-mobile">…</div>
+//   </div>
 //
-// Paridad mobile + desktop según mockup:
-//   - Mobile: cards verticales apiladas (FijasList)
-//   - Desktop: tabla densa (FijasList renderiza ambas)
-//
-// `force-dynamic`: la lista depende del Filtro 1 que el admin puede mover
-// en cualquier momento + del estado del análisis. Cache de Next sería
-// inconsistente con la realidad operativa.
+// Datos provienen de listarFijas() — mismo contrato que Lote M, sin cambios.
+// `force-dynamic`: el listado depende del Filtro 1 que el admin puede mover
+// en cualquier momento + del estado del análisis.
 
 import type { Metadata } from "next";
 import {
@@ -66,7 +65,7 @@ export default async function LasFijasPage({
   ]);
 
   return (
-    <div className="mx-auto w-full max-w-[1200px] px-4 py-6 md:px-6 md:py-10">
+    <div className="mockup-container">
       <TrackOnMount
         event="fijas_lista_vista"
         props={{
@@ -76,18 +75,11 @@ export default async function LasFijasPage({
         }}
       />
 
-      <header className="mb-5">
-        <p className="mb-2 inline-block rounded-sm bg-brand-blue-main/10 px-2.5 py-1 text-label-sm text-brand-blue-main">
-          📊 Comparador en vivo
-        </p>
-        <h1 className="font-display text-display-lg leading-tight text-dark md:text-[36px]">
-          Las Fijas
-        </h1>
-        <p className="mt-2 text-body-md leading-[1.55] text-body">
-          Pronóstico Habla! 1X2 y mejores cuotas de los próximos partidos
-          cubiertos. Refresco continuo · cuotas referenciales.
-        </p>
-      </header>
+      <div className="page-title">Las Fijas</div>
+      <div className="page-subtitle">
+        Comparador de cuotas en vivo · {partidos.length}{" "}
+        {partidos.length === 1 ? "partido" : "partidos"} · refresco cada 30 min
+      </div>
 
       <FijasFilters ligasPresentes={ligas} />
 
