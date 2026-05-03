@@ -108,12 +108,9 @@ export function AnalisisBasicoCard({ texto, equipoLocal, equipoVisita }: Props) 
             <div className="analisis-row">
               <span className="analisis-row-label">{equipoVisita}</span>
               <span
-                className="analisis-row-value"
-                style={
-                  /3|4|titular/i.test(bloques.lesionesVisita)
-                    ? { color: "var(--pred-wrong)" }
-                    : undefined
-                }
+                className={`analisis-row-value${
+                  /3|4|titular/i.test(bloques.lesionesVisita) ? " danger" : ""
+                }`}
               >
                 {bloques.lesionesVisita}
               </span>

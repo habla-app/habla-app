@@ -238,7 +238,7 @@ function Paginador({
               key={`p-${p}`}
               type="button"
               onClick={() => onChange(p)}
-              className={`ranking-page-btn${p === page ? " active" : ""}`}
+              className={`btn btn-ghost btn-xs ranking-page-btn${p === page ? " active" : ""}`}
               aria-current={p === page ? "page" : undefined}
             >
               {p === miPagina && p !== page

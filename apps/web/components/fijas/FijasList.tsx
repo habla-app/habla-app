@@ -1,12 +1,16 @@
-// FijasList — Lote Q v3.2 (May 2026): port 1:1 desde docs/habla-mockup-v3.2.html
-// § page-fijas-list. La estructura HTML, las clases CSS y los textos provienen
-// directamente del mockup. Reemplazá solo los datos hardcodeados por datos
-// reales preservando el layout. NO usar componentes UI del repo si su HTML
-// difiere del mockup.
+// FijasList — Lote T v3.2 (May 2026): port literal 1:1 desde
+// docs/habla-mockup-v3.2.html § page-fijas-list (líneas 2574-2765).
+//
+// Estructura del mockup:
+//   <table class="fijas-list-table">…</table>
+//   <div class="fijas-list-mobile">…</div>
+//
+// La visibilidad de cada uno es responsabilidad del CSS (mockup-styles.css):
+// `.fijas-list-table { display: none }` en mobile, `.fijas-list-mobile { display: none }`
+// en desktop. Cero clases Tailwind utility en este componente.
 //
 // Mobile (≤767px): cards `.fija-card` con `.fija-card-cuotas` mini-grid.
-// Desktop (≥768px): tabla densa `.fijas-list-table` con scroll horizontal
-//                   en mobile (no se ven a la vez).
+// Desktop (≥768px): tabla densa `.fijas-list-table` con 9 columnas.
 
 import Link from "next/link";
 import type { FijaListItem } from "@/lib/services/las-fijas.service";
@@ -33,39 +37,37 @@ export function FijasList({ partidos }: Props) {
 
 function FijasTableDesktop({ partidos }: Props) {
   return (
-    <div className="hidden md:block">
-      <table className="fijas-list-table">
-        <thead>
-          <tr>
-            <th>Liga · Hora</th>
-            <th>Partido</th>
-            <th className="center" colSpan={3}>
-              1X2
-            </th>
-            <th className="center">±2.5</th>
-            <th className="center">BTTS</th>
-            <th>Mejor cuota</th>
-            <th></th>
-          </tr>
-          <tr>
-            <th></th>
-            <th></th>
-            <th className="center">Local</th>
-            <th className="center">Empate</th>
-            <th className="center">Visita</th>
-            <th className="center">Más / Menos</th>
-            <th className="center">Sí / No</th>
-            <th></th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {partidos.map((p) => (
-            <FilaTabla key={p.id} partido={p} />
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <table className="fijas-list-table">
+      <thead>
+        <tr>
+          <th>Liga · Hora</th>
+          <th>Partido</th>
+          <th className="center" colSpan={3}>
+            1X2
+          </th>
+          <th className="center">±2.5</th>
+          <th className="center">BTTS</th>
+          <th>Mejor cuota</th>
+          <th></th>
+        </tr>
+        <tr>
+          <th></th>
+          <th></th>
+          <th className="center">Local</th>
+          <th className="center">Empate</th>
+          <th className="center">Visita</th>
+          <th className="center">Más / Menos</th>
+          <th className="center">Sí / No</th>
+          <th></th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {partidos.map((p) => (
+          <FilaTabla key={p.id} partido={p} />
+        ))}
+      </tbody>
+    </table>
   );
 }
 
@@ -149,7 +151,7 @@ function CuotaCell({ value, best = false }: { value: string; best?: boolean }) {
 
 function FijasCardsMobile({ partidos }: Props) {
   return (
-    <div className="fijas-list-mobile md:hidden">
+    <div className="fijas-list-mobile">
       {partidos.map((p) => (
         <FijaCard key={p.id} partido={p} />
       ))}
@@ -276,9 +278,7 @@ function formatLigaCorta(liga: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Derivar cuotas: las cuotas reales viven en CuotasComparator (Lote 9). Acá
-// usamos el snapshot del análisis aprobado si existe, o placeholders "—"
-// para no tirar la fila. Mantenemos el shape del mockup (5 cuotas + best).
+// Derivar cuotas: snapshot del análisis aprobado o "—" placeholder.
 // ---------------------------------------------------------------------------
 
 interface Cuotas {
@@ -296,10 +296,6 @@ interface Cuotas {
 }
 
 function derivarCuotas(partido: FijaListItem): Cuotas {
-  // El servicio actual no expone cuotas comparadas (eso vive en
-  // obtenerOddsCacheadas, llamado desde el detalle). Mientras no se inyecte
-  // un snapshot en `FijaListItem`, mostramos "—" en las celdas y solo
-  // resaltamos el pronóstico Habla! como "best" cuando hay análisis.
   const pron = partido.pronostico1x2;
   return {
     local: "—",
@@ -324,7 +320,7 @@ function derivarCuotas(partido: FijaListItem): Cuotas {
 }
 
 // ---------------------------------------------------------------------------
-// Empty
+// Empty state
 // ---------------------------------------------------------------------------
 
 function FijasEmpty() {
