@@ -1,10 +1,17 @@
-// OG dinámico para /partidos/[slug] — Lote 8.
+// OG dinámico para /las-fijas/[slug] — Lote 8 + Lote M v3.2.
+//
+// El slug ahora deriva del partido real (no de MDX), así que resolvemos
+// vía `resolverFijaPorSlug` y caemos en un OG genérico si no matchea.
 
-import { renderOgImage, OG_CONTENT_TYPE, OG_SIZE } from "@/lib/content/og-template";
-import * as partidos from "@/lib/content/partidos";
+import {
+  renderOgImage,
+  OG_CONTENT_TYPE,
+  OG_SIZE,
+} from "@/lib/content/og-template";
+import { resolverFijaPorSlug } from "@/lib/services/las-fijas.service";
 
 export const runtime = "nodejs";
-export const alt = "Previa de partido — Habla!";
+export const alt = "Las Fijas — Habla!";
 export const size = OG_SIZE;
 export const contentType = OG_CONTENT_TYPE;
 
@@ -13,12 +20,16 @@ export default async function OgImage({
 }: {
   params: { slug: string };
 }) {
-  const doc = partidos.getBySlug(params.slug);
-  const title = doc?.frontmatter.title ?? "Previa de partido";
-  const subtitulo = doc?.frontmatter.author ?? "Habla! Editorial";
+  const r = await resolverFijaPorSlug(params.slug);
+  const title =
+    r.estado === "found" && r.partido
+      ? `${r.partido.equipoLocal} vs ${r.partido.equipoVisita}`
+      : "Las Fijas";
+  const subtitulo =
+    r.estado === "found" && r.partido ? r.partido.liga : "Habla! Editorial";
   return renderOgImage({
     title,
-    categoria: "Partido",
+    categoria: "Las Fijas",
     subtitulo,
   });
 }

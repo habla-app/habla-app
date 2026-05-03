@@ -8,14 +8,23 @@
 // comunidad / afiliación MINCETUR — el operador final maneja sus propios
 // límites bajo regulación. Sólo queda el cap de 10 tickets por torneo.
 //
-// Reglas:
-//  - Torneo en estado ABIERTO y cierreAt > now para aceptar ticket.
-//  - Máximo 10 tickets del mismo usuario en el mismo torneo.
-//  - Ticket idéntico a uno previo del mismo usuario en el mismo torneo
-//    → 409 (la unique constraint compuesta del schema ataja el caso).
-//  - Ticket placeholder del flujo de inscripción (predicciones default
-//    LOCAL / 0-0 / todo false): si existe y el usuario manda predicciones
-//    distintas → el placeholder se ACTUALIZA en vez de crear nuevo.
+// Lote M v3.2 (May 2026): aplica las 9 sub-decisiones §4.9 del análisis.
+// Una combinada por jugador por torneo (unique constraint del Lote K).
+// El usuario puede editar (incrementa numEdiciones) y eliminar antes del
+// kickoff. Después del kickoff, todo inmutable. Tres operaciones nuevas:
+//   - editar()   — actualiza una combinada existente
+//   - eliminar() — borra una combinada antes del kickoff
+//   - obtenerMiCombinada() — atajo para precargar el modal
+//
+// Reglas integrales (§4.9):
+//  - 4.9.1 Unique (usuarioId, torneoId) en BD (Lote K) — bloqueo duro.
+//  - 4.9.2 Validación servidor antes del kickoff (race condition guard).
+//  - 4.9.5 Eliminación voluntaria + recreación libre antes del kickoff.
+//  - 4.9.6 Las 5 predicciones obligatorias (Zod ya valida).
+//  - 4.9.7 numEdiciones se incrementa en cada edición.
+//  - 4.9.8 Privacidad: combinadas ajenas no se exponen antes del kickoff
+//    (responsabilidad del caller — listar/leer).
+//  - 4.9.9 Combinadas en torneos cerrados son históricas e inmutables.
 
 import {
   prisma,
@@ -131,10 +140,18 @@ export async function crear(
   return prisma.$transaction(async (tx) => {
     const torneo = await tx.torneo.findUnique({
       where: { id: input.torneoId },
+      include: { partido: { select: { fechaInicio: true } } },
     });
     if (!torneo) throw new TorneoNoEncontrado(input.torneoId);
     if (torneo.estado !== "ABIERTO") throw new TorneoCerrado(input.torneoId);
-    if (torneo.cierreAt.getTime() <= Date.now()) {
+    // Decisión §4.9.2: race condition guard. Validamos contra
+    // partido.fechaInicio (fuente de verdad de "ya empezó") además del
+    // cierreAt del torneo. Cualquiera que pase ya es trigger de cierre.
+    const ahora = Date.now();
+    if (
+      torneo.cierreAt.getTime() <= ahora ||
+      torneo.partido.fechaInicio.getTime() <= ahora
+    ) {
       throw new TorneoCerrado(input.torneoId);
     }
 
@@ -265,6 +282,180 @@ export async function crear(
       reemplazoPlaceholder,
       torneo: torneoActualizado,
     };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// editar — Lote M v3.2 (decisiones §4.9.2 + §4.9.5 + §4.9.7).
+//
+// Actualiza la combinada del usuario en el torneo. Reglas:
+//   - El usuario debe ser dueño del ticket (404 si no).
+//   - El partido NO debe haber empezado todavía (TORNEO_CERRADO si sí —
+//     race condition guard del 4.9.2: comparamos contra partido.fechaInicio
+//     en BD para no depender de cierreAt mutable).
+//   - numEdiciones += 1.
+//   - Idempotente respecto al unique compuesto: si las nuevas predicciones
+//     son idénticas a las viejas, también incrementa numEdiciones (la
+//     intención del usuario igual fue editar).
+// ---------------------------------------------------------------------------
+
+export interface EditarTicketResult {
+  ticket: Ticket;
+}
+
+export async function editar(
+  ticketId: string,
+  usuarioId: string,
+  input: CrearTicketBody,
+): Promise<EditarTicketResult> {
+  return prisma.$transaction(async (tx) => {
+    const ticket = await tx.ticket.findUnique({
+      where: { id: ticketId },
+      include: { torneo: { include: { partido: true } } },
+    });
+    if (!ticket) {
+      throw new DomainError(
+        "TICKET_NO_ENCONTRADO",
+        "No existe esa combinada.",
+        404,
+      );
+    }
+    if (ticket.usuarioId !== usuarioId) {
+      throw new DomainError(
+        "NO_AUTORIZADO",
+        "Esta combinada no es tuya.",
+        403,
+      );
+    }
+    // Decisión §4.9.2: validar contra partido.fechaInicio, no cierreAt.
+    // Si por algún hotfix el cierreAt diverge de la fecha real (raro pero
+    // posible), priorizamos la fecha del partido — es lo que ve el usuario
+    // y lo que indica "ya empezó".
+    if (ticket.torneo.partido.fechaInicio.getTime() <= Date.now()) {
+      throw new TorneoCerrado(ticket.torneoId);
+    }
+    if (ticket.torneo.estado !== "ABIERTO") {
+      throw new TorneoCerrado(ticket.torneoId);
+    }
+
+    let actualizado: Ticket;
+    try {
+      actualizado = await tx.ticket.update({
+        where: { id: ticket.id },
+        data: {
+          predResultado: input.predResultado,
+          predBtts: input.predBtts,
+          predMas25: input.predMas25,
+          predTarjetaRoja: input.predTarjetaRoja,
+          predMarcadorLocal: input.predMarcadorLocal,
+          predMarcadorVisita: input.predMarcadorVisita,
+          numEdiciones: { increment: 1 },
+        },
+      });
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === "P2002"
+      ) {
+        // Conflict en la unique de predicciones identicas: alguna ediciòn
+        // anterior ya quedó con esta combinaciòn. Lo tratamos como noop
+        // semántico: el usuario no perdiò datos, su combinada queda válida.
+        throw new DomainError(
+          "TICKET_DUPLICADO",
+          "Esta combinada coincide con una variante anterior tuya.",
+          409,
+        );
+      }
+      throw err;
+    }
+
+    logger.info(
+      {
+        torneoId: ticket.torneoId,
+        usuarioId,
+        ticketId: ticket.id,
+        numEdiciones: actualizado.numEdiciones,
+      },
+      "ticket editado",
+    );
+
+    return { ticket: actualizado };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// eliminar — Lote M v3.2 (decisión §4.9.5).
+//
+// Borra la combinada del usuario antes del kickoff. Después del kickoff,
+// rechaza con TORNEO_CERRADO. Decrementa totalInscritos del torneo.
+// ---------------------------------------------------------------------------
+
+export interface EliminarTicketResult {
+  torneoId: string;
+}
+
+export async function eliminar(
+  ticketId: string,
+  usuarioId: string,
+): Promise<EliminarTicketResult> {
+  return prisma.$transaction(async (tx) => {
+    const ticket = await tx.ticket.findUnique({
+      where: { id: ticketId },
+      include: { torneo: { include: { partido: true } } },
+    });
+    if (!ticket) {
+      throw new DomainError(
+        "TICKET_NO_ENCONTRADO",
+        "No existe esa combinada.",
+        404,
+      );
+    }
+    if (ticket.usuarioId !== usuarioId) {
+      throw new DomainError(
+        "NO_AUTORIZADO",
+        "Esta combinada no es tuya.",
+        403,
+      );
+    }
+    if (ticket.torneo.partido.fechaInicio.getTime() <= Date.now()) {
+      throw new TorneoCerrado(ticket.torneoId);
+    }
+    if (ticket.torneo.estado !== "ABIERTO") {
+      throw new TorneoCerrado(ticket.torneoId);
+    }
+
+    await tx.ticket.delete({ where: { id: ticket.id } });
+    await tx.torneo.update({
+      where: { id: ticket.torneoId },
+      data: {
+        totalInscritos: { decrement: 1 },
+      },
+    });
+
+    logger.info(
+      { torneoId: ticket.torneoId, usuarioId, ticketId },
+      "ticket eliminado",
+    );
+
+    return { torneoId: ticket.torneoId };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// obtenerMiCombinada — Lote M v3.2.
+//
+// Devuelve la combinada del usuario para un torneo dado. Útil para
+// precargar el ComboModal sin tener que hacer dos round-trips (resolver
+// el partido + buscar el ticket). null si no existe.
+// ---------------------------------------------------------------------------
+
+export async function obtenerMiCombinada(
+  torneoId: string,
+  usuarioId: string,
+): Promise<Ticket | null> {
+  return prisma.ticket.findFirst({
+    where: { torneoId, usuarioId },
+    orderBy: { creadoEn: "desc" },
   });
 }
 

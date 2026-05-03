@@ -1,19 +1,17 @@
 // LigaWidgetInline — widget azul brillante con CTA cross-product B → C.
-// Lote B v3.1. Spec:
-// docs/ux-spec/02-pista-usuario-publica/partidos-slug.spec.md.
+// Lote B v3.1 + Lote M v3.2 (URL nueva /liga/[slug]).
+// Spec: docs/habla-mockup-v3.2.html § page-fijas-detail .liga-inline-banner.
 //
-// Renderiza si y solo si el partido tiene un torneo activo en BD. El
-// widget linkea al torneo del partido en /comunidad/torneo/[slug] (URL
-// canónica del Producto C en v3.1, creada por Lote C). Por ahora linkea
-// a `/torneo/[id]` (URL legacy) hasta que Lote C complete la migración.
+// Renderiza si y solo si el partido tiene un torneo activo en BD. Linkea
+// a `/liga/[slug]` (URL canónica v3.2 del Producto C). El partidoSlug es
+// el mismo slug que se usa en /las-fijas/[slug].
 
 import Link from "next/link";
 
 interface Props {
   /** Id del torneo asociado al partido. Si null se oculta. */
   torneoId: string | null;
-  /** Slug del partido para construir la URL v3.1. Mientras Lote C no
-   *  exista, fallback a /torneo/[id]. */
+  /** Slug del partido para construir la URL del detalle de Liga. */
   partidoSlug?: string;
   totalInscritos: number;
 }
@@ -23,18 +21,11 @@ export function LigaWidgetInline({
   partidoSlug,
   totalInscritos,
 }: Props) {
-  if (!torneoId) return null;
-
-  // Mientras Lote C no termine de migrar, usamos /torneo/[id] (la URL
-  // legacy aún funciona). Cuando Lote C aterrice, swap a
-  // `/comunidad/torneo/${partidoSlug}`.
-  const href = partidoSlug
-    ? `/comunidad/torneo/${partidoSlug}`
-    : `/torneo/${torneoId}`;
+  if (!torneoId || !partidoSlug) return null;
 
   return (
     <Link
-      href={href}
+      href={`/liga/${partidoSlug}`}
       className="my-6 flex items-center justify-between gap-4 rounded-md bg-gradient-to-r from-brand-blue-main to-brand-blue-light p-4 text-white shadow-md transition-all hover:-translate-y-px hover:shadow-lg md:p-5"
     >
       <div className="flex items-center gap-3">
@@ -50,7 +41,7 @@ export function LigaWidgetInline({
               {totalInscritos.toLocaleString("es-PE")}
             </strong>{" "}
             tipster{totalInscritos === 1 ? "" : "s"} compitiendo · S/ 1,250 al
-            mes
+            mes · armá tu combinada de 5 predicciones gratis
           </p>
         </div>
       </div>

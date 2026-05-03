@@ -1,17 +1,16 @@
-// CrossProductBanner — sincronía B↔C. v3.1 (Lote A). Spec:
-// docs/ux-spec/00-design-system/componentes-mobile.md §10.
+// CrossProductBanner — sincronía Las Fijas ↔ Liga. v3.1 (Lote A) +
+// Lote M v3.2 (URLs nuevas).
+// Spec: docs/habla-mockup-v3.2.html § .liga-inline-banner.
 //
-// Banner que linkea entre Producto B (cobertura del partido) y Producto C
-// (Liga Habla! comunitaria) para el mismo partido. La spec define dos
-// direcciones:
+// Banner que linkea entre Las Fijas (Producto B en v3.2) y La Liga Habla!
+// (Producto C) para el mismo partido. Dos direcciones:
 //
-// - B-to-C: en /partidos/[slug] → "🏆 Compite por este partido en la Liga
+// - B-to-C: en /las-fijas/[slug] → "🏆 Compite por este partido en la Liga
 //           Habla! · 234 tipsters compitiendo · [Hacer mi predicción]"
-//           Linkea a /comunidad/torneo/[slug].
+//           Linkea a /liga/[slug].
 //
-// - C-to-B: en /comunidad/torneo/[slug] → "📊 Ver análisis completo y
-//           cuotas comparadas →"
-//           Linkea a /partidos/[slug].
+// - C-to-B: en /liga/[slug] → "📊 Ver análisis completo y cuotas comparadas →"
+//           Linkea a /las-fijas/[slug].
 //
 // Layout: card con icono + texto + arrow. Sin animaciones decorativas.
 import Link from "next/link";
@@ -47,9 +46,7 @@ export function CrossProductBanner({
 }: CrossProductBannerProps) {
   const isBtoC = direction === "B-to-C";
   const isDark = tone === "dark";
-  const href = isBtoC
-    ? `/comunidad/torneo/${partidoSlug}`
-    : `/partidos/${partidoSlug}`;
+  const href = isBtoC ? `/liga/${partidoSlug}` : `/las-fijas/${partidoSlug}`;
   const icon = isBtoC ? "🏆" : "📊";
   const title = isBtoC
     ? "Compite por este partido en la Liga Habla!"
