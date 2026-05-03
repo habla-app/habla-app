@@ -219,7 +219,9 @@ body {
 body {
   background: var(--bg-page);
   color: var(--text-body);
-  font-family: "DM Sans", sans-serif;
+  /* next/font (layout.tsx) hashea el nombre real de la fuente; usar la CSS
+     variable para que matchee. El nombre literal "DM Sans" no resuelve. */
+  font-family: var(--font-dm-sans), "DM Sans", sans-serif;
 }
 
 h1,
@@ -228,7 +230,8 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: "Barlow Condensed", sans-serif;
+  /* idem body — usar var(--font-barlow), no el nombre literal */
+  font-family: var(--font-barlow), "Barlow Condensed", sans-serif;
   letter-spacing: 0.02em;
   line-height: 1.1;
   color: var(--text-dark);

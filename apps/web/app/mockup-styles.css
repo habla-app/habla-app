@@ -60,7 +60,7 @@
 }
 .section-bar-title {
   font-size: 20px; font-weight: 800; text-transform: uppercase;
-  color: var(--text-dark); font-family: 'Barlow Condensed', sans-serif; line-height: 1;
+  color: var(--text-dark); font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; line-height: 1;
 }
 .section-bar-subtitle { font-size: 12px; color: var(--text-muted-d); margin-top: 4px; }
 .section-bar-cta { font-size: 12px; font-weight: 700; color: var(--blue-main); white-space: nowrap; }
@@ -116,7 +116,7 @@
 }
 
 .page-title {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 32px; font-weight: 900; color: var(--text-dark);
   text-transform: uppercase; line-height: 1; margin-bottom: 6px;
 }
@@ -137,7 +137,7 @@
 
 .app-header-left { display: flex; align-items: center; gap: 32px; }
 .logo {
-  font-family: 'Barlow Condensed', sans-serif; font-weight: 900; color: var(--white);
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; font-weight: 900; color: var(--white);
   display: flex; align-items: center; gap: 10px; cursor: pointer;
   font-size: 28px;
 }
@@ -180,7 +180,7 @@
   background: linear-gradient(135deg, var(--gold), #FF8C00);
   color: #000; font-weight: 900; font-size: 12px;
   display: flex; align-items: center; justify-content: center;
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
 }
 .avatar-trigger {
   cursor: pointer; padding: 0;
@@ -254,7 +254,7 @@
   background: linear-gradient(135deg, var(--gold), #FF8C00);
   color: #000; font-weight: 900; font-size: 18px;
   display: flex; align-items: center; justify-content: center;
-  font-family: 'Barlow Condensed', sans-serif; flex-shrink: 0;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; flex-shrink: 0;
   box-shadow: 0 4px 12px rgba(255,184,0,.3);
 }
 .avatar-dd-name { font-weight: 800; color: #fff; font-size: 14px; }
@@ -267,7 +267,7 @@
 }
 .avatar-dd-stat { padding: 12px 8px; text-align: center; border-right: 1px solid var(--border-light); }
 .avatar-dd-stat:last-child { border-right: 0; }
-.avatar-dd-stat-val { font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 900; color: var(--blue-main); line-height: 1; }
+.avatar-dd-stat-val { font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 900; color: var(--blue-main); line-height: 1; }
 .avatar-dd-stat-lbl { font-size: 9px; color: var(--text-muted-d); text-transform: uppercase; letter-spacing: .04em; margin-top: 4px; }
 
 .avatar-dd-item {
@@ -346,7 +346,7 @@
   font-size: 42px; font-weight: 900; color: var(--white);
   line-height: .95; margin-bottom: 16px;
   text-transform: uppercase; letter-spacing: .01em;
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
 }
 @media (max-width: 767px) { .home-hero h1 { font-size: 34px; } }
 .home-hero-desc {
@@ -375,7 +375,7 @@
 .hero-socio-stat { padding: 4px 6px; text-align: center; }
 .hero-socio-stat:not(:last-child) { border-right: 1px solid rgba(255,255,255,.08); }
 .hero-socio-stat-val {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 22px; font-weight: 900; color: var(--gold); line-height: 1;
 }
 @media (max-width: 767px) { .hero-socio-stat-val { font-size: 18px; } }
@@ -416,7 +416,7 @@
 .fijas-table thead { background: var(--bg-subtle); }
 .fijas-table th {
   padding: 10px 12px;
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 11px; font-weight: 800;
   text-transform: uppercase; letter-spacing: .05em;
   color: var(--text-muted-d);
@@ -441,14 +441,14 @@
 .cell-fav { display: flex; flex-direction: column; gap: 2px; }
 .cell-fav-result { font-weight: 700; color: var(--text-dark); font-size: 12px; }
 .cell-fav-pct { font-size: 11px; color: var(--blue-main); font-weight: 600; }
-.cell-cuota { font-weight: 800; color: var(--text-dark); font-family: 'Barlow Condensed', sans-serif; font-size: 15px; }
+.cell-cuota { font-weight: 800; color: var(--text-dark); font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; font-size: 15px; }
 .cell-casa { display: flex; align-items: center; gap: 6px; }
 .casa-mini-logo {
   width: 24px; height: 24px; border-radius: 6px;
   background: var(--blue-main); color: #fff;
   font-size: 9px; font-weight: 900;
   display: flex; align-items: center; justify-content: center;
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
 }
 .cta-fila {
   display: inline-flex; align-items: center; gap: 4px;
@@ -503,7 +503,7 @@
 .liga-card-home h2 {
   font-size: 28px; font-weight: 900; color: var(--text-dark);
   text-transform: uppercase; line-height: .95; margin-bottom: 8px;
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
 }
 .liga-card-home-desc { font-size: 13px; color: var(--text-body); margin-bottom: 18px; }
 
@@ -519,7 +519,7 @@
   text-align: center;
 }
 .liga-stat-value {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 22px; font-weight: 900; color: var(--blue-main); line-height: 1;
 }
 .liga-stat-label {
@@ -542,14 +542,14 @@
 }
 .liga-top-mini-row:last-child { border-bottom: 0; }
 .liga-top-rank {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 18px; font-weight: 900; color: var(--text-dark);
   text-align: center;
 }
 .liga-top-rank.gold { color: var(--gold); }
 .liga-top-name { font-weight: 600; color: var(--text-dark); }
 .liga-top-pts {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-weight: 800; color: var(--blue-main); font-size: 15px;
 }
 
@@ -573,7 +573,7 @@
 .socios-card-home h2 {
   font-size: 28px; font-weight: 900; color: var(--white);
   text-transform: uppercase; line-height: .95; margin-bottom: 8px;
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
 }
 .socios-card-home-desc { font-size: 13px; color: rgba(238,242,255,.8); margin-bottom: 18px; }
 .socios-bullets { list-style: none; display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; padding: 0; }
@@ -595,7 +595,7 @@
 }
 .plan-mini.featured { border-color: var(--gold); background: rgba(255,184,0,.12); }
 .plan-mini-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--gold); }
-.plan-mini-price { font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 900; color: #fff; line-height: 1; margin-top: 4px; }
+.plan-mini-price { font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 900; color: #fff; line-height: 1; margin-top: 4px; }
 .plan-mini-period { font-size: 10px; color: rgba(238,242,255,.6); margin-top: 2px; }
 
 .socios-card-home .btn-primary { width: 100%; }
@@ -615,10 +615,10 @@
   background: linear-gradient(135deg, var(--gold), #FF8C00);
   color: #000; font-weight: 900; font-size: 30px;
   display: flex; align-items: center; justify-content: center;
-  font-family: 'Barlow Condensed', sans-serif; flex-shrink: 0;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; flex-shrink: 0;
   box-shadow: 0 8px 20px rgba(255,184,0,.3);
 }
-.perfil-info h1 { font-size: 28px; font-weight: 900; color: #fff; text-transform: uppercase; line-height: 1; margin-bottom: 4px; font-family: 'Barlow Condensed', sans-serif; }
+.perfil-info h1 { font-size: 28px; font-weight: 900; color: #fff; text-transform: uppercase; line-height: 1; margin-bottom: 4px; font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; }
 .perfil-username { color: var(--gold); font-weight: 700; font-size: 14px; margin-bottom: 8px; }
 .perfil-badges { display: flex; gap: 6px; flex-wrap: wrap; }
 @media (max-width: 767px) { .perfil-badges { justify-content: center; } }
@@ -632,7 +632,7 @@
   background: var(--bg-card); border: 1px solid var(--border-light);
   border-radius: var(--radius-md); padding: 16px; text-align: center;
 }
-.perfil-stat-val { font-family: 'Barlow Condensed', sans-serif; font-size: 32px; font-weight: 900; color: var(--blue-main); line-height: 1; }
+.perfil-stat-val { font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; font-size: 32px; font-weight: 900; color: var(--blue-main); line-height: 1; }
 .perfil-stat-val.gold { color: var(--gold); }
 .perfil-stat-val.green { color: var(--green); }
 .perfil-stat-lbl { font-size: 11px; color: var(--text-muted-d); text-transform: uppercase; letter-spacing: .04em; margin-top: 6px; font-weight: 700; }
@@ -646,7 +646,7 @@
   margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--border-light);
 }
 .perfil-section-title {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 18px; font-weight: 800; color: var(--text-dark);
   text-transform: uppercase; display: flex; align-items: center; gap: 8px;
 }
@@ -658,19 +658,19 @@
 }
 @media (max-width: 767px) { .prediccion-item { grid-template-columns: auto 1fr auto; } }
 .prediccion-fecha {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 11px; font-weight: 700; color: var(--text-muted-d);
   text-transform: uppercase; width: 60px;
 }
 .prediccion-partido { font-weight: 600; color: var(--text-dark); font-size: 13px; }
 .prediccion-meta { font-size: 10px; color: var(--text-muted-d); margin-top: 2px; }
 .prediccion-resultado {
-  font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 16px;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 16px;
 }
 .prediccion-pts {
   background: var(--gold-dim); color: #7A4A00;
   padding: 4px 10px; border-radius: 6px;
-  font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 14px;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 14px;
 }
 .prediccion-pts.zero { background: var(--bg-subtle); color: var(--text-muted-d); }
 @media (max-width: 767px) { .prediccion-pts { display: none; } }
@@ -719,7 +719,7 @@
 }
 .suscripcion-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
 .suscripcion-titulo {
-  font-family: 'Barlow Condensed', sans-serif; font-size: 18px;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; font-size: 18px;
   font-weight: 800; color: var(--text-dark); text-transform: uppercase;
   display: flex; align-items: center; gap: 8px;
 }
@@ -771,7 +771,7 @@
 }
 .fijas-list-table thead { background: var(--bg-subtle); }
 .fijas-list-table th {
-  padding: 10px 8px; font-family: 'Barlow Condensed', sans-serif;
+  padding: 10px 8px; font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em;
   color: var(--text-muted-d); text-align: left; white-space: nowrap;
 }
@@ -786,7 +786,7 @@
 .fijas-list-table tr:hover td { background: var(--bg-hover); cursor: pointer; }
 
 .cuota-cell {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-weight: 800; color: var(--text-dark); font-size: 14px;
 }
 .cuota-cell.best { color: var(--blue-main); }
@@ -819,7 +819,7 @@
 }
 .fija-mini-cuota { text-align: center; }
 .fija-mini-cuota-label { font-size: 9px; color: var(--text-muted-d); font-weight: 700; text-transform: uppercase; }
-.fija-mini-cuota-val { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 15px; color: var(--text-dark); }
+.fija-mini-cuota-val { font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 15px; color: var(--text-dark); }
 .fija-card-bottom { display: flex; justify-content: space-between; align-items: center; }
 
 /* ============================================================================
@@ -844,14 +844,14 @@
   width: 64px; height: 64px; border-radius: 50%;
   background: rgba(255,255,255,.1);
   display: flex; align-items: center; justify-content: center;
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 24px; font-weight: 900; color: #fff;
   margin: 0 auto 8px;
   border: 2px solid rgba(255,255,255,.15);
 }
 .team-name { font-weight: 700; color: #fff; font-size: 14px; text-transform: uppercase; }
 .partido-vs {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 36px; font-weight: 900; color: var(--gold); line-height: 1;
 }
 .partido-countdown {
@@ -861,11 +861,11 @@
 .partido-countdown > div { text-align: center; }
 .countdown-num {
   background: rgba(255,255,255,.1); padding: 6px 10px;
-  border-radius: 6px; font-family: 'Barlow Condensed', sans-serif;
+  border-radius: 6px; font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-weight: 900; color: #fff; font-size: 18px; line-height: 1;
 }
 .partido-hero-marcador {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 48px; font-weight: 900; margin-top: 8px; line-height: 1;
 }
 .partido-hero-marcador.gold { color: var(--gold); }
@@ -892,8 +892,8 @@
   border-radius: 8px; margin: 12px 0;
 }
 .resumen-recomend-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--text-muted-d); letter-spacing: .05em; }
-.resumen-recomend-value { font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 900; color: var(--text-dark); line-height: 1; }
-.resumen-recomend-cuota { margin-left: auto; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; font-weight: 900; color: var(--blue-main); }
+.resumen-recomend-value { font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 900; color: var(--text-dark); line-height: 1; }
+.resumen-recomend-cuota { margin-left: auto; font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; font-size: 24px; font-weight: 900; color: var(--blue-main); }
 
 .resumen-prob-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin: 10px 0; }
 .resumen-prob {
@@ -901,7 +901,7 @@
 }
 .resumen-prob.selected { background: rgba(0,82,204,.08); border: 1.5px solid var(--blue-main); }
 .resumen-prob-label { font-size: 10px; color: var(--text-muted-d); text-transform: uppercase; font-weight: 700; }
-.resumen-prob-val { font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 900; color: var(--text-dark); }
+.resumen-prob-val { font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 900; color: var(--text-dark); }
 .resumen-prob.selected .resumen-prob-val { color: var(--blue-main); }
 .resumen-prob-cuota { font-size: 11px; color: var(--text-body); }
 
@@ -927,7 +927,7 @@
   margin-top: 14px; text-align: center;
 }
 .resumen-pick-socios-title {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 14px; font-weight: 800; color: var(--text-dark);
   text-transform: uppercase; margin-bottom: 4px;
   display: flex; align-items: center; justify-content: center; gap: 6px;
@@ -949,7 +949,7 @@
 }
 .pick-socios-unlocked-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .pick-socios-unlocked-title {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 14px; font-weight: 800; text-transform: uppercase; color: #7A4A00;
   display: flex; align-items: center; gap: 6px;
 }
@@ -959,8 +959,8 @@
   border-radius: 8px; margin-bottom: 12px;
 }
 .pick-socios-recomend-label { font-size: 10px; font-weight: 700; color: var(--text-muted-d); text-transform: uppercase; letter-spacing: .04em; }
-.pick-socios-recomend-value { font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 900; color: var(--text-dark); }
-.pick-socios-recomend-cuota { margin-left: auto; font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 900; color: var(--blue-main); }
+.pick-socios-recomend-value { font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 900; color: var(--text-dark); }
+.pick-socios-recomend-cuota { margin-left: auto; font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 900; color: var(--blue-main); }
 .pick-socios-stake { display: flex; gap: 10px; font-size: 12px; flex-wrap: wrap; margin-bottom: 10px; }
 .pick-socios-stake-item { background: var(--bg-subtle); padding: 6px 10px; border-radius: 6px; font-weight: 600; }
 .pick-socios-stake-item strong { color: var(--text-dark); }
@@ -985,7 +985,7 @@
 }
 .liga-inline-banner-text { flex: 1; }
 .liga-inline-banner-title {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 16px; font-weight: 800; color: var(--text-dark);
   text-transform: uppercase; line-height: 1.2;
 }
@@ -1002,7 +1002,7 @@
   font-size: 16px; font-weight: 800; color: var(--text-dark);
   text-transform: uppercase; margin-bottom: 12px;
   display: flex; align-items: center; gap: 8px;
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
 }
 .analisis-row {
   display: flex; justify-content: space-between; align-items: center;
@@ -1017,7 +1017,7 @@
   width: 22px; height: 22px; border-radius: 6px;
   font-size: 11px; font-weight: 800;
   display: flex; align-items: center; justify-content: center;
-  font-family: 'Barlow Condensed', sans-serif; color: #fff;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; color: #fff;
 }
 .forma-w { background: var(--pred-correct); }
 .forma-l { background: var(--pred-wrong); }
@@ -1034,7 +1034,7 @@
 }
 .comparador-table th {
   background: var(--bg-subtle);
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--text-muted-d); letter-spacing: .04em;
 }
 .comparador-table td.casa-name {
@@ -1049,7 +1049,7 @@
 .casa-logo {
   width: 36px; height: 36px; border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
-  font-family: 'Barlow Condensed', sans-serif; font-weight: 900; color: #fff; font-size: 12px;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; font-weight: 900; color: #fff; font-size: 12px;
 }
 
 .partido-cierre-ctas {
@@ -1076,7 +1076,7 @@
 .liga-hero h1 {
   font-size: 36px; font-weight: 900; color: #fff;
   text-transform: uppercase; line-height: .95; margin-bottom: 8px;
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
 }
 @media (max-width: 767px) { .liga-hero h1 { font-size: 30px; } }
 .liga-hero-desc { font-size: 14px; color: rgba(238,242,255,.85); margin-bottom: 20px; }
@@ -1086,7 +1086,7 @@
   border: 1px solid rgba(255,255,255,.16);
   border-radius: var(--radius-sm); padding: 12px; text-align: center;
 }
-.liga-hero-stat-val { font-family: 'Barlow Condensed', sans-serif; font-size: 24px; font-weight: 900; color: #fff; line-height: 1; }
+.liga-hero-stat-val { font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; font-size: 24px; font-weight: 900; color: #fff; line-height: 1; }
 .liga-hero-stat-lbl { font-size: 10px; color: rgba(238,242,255,.6); text-transform: uppercase; letter-spacing: .04em; margin-top: 4px; }
 
 /* Como funciona acordeón */
@@ -1100,7 +1100,7 @@
   width: 100%; border: 0; font-family: inherit;
 }
 .como-funciona-title {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 16px; font-weight: 800; color: var(--text-dark); text-transform: uppercase;
   display: flex; align-items: center; gap: 8px;
 }
@@ -1128,8 +1128,8 @@
 }
 .premio-cell.gold { background: linear-gradient(135deg, var(--gold) 0%, #FF8C00 100%); color: #000; }
 .premio-cell.silver { background: linear-gradient(135deg, #E5E7EB, #D1D5DB); color: var(--text-dark); }
-.premio-pos { font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 900; line-height: 1; }
-.premio-monto { font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 800; margin-top: 2px; }
+.premio-pos { font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 900; line-height: 1; }
+.premio-monto { font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 800; margin-top: 2px; }
 
 /* Mis stats */
 .mis-stats-card {
@@ -1139,7 +1139,7 @@
 }
 .mis-stat { padding: 14px 12px; text-align: center; border-right: 1px solid var(--border-light); }
 .mis-stat:last-child { border-right: 0; }
-.mis-stat-val { font-family: 'Barlow Condensed', sans-serif; font-size: 24px; font-weight: 900; color: var(--blue-main); line-height: 1; }
+.mis-stat-val { font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; font-size: 24px; font-weight: 900; color: var(--blue-main); line-height: 1; }
 .mis-stat-lbl { font-size: 10px; color: var(--text-muted-d); text-transform: uppercase; letter-spacing: .04em; margin-top: 4px; }
 
 /* Liga sections */
@@ -1151,7 +1151,7 @@
 }
 .liga-table thead { background: var(--bg-subtle); }
 .liga-table th {
-  padding: 10px 8px; font-family: 'Barlow Condensed', sans-serif;
+  padding: 10px 8px; font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em;
   color: var(--text-muted-d); text-align: left;
 }
@@ -1198,7 +1198,7 @@
   margin-bottom: 14px;
 }
 .mi-combinada-title {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 18px; font-weight: 800; color: var(--text-dark);
   text-transform: uppercase;
 }
@@ -1219,7 +1219,7 @@
 }
 .mercado-pts { background: var(--gold-dim); color: #7A4A00; padding: 2px 6px; border-radius: 4px; font-size: 9px; }
 .mercado-value {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 16px; font-weight: 800; color: var(--text-dark);
 }
 .mercado-value-meta { color: var(--text-muted-d); font-size: 12px; font-weight: 600; margin-left: 6px; }
@@ -1234,7 +1234,7 @@
   padding-top: 14px; border-top: 1px solid var(--border-light); flex-wrap: wrap; gap: 8px;
 }
 .mi-combinada-puntos { font-size: 13px; }
-.mi-combinada-puntos strong { color: var(--blue-main); font-family: 'Barlow Condensed', sans-serif; font-size: 18px; }
+.mi-combinada-puntos strong { color: var(--blue-main); font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; font-size: 18px; }
 
 /* Ranking */
 .ranking-table {
@@ -1244,7 +1244,7 @@
 }
 .ranking-table thead { background: var(--bg-subtle); }
 .ranking-table th {
-  padding: 10px; font-family: 'Barlow Condensed', sans-serif; font-size: 10px;
+  padding: 10px; font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; font-size: 10px;
   font-weight: 800; text-transform: uppercase; color: var(--text-muted-d); text-align: left;
 }
 .ranking-table th.center { text-align: center; }
@@ -1260,7 +1260,7 @@
 .ranking-table tr.clickable.disabled:hover { background: transparent; }
 
 .rank-pos {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 16px; font-weight: 900; color: var(--text-dark); width: 40px;
 }
 .rank-pos.gold { color: var(--gold); }
@@ -1269,7 +1269,7 @@
 .rank-meta { font-size: 10px; color: var(--text-muted-d); }
 .rank-meta.blue { color: var(--blue-main); font-weight: 700; }
 .rank-pts {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 15px; font-weight: 800; color: var(--blue-main);
 }
 .rank-delta-up   { color: var(--green); font-weight: 700; }
@@ -1348,7 +1348,7 @@
   display: flex; justify-content: space-between; align-items: center;
 }
 .modal-ranking-header h3 {
-  font-family: 'Barlow Condensed', sans-serif; font-size: 18px;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; font-size: 18px;
   font-weight: 800; color: var(--text-dark); text-transform: uppercase; line-height: 1.1;
 }
 .modal-ranking-meta { font-size: 11px; color: var(--text-muted-d); margin-top: 2px; }
@@ -1404,7 +1404,7 @@
   transform: translateX(-50%);
 }
 .modal-combinada-title {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 18px; font-weight: 800; color: var(--text-dark);
   text-transform: uppercase; line-height: 1.1;
 }
@@ -1428,7 +1428,7 @@
 .market-row { margin-bottom: 18px; }
 .market-row-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .market-row-label {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 14px; font-weight: 800; color: var(--text-dark); text-transform: uppercase;
 }
 .market-row-pts { background: var(--gold-dim); color: #7A4A00; padding: 3px 8px; border-radius: 5px; font-size: 10px; font-weight: 800; }
@@ -1449,7 +1449,7 @@
 .score-input {
   width: 100%; padding: 10px; border-radius: 8px;
   border: 1.5px solid var(--border-light); font-weight: 700; color: var(--text-dark);
-  font-size: 18px; text-align: center; font-family: 'Barlow Condensed', sans-serif;
+  font-size: 18px; text-align: center; font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
 }
 .score-input:focus { outline: none; border-color: var(--blue-main); }
 .score-vs { font-weight: 800; color: var(--text-muted-d); text-align: center; }
@@ -1479,7 +1479,7 @@
 @media (max-width: 767px) { .socios-hub-hero { grid-template-columns: 1fr; gap: 16px; } }
 .socios-hub-hero-left h1 {
   font-size: 32px; font-weight: 900; color: #fff; text-transform: uppercase; line-height: .95;
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
 }
 @media (max-width: 767px) { .socios-hub-hero-left h1 { font-size: 24px; } }
 .socios-hub-hero-stats {
@@ -1491,7 +1491,7 @@
 @media (max-width: 767px) { .socios-hub-hero-stats { justify-content: space-around; } }
 .socios-hub-stat { padding: 8px 14px; text-align: center; }
 .socios-hub-stat:not(:last-child) { border-right: 1px solid rgba(255,255,255,.1); }
-.socios-hub-stat-val { font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 900; color: var(--gold); line-height: 1; }
+.socios-hub-stat-val { font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 900; color: var(--gold); line-height: 1; }
 .socios-hub-stat-lbl { font-size: 9px; color: rgba(238,242,255,.7); text-transform: uppercase; letter-spacing: .04em; margin-top: 4px; font-weight: 700; }
 
 .hub-pick-card {
@@ -1504,14 +1504,14 @@
   .hub-pick-card .badge { grid-column: 1/-1; justify-self: flex-start; }
 }
 .hub-pick-time {
-  font-family: 'Barlow Condensed', sans-serif; font-size: 18px;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; font-size: 18px;
   font-weight: 900; color: var(--text-dark); text-align: center; line-height: 1;
 }
 .hub-pick-meta { font-size: 10px; color: var(--text-muted-d); text-transform: uppercase; letter-spacing: .04em; font-weight: 700; }
 .hub-pick-equipos { font-weight: 700; color: var(--text-dark); font-size: 14px; margin: 4px 0 6px; }
 .hub-pick-detalle { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 11px; }
 .hub-pick-mercado { font-weight: 700; color: var(--text-dark); }
-.hub-pick-cuota { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; color: var(--blue-main); font-size: 14px; }
+.hub-pick-cuota { font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; font-weight: 800; color: var(--blue-main); font-size: 14px; }
 .hub-pick-casa { padding: 2px 6px; background: var(--bg-subtle); border-radius: 4px; font-weight: 600; color: var(--text-body); font-size: 10px; }
 .hub-pick-ev { padding: 2px 6px; background: var(--pred-correct-bg); color: #006D47; border-radius: 4px; font-weight: 700; font-size: 10px; }
 
@@ -1531,7 +1531,7 @@
 .socios-hero-icon { font-size: 48px; margin-bottom: 10px; }
 .socios-hero h1 {
   font-size: 36px; font-weight: 900; color: #fff; text-transform: uppercase; line-height: .95; margin-bottom: 10px;
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
 }
 @media (max-width: 767px) { .socios-hero h1 { font-size: 28px; } }
 .socios-hero-desc { font-size: 14px; color: rgba(238,242,255,.85); max-width: 480px; margin: 0 auto; }
@@ -1544,7 +1544,7 @@
 .socios-inclusiones h2 {
   font-size: 22px; font-weight: 800; text-transform: uppercase;
   margin-bottom: 18px; display: flex; align-items: center; gap: 8px;
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
 }
 .socios-inclusion-list { display: flex; flex-direction: column; gap: 14px; }
 .socios-inclusion {
@@ -1574,7 +1574,7 @@
   background: radial-gradient(circle at 30% 30%, var(--gold), #FF8C00);
   color: #000; font-weight: 900; font-size: 14px;
   display: flex; align-items: center; justify-content: center;
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
 }
 .canal-mockup-name { font-weight: 700; }
 .canal-mockup-status { font-size: 11px; color: rgba(255,255,255,.7); }
@@ -1586,7 +1586,7 @@
 .canal-msg-time {
   font-size: 10px; color: var(--text-muted-d); text-align: right; margin-top: 4px;
 }
-.canal-msg strong { color: var(--text-dark); font-family: 'Barlow Condensed', sans-serif; font-size: 14px; }
+.canal-msg strong { color: var(--text-dark); font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; font-size: 14px; }
 
 /* Planes */
 .planes-grid {
@@ -1607,12 +1607,12 @@
   font-size: 10px; font-weight: 800; text-transform: uppercase;
 }
 .plan-name {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 18px; font-weight: 800; text-transform: uppercase; color: var(--text-dark);
 }
 .plan-savings { font-size: 11px; color: var(--green); font-weight: 700; margin-top: 2px; }
 .plan-price {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 42px; font-weight: 900; color: var(--text-dark); line-height: 1; margin: 14px 0 4px;
 }
 .plan-period { font-size: 12px; color: var(--text-muted-d); margin-bottom: 18px; }
@@ -1670,7 +1670,7 @@
 }
 .reviews-table th {
   padding: 12px 10px; background: var(--bg-subtle);
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--text-muted-d);
   text-align: left; letter-spacing: .04em;
 }
@@ -1737,7 +1737,7 @@
   font-weight: 700; margin-bottom: 6px;
 }
 .guia-item-title {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 20px; font-weight: 800; color: var(--text-dark);
   text-transform: uppercase; line-height: 1.2; margin-bottom: 8px;
 }
@@ -1768,7 +1768,7 @@
   margin-bottom: 16px;
 }
 .admin-sidebar-logo {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 24px; font-weight: 900; color: #fff;
   display: flex; align-items: center; gap: 8px;
 }
@@ -1821,7 +1821,7 @@
   background: rgba(255,255,255,.1); color: #fff;
   font-size: 11px; font-weight: 800;
   display: flex; align-items: center; justify-content: center;
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
 }
 .admin-sidebar-user-info { flex: 1; min-width: 0; }
 .admin-sidebar-user-name { font-size: 11px; color: #fff; font-weight: 600; }
@@ -1845,7 +1845,7 @@
 }
 .admin-breadcrumbs span:not(:last-child)::after { content: " / "; margin-left: 8px; color: rgba(0,16,80,.25); }
 .admin-page-title {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 24px; font-weight: 800; color: #001050;
   text-transform: uppercase; line-height: 1.1;
 }
@@ -1887,7 +1887,7 @@
   margin-bottom: 12px;
 }
 .admin-kpi-section-title {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 16px; font-weight: 800; color: #001050;
   text-transform: uppercase;
 }
@@ -1911,7 +1911,7 @@
 .admin-kpi-status-amber { background: #FFB800; }
 .admin-kpi-status-red   { background: #FF3D3D; }
 .admin-kpi-card-value {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 28px; font-weight: 900; color: #001050; line-height: 1; margin-top: 8px;
 }
 .admin-kpi-card-trend {
@@ -1969,7 +1969,7 @@
 .pick-detalle-title-block h3 {
   font-size: 18px; font-weight: 800; color: #001050;
   text-transform: uppercase; line-height: 1.1;
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
 }
 .pick-detalle-meta { font-size: 11px; color: rgba(0,16,80,.42); margin-top: 4px; }
 .pick-detalle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 18px; }
@@ -2001,7 +2001,7 @@
   padding: 10px 12px; font-size: 11px; font-weight: 700;
   color: rgba(0,16,80,.58); text-align: left;
   text-transform: uppercase; letter-spacing: .04em;
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
 }
 .admin-table td { padding: 12px; border-top: 1px solid rgba(0,16,80,.06); }
 .admin-table tbody tr:hover { background: #F8FAFD; }
@@ -2042,7 +2042,7 @@
 }
 .cohort-cell {
   border-radius: 4px; font-weight: 700;
-  padding: 8px; color: #fff; font-family: 'Barlow Condensed', sans-serif; font-size: 14px;
+  padding: 8px; color: #fff; font-family: var(--font-barlow), 'Barlow Condensed', sans-serif; font-size: 14px;
 }
 .cohort-cell.c-100 { background: #001050; }
 .cohort-cell.c-80  { background: #0038B8; }
@@ -2104,7 +2104,7 @@
 }
 .estado-vacio-icono { margin-bottom: 16px; font-size: 48px; }
 .estado-vacio-titulo {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
   font-size: 28px; font-weight: 900; color: var(--text-dark);
   text-transform: uppercase; line-height: 1;
 }
