@@ -184,9 +184,9 @@
 }
 .avatar-trigger {
   cursor: pointer; padding: 0;
+  border: 0;
   border: 2px solid transparent;
   transition: all .15s;
-  background: transparent;
 }
 .avatar-trigger:hover { border-color: var(--gold); transform: scale(1.05); }
 
