@@ -1,26 +1,15 @@
-// Layout /legal/* — Lote B v3.1 (refactor del Lote 0).
-// Spec: docs/ux-spec/02-pista-usuario-publica/suscribir-y-aux.spec.md.
+// Layout /legal/* — Lote S v3.2 (rewrite del Lote B).
 //
-// Comparte el shell público (MobileHeader + Footer + BottomNav). El
-// renderizado del documento legal (con TOC + back-to-top) lo hace cada
-// page.tsx; este layout solo da la envoltura.
+// Comparte shell único con (public) y (main): NavBar + Footer + BottomNav,
+// con AuthStateProvider para los componentes que usan <AuthGate>.
 
 import type { ReactNode } from "react";
 import { auth } from "@/lib/auth";
-import { contarLiveMatches } from "@/lib/services/live-matches.service";
-import { logger } from "@/lib/services/logger";
-import { PublicHeaderV31 } from "@/components/layout/PublicHeaderV31";
+import { obtenerEstadoAuthServer } from "@/lib/services/auth-state.service";
+import { NavBar } from "@/components/layout/NavBar";
 import { Footer } from "@/components/layout/Footer";
 import { BottomNav } from "@/components/layout/BottomNav";
-
-async function obtenerLiveCount(): Promise<number> {
-  try {
-    return await contarLiveMatches();
-  } catch (err) {
-    logger.error({ err }, "/legal layout: contarLiveMatches falló");
-    return 0;
-  }
-}
+import { AuthStateProvider } from "@/components/auth/AuthStateProvider";
 
 export default async function LegalLayout({
   children,
@@ -28,14 +17,14 @@ export default async function LegalLayout({
   children: ReactNode;
 }) {
   const session = await auth();
-  const liveCount = await obtenerLiveCount();
+  const estadoAuth = await obtenerEstadoAuthServer(session?.user?.id ?? null);
 
   return (
-    <div className="flex min-h-screen flex-col bg-page">
-      <PublicHeaderV31 />
-      <main className="flex-1 pb-24 lg:pb-10">{children}</main>
+    <AuthStateProvider initialState={estadoAuth}>
+      <NavBar />
+      <main>{children}</main>
       <Footer />
-      <BottomNav liveDot={liveCount > 0} isAuthenticated={!!session?.user} />
-    </div>
+      <BottomNav />
+    </AuthStateProvider>
   );
 }

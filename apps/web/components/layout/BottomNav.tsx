@@ -1,21 +1,29 @@
 "use client";
 
-// BottomNav v3.2 — pista usuario unificada (Lote K · rebrand del Lote B).
-// Spec: docs/habla-mockup-v3.2.html (mobile · 5 ítems en BottomNav).
+// BottomNav — Lote S v3.2 · portación literal del `<nav class="bottom-nav">`
+// del mockup (docs/habla-mockup-v3.2.html líneas 4788-4795).
 //
-// 5 ítems oficiales del modelo v3.2: Inicio · Las Fijas · Liga · Socios ·
-// Perfil. Sticky bottom, oculto >=lg (los desktops usan navegación top).
-// Touch targets ≥44px (h-16). Detección de active path con `usePathname`.
-// El ítem "Perfil" redirige a /auth/signin si no hay session, a /perfil
-// si la hay — esto unifica la experiencia entre la capa pública y la
-// autenticada (decisión arquitectónica del Lote B preservada en v3.2).
+// 6 items, con visibilidad por estado de auth:
+//   - 🏠 Inicio       (siempre)
+//   - 🎯 Fijas        (siempre)  → /las-fijas
+//   - 🏆 Liga         (siempre)  → /liga
+//   - 💎 Socios       (siempre)  → /socios
+//   - 📚 Reviews      (visitor-only)     → /reviews-y-guias
+//   - 👤 Perfil       (not-visitor-only) → /perfil
 //
-// Live indicator: dot rojo junto a "Inicio" si hay partido en vivo. La
-// prop `liveDot` la propaga el layout server-side via consulta a
-// live-matches.service. No polling client-side acá — el polling vive en
-// el header desktop.
+// Las clases CSS son las del mockup (.bottom-nav, .bn-item, .bn-icon,
+// .bn-item.active) — definidas en mockup-styles.css por el Lote R. Cero
+// Tailwind utility en este componente.
+//
+// El mockup muestra `.bottom-nav` con `display:none` y solo lo expone en
+// mobile (≤767px) via media query — ver mockup-styles.css.
+//
+// El BottomNav se OCULTA en /auth/* y /admin/* (layouts propios) y en
+// /socios/exito (post-pago, foco crítico) — comportamiento heredado.
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { AuthGate } from "@/components/auth/AuthGate";
 
 interface Item {
   href: string;
@@ -24,7 +32,7 @@ interface Item {
   match: (pathname: string) => boolean;
 }
 
-const ITEMS_BASE: Item[] = [
+const ITEMS: Item[] = [
   {
     href: "/",
     label: "Inicio",
@@ -32,61 +40,52 @@ const ITEMS_BASE: Item[] = [
     match: (p) => p === "/",
   },
   {
-    // Lote K v3.2: /cuotas + /partidos consolidados en /las-fijas. Las URLs
-    // viejas (/cuotas, /partidos, /matches) redirigen 301 a /las-fijas;
-    // mantenemos el match para que el item siga marcado activo durante el
-    // hop momentáneo del redirect.
     href: "/las-fijas",
-    label: "Las Fijas",
-    icon: "⚽",
+    label: "Fijas",
+    icon: "🎯",
     match: (p) =>
       p.startsWith("/las-fijas") ||
       p.startsWith("/cuotas") ||
-      p.startsWith("/partidos") ||
-      p.startsWith("/matches") ||
-      p.startsWith("/live-match") ||
-      p.startsWith("/pronosticos"),
+      p.startsWith("/partidos"),
   },
   {
-    // Lote K v3.2: /comunidad → /liga. /comunidad/torneo/[slug] → /liga/[slug].
-    // /comunidad/[username] → /jugador/[username]. /comunidad/mes → /liga/mes.
     href: "/liga",
     label: "Liga",
     icon: "🏆",
     match: (p) =>
       p.startsWith("/liga") ||
       p.startsWith("/jugador") ||
-      p.startsWith("/comunidad") || // legacy, redirect 301 a /liga
-      p.startsWith("/torneo") ||
-      p.startsWith("/mis-predicciones") ||
-      p.startsWith("/mis-combinadas"), // legacy, redirect 301
+      p.startsWith("/comunidad") ||
+      p.startsWith("/torneo"),
   },
   {
-    // Lote K v3.2: /premium → /socios. /premium/mi-suscripcion → /socios-hub.
     href: "/socios",
     label: "Socios",
     icon: "💎",
-    match: (p) =>
-      p.startsWith("/socios") ||
-      p.startsWith("/premium"), // legacy, redirect 301 a /socios
+    match: (p) => p.startsWith("/socios") || p.startsWith("/premium"),
   },
 ];
 
-interface Props {
-  /** Si hay partido en vivo se muestra el dot rojo junto a Inicio. */
-  liveDot?: boolean;
-  /** Si hay session, "Perfil" linkea a /perfil; si no, a /auth/signin. */
-  isAuthenticated?: boolean;
-}
+const ITEM_REVIEWS: Item = {
+  href: "/reviews-y-guias",
+  label: "Reviews",
+  icon: "📚",
+  match: (p) =>
+    p.startsWith("/reviews-y-guias") ||
+    p.startsWith("/casas") ||
+    p.startsWith("/guias"),
+};
 
-export function BottomNav({ liveDot = false, isAuthenticated = false }: Props) {
+const ITEM_PERFIL: Item = {
+  href: "/perfil",
+  label: "Perfil",
+  icon: "👤",
+  match: (p) => p.startsWith("/perfil"),
+};
+
+export function BottomNav() {
   const pathname = usePathname() ?? "/";
 
-  // Oculto en /auth/*, /admin/* y /socios/exito (tienen layouts propios o
-  // foco crítico). El post-pago suprime BottomNav para que el CTA verde de
-  // unirse al WhatsApp Channel sea la única acción visible.
-  // Lote K v3.2: rebrand /premium/exito → /socios/exito. Mantenemos el
-  // match al path viejo por si alguien aterriza durante el redirect 301.
   if (
     pathname.startsWith("/auth") ||
     pathname.startsWith("/admin") ||
@@ -98,47 +97,47 @@ export function BottomNav({ liveDot = false, isAuthenticated = false }: Props) {
     return null;
   }
 
-  const perfilItem: Item = {
-    href: isAuthenticated ? "/perfil" : "/auth/signin?callbackUrl=/perfil",
-    label: "Perfil",
-    icon: "👤",
-    match: (p) => p.startsWith("/perfil"),
-  };
-
-  const items = [...ITEMS_BASE, perfilItem];
-
   return (
-    <nav
-      aria-label="Navegación móvil"
-      className="fixed inset-x-0 bottom-0 z-sticky flex border-t border-strong bg-card pb-[env(safe-area-inset-bottom)] pt-1.5 shadow-nav-top lg:hidden"
-    >
-      {items.map((item) => {
+    <nav className="bottom-nav" aria-label="Navegación móvil">
+      {ITEMS.map((item) => {
         const isActive = item.match(pathname);
-        const showLiveDot = liveDot && item.href === "/";
         return (
           <Link
             key={item.label}
             href={item.href}
             aria-current={isActive ? "page" : undefined}
-            className={`touch-target relative flex min-h-[56px] flex-1 flex-col items-center justify-center gap-[3px] px-1 py-2 transition-colors duration-150 ${
-              isActive ? "text-brand-gold-dark" : "text-muted-d"
-            }`}
+            className={isActive ? "bn-item active" : "bn-item"}
           >
-            <span aria-hidden className="relative text-[22px] leading-none">
-              {item.icon}
-              {showLiveDot ? (
-                <span
-                  aria-hidden
-                  className="absolute -right-1 -top-0.5 inline-block h-2 w-2 animate-pulse rounded-full bg-urgent-critical ring-2 ring-card"
-                />
-              ) : null}
-            </span>
-            <span className="text-[10px] font-semibold uppercase tracking-[0.03em]">
-              {item.label}
-            </span>
+            <span className="bn-icon">{item.icon}</span> {item.label}
           </Link>
         );
       })}
+      <AuthGate state="visitor">
+        <Link
+          href={ITEM_REVIEWS.href}
+          aria-current={ITEM_REVIEWS.match(pathname) ? "page" : undefined}
+          className={
+            ITEM_REVIEWS.match(pathname)
+              ? "bn-item visitor-only active"
+              : "bn-item visitor-only"
+          }
+        >
+          <span className="bn-icon">{ITEM_REVIEWS.icon}</span> {ITEM_REVIEWS.label}
+        </Link>
+      </AuthGate>
+      <AuthGate not="visitor">
+        <Link
+          href={ITEM_PERFIL.href}
+          aria-current={ITEM_PERFIL.match(pathname) ? "page" : undefined}
+          className={
+            ITEM_PERFIL.match(pathname)
+              ? "bn-item not-visitor-only active"
+              : "bn-item not-visitor-only"
+          }
+        >
+          <span className="bn-icon">{ITEM_PERFIL.icon}</span> {ITEM_PERFIL.label}
+        </Link>
+      </AuthGate>
     </nav>
   );
 }
