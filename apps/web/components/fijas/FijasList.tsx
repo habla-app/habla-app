@@ -278,7 +278,11 @@ function formatLigaCorta(liga: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Derivar cuotas: snapshot del análisis aprobado o "—" placeholder.
+// Derivar cuotas para la fila/card:
+//   - Si el partido tiene `cuotasSnapshot` (lo trae el análisis aprobado vía
+//     `inputsJSON.cuotasReferenciales`), usamos esos valores.
+//   - Si no hay snapshot, "—" placeholder en todas las celdas.
+//   - La columna "best" se resalta en la cuota del pronóstico Habla! (1X2).
 // ---------------------------------------------------------------------------
 
 interface Cuotas {
@@ -295,27 +299,34 @@ interface Cuotas {
   bestCasaColor: string | null;
 }
 
+function fmt(n: number | null): string {
+  return n !== null ? n.toFixed(2) : "—";
+}
+
 function derivarCuotas(partido: FijaListItem): Cuotas {
   const pron = partido.pronostico1x2;
+  const snap = partido.cuotasSnapshot;
+  const bestKey =
+    pron === "LOCAL"
+      ? "local"
+      : pron === "EMPATE"
+        ? "empate"
+        : pron === "VISITA"
+          ? "visita"
+          : null;
+
   return {
-    local: "—",
-    empate: "—",
-    visita: "—",
-    over25: "—",
-    under25: "—",
-    bttsSi: "—",
-    bttsNo: "—",
-    bestKey:
-      pron === "LOCAL"
-        ? "local"
-        : pron === "EMPATE"
-          ? "empate"
-          : pron === "VISITA"
-            ? "visita"
-            : null,
-    bestCasaSigla: "—",
-    bestCasaNombre: "—",
-    bestCasaColor: null,
+    local: fmt(snap?.local ?? null),
+    empate: fmt(snap?.empate ?? null),
+    visita: fmt(snap?.visita ?? null),
+    over25: fmt(snap?.over25 ?? null),
+    under25: fmt(snap?.under25 ?? null),
+    bttsSi: fmt(snap?.bttsSi ?? null),
+    bttsNo: fmt(snap?.bttsNo ?? null),
+    bestKey,
+    bestCasaSigla: snap?.bestSigla ?? "—",
+    bestCasaNombre: snap?.bestCasa ?? "—",
+    bestCasaColor: snap?.bestColor ?? null,
   };
 }
 

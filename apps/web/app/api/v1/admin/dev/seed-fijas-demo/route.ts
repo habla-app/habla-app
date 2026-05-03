@@ -54,6 +54,33 @@ interface FijaDemo {
   pronostico: "LOCAL" | "EMPATE" | "VISITA";
   probabilidades: { local: number; empate: number; visita: number };
   mejorCuota: { mercado: "LOCAL" | "EMPATE" | "VISITA"; cuota: number; casa: string };
+  /** Snapshot de cuotas referenciales (1X2 + ±2.5 + BTTS Sí/No + casa best).
+   *  Se persiste en `inputsJSON.cuotasReferenciales` y lo lee `listarFijas()`
+   *  para llenar la tabla densa de Las Fijas.
+   *  Las claves del lado de Las Fijas: local/empate/visita/over25/under25/
+   *  bttsSi/bttsNo, más bestCasa/bestSigla/bestColor. */
+  cuotasReferenciales: {
+    local: number;
+    empate: number;
+    visita: number;
+    over25: number;
+    under25: number;
+    bttsSi: number;
+    bttsNo: number;
+    bestCasa: string;
+    bestSigla: string;
+    bestColor: string;
+  };
+  /** Texto formato literal-mockup. CADA bloque debe estar en una sola
+   *  línea SIN newlines internos para que el regex de AnalisisBasicoCard
+   *  los matchee (las regex ahí no atraviesan newlines).
+   *  Bloques esperados:
+   *    - "Forma reciente últimos 5 local: G G E G G."
+   *    - "Forma reciente últimos 5 visita: P P G E G."
+   *    - "Cara a cara últimos 5: 3 victorias del local, 1 empate, 1 victoria del visita. Promedio de goles por partido 3.2."
+   *    - "Lesiones local: 2 lesionados (no titulares)."
+   *    - "Lesiones visita: 3 titulares fuera (Bowen, Antonio, Kudus)."
+   */
   analisisBasico: string;
   combinadaOptima: {
     mercados: { mercado: string; outcome: string; cuota: number; label: string }[];
@@ -102,15 +129,24 @@ const FIJAS_DEMO: FijaDemo[] = [
     pronostico: "LOCAL",
     probabilidades: { local: 0.47, empate: 0.28, visita: 0.25 },
     mejorCuota: { mercado: "LOCAL", cuota: 2.1, casa: "Betano" },
+    cuotasReferenciales: {
+      local: 2.1,
+      empate: 3.3,
+      visita: 3.4,
+      over25: 1.85,
+      under25: 1.95,
+      bttsSi: 1.75,
+      bttsNo: 2.05,
+      bestCasa: "Betano",
+      bestSigla: "BT",
+      bestColor: "#DC2626",
+    },
     analisisBasico:
-      "Forma reciente (últimos 5):\n" +
-      "Brentford (local) — G G E G G.\n" +
-      "West Ham (visita) — P P G E G.\n\n" +
-      "Cara a cara últimos 5 partidos: 3 victorias Brentford, 1 empate, 1 victoria West Ham. Promedio de goles por partido: 3.2.\n\n" +
-      "Lesiones y bajas:\n" +
-      "Brentford: 2 lesionados (no titulares).\n" +
-      "West Ham: 3 titulares fuera (Bowen, Antonio, Kudus).\n\n" +
-      "Brentford ganó 4 de los últimos 5 en casa con promedio de 2.4 goles a favor. West Ham viene de 2 derrotas como visitante.",
+      "Forma reciente últimos 5 local: G G E G G.\n" +
+      "Forma reciente últimos 5 visita: P P G E G.\n" +
+      "Cara a cara últimos 5: 3 victorias del local, 1 empate, 1 victoria del visita. Promedio de goles por partido 3.2.\n" +
+      "Lesiones local: 2 lesionados (no titulares).\n" +
+      "Lesiones visita: 3 titulares fuera (Bowen, Antonio, Kudus).",
     combinadaOptima: {
       mercados: [
         { mercado: "1X2", outcome: "LOCAL", cuota: 2.1, label: "Local" },
@@ -159,24 +195,34 @@ const FIJAS_DEMO: FijaDemo[] = [
     liga: "Liga 1 Perú",
     equipoLocal: "Universitario",
     equipoVisita: "Sport Boys",
-    fechaOffsetHoras: -1, // arrancó hace 1h
+    fechaOffsetHoras: -0.5, // arrancó hace 30 min — partido en minuto 30 1T
     estado: "EN_VIVO",
     golesLocal: 1,
     golesVisita: 0,
-    liveElapsed: 63,
-    liveStatusShort: "2H",
+    liveElapsed: 30,
+    liveStatusShort: "1H",
     round: "Fecha 12",
     pronostico: "LOCAL",
     probabilidades: { local: 0.5, empate: 0.28, visita: 0.22 },
     mejorCuota: { mercado: "LOCAL", cuota: 1.4, casa: "Te Apuesto" },
+    cuotasReferenciales: {
+      local: 1.4,
+      empate: 4.5,
+      visita: 7.0,
+      over25: 2.1,
+      under25: 1.7,
+      bttsSi: 2.2,
+      bttsNo: 1.65,
+      bestCasa: "Te Apuesto",
+      bestSigla: "TA",
+      bestColor: "#DC2626",
+    },
     analisisBasico:
-      "Forma reciente (últimos 5):\n" +
-      "Universitario (local) — G G G E G.\n" +
-      "Sport Boys (visita) — P E P P G.\n\n" +
-      "Cara a cara últimos 5 partidos: 4 victorias Universitario, 1 empate. Promedio de goles 2.4.\n\n" +
-      "Lesiones y bajas:\n" +
-      "Universitario: 1 lesionado (no titular).\n" +
-      "Sport Boys: 2 titulares fuera.",
+      "Forma reciente últimos 5 local: G G G E G.\n" +
+      "Forma reciente últimos 5 visita: P E P P G.\n" +
+      "Cara a cara últimos 5: 4 victorias del local, 1 empate. Promedio de goles por partido 2.4.\n" +
+      "Lesiones local: 1 lesionado (no titular).\n" +
+      "Lesiones visita: 2 titulares fuera.",
     combinadaOptima: null,
     analisisGoles: null,
     analisisTarjetas: null,
@@ -199,12 +245,24 @@ const FIJAS_DEMO: FijaDemo[] = [
     pronostico: "VISITA",
     probabilidades: { local: 0.13, empate: 0.19, visita: 0.68 },
     mejorCuota: { mercado: "VISITA", cuota: 1.42, casa: "Betsson" },
+    cuotasReferenciales: {
+      local: 7.5,
+      empate: 5.0,
+      visita: 1.42,
+      over25: 1.55,
+      under25: 2.4,
+      bttsSi: 1.85,
+      bttsNo: 1.95,
+      bestCasa: "Betsson",
+      bestSigla: "BS",
+      bestColor: "#0EA5E9",
+    },
     analisisBasico:
-      "Forma reciente (últimos 5):\n" +
-      "Osasuna (local) — E P G P P.\n" +
-      "Barcelona (visita) — G G G E G.\n\n" +
-      "Cara a cara últimos 5: 4 victorias Barcelona, 1 empate. Promedio 2.8 goles.\n\n" +
-      "Lesiones: Osasuna sin novedad. Barcelona con todos sus titulares disponibles.",
+      "Forma reciente últimos 5 local: E P G P P.\n" +
+      "Forma reciente últimos 5 visita: G G G E G.\n" +
+      "Cara a cara últimos 5: 1 victoria del local, 0 empates, 4 victorias del visita. Promedio de goles por partido 2.8.\n" +
+      "Lesiones local: 0 lesionados destacados.\n" +
+      "Lesiones visita: 1 lesionado (no titular).",
     combinadaOptima: {
       mercados: [
         { mercado: "1X2", outcome: "VISITA", cuota: 1.42, label: "Visita" },
@@ -254,12 +312,24 @@ const FIJAS_DEMO: FijaDemo[] = [
     pronostico: "LOCAL",
     probabilidades: { local: 0.62, empate: 0.22, visita: 0.16 },
     mejorCuota: { mercado: "LOCAL", cuota: 1.65, casa: "Te Apuesto" },
+    cuotasReferenciales: {
+      local: 1.65,
+      empate: 3.8,
+      visita: 4.5,
+      over25: 2.05,
+      under25: 1.75,
+      bttsSi: 2.1,
+      bttsNo: 1.7,
+      bestCasa: "Te Apuesto",
+      bestSigla: "TA",
+      bestColor: "#DC2626",
+    },
     analisisBasico:
-      "Forma reciente (últimos 5):\n" +
-      "Alianza Lima (local) — G G E G G.\n" +
-      "UCV Moquegua (visita) — P P E P G.\n\n" +
-      "Cara a cara últimos 5: 5 victorias Alianza Lima. Promedio 2.6 goles.\n\n" +
-      "Lesiones: Alianza con plantel completo. UCV con 1 titular fuera.",
+      "Forma reciente últimos 5 local: G G E G G.\n" +
+      "Forma reciente últimos 5 visita: P P E P G.\n" +
+      "Cara a cara últimos 5: 5 victorias del local, 0 empates, 0 victorias del visita. Promedio de goles por partido 2.6.\n" +
+      "Lesiones local: 0 lesionados destacados.\n" +
+      "Lesiones visita: 1 titular fuera.",
     combinadaOptima: null,
     analisisGoles: null,
     analisisTarjetas: null,
@@ -282,11 +352,24 @@ const FIJAS_DEMO: FijaDemo[] = [
     pronostico: "LOCAL",
     probabilidades: { local: 0.4, empate: 0.27, visita: 0.33 },
     mejorCuota: { mercado: "LOCAL", cuota: 2.5, casa: "Betano" },
+    cuotasReferenciales: {
+      local: 2.5,
+      empate: 3.4,
+      visita: 2.75,
+      over25: 1.62,
+      under25: 2.3,
+      bttsSi: 1.55,
+      bttsNo: 2.45,
+      bestCasa: "Betano",
+      bestSigla: "BT",
+      bestColor: "#DC2626",
+    },
     analisisBasico:
-      "Forma reciente (últimos 5):\n" +
-      "Real Madrid (local) — G G G E G.\n" +
-      "Manchester City (visita) — G G E G G.\n\n" +
-      "Cara a cara últimos 5: 2 victorias Real Madrid, 2 victorias City, 1 empate. Promedio 3.4 goles.",
+      "Forma reciente últimos 5 local: G G G E G.\n" +
+      "Forma reciente últimos 5 visita: G G E G G.\n" +
+      "Cara a cara últimos 5: 2 victorias del local, 1 empate, 2 victorias del visita. Promedio de goles por partido 3.4.\n" +
+      "Lesiones local: 1 lesionado (no titular).\n" +
+      "Lesiones visita: 2 lesionados.",
     combinadaOptima: {
       mercados: [
         { mercado: "TOTAL", outcome: "MAS_2_5", cuota: 1.62, label: "Más 2.5" },
@@ -329,11 +412,24 @@ const FIJAS_DEMO: FijaDemo[] = [
     pronostico: "VISITA",
     probabilidades: { local: 0.18, empate: 0.22, visita: 0.6 },
     mejorCuota: { mercado: "VISITA", cuota: 1.55, casa: "Coolbet" },
+    cuotasReferenciales: {
+      local: 5.5,
+      empate: 3.8,
+      visita: 1.55,
+      over25: 1.7,
+      under25: 2.15,
+      bttsSi: 1.95,
+      bttsNo: 1.85,
+      bestCasa: "Coolbet",
+      bestSigla: "CB",
+      bestColor: "#059669",
+    },
     analisisBasico:
-      "Forma reciente (últimos 5):\n" +
-      "Como (local) — P E P G P.\n" +
-      "Napoli (visita) — G G E G G.\n\n" +
-      "Cara a cara: Napoli dominante en últimos cruces. Promedio 2.8 goles.",
+      "Forma reciente últimos 5 local: P E P G P.\n" +
+      "Forma reciente últimos 5 visita: G G E G G.\n" +
+      "Cara a cara últimos 5: 1 victoria del local, 1 empate, 3 victorias del visita. Promedio de goles por partido 2.8.\n" +
+      "Lesiones local: 2 titulares fuera.\n" +
+      "Lesiones visita: 0 lesionados destacados.",
     combinadaOptima: null,
     analisisGoles: null,
     analisisTarjetas: null,
@@ -442,7 +538,11 @@ export async function POST(_req: NextRequest): Promise<Response> {
           mercadosSecundarios: mercadosSecundariosValue,
           estado: "APROBADO",
           promptVersion: PROMPT_VERSION_DEMO,
-          inputsJSON: { demo: true, fechaSeed: ahora.toISOString() },
+          inputsJSON: {
+            demo: true,
+            fechaSeed: ahora.toISOString(),
+            cuotasReferenciales: fija.cuotasReferenciales,
+          },
           aprobadoPor: session.user.id,
           aprobadoEn: ahora,
         },
@@ -457,6 +557,14 @@ export async function POST(_req: NextRequest): Promise<Response> {
           analisisTarjetas: analisisTarjetasValue,
           mercadosSecundarios: mercadosSecundariosValue,
           estado: "APROBADO",
+          // Re-corremos seed: actualizamos inputsJSON también, para que las
+          // cuotas referenciales se sincronicen aún si el seed previo no
+          // las tenía.
+          inputsJSON: {
+            demo: true,
+            fechaSeed: ahora.toISOString(),
+            cuotasReferenciales: fija.cuotasReferenciales,
+          },
           aprobadoPor: session.user.id,
           aprobadoEn: ahora,
           archivadoEn: null,
