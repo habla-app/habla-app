@@ -6,6 +6,7 @@
 
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { MDXRemote } from "next-mdx-remote/rsc";
 import remarkGfm from "remark-gfm";
 import * as guias from "@/lib/content/guias";
@@ -63,6 +64,19 @@ export default function GuiaPage({ params }: { params: Params }) {
           titulo: frontmatter.title,
         }}
       />
+
+      <Link
+        href="/reviews-y-guias"
+        style={{
+          fontSize: 12,
+          color: "var(--blue-main)",
+          fontWeight: 700,
+          marginBottom: 14,
+          display: "inline-block",
+        }}
+      >
+        ← Volver
+      </Link>
 
       <div className="lg:flex lg:gap-10">
         <TOC headings={headings} />

@@ -1,9 +1,12 @@
 // Sitemap dinámico — Next.js App Router Metadata Files API.
 //
 // Lote K v3.2 (May 2026): rebrand de URLs públicas. URLs viejas
-// (/cuotas, /partidos/, /casas/, /guias/, /comunidad, /premium) se
-// retiran del sitemap y existen solo como redirects 301 (next.config.js).
-// El sitemap usa exclusivamente URLs nuevas v3.2.
+// (/cuotas, /partidos/, /casas/, /guias/, /comunidad, /premium,
+// /suscribir) se retiran del sitemap y existen solo como redirects 301
+// (next.config.js). El sitemap usa exclusivamente URLs nuevas v3.2.
+//
+// Lote U v3.2 (May 2026): revisado. Confirmado que solo URLs nuevas
+// aparecen — las viejas están cubiertas por los redirects 301 del Lote K.
 //
 // URLs públicas indexables (Lote K v3.2):
 //   /                                  Home

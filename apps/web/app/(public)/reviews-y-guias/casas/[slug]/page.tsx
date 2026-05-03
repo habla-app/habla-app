@@ -74,6 +74,19 @@ export default async function CasaReviewPage({ params }: { params: Params }) {
         }}
       />
 
+      <Link
+        href="/reviews-y-guias"
+        style={{
+          fontSize: 12,
+          color: "var(--blue-main)",
+          fontWeight: 700,
+          marginBottom: 14,
+          display: "inline-block",
+        }}
+      >
+        ← Volver
+      </Link>
+
       <div className="lg:flex lg:gap-10">
         <TOC headings={headings} />
         <article className="min-w-0 flex-1 lg:max-w-[760px]">

@@ -12,6 +12,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { obtenerEstadoAuthServer } from "@/lib/services/auth-state.service";
+import { SociosFaqList } from "@/components/socios/SociosFaqList";
 
 export const dynamic = "force-dynamic";
 
@@ -166,13 +167,7 @@ export default async function SociosLandingPage() {
           <div><div className="section-bar-title">Preguntas frecuentes</div></div>
         </div>
       </div>
-      <div className="faq-list">
-        <div className="faq-item"><div className="faq-q">¿Cómo recibo los picks?</div></div>
-        <div className="faq-item"><div className="faq-q">¿Puedo cancelar cuando quiera?</div></div>
-        <div className="faq-item"><div className="faq-q">¿Qué pasa si no acierto?</div></div>
-        <div className="faq-item"><div className="faq-q">¿Comparten mis datos con las casas?</div></div>
-        <div className="faq-item"><div className="faq-q">¿Cuánto tiempo me toma seguir un pick?</div></div>
-      </div>
+      <SociosFaqList />
 
       <p style={{ fontSize: 11, color: "var(--text-muted-d)", margin: "24px 0 0", textAlign: "center", lineHeight: 1.5 }}>
         Apuesta responsable. Solo +18. Línea Tugar (gratuita): 0800-19009.

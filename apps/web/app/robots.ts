@@ -7,6 +7,10 @@
 // nuevas URLs. No se listan ni en allow ni en disallow porque ya no
 // devuelven contenido propio.
 //
+// Lote U v3.2 (May 2026): revisado. Cumple los disallow obligatorios:
+// /admin, /api, /auth, /perfil, /socios-hub, /socios/checkout,
+// /socios/exito. /perfil con y sin trailing slash para parity con /admin.
+//
 // Política v3.2:
 //   - Indexamos: /, /las-fijas, /las-fijas/[slug], /reviews-y-guias/*,
 //     /pronosticos/*, /blog/*, /liga (listing público), /socios (venta),
@@ -46,6 +50,7 @@ export default function robots(): MetadataRoute.Robots {
           "/admin",
           "/admin/",
           "/perfil",
+          "/perfil/",
           "/mis-predicciones",
           "/mis-combinadas",
           // Privadas v3.2 — Liga (detalle, mes, jugador) requieren login

@@ -18,11 +18,12 @@
 // /reviews-y-guias/*, /blog, /pronosticos, /liga (listing), /socios.
 // NO se listan en el matcher.
 //
-// Auto-redirect Socio → /socios-hub: vive en `app/(public)/socios/page.tsx`
-// (Server Component, decisión §4.8 del análisis-repo-vs-mockup-v3.2.md).
-// El middleware edge no puede leer Prisma para detectar suscripción
-// activa, por eso el redirect server-side ocurre dentro del Server
-// Component antes de pintar UI.
+// Auto-redirect Socio → /socios-hub: el middleware edge resuelve el
+// redirect leyendo `req.auth.user.esSocio` (claim cacheado en el JWT —
+// ver `lib/auth.ts` callbacks.jwt + `calcularEsSocio`). Lote U v3.2.
+// El server component `app/(public)/socios/page.tsx` mantiene su propio
+// redirect server-side como belt+suspenders por si el JWT está stale
+// (decisión §4.8 del análisis-repo-vs-mockup-v3.2.md).
 //
 // Lote K v3.2: redirects 301 estáticos masivos (cuotas→las-fijas,
 // premium→socios, comunidad→liga, etc.) viven en `next.config.js`.
@@ -196,8 +197,18 @@ export default auth(async (req) => {
   // /liga/:partidoId vive en `app/(main)/torneo/[id]/page.tsx`
   // (Server Component runtime nodejs) porque el middleware corre en edge
   // y NO puede importar Prisma. La page redirige y NO renderiza UI.
-  // El auto-redirect Socio → /socios-hub vive en
-  // `app/(public)/socios/page.tsx` por la misma razón.
+
+  // Lote U v3.2 — auto-redirect /socios → /socios-hub para Socios activos.
+  // Lee `esSocio` del JWT (cacheado en login + en cada session.update()).
+  // El page server-side mantiene su propio redirect como belt+suspenders.
+  if (pathname === "/socios") {
+    if (req.auth?.user?.esSocio) {
+      return Response.redirect(new URL("/socios-hub", req.url));
+    }
+    // /socios es público — visitantes y Free deben poder verlo. Salimos del
+    // middleware sin caer al gating de auth abajo (que pediría login).
+    return;
+  }
 
   const isLoggedIn = !!req.auth;
   const session = req.auth;
@@ -249,5 +260,9 @@ export const config = {
     "/admin",
     "/admin/:path*",
     "/api/:path*",
+    // Lote U v3.2: matcher para que el middleware vea /socios y pueda
+    // ejecutar el redirect a /socios-hub cuando esSocio=true. La ruta
+    // sigue siendo pública para visitantes/Free.
+    "/socios",
   ],
 };

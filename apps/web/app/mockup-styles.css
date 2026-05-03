@@ -1654,6 +1654,15 @@
   background: transparent; border: 0; width: 100%; font-family: inherit; text-align: left;
 }
 .faq-q::after { content: "+"; font-size: 20px; color: var(--text-muted-d); }
+/* Lote U v3.2 — extensión de infraestructura para que el FAQ del mockup sea
+   funcional. El mockup HTML solo tiene `.faq-q`; cuando el usuario expande
+   un ítem agregamos la clase `.open` al `.faq-item` y mostramos `.faq-a`
+   debajo. El `+` se rota a `−`. Cero alteración del HTML del mockup. */
+.faq-item.open .faq-q::after { content: "−"; }
+.faq-a {
+  padding: 0 16px 14px; font-size: 13px; line-height: 1.55;
+  color: var(--text-body);
+}
 
 /* ============================================================================
    REVIEWS Y GUÍAS · tabs · reviews-table · review-card · guías

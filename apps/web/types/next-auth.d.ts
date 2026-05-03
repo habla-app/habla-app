@@ -16,6 +16,12 @@ declare module "next-auth" {
       /** true tras completar-perfil: el @handle queda inmutable. false
        *  mientras el usuario viene de OAuth sin haber elegido handle. */
       usernameLocked: boolean;
+      /** Lote U v3.2 — flag de Socio activo cacheado en el JWT. Eventualmente
+       *  consistente: si el usuario se suscribe DESPUÉS del login, el flag
+       *  refleja el cambio recién al próximo refresh del JWT (≤ session TTL).
+       *  El server component `/socios/page.tsx` revalida server-side con
+       *  Prisma como belt+suspenders. */
+      esSocio: boolean;
     } & DefaultSession["user"];
   }
 }
@@ -26,5 +32,7 @@ declare module "next-auth/jwt" {
     rol?: "JUGADOR" | "ADMIN";
     username?: string;
     usernameLocked?: boolean;
+    /** Lote U v3.2 — ver comentario en Session.user.esSocio. */
+    esSocio?: boolean;
   }
 }

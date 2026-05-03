@@ -17,6 +17,26 @@ import Resend from "next-auth/providers/resend";
 import { HablaPrismaAdapter } from "@/lib/auth-adapter";
 import { prisma } from "@habla/db";
 
+// Lote U v3.2 — `esSocio` cacheado en el JWT para que el middleware (edge,
+// sin Prisma) pueda resolver el redirect /socios → /socios-hub sin tocar
+// BD. Se llena en el callback `jwt` al login y al `session.update()`. Ver
+// comentario en types/next-auth.d.ts sobre eventual consistency.
+async function calcularEsSocio(usuarioId: string): Promise<boolean> {
+  try {
+    // El modelo Suscripcion tiene un flag boolean `activa` que es la fuente
+    // de verdad usada por `obtenerEstadoPremium()` y AuthGate. Se mantiene
+    // true para estados ACTIVA y CANCELANDO (aún con acceso vigente);
+    // pasa a false en VENCIDA/REEMBOLSADA/FALLIDA. Usamos el mismo flag.
+    const sub = await prisma.suscripcion.findFirst({
+      where: { usuarioId, activa: true },
+      select: { id: true },
+    });
+    return !!sub;
+  } catch {
+    return false;
+  }
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   // Railway corre la app detrás de un proxy; sin esto NextAuth rechaza
   // el host reenviado (habla-app-production.up.railway.app).
@@ -66,6 +86,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.rol = u.rol;
           token.username = u.username;
           token.usernameLocked = u.usernameLocked;
+          token.esSocio = await calcularEsSocio(u.id);
         }
       }
 
@@ -78,6 +99,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.username = u.username;
           token.usernameLocked = u.usernameLocked;
           token.rol = u.rol;
+          token.esSocio = await calcularEsSocio(token.usuarioId as string);
         }
       }
 
@@ -90,6 +112,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.username = (token.username as string) ?? "";
         session.user.usernameLocked =
           (token.usernameLocked as boolean) ?? false;
+        session.user.esSocio = (token.esSocio as boolean) ?? false;
       }
       return session;
     },
@@ -104,10 +127,34 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     // Para el flow email/magic link, signup_completed lo dispara el handler
     // POST /api/v1/auth/signup (cuando creamos al usuario, pre-magic-link).
     async signIn(message) {
+      const provider = message.account?.provider ?? "unknown";
+      const userId = message.user?.id;
+
+      // Lote U v3.2 — backstop emailVerified para Google OAuth.
+      //
+      // El adapter consume `data.emailVerified` que viene del provider
+      // (Google id_token: `email_verified` claim). En la práctica Google
+      // siempre envía email_verified=true, pero el provider puede no
+      // pasarlo a NextAuth en algunos casos legacy. Como Google ya validó
+      // el email antes de emitir el id_token, marcar emailVerified=now()
+      // si está null es seguro y consistente.
+      //
+      // Magic link: NextAuth.useVerificationToken() ya marca emailVerified
+      // tras consumir el token. NO tocamos ese path para no introducir
+      // race conditions con el adapter.
+      if (provider === "google" && userId) {
+        try {
+          await prisma.usuario.updateMany({
+            where: { id: userId, emailVerified: null },
+            data: { emailVerified: new Date() },
+          });
+        } catch {
+          /* logueado abajo via analytics, no rompe sign-in */
+        }
+      }
+
       try {
         const { track } = await import("./services/analytics.service");
-        const provider = message.account?.provider ?? "unknown";
-        const userId = message.user?.id;
 
         void track({
           evento: "email_verified",

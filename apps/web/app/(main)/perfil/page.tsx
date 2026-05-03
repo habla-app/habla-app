@@ -20,7 +20,10 @@ import {
 } from "@/lib/services/leaderboard.service";
 import { obtenerEstadoPremium } from "@/lib/services/suscripciones.service";
 import { CuentaTogglesClient } from "@/components/perfil/CuentaTogglesClient";
+import { CuentaEditableField } from "@/components/perfil/CuentaEditableField";
 import { SignOutLink } from "@/components/perfil/SignOutLink";
+import { EliminarCuentaButton } from "@/components/perfil/EliminarCuentaButton";
+import { YapeCapturaBanner } from "@/components/perfil/YapeCapturaBanner";
 import { PLANES } from "@/lib/premium-planes";
 
 export const dynamic = "force-dynamic";
@@ -128,6 +131,38 @@ export default async function PerfilPage() {
         .catch(() => 0)
     : 0;
 
+  // Lote U v3.2 — Top 10 ganador sin yapeNumero. Mostramos el banner si:
+  //   (a) el usuario está Top 10 del mes en curso (posición <=10), O
+  //   (b) ganó algún Top 10 cerrado en el historial (premio confirmado),
+  //   y NO tiene yapeNumero registrado todavía.
+  // El leaderboard service expone posicionDelMes; el premio confirmado lo
+  // detectamos buscando una posición ≤10 en `historialMeses` con cerrado=true.
+  const usuarioYape = await prisma.usuario
+    .findUnique({ where: { id: userId }, select: { yapeNumero: true } })
+    .catch(() => null);
+  const tieneYape = !!usuarioYape?.yapeNumero;
+
+  const cerradoTop10 = historialMeses.find(
+    (m) => m.cerrado && m.posicion !== null && m.posicion <= 10,
+  );
+  const enCursoTop10 =
+    mensual.posicionDelMes !== null && mensual.posicionDelMes <= 10;
+
+  const yapeBanner: { posicion: number; nombreMes: string; premioConfirmado: boolean } | null =
+    !tieneYape && cerradoTop10
+      ? {
+          posicion: cerradoTop10.posicion!,
+          nombreMes: cerradoTop10.nombreMes,
+          premioConfirmado: true,
+        }
+      : !tieneYape && enCursoTop10
+        ? {
+            posicion: mensual.posicionDelMes!,
+            nombreMes: mensual.nombreMes,
+            premioConfirmado: false,
+          }
+        : null;
+
   return (
     <div className="mockup-container">
 
@@ -176,6 +211,15 @@ export default async function PerfilPage() {
           <div className="perfil-stat-lbl">Δ semana</div>
         </div>
       </div>
+
+      {/* Lote U — Banner de captura Yape para ganadores Top 10 sin yapeNumero */}
+      {yapeBanner ? (
+        <YapeCapturaBanner
+          posicion={yapeBanner.posicion}
+          nombreMes={yapeBanner.nombreMes}
+          premioConfirmado={yapeBanner.premioConfirmado}
+        />
+      ) : null}
 
       {/* Suscripción Socios (solo si Socio) */}
       {esSocio && plan ? (
@@ -235,7 +279,7 @@ export default async function PerfilPage() {
           </div>
           <div className="cuenta-row">
             <div className="cuenta-row-label">Nombre</div>
-            <div className="cuenta-row-value">{perfil.nombre || "—"} <button type="button" className="cuenta-edit-btn">Editar</button></div>
+            <CuentaEditableField field="nombre" initialValue={perfil.nombre ?? ""} />
           </div>
           <div className="cuenta-row">
             <div className="cuenta-row-label">Email</div>
@@ -250,7 +294,7 @@ export default async function PerfilPage() {
           </div>
           <div className="cuenta-row">
             <div className="cuenta-row-label">Ubicación</div>
-            <div className="cuenta-row-value">{ubicacionLabel} <button type="button" className="cuenta-edit-btn">Editar</button></div>
+            <CuentaEditableField field="ubicacion" initialValue={perfil.ubicacion ?? ""} />
           </div>
           <div className="cuenta-row">
             <div className="cuenta-row-label">Fecha nacimiento</div>
@@ -271,12 +315,13 @@ export default async function PerfilPage() {
           />
         </div>
 
-        {/* Acciones de cuenta */}
+        {/* Acciones de cuenta — Lote U: removidos "Cambiar contraseña" (la app
+            usa OAuth + magic link, no maneja passwords) y "Descargar mis
+            datos" (endpoint /datos-download intacto en backend para uso
+            futuro vía soporte). */}
         <div style={{ marginTop: 18, paddingTop: 14, borderTop: "1px solid var(--border-light)", display: "flex", flexDirection: "column", gap: 8 }}>
-          <button type="button" className="btn btn-ghost btn-sm" style={{ justifyContent: "flex-start" }}>🔒 Cambiar contraseña</button>
-          <a href="/api/v1/usuarios/me/exportar" className="btn btn-ghost btn-sm" style={{ justifyContent: "flex-start" }}>📥 Descargar mis datos</a>
           <SignOutLink />
-          <Link href="/perfil/eliminar" className="btn btn-ghost btn-sm" style={{ justifyContent: "flex-start", color: "var(--pred-wrong)" }}>🗑 Eliminar mi cuenta</Link>
+          <EliminarCuentaButton />
         </div>
       </div>
 
