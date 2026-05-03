@@ -1,14 +1,15 @@
+/* ============================================
+   Lote R — Mockup styles 1:1 portados desde docs/habla-mockup-v3.2.html.
+   Importado al inicio (regla v3.0 paso 6: antes de Tailwind utilities) para
+   que las utilities de Tailwind puedan sobrescribir en casos puntuales si
+   hace falta, pero el enfoque es usar las clases del mockup tal cual sin
+   override. CSS @import OBLIGATORIAMENTE al inicio del archivo (spec).
+   ============================================ */
+@import "./mockup-styles.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* ============================================
-   Lote Q — Mockup styles 1:1 portados desde docs/habla-mockup-v3.2.html.
-   Importado primero para que las utilities de Tailwind puedan sobrescribir
-   en casos puntuales si hace falta, pero el enfoque es usar las clases
-   del mockup tal cual sin override.
-   ============================================ */
-@import "./mockup-styles.css";
 
 /* ==========================================================================
    DESIGN TOKENS — fuente de verdad: docs/ux-spec/00-design-system/tokens.md
