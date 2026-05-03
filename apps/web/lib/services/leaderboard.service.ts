@@ -140,7 +140,59 @@ export async function obtenerLeaderboardMesActual(input: {
 } = {}): Promise<LeaderboardActual> {
   const mes = input.mes ?? mesActualKey();
   const filas = await agregarPuntosDelMes(mes);
-  return armarVistaActual(mes, filas, input.usuarioIdActual ?? null);
+  const miFilaSintetica = await resolverMiFilaFueraDelAgregado(
+    mes,
+    input.usuarioIdActual ?? null,
+    filas,
+  );
+  return armarVistaActual(
+    mes,
+    filas,
+    input.usuarioIdActual ?? null,
+    miFilaSintetica,
+  );
+}
+
+/**
+ * Si el usuario tiene tickets en torneos del mes pero NO aparece en el
+ * agregado del leaderboard (porque sus torneos aún no terminaron, así que
+ * no tiene `puntosFinales`), devolvemos una fila sintética con puntos = 0
+ * y posición = filas.length + 1, para que la vista pueda mostrar "@yo (tú)"
+ * sticky-bottom.
+ *
+ * Decisión: usamos puntos = 0 (no `puntosTotal` parcial del LIVE) para que
+ * sea consistente con el resto del ranking — todos los demás cuentan solo
+ * `puntosFinales` de torneos FINALIZADO.
+ */
+async function resolverMiFilaFueraDelAgregado(
+  mes: string,
+  usuarioId: string | null,
+  filasAgregado: LeaderboardRow[],
+): Promise<LeaderboardRow | null> {
+  if (!usuarioId) return null;
+  // Si ya está en el agregado (puntos finales), no hace falta sintetizar.
+  if (filasAgregado.some((f) => f.userId === usuarioId)) return null;
+
+  const { desde, hasta } = getMonthBounds(mes);
+  const ticket = await prisma.ticket.findFirst({
+    where: {
+      usuarioId,
+      torneo: {
+        partido: { fechaInicio: { gte: desde, lt: hasta } },
+      },
+    },
+    select: {
+      usuario: { select: { username: true, deletedAt: true } },
+    },
+  });
+  if (!ticket || ticket.usuario.deletedAt) return null;
+
+  return {
+    posicion: filasAgregado.length + 1,
+    userId: usuarioId,
+    username: ticket.usuario.username,
+    puntos: 0,
+  };
 }
 
 /**
@@ -798,15 +850,23 @@ function armarVistaActual(
   mes: string,
   filas: LeaderboardRow[],
   usuarioId: string | null,
+  miFilaSintetica: LeaderboardRow | null = null,
 ): LeaderboardActual {
   const top100 = filas.slice(0, 100);
+  // Prioridad: 1) fila real del agregado finalizado, 2) fila sintética
+  // (usuario inscripto en partidos pendientes/LIVE pero sin puntos finales).
   const miFila = usuarioId
-    ? filas.find((f) => f.userId === usuarioId) ?? null
+    ? (filas.find((f) => f.userId === usuarioId) ?? miFilaSintetica)
     : null;
+  // Si la fila sintética cuenta, totalUsuarios incluye al usuario también.
+  const totalUsuarios =
+    miFilaSintetica !== null && miFila === miFilaSintetica
+      ? filas.length + 1
+      : filas.length;
   return {
     mes,
     nombreMes: formatNombreMes(mes),
-    totalUsuarios: filas.length,
+    totalUsuarios,
     filas: top100,
     miFila,
     cerrado: false,
