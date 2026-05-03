@@ -26,6 +26,8 @@ import {
 } from "@/lib/services/errors";
 import { logger } from "@/lib/services/logger";
 import { logAuditoria } from "@/lib/services/auditoria.service";
+import { listarFijas } from "@/lib/services/las-fijas.service";
+import { obtenerListaLiga } from "@/lib/services/liga.service";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -881,6 +883,78 @@ export async function GET(_req: NextRequest): Promise<Response> {
         })
       : 0;
 
+    // ----- Llamadas REALES a los servicios -----
+    // Si los conteos del resumen JS-side dicen que X partidos deberían
+    // aparecer pero los servicios reales devuelven 0, hay un disconnect
+    // entre la replicación JS de los filtros y lo que Prisma realmente
+    // ejecuta. Estos números son la verdad operacional.
+    const fijasReales = await listarFijas().catch((e: Error) => ({
+      error: e.message,
+    }));
+    const ligaReal = await obtenerListaLiga(session.user.id).catch(
+      (e: Error) => ({ error: e.message }),
+    );
+
+    const serviciosReales = {
+      listarFijas: Array.isArray(fijasReales)
+        ? {
+            total: fijasReales.length,
+            externalIds: [], // FijaListItem no expone externalId; usamos partido
+            partidos: fijasReales.map(
+              (f) => `${f.equipoLocal} vs ${f.equipoVisita}`,
+            ),
+            partidosDemoIncluidos: fijasReales.filter((f) =>
+              partidosDemo.some(
+                (d) =>
+                  d.equipoLocal === f.equipoLocal &&
+                  d.equipoVisita === f.equipoVisita,
+              ),
+            ).length,
+          }
+        : fijasReales,
+      obtenerListaLiga:
+        "proximos" in ligaReal
+          ? {
+              proximos: {
+                total: ligaReal.proximos.length,
+                partidos: ligaReal.proximos.map(
+                  (p) => `${p.equipoLocal} vs ${p.equipoVisita}`,
+                ),
+              },
+              enVivo: {
+                total: ligaReal.enVivo.length,
+                partidos: ligaReal.enVivo.map(
+                  (p) => `${p.equipoLocal} vs ${p.equipoVisita}`,
+                ),
+              },
+              terminados: {
+                total: ligaReal.terminados.length,
+                partidos: ligaReal.terminados.map(
+                  (p) => `${p.equipoLocal} vs ${p.equipoVisita}`,
+                ),
+              },
+            }
+          : ligaReal,
+    };
+
+    // Para detectar discrepancias entre los flags directos del partido y
+    // un raw query equivalente (descarta posible bug de visibilidadWhere).
+    const proximosRaw = await prisma.partido.count({
+      where: {
+        elegibleLiga: true,
+        estado: "PROGRAMADO",
+        fechaInicio: { gt: ahora },
+      },
+    });
+    const proximosRawDemoSolo = await prisma.partido.count({
+      where: {
+        elegibleLiga: true,
+        estado: "PROGRAMADO",
+        fechaInicio: { gt: ahora },
+        externalId: { startsWith: DEMO_PREFIX },
+      },
+    });
+
     return Response.json({
       data: {
         ok: true,
@@ -888,6 +962,15 @@ export async function GET(_req: NextRequest): Promise<Response> {
         resumen: {
           ...resumen,
           ticketsEnTorneosDemo: ticketsCount,
+        },
+        // Verdad operacional — qué devuelven los servicios que la página
+        // usa. Si esto difiere de "resumen", hay un bug de query.
+        serviciosReales,
+        // Conteos crudos sin visibilidadWhere para aislar si ese filtro
+        // es el culpable.
+        rawCount: {
+          proximosTotal: proximosRaw,
+          proximosDemoSolo: proximosRawDemoSolo,
         },
         detalle,
       },
