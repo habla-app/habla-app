@@ -1,15 +1,25 @@
-/* ============================================
-   Lote R — Mockup styles 1:1 portados desde docs/habla-mockup-v3.2.html.
-   Importado al inicio (regla v3.0 paso 6: antes de Tailwind utilities) para
-   que las utilities de Tailwind puedan sobrescribir en casos puntuales si
-   hace falta, pero el enfoque es usar las clases del mockup tal cual sin
-   override. CSS @import OBLIGATORIAMENTE al inicio del archivo (spec).
-   ============================================ */
-@import "./mockup-styles.css";
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ============================================
+   Lote R — Mockup styles 1:1 portados desde docs/habla-mockup-v3.2.html.
+
+   IMPORTANTE: El @import VA DESPUÉS de las directivas @tailwind. Este proyecto
+   usa Tailwind 3.4 SIN postcss-import instalado. En esa configuración:
+     - Si el @import está al INICIO, Tailwind no lo procesa e inlinea, y queda
+       literal en el CSS final → el browser pide mockup-styles.css por separado
+       a una URL que Next.js no sirve → archivo de 0 bytes en producción.
+     - Si el @import va DESPUÉS de @tailwind, postcss-import (que Tailwind
+       incluye internamente para procesar @apply y resolver paths relativos)
+       sí lo inlinea correctamente → todas las clases del mockup viajan dentro
+       del bundle CSS principal.
+   El plan v3.0 paso 6 sugería poner @import antes de Tailwind utilities, pero
+   eso rompe el build en este stack. La cascada se mantiene correcta porque
+   las clases del mockup quedan después de las utilities, dándoles prioridad
+   sobre overrides accidentales de Tailwind utility.
+   ============================================ */
+@import "./mockup-styles.css";
 
 /* ==========================================================================
    DESIGN TOKENS — fuente de verdad: docs/ux-spec/00-design-system/tokens.md
