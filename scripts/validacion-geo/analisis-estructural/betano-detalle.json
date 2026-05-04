@@ -1,0 +1,609 @@
+{
+  "totalElementos": 1570,
+  "tags": [
+    {
+      "tag": "div",
+      "count": 529
+    },
+    {
+      "tag": "path",
+      "count": 226
+    },
+    {
+      "tag": "link",
+      "count": 179
+    },
+    {
+      "tag": "span",
+      "count": 145
+    },
+    {
+      "tag": "svg",
+      "count": 141
+    },
+    {
+      "tag": "a",
+      "count": 49
+    },
+    {
+      "tag": "p",
+      "count": 39
+    },
+    {
+      "tag": "script",
+      "count": 37
+    },
+    {
+      "tag": "li",
+      "count": 30
+    },
+    {
+      "tag": "button",
+      "count": 19
+    },
+    {
+      "tag": "meta",
+      "count": 17
+    },
+    {
+      "tag": "section",
+      "count": 17
+    },
+    {
+      "tag": "input",
+      "count": 17
+    },
+    {
+      "tag": "label",
+      "count": 15
+    },
+    {
+      "tag": "g",
+      "count": 13
+    },
+    {
+      "tag": "h3",
+      "count": 12
+    },
+    {
+      "tag": "defs",
+      "count": 11
+    },
+    {
+      "tag": "clippath",
+      "count": 11
+    },
+    {
+      "tag": "rect",
+      "count": 11
+    },
+    {
+      "tag": "title",
+      "count": 6
+    },
+    {
+      "tag": "style",
+      "count": 5
+    },
+    {
+      "tag": "img",
+      "count": 5
+    },
+    {
+      "tag": "hr",
+      "count": 4
+    },
+    {
+      "tag": "symbol",
+      "count": 4
+    },
+    {
+      "tag": "nav",
+      "count": 3
+    }
+  ],
+  "topClases": [
+    {
+      "clase": "tw-flex",
+      "count": 175
+    },
+    {
+      "clase": "tw-items-center",
+      "count": 155
+    },
+    {
+      "clase": "[object",
+      "count": 137
+    },
+    {
+      "clase": "SVGAnimatedString]",
+      "count": 137
+    },
+    {
+      "clase": "tw-flex-1",
+      "count": 96
+    },
+    {
+      "clase": "tw-whitespace-nowrap",
+      "count": 96
+    },
+    {
+      "clase": "tw-text-sem-color-text-gray-emphasis",
+      "count": 94
+    },
+    {
+      "clase": "tw-text-s",
+      "count": 72
+    },
+    {
+      "clase": "tw-flex-row",
+      "count": 72
+    },
+    {
+      "clase": "tw-overflow-hidden",
+      "count": 72
+    },
+    {
+      "clase": "tw-px-n",
+      "count": 71
+    },
+    {
+      "clase": "tw-leading-s",
+      "count": 71
+    },
+    {
+      "clase": "tw-py-n",
+      "count": 69
+    },
+    {
+      "clase": "tw-select-none",
+      "count": 57
+    },
+    {
+      "clase": "tw-justify-center",
+      "count": 55
+    },
+    {
+      "clase": "tw-cursor-pointer",
+      "count": 55
+    },
+    {
+      "clase": "tw-ml-n",
+      "count": 49
+    },
+    {
+      "clase": "tw-gap-xs",
+      "count": 48
+    },
+    {
+      "clase": "tw-text-ellipsis",
+      "count": 48
+    },
+    {
+      "clase": "tw-relative",
+      "count": 48
+    },
+    {
+      "clase": "tw-inline-flex",
+      "count": 46
+    },
+    {
+      "clase": "tw-min-w-0",
+      "count": 44
+    },
+    {
+      "clase": "tw-w-full",
+      "count": 43
+    },
+    {
+      "clase": "tw-no-underline",
+      "count": 42
+    },
+    {
+      "clase": "tw-font-bold",
+      "count": 42
+    },
+    {
+      "clase": "tw-border-solid",
+      "count": 38
+    },
+    {
+      "clase": "tw-border-n",
+      "count": 37
+    },
+    {
+      "clase": "tw-leading-m",
+      "count": 36
+    },
+    {
+      "clase": "sport-picker__main__item",
+      "count": 34
+    },
+    {
+      "clase": "tw-justify-between",
+      "count": 32
+    },
+    {
+      "clase": "tw-h-full",
+      "count": 28
+    },
+    {
+      "clase": "tw-text-center",
+      "count": 28
+    },
+    {
+      "clase": "tw-items-start",
+      "count": 28
+    },
+    {
+      "clase": "tw-text-xs",
+      "count": 27
+    },
+    {
+      "clase": "sport-picker__item",
+      "count": 24
+    },
+    {
+      "clase": "sport-picker__item--expandable",
+      "count": 24
+    },
+    {
+      "clase": "!tw-p-0",
+      "count": 24
+    },
+    {
+      "clase": "sport-picker__item__inline",
+      "count": 24
+    },
+    {
+      "clase": "tw-pt-xs",
+      "count": 24
+    },
+    {
+      "clase": "tw-max-w-[150px]",
+      "count": 24
+    }
+  ],
+  "dataAttributos": [
+    "data-cf-beacon",
+    "data-current-language",
+    "data-document-language",
+    "data-domain-script",
+    "data-icon",
+    "data-kds-brand",
+    "data-kds-mode",
+    "data-kds-theme",
+    "data-marketid",
+    "data-msgid",
+    "data-nosnippet",
+    "data-optanongroupid",
+    "data-optimove-service-worker-path",
+    "data-prefix",
+    "data-qa",
+    "data-qa-selected",
+    "data-qa-visible",
+    "data-scroll-locator",
+    "data-selnid",
+    "data-translations-source",
+    "data-translations-version",
+    "data-v-0f7e2b97",
+    "data-v-11a8437c",
+    "data-v-6755e7c3",
+    "data-v-7db4ed7c",
+    "data-v-a08a26bf",
+    "data-v-a555d029",
+    "data-v-app",
+    "data-v-c1e9907b",
+    "data-v-ccbe19a3",
+    "data-v-d0990141",
+    "data-v-dc0ccdcb",
+    "data-v-dead4c65",
+    "data-v-e661dd76",
+    "data-v-e7103c37"
+  ],
+  "topPrefijosClase": [
+    {
+      "prefijo": "tw",
+      "count": 2727
+    },
+    {
+      "prefijo": "sport",
+      "count": 124
+    },
+    {
+      "prefijo": "ot",
+      "count": 95
+    },
+    {
+      "prefijo": "hover:tw",
+      "count": 87
+    },
+    {
+      "prefijo": "sb",
+      "count": 40
+    },
+    {
+      "prefijo": "GTM",
+      "count": 37
+    },
+    {
+      "prefijo": "favorite",
+      "count": 33
+    },
+    {
+      "prefijo": "kb",
+      "count": 31
+    },
+    {
+      "prefijo": "!tw",
+      "count": 26
+    },
+    {
+      "prefijo": "bet",
+      "count": 25
+    },
+    {
+      "prefijo": "l:tw",
+      "count": 21
+    },
+    {
+      "prefijo": "swiper",
+      "count": 21
+    },
+    {
+      "prefijo": "cui",
+      "count": 21
+    },
+    {
+      "prefijo": "last:tw",
+      "count": 14
+    },
+    {
+      "prefijo": "vertical",
+      "count": 10
+    }
+  ],
+  "muestraLinks": [
+    {
+      "text": "Programación de Apuestas",
+      "href": "https://www.betano.pe/sport/futbol/proximos-partidos-hoy/"
+    },
+    {
+      "text": "Apuestas por los Campeones",
+      "href": "https://www.betano.pe/ganadores-competencia/"
+    },
+    {
+      "text": "Apuestas especiales",
+      "href": "https://www.betano.pe/apuestas-especiales/"
+    },
+    {
+      "text": "Los favoritos",
+      "href": "https://www.betano.pe/favoritos/"
+    },
+    {
+      "text": "Misiones",
+      "href": "https://www.betano.pe/missions/"
+    },
+    {
+      "text": "iOS y Android",
+      "href": "https://www.betano.pe/celular/"
+    },
+    {
+      "text": "Virtuales",
+      "href": "https://www.betano.pe/virtuals/"
+    },
+    {
+      "text": "Master",
+      "href": "https://www.betano.pe/master/"
+    },
+    {
+      "text": "Para Ti",
+      "href": "https://www.betano.pe/yours/foryou/"
+    },
+    {
+      "text": "Liga 1\nPerú",
+      "href": "https://www.betano.pe/sport/futbol/peru/liga-1/17079/"
+    },
+    {
+      "text": "Premier League\nInglaterra",
+      "href": "https://www.betano.pe/sport/futbol/inglaterra/premier-league/1/"
+    },
+    {
+      "text": "Champions League",
+      "href": "https://www.betano.pe/sport/futbol/campeonatos/champions-league/188566/"
+    },
+    {
+      "text": "LaLiga\nEspaña",
+      "href": "https://www.betano.pe/sport/futbol/espana/laliga/5/"
+    },
+    {
+      "text": "NBA\nEE. UU.",
+      "href": "https://www.betano.pe/sport/basquetbol/ee-uu/nba/441g/"
+    },
+    {
+      "text": "MLB\nEE. UU.",
+      "href": "https://www.betano.pe/sport/beisbol/ee-uu/mlb/1662/"
+    },
+    {
+      "text": "Fútbol",
+      "href": "https://www.betano.pe/sport/futbol/"
+    },
+    {
+      "text": "Básquetbol",
+      "href": "https://www.betano.pe/sport/basquetbol/"
+    },
+    {
+      "text": "Tenis",
+      "href": "https://www.betano.pe/sport/tenis/"
+    },
+    {
+      "text": "Esports",
+      "href": "https://www.betano.pe/sport/esports/"
+    },
+    {
+      "text": "Béisbol",
+      "href": "https://www.betano.pe/sport/beisbol/"
+    },
+    {
+      "text": "Fórmula 1",
+      "href": "https://www.betano.pe/sport/formula-1/"
+    },
+    {
+      "text": "MMA",
+      "href": "https://www.betano.pe/sport/mma/"
+    },
+    {
+      "text": "Voleibol",
+      "href": "https://www.betano.pe/sport/voleibol/"
+    },
+    {
+      "text": "Hockey sobre hielo",
+      "href": "https://www.betano.pe/sport/hockey-sobre-hielo/"
+    },
+    {
+      "text": "Tenis de mesa",
+      "href": "https://www.betano.pe/sport/tenis-de-mesa/"
+    },
+    {
+      "text": "Box",
+      "href": "https://www.betano.pe/sport/box/"
+    },
+    {
+      "text": "Fútbol americano",
+      "href": "https://www.betano.pe/sport/futbol-americano/"
+    },
+    {
+      "text": "Balonmano",
+      "href": "https://www.betano.pe/sport/balonmano/"
+    },
+    {
+      "text": "Dardos",
+      "href": "https://www.betano.pe/sport/dardos/"
+    },
+    {
+      "text": "Unión de Rugby",
+      "href": "https://www.betano.pe/sport/rugby-union/"
+    },
+    {
+      "text": "Liga de Rugby",
+      "href": "https://www.betano.pe/sport/rugby-league/"
+    },
+    {
+      "text": "Ciclismo",
+      "href": "https://www.betano.pe/sport/ciclismo/"
+    },
+    {
+      "text": "Futsal",
+      "href": "https://www.betano.pe/sport/futsal/"
+    },
+    {
+      "text": "Waterpolo",
+      "href": "https://www.betano.pe/sport/waterpolo/"
+    },
+    {
+      "text": "Snooker",
+      "href": "https://www.betano.pe/sport/snooker/"
+    },
+    {
+      "text": "Criquet",
+      "href": "https://www.betano.pe/sport/cricket/"
+    },
+    {
+      "text": "Moto GP",
+      "href": "https://www.betano.pe/sport/motogp/"
+    },
+    {
+      "text": "Golf",
+      "href": "https://www.betano.pe/sport/golf/"
+    },
+    {
+      "text": "Deportes de motor",
+      "href": "https://www.betano.pe/sport/deportes-de-motor/"
+    },
+    {
+      "text": "Resultados En Vivo",
+      "href": "https://www.betano.pe/live-scores/"
+    },
+    {
+      "text": "Inicio",
+      "href": "https://www.betano.pe/"
+    },
+    {
+      "text": "Fútbol",
+      "href": "https://www.betano.pe/sport/futbol/"
+    },
+    {
+      "text": "Perú",
+      "href": "https://www.betano.pe/sport/futbol/campeonatos/peru/11380/"
+    },
+    {
+      "text": "Liga 1",
+      "href": "https://www.betano.pe/sport/futbol/peru/liga-1/17079/"
+    },
+    {
+      "text": "UTC De Cajamarca",
+      "href": "https://www.betano.pe/sport/futbol/campeonatos/peru/17079/utc-de-cajamarca/116620-t/"
+    },
+    {
+      "text": "FC Cajamarca",
+      "href": "https://www.betano.pe/sport/futbol/campeonatos/peru/17079/fc-cajamarca/2067205-t/"
+    },
+    {
+      "text": "Más información",
+      "href": "https://cookiepedia.co.uk/giving-consent-to-cookies"
+    }
+  ],
+  "probablesPartidos": [
+    {
+      "textoMuestra": "UTC De Cajamarca o Empate\n1.23",
+      "tagName": "DIV",
+      "clases": "selections__selection selection-horizontal-button tw-flex tw-flex-row tw-items-center tw-justify-cen",
+      "dataAttrs": [
+        "qa",
+        "selnid"
+      ],
+      "bbox": 28512
+    },
+    {
+      "textoMuestra": "UTC De Cajamarca o FC Cajamarca\n1.26",
+      "tagName": "DIV",
+      "clases": "selections__selection selection-horizontal-button tw-flex tw-flex-row tw-items-center tw-justify-cen",
+      "dataAttrs": [
+        "qa",
+        "selnid"
+      ],
+      "bbox": 28512
+    },
+    {
+      "textoMuestra": "FC Cajamarca o Empate\n2.02",
+      "tagName": "DIV",
+      "clases": "selections__selection selection-horizontal-button tw-flex tw-flex-row tw-items-center tw-justify-cen",
+      "dataAttrs": [
+        "qa",
+        "selnid"
+      ],
+      "bbox": 28512
+    },
+    {
+      "textoMuestra": "Mentor de Apuestas\nSelecciona el monto que deseas apostar\nSelecciona el monto que deseas ganar\nS/60 - S/200\nS/200 - S/600\nS/600 - S/3000\nS/3000 - S/20000\nS/20000 - S/30000\nMostrar sugerencias",
+      "tagName": "ARTICLE",
+      "clases": "bet-mentor-widget",
+      "dataAttrs": [],
+      "bbox": 95456
+    },
+    {
+      "textoMuestra": "S/3000 - S/20000",
+      "tagName": "BUTTON",
+      "clases": "bet-mentor-widget__amounts__amount",
+      "dataAttrs": [],
+      "bbox": 4760
+    },
+    {
+      "textoMuestra": "S/20000 - S/30000",
+      "tagName": "BUTTON",
+      "clases": "bet-mentor-widget__amounts__amount",
+      "dataAttrs": [],
+      "bbox": 9792
+    }
+  ]
+}

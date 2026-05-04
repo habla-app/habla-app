@@ -1,0 +1,593 @@
+{
+  "totalElementos": 922,
+  "tags": [
+    {
+      "tag": "link",
+      "count": 133
+    },
+    {
+      "tag": "div",
+      "count": 128
+    },
+    {
+      "tag": "li",
+      "count": 113
+    },
+    {
+      "tag": "a",
+      "count": 111
+    },
+    {
+      "tag": "img",
+      "count": 78
+    },
+    {
+      "tag": "span",
+      "count": 62
+    },
+    {
+      "tag": "p",
+      "count": 55
+    },
+    {
+      "tag": "strong",
+      "count": 48
+    },
+    {
+      "tag": "script",
+      "count": 24
+    },
+    {
+      "tag": "meta",
+      "count": 22
+    },
+    {
+      "tag": "h3",
+      "count": 21
+    },
+    {
+      "tag": "path",
+      "count": 19
+    },
+    {
+      "tag": "ul",
+      "count": 14
+    },
+    {
+      "tag": "svg",
+      "count": 13
+    },
+    {
+      "tag": "button",
+      "count": 12
+    },
+    {
+      "tag": "br",
+      "count": 11
+    },
+    {
+      "tag": "style",
+      "count": 9
+    },
+    {
+      "tag": "h2",
+      "count": 9
+    },
+    {
+      "tag": "hr",
+      "count": 8
+    },
+    {
+      "tag": "article",
+      "count": 5
+    },
+    {
+      "tag": "section",
+      "count": 5
+    },
+    {
+      "tag": "iframe",
+      "count": 2
+    },
+    {
+      "tag": "main",
+      "count": 2
+    },
+    {
+      "tag": "label",
+      "count": 2
+    },
+    {
+      "tag": "input",
+      "count": 2
+    }
+  ],
+  "topClases": [
+    {
+      "clase": "flex",
+      "count": 184
+    },
+    {
+      "clase": "w-full",
+      "count": 169
+    },
+    {
+      "clase": "justify-center",
+      "count": 139
+    },
+    {
+      "clase": "items-center",
+      "count": 124
+    },
+    {
+      "clase": "h-full",
+      "count": 89
+    },
+    {
+      "clase": "uppercase",
+      "count": 64
+    },
+    {
+      "clase": "text-start",
+      "count": 58
+    },
+    {
+      "clase": "block",
+      "count": 56
+    },
+    {
+      "clase": "flex-col",
+      "count": 55
+    },
+    {
+      "clase": "gap-2",
+      "count": 47
+    },
+    {
+      "clase": "hover:scale-105",
+      "count": 44
+    },
+    {
+      "clase": "text-info-text",
+      "count": 41
+    },
+    {
+      "clase": "rounded-xl",
+      "count": 40
+    },
+    {
+      "clase": "items-start",
+      "count": 39
+    },
+    {
+      "clase": "py-2",
+      "count": 38
+    },
+    {
+      "clase": "text-neutral",
+      "count": 35
+    },
+    {
+      "clase": "bg-base-300",
+      "count": 34
+    },
+    {
+      "clase": "gap-4",
+      "count": 33
+    },
+    {
+      "clase": "p-3",
+      "count": 30
+    },
+    {
+      "clase": "hover:bg-gradient-to-r",
+      "count": 30
+    },
+    {
+      "clase": "hover:from-primary",
+      "count": 30
+    },
+    {
+      "clase": "hover:from-90%",
+      "count": 30
+    },
+    {
+      "clase": "w-8",
+      "count": 30
+    },
+    {
+      "clase": "h-8",
+      "count": 30
+    },
+    {
+      "clase": "[object",
+      "count": 29
+    },
+    {
+      "clase": "SVGAnimatedString]",
+      "count": 29
+    },
+    {
+      "clase": "hover:font-bold",
+      "count": 27
+    },
+    {
+      "clase": "text-xs",
+      "count": 27
+    },
+    {
+      "clase": "lg:text-sm",
+      "count": 27
+    },
+    {
+      "clase": "justify-start",
+      "count": 21
+    },
+    {
+      "clase": "object-contain",
+      "count": 21
+    },
+    {
+      "clase": "flex-shrink-0",
+      "count": 20
+    },
+    {
+      "clase": "w-[65px]",
+      "count": 20
+    },
+    {
+      "clase": "h-[40px]",
+      "count": 20
+    },
+    {
+      "clase": "payment-methods",
+      "count": 19
+    },
+    {
+      "clase": "lg:hover:scale-105",
+      "count": 18
+    },
+    {
+      "clase": "text-base",
+      "count": 16
+    },
+    {
+      "clase": "titles",
+      "count": 15
+    },
+    {
+      "clase": "font-medium",
+      "count": 15
+    },
+    {
+      "clase": "text-sm",
+      "count": 14
+    }
+  ],
+  "dataAttributos": [
+    "data-action",
+    "data-analytics-context",
+    "data-analytics-label",
+    "data-ceg-image-size",
+    "data-ceg-image-type",
+    "data-ceg-seal-id",
+    "data-icon",
+    "data-lang",
+    "data-layout",
+    "data-name",
+    "data-optimove-service-worker-path",
+    "data-prefix",
+    "data-share",
+    "data-show-count",
+    "data-show-faces",
+    "data-size",
+    "data-v-01733d47",
+    "data-v-04a15712",
+    "data-v-08a4dc28",
+    "data-v-1a52b0ce",
+    "data-v-2184378b",
+    "data-v-2f07ba6f",
+    "data-v-3db9f64d",
+    "data-v-566bc590",
+    "data-v-8884dd99",
+    "data-v-a90d6b29",
+    "data-v-app"
+  ],
+  "topPrefijosClase": [
+    {
+      "prefijo": "text",
+      "count": 216
+    },
+    {
+      "prefijo": "justify",
+      "count": 164
+    },
+    {
+      "prefijo": "items",
+      "count": 163
+    },
+    {
+      "prefijo": "gap",
+      "count": 100
+    },
+    {
+      "prefijo": "flex",
+      "count": 81
+    },
+    {
+      "prefijo": "bg",
+      "count": 60
+    },
+    {
+      "prefijo": "rounded",
+      "count": 53
+    },
+    {
+      "prefijo": "py",
+      "count": 41
+    },
+    {
+      "prefijo": "hover:bg",
+      "count": 30
+    },
+    {
+      "prefijo": "font",
+      "count": 29
+    },
+    {
+      "prefijo": "lg:text",
+      "count": 27
+    },
+    {
+      "prefijo": "object",
+      "count": 21
+    },
+    {
+      "prefijo": "payment",
+      "count": 19
+    },
+    {
+      "prefijo": "shadow",
+      "count": 14
+    },
+    {
+      "prefijo": "border",
+      "count": 12
+    }
+  ],
+  "muestraLinks": [
+    {
+      "text": "Regístrate",
+      "href": "https://doradobet.com/registro"
+    },
+    {
+      "text": "INICIO",
+      "href": "https://doradobet.com/home"
+    },
+    {
+      "text": "REGISTRATE",
+      "href": "https://doradobet.com/registro"
+    },
+    {
+      "text": "APP MÓVIL",
+      "href": "https://doradobet.com/landing/app-pwa"
+    },
+    {
+      "text": "APUESTAS DEPORTIVAS",
+      "href": "https://doradobet.com/deportes"
+    },
+    {
+      "text": "APUESTAS EN VIVO",
+      "href": "https://doradobet.com/deportes-en-vivo"
+    },
+    {
+      "text": "CASINO",
+      "href": "https://doradobet.com/new-casino"
+    },
+    {
+      "text": "CASINO EN VIVO",
+      "href": "https://doradobet.com/live-casino-vivo"
+    },
+    {
+      "text": "APUESTAS VIRTUALES",
+      "href": "https://doradobet.com/virtuales-lobby"
+    },
+    {
+      "text": "BINGO PRAGMATIC PLAY",
+      "href": "https://doradobet.com/new-casino/427285"
+    },
+    {
+      "text": "Dorado Club",
+      "href": "https://doradobet.com/programa-lealtad"
+    },
+    {
+      "text": "Promociones",
+      "href": "https://doradobet.com/promociones-bonos"
+    },
+    {
+      "text": "Sorteos",
+      "href": "https://doradobet.com/sorteos"
+    },
+    {
+      "text": "Torneos",
+      "href": "https://doradobet.com/torneos"
+    },
+    {
+      "text": "Televentas",
+      "href": "https://doradobet.com/televentas"
+    },
+    {
+      "text": "Términos y condiciones",
+      "href": "https://doradobet.com/terminosycondiciones"
+    },
+    {
+      "text": "Política de Privacidad",
+      "href": "https://doradobet.com/politica-de-privacidad/politica-de-privacidad"
+    },
+    {
+      "text": "Contáctanos",
+      "href": "https://doradobet.com/contactenos"
+    },
+    {
+      "text": "¿Quieres ser Agente DoradoBet?",
+      "href": "https://doradobet.com/trabaja-con-nosotros"
+    },
+    {
+      "text": "Juego Responsable",
+      "href": "https://doradobet.com/juego-responsable/juego-responsable"
+    },
+    {
+      "text": "Afiliados",
+      "href": "https://afiliados.doradobet.com/"
+    },
+    {
+      "text": "Nuestras tiendas",
+      "href": "https://doradobet.com/geolocalizacion"
+    },
+    {
+      "text": "Blog",
+      "href": "https://blog.doradobet.com/"
+    },
+    {
+      "text": "Promociones",
+      "href": "https://doradobet.com/promociones-bonos"
+    },
+    {
+      "text": "Regístrate",
+      "href": "https://doradobet.com/registro"
+    },
+    {
+      "text": "Retiros",
+      "href": "https://doradobet.com/consulta/consulta_retiros"
+    },
+    {
+      "text": "Depositar",
+      "href": "https://doradobet.com/deportes/liga/4042#"
+    },
+    {
+      "text": "Historial",
+      "href": "https://doradobet.com/consulta/consulta_tickets_online"
+    },
+    {
+      "text": "Mi Perfil",
+      "href": "https://doradobet.com/gestion/gestion_cuenta"
+    },
+    {
+      "text": "Reglas de apuestas",
+      "href": "https://doradobet.com/terminosycondiciones/reglas-de-juego"
+    },
+    {
+      "text": "Depósitos",
+      "href": "https://doradobet.com/gestion/deposito"
+    },
+    {
+      "text": "Retiros",
+      "href": "https://doradobet.com/gestion/cuenta_cobro"
+    },
+    {
+      "text": "Límite de Apuestas",
+      "href": "https://doradobet.com/terminosycondiciones/reglas-de-juego"
+    },
+    {
+      "text": "Dorado Club",
+      "href": "https://doradobet.com/programa-lealtad"
+    },
+    {
+      "text": "Tienda de premios",
+      "href": "https://doradobet.com/shop-bonuses"
+    },
+    {
+      "text": "Promociones",
+      "href": "https://doradobet.com/promociones-bonos"
+    },
+    {
+      "text": "Apuestas en vivo",
+      "href": "https://doradobet.com/apuestas-en-vivo"
+    },
+    {
+      "text": "Casino",
+      "href": "https://doradobet.com/new-casino"
+    },
+    {
+      "text": "Blog",
+      "href": "https://blog.doradobet.com/"
+    },
+    {
+      "text": "Política de Privacidad",
+      "href": "https://doradobet.com/politica-de-privacidad"
+    },
+    {
+      "text": "Juego Responsable",
+      "href": "https://doradobet.com/juego-responsable"
+    },
+    {
+      "text": "Registro de personas prohibidas",
+      "href": "https://www.gob.pe/765-inscribirse-en-el-registro-de-personas-prohibidas-a-acceder-a-juegos-de-casinos-y-maquinas-tragamonedas"
+    },
+    {
+      "text": "Términos y Condiciones",
+      "href": "https://doradobet.com/terminosycondiciones/terminos-condiciones"
+    },
+    {
+      "text": "Preguntas Frecuentes",
+      "href": "https://doradobet.com/preguntasfrecuentes"
+    },
+    {
+      "text": "Lavado de Dinero",
+      "href": "https://doradobet.com/terminosycondiciones/terminos-condiciones"
+    },
+    {
+      "text": "Políticas KyC",
+      "href": "https://doradobet.com/terminosycondiciones/terminos-condiciones"
+    },
+    {
+      "text": "Recargas, Retiros y Promociones",
+      "href": "https://doradobet.com/terminosycondiciones/terminos-condiciones"
+    },
+    {
+      "text": "Nuestras tiendas",
+      "href": "https://doradobet.com/geolocalizacion"
+    },
+    {
+      "text": "¿Quieres ser Agente DoradoBet?",
+      "href": "https://doradobet.com/trabaja-con-nosotros"
+    },
+    {
+      "text": "Programa de afiliados",
+      "href": "https://afiliados.doradobet.com/"
+    },
+    {
+      "text": "Contáctanos",
+      "href": "https://doradobet.com/contactenos"
+    },
+    {
+      "text": "Libro de Reclamaciones",
+      "href": "https://doradobet.com/reclamaciones"
+    },
+    {
+      "text": "Ayuda",
+      "href": "https://blog.doradobet.com/ayuda-doradobet/"
+    },
+    {
+      "text": "Resolución de Disputas",
+      "href": "https://doradobet.com/terminosycondiciones/terminos-condiciones"
+    },
+    {
+      "text": "Información personal y cuenta",
+      "href": "https://doradobet.com/politica-de-privacidad/9.%20Informaci%C3%B3n%20personal%20y%20cuenta"
+    },
+    {
+      "text": "Follow @doradobet",
+      "href": "https://twitter.com/doradobet?ref_src=twsrc%5Etfw"
+    },
+    {
+      "text": "Ministerio de Comercio Exterior y Turismo (MINCETUR).",
+      "href": "https://www.gob.pe/mincetur"
+    },
+    {
+      "text": "enlace",
+      "href": "https://www.gob.pe/765-inscribirse-en-el-registro-de-personas-prohibidas-a-acceder-a-juegos-de-casinos-y-maquinas-tragamonedas"
+    }
+  ],
+  "probablesPartidos": []
+}

@@ -1,0 +1,709 @@
+{
+  "totalElementos": 2773,
+  "tags": [
+    {
+      "tag": "div",
+      "count": 931
+    },
+    {
+      "tag": "path",
+      "count": 297
+    },
+    {
+      "tag": "link",
+      "count": 226
+    },
+    {
+      "tag": "span",
+      "count": 218
+    },
+    {
+      "tag": "svg",
+      "count": 176
+    },
+    {
+      "tag": "a",
+      "count": 123
+    },
+    {
+      "tag": "stop",
+      "count": 108
+    },
+    {
+      "tag": "img",
+      "count": 100
+    },
+    {
+      "tag": "li",
+      "count": 93
+    },
+    {
+      "tag": "p",
+      "count": 69
+    },
+    {
+      "tag": "b",
+      "count": 58
+    },
+    {
+      "tag": "script",
+      "count": 37
+    },
+    {
+      "tag": "g",
+      "count": 34
+    },
+    {
+      "tag": "h2",
+      "count": 34
+    },
+    {
+      "tag": "section",
+      "count": 29
+    },
+    {
+      "tag": "lineargradient",
+      "count": 28
+    },
+    {
+      "tag": "button",
+      "count": 26
+    },
+    {
+      "tag": "h3",
+      "count": 24
+    },
+    {
+      "tag": "input",
+      "count": 18
+    },
+    {
+      "tag": "meta",
+      "count": 17
+    },
+    {
+      "tag": "rect",
+      "count": 17
+    },
+    {
+      "tag": "defs",
+      "count": 16
+    },
+    {
+      "tag": "label",
+      "count": 16
+    },
+    {
+      "tag": "ul",
+      "count": 13
+    },
+    {
+      "tag": "clippath",
+      "count": 11
+    }
+  ],
+  "topClases": [
+    {
+      "clase": "tw-items-center",
+      "count": 241
+    },
+    {
+      "clase": "tw-flex",
+      "count": 239
+    },
+    {
+      "clase": "cui-flex",
+      "count": 186
+    },
+    {
+      "clase": "[object",
+      "count": 168
+    },
+    {
+      "clase": "SVGAnimatedString]",
+      "count": 168
+    },
+    {
+      "clase": "cui-w-full",
+      "count": 145
+    },
+    {
+      "clase": "tw-flex-row",
+      "count": 127
+    },
+    {
+      "clase": "tw-flex-1",
+      "count": 124
+    },
+    {
+      "clase": "tw-justify-center",
+      "count": 114
+    },
+    {
+      "clase": "tw-text-sem-color-text-gray-emphasis",
+      "count": 105
+    },
+    {
+      "clase": "tw-whitespace-nowrap",
+      "count": 99
+    },
+    {
+      "clase": "tw-overflow-hidden",
+      "count": 90
+    },
+    {
+      "clase": "tw-leading-s",
+      "count": 87
+    },
+    {
+      "clase": "tw-min-w-0",
+      "count": 82
+    },
+    {
+      "clase": "cui-items-center",
+      "count": 81
+    },
+    {
+      "clase": "tw-text-s",
+      "count": 79
+    },
+    {
+      "clase": "cui-font-bold",
+      "count": 77
+    },
+    {
+      "clase": "cui-flex-col",
+      "count": 74
+    },
+    {
+      "clase": "tw-h-full",
+      "count": 72
+    },
+    {
+      "clase": "tw-w-full",
+      "count": 70
+    },
+    {
+      "clase": "tw-px-n",
+      "count": 67
+    },
+    {
+      "clase": "tw-py-n",
+      "count": 66
+    },
+    {
+      "clase": "cui-text-sem-color-text-gray-emphasis",
+      "count": 54
+    },
+    {
+      "clase": "tw-ml-n",
+      "count": 52
+    },
+    {
+      "clase": "tw-inline-flex",
+      "count": 52
+    },
+    {
+      "clase": "cui-border",
+      "count": 52
+    },
+    {
+      "clase": "cui-border-solid",
+      "count": 52
+    },
+    {
+      "clase": "tw-no-underline",
+      "count": 51
+    },
+    {
+      "clase": "tw-gap-xs",
+      "count": 51
+    },
+    {
+      "clase": "cui-h-full",
+      "count": 51
+    },
+    {
+      "clase": "tw-text-ellipsis",
+      "count": 50
+    },
+    {
+      "clase": "cui-transition-all",
+      "count": 48
+    },
+    {
+      "clase": "tw-flex-col",
+      "count": 47
+    },
+    {
+      "clase": "tw-justify-start",
+      "count": 45
+    },
+    {
+      "clase": "tw-relative",
+      "count": 43
+    },
+    {
+      "clase": "tw-cursor-pointer",
+      "count": 43
+    },
+    {
+      "clase": "cui-cursor-pointer",
+      "count": 43
+    },
+    {
+      "clase": "cui-justify-between",
+      "count": 43
+    },
+    {
+      "clase": "cui-inline-flex",
+      "count": 42
+    },
+    {
+      "clase": "sport-picker__main__item",
+      "count": 40
+    }
+  ],
+  "dataAttributos": [
+    "data-cf-beacon",
+    "data-current-language",
+    "data-document-language",
+    "data-domain-script",
+    "data-evtid",
+    "data-icon",
+    "data-kds-brand",
+    "data-kds-mode",
+    "data-kds-theme",
+    "data-msgid",
+    "data-nosnippet",
+    "data-optanongroupid",
+    "data-optimove-service-worker-path",
+    "data-prefix",
+    "data-qa",
+    "data-qa-selected",
+    "data-scope",
+    "data-selnid",
+    "data-test-id",
+    "data-testid",
+    "data-tooltip-container",
+    "data-translations-source",
+    "data-translations-version",
+    "data-v-11a8437c",
+    "data-v-1918f376",
+    "data-v-7db4ed7c",
+    "data-v-ae10889b",
+    "data-v-app",
+    "data-v-b329ee4c",
+    "data-v-ccbe19a3",
+    "data-v-cf388edd",
+    "data-v-dead4c65",
+    "data-v-e7103c37"
+  ],
+  "topPrefijosClase": [
+    {
+      "prefijo": "tw",
+      "count": 3266
+    },
+    {
+      "prefijo": "cui",
+      "count": 2203
+    },
+    {
+      "prefijo": "nf",
+      "count": 357
+    },
+    {
+      "prefijo": "sport",
+      "count": 181
+    },
+    {
+      "prefijo": "lm",
+      "count": 162
+    },
+    {
+      "prefijo": "ot",
+      "count": 104
+    },
+    {
+      "prefijo": "hover:tw",
+      "count": 102
+    },
+    {
+      "prefijo": "sb",
+      "count": 90
+    },
+    {
+      "prefijo": "footer",
+      "count": 49
+    },
+    {
+      "prefijo": "group",
+      "count": 48
+    },
+    {
+      "prefijo": "swiper",
+      "count": 43
+    },
+    {
+      "prefijo": "GTM",
+      "count": 37
+    },
+    {
+      "prefijo": "favorite",
+      "count": 34
+    },
+    {
+      "prefijo": "kb",
+      "count": 31
+    },
+    {
+      "prefijo": "md:nf",
+      "count": 29
+    }
+  ],
+  "muestraLinks": [
+    {
+      "text": "Programación de Apuestas",
+      "href": "https://www.betano.pe/sport/futbol/proximos-partidos-hoy/"
+    },
+    {
+      "text": "Apuestas por los Campeones",
+      "href": "https://www.betano.pe/ganadores-competencia/"
+    },
+    {
+      "text": "Apuestas especiales",
+      "href": "https://www.betano.pe/apuestas-especiales/"
+    },
+    {
+      "text": "Los favoritos",
+      "href": "https://www.betano.pe/favoritos/"
+    },
+    {
+      "text": "Misiones",
+      "href": "https://www.betano.pe/missions/"
+    },
+    {
+      "text": "iOS y Android",
+      "href": "https://www.betano.pe/celular/"
+    },
+    {
+      "text": "Virtuales",
+      "href": "https://www.betano.pe/virtuals/"
+    },
+    {
+      "text": "Master",
+      "href": "https://www.betano.pe/master/"
+    },
+    {
+      "text": "Para Ti",
+      "href": "https://www.betano.pe/yours/foryou/"
+    },
+    {
+      "text": "Liga 1\nPerú",
+      "href": "https://www.betano.pe/sport/futbol/peru/liga-1/17079/"
+    },
+    {
+      "text": "Premier League\nInglaterra",
+      "href": "https://www.betano.pe/sport/futbol/inglaterra/premier-league/1/"
+    },
+    {
+      "text": "Champions League",
+      "href": "https://www.betano.pe/sport/futbol/campeonatos/champions-league/188566/"
+    },
+    {
+      "text": "LaLiga\nEspaña",
+      "href": "https://www.betano.pe/sport/futbol/espana/laliga/5/"
+    },
+    {
+      "text": "NBA\nEE. UU.",
+      "href": "https://www.betano.pe/sport/basquetbol/ee-uu/nba/441g/"
+    },
+    {
+      "text": "MLB\nEE. UU.",
+      "href": "https://www.betano.pe/sport/beisbol/ee-uu/mlb/1662/"
+    },
+    {
+      "text": "Fútbol",
+      "href": "https://www.betano.pe/sport/futbol/"
+    },
+    {
+      "text": "Champions League\nChampions League",
+      "href": "https://www.betano.pe/sport/futbol/campeonatos/champions-league/188566/"
+    },
+    {
+      "text": "Liga Profesional\nArgentina",
+      "href": "https://www.betano.pe/sport/futbol/argentina/liga-profesional/195785/"
+    },
+    {
+      "text": "Liga AUF Uruguaya\nUruguay",
+      "href": "https://www.betano.pe/sport/futbol/uruguay/liga-auf-uruguaya/17105/"
+    },
+    {
+      "text": "Copa Libertadores\nCopa Libertadores",
+      "href": "https://www.betano.pe/sport/futbol/campeonatos/copa-libertadores/189817/"
+    },
+    {
+      "text": "Europa League\nEuropa League",
+      "href": "https://www.betano.pe/sport/futbol/campeonatos/europa-league/188567/"
+    },
+    {
+      "text": "Copa Sudamericana\nCopa Sudamericana",
+      "href": "https://www.betano.pe/sport/futbol/campeonatos/copa-sudamericana/189818/"
+    },
+    {
+      "text": "Básquetbol",
+      "href": "https://www.betano.pe/sport/basquetbol/"
+    },
+    {
+      "text": "Tenis",
+      "href": "https://www.betano.pe/sport/tenis/"
+    },
+    {
+      "text": "Esports",
+      "href": "https://www.betano.pe/sport/esports/"
+    },
+    {
+      "text": "Béisbol",
+      "href": "https://www.betano.pe/sport/beisbol/"
+    },
+    {
+      "text": "Fórmula 1",
+      "href": "https://www.betano.pe/sport/formula-1/"
+    },
+    {
+      "text": "MMA",
+      "href": "https://www.betano.pe/sport/mma/"
+    },
+    {
+      "text": "Voleibol",
+      "href": "https://www.betano.pe/sport/voleibol/"
+    },
+    {
+      "text": "Hockey sobre hielo",
+      "href": "https://www.betano.pe/sport/hockey-sobre-hielo/"
+    },
+    {
+      "text": "Tenis de mesa",
+      "href": "https://www.betano.pe/sport/tenis-de-mesa/"
+    },
+    {
+      "text": "Box",
+      "href": "https://www.betano.pe/sport/box/"
+    },
+    {
+      "text": "Fútbol americano",
+      "href": "https://www.betano.pe/sport/futbol-americano/"
+    },
+    {
+      "text": "Balonmano",
+      "href": "https://www.betano.pe/sport/balonmano/"
+    },
+    {
+      "text": "Dardos",
+      "href": "https://www.betano.pe/sport/dardos/"
+    },
+    {
+      "text": "Unión de Rugby",
+      "href": "https://www.betano.pe/sport/rugby-union/"
+    },
+    {
+      "text": "Liga de Rugby",
+      "href": "https://www.betano.pe/sport/rugby-league/"
+    },
+    {
+      "text": "Ciclismo",
+      "href": "https://www.betano.pe/sport/ciclismo/"
+    },
+    {
+      "text": "Futsal",
+      "href": "https://www.betano.pe/sport/futsal/"
+    },
+    {
+      "text": "Waterpolo",
+      "href": "https://www.betano.pe/sport/waterpolo/"
+    },
+    {
+      "text": "Snooker",
+      "href": "https://www.betano.pe/sport/snooker/"
+    },
+    {
+      "text": "Criquet",
+      "href": "https://www.betano.pe/sport/cricket/"
+    },
+    {
+      "text": "Moto GP",
+      "href": "https://www.betano.pe/sport/motogp/"
+    },
+    {
+      "text": "Golf",
+      "href": "https://www.betano.pe/sport/golf/"
+    },
+    {
+      "text": "Deportes de motor",
+      "href": "https://www.betano.pe/sport/deportes-de-motor/"
+    },
+    {
+      "text": "Resultados En Vivo",
+      "href": "https://www.betano.pe/live-scores/"
+    },
+    {
+      "text": "Inicio",
+      "href": "https://www.betano.pe/"
+    },
+    {
+      "text": "Fútbol",
+      "href": "https://www.betano.pe/sport/futbol/"
+    },
+    {
+      "text": "Perú",
+      "href": "https://www.betano.pe/sport/futbol/campeonatos/peru/11380/"
+    },
+    {
+      "text": "UTC De Cajamarca\nFC Cajamarca",
+      "href": "https://www.betano.pe/cuotas-de-partido/utc-de-cajamarca-fc-cajamarca/84610837/"
+    },
+    {
+      "text": "CD Moquegua\nAsociacion Deportiva Tarma",
+      "href": "https://www.betano.pe/cuotas-de-partido/cd-moquegua-asociacion-deportiva-tarma/84610816/"
+    },
+    {
+      "text": "Atletico Grau\nClub Cienciano",
+      "href": "https://www.betano.pe/cuotas-de-partido/atletico-grau-club-cienciano/84298759/"
+    },
+    {
+      "text": "Alianza Lima\nSporting Cristal",
+      "href": "https://www.betano.pe/cuotas-de-partido/alianza-lima-sporting-cristal/85150719/"
+    },
+    {
+      "text": "Sport Huancayo\nADC Juan Pablo II College",
+      "href": "https://www.betano.pe/cuotas-de-partido/sport-huancayo-adc-juan-pablo-ii-college/84523263/"
+    },
+    {
+      "text": "Comerciantes Unidos\nFBC Melgar",
+      "href": "https://www.betano.pe/cuotas-de-partido/comerciantes-unidos-fbc-melgar/84523284/"
+    },
+    {
+      "text": "Cusco FC\nLos Chankas CYC",
+      "href": "https://www.betano.pe/cuotas-de-partido/cusco-fc-los-chankas-cyc/84523285/"
+    },
+    {
+      "text": "Deportivo Garcilaso\nAlianza Atletico",
+      "href": "https://www.betano.pe/cuotas-de-partido/deportivo-garcilaso-alianza-atletico/84523286/"
+    },
+    {
+      "text": "Sport Boys Association\nUniversitario de Deportes",
+      "href": "https://www.betano.pe/cuotas-de-partido/sport-boys-association-universitario-de-deportes/84523291/"
+    },
+    {
+      "text": "apuestas deportivas",
+      "href": "https://www.betano.pe/"
+    },
+    {
+      "text": "transmisiones en vivo",
+      "href": "https://www.betano.pe/live/calendar/streaming/"
+    },
+    {
+      "text": "apuestas de fútbol",
+      "href": "https://www.betano.pe/sport/futbol/"
+    },
+    {
+      "text": "Bonos de Bienvenida",
+      "href": "https://www.betano.pe/promociones/bono-de-bienvenida-para-deportes-y-casino-/1035327/"
+    },
+    {
+      "text": "Juego Responsable.",
+      "href": "https://www.betano.pe/articulo/politica-de-juego-responsable/350683/"
+    },
+    {
+      "text": "casino",
+      "href": "https://www.betano.pe/casino/"
+    },
+    {
+      "text": "Casino en vivo",
+      "href": "https://www.betano.pe/casino/live/"
+    },
+    {
+      "text": "tragamonedas",
+      "href": "https://www.betano.pe/casino/tragamonedas/"
+    },
+    {
+      "text": "póker",
+      "href": "https://www.betano.pe/casino/live/poker/"
+    },
+    {
+      "text": "Baccarat",
+      "href": "https://www.betano.pe/casino/live/baccarat/"
+    },
+    {
+      "text": "Ruleta",
+      "href": "https://www.betano.pe/casino/live/ruleta/"
+    },
+    {
+      "text": "Blackjack",
+      "href": "https://www.betano.pe/casino/live/blackjack/"
+    },
+    {
+      "text": "Jackpot",
+      "href": "https://www.betano.pe/casino/jackpots/"
+    },
+    {
+      "text": "Centro de Ayuda",
+      "href": "https://betanope.zendesk.com/hc/es-pe"
+    },
+    {
+      "text": "Reglas de Apuestas",
+      "href": "https://www.betano.pe/articulo/reglas-de-apuestas/350633/"
+    },
+    {
+      "text": "Términos y Condiciones",
+      "href": "https://www.betano.pe/articulo/terminos-y-condiciones/350644/"
+    },
+    {
+      "text": "Política de Juego Responsable",
+      "href": "https://www.betano.pe/articulo/politica-de-juego-responsable/350683/"
+    },
+    {
+      "text": "Seguridad",
+      "href": "https://www.betano.pe/articulo/seguridad/350677/"
+    },
+    {
+      "text": "Política de Bono",
+      "href": "https://www.betano.pe/articulo/politica-de-bono/350639/"
+    },
+    {
+      "text": "Métodos de pago",
+      "href": "https://www.betano.pe/myaccount/payment-methods/"
+    },
+    {
+      "text": "Guías",
+      "href": "https://www.betano.pe/guides/"
+    },
+    {
+      "text": "Verificación de Cuenta",
+      "href": "https://www.betano.pe/articulo/verificacion-de-cuenta/350700/"
+    }
+  ],
+  "probablesPartidos": [
+    {
+      "textoMuestra": "Mentor de Apuestas\nSelecciona el monto que deseas apostar\nSelecciona el monto que deseas ganar\nS/60 - S/200\nS/200 - S/600\nS/600 - S/3000\nS/3000 - S/20000\nS/20000 - S/30000\nMostrar sugerencias",
+      "tagName": "ARTICLE",
+      "clases": "bet-mentor-widget",
+      "dataAttrs": [],
+      "bbox": 95456
+    },
+    {
+      "textoMuestra": "S/3000 - S/20000",
+      "tagName": "BUTTON",
+      "clases": "bet-mentor-widget__amounts__amount",
+      "dataAttrs": [],
+      "bbox": 4760
+    },
+    {
+      "textoMuestra": "S/20000 - S/30000",
+      "tagName": "BUTTON",
+      "clases": "bet-mentor-widget__amounts__amount",
+      "dataAttrs": [],
+      "bbox": 9792
+    }
+  ]
+}
