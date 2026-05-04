@@ -973,9 +973,15 @@ export async function register() {
   } = await import("./lib/services/captura-cuotas.service");
   const { CUOTAS_CONFIG } = await import("./lib/config/cuotas");
   const { prisma: prismaCuotas } = await import("@habla/db");
+  const { registrarScrapersV2 } = await import(
+    "./lib/services/scrapers"
+  );
 
-  // Iniciar el worker BullMQ inmediatamente. Si Redis no está, no-op.
+  // Iniciar el worker BullMQ y registrar los scrapers V.2 inmediatamente.
+  // Si Redis no está disponible, `iniciarMotorCuotas` es no-op pero el
+  // registro de scrapers igual se hace (los jobs simplemente no llegan).
   iniciarMotorCuotas();
+  registrarScrapersV2();
 
   const CUOTAS_TICK_INTERVAL_MS = CUOTAS_CONFIG.CRON_TICK_INTERVAL_MS;
   const CUOTAS_TARGET_LIMA_HOUR = CUOTAS_CONFIG.REFRESH_HORA_LIMA;
