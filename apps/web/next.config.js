@@ -51,7 +51,9 @@ const nextConfig = {
 
     // Edge runtime + client bundle: los builtins de Node que solo
     // usamos server-only (Lote 7 — child_process/fs/etc para pg_dump,
-    // Lote 8 — fs/path para el loader de MDX) deben quedar como módulos
+    // Lote 8 — fs/path para el loader de MDX, Lote V — net/crypto/
+    // worker_threads/tls/dns vía bullmq + playwright-core importados
+    // transitivamente desde instrumentation.ts) deben quedar como módulos
     // vacíos. El código que los importa está guardado por
     // `runtime = "nodejs"` en los handlers y por
     // `if (NEXT_RUNTIME !== "nodejs") return` en instrumentation.ts —
@@ -63,6 +65,14 @@ const nextConfig = {
     // distintos. Sin esta entrada, webpack falla con UnhandledSchemeError
     // al bundlear cualquier archivo que importe `node:fs`/`node:path`
     // hacia targets que no soportan el scheme.
+    //
+    // Lote V (May 2026) — bullmq importa `net` + `worker_threads` desde
+    // `classes/child.js` y `crypto` desde `classes/repeat.js` + `utils/
+    // index.js`; playwright-core importa `net` desde `remote/
+    // playwrightPipeServer.js`. Sin estos en fallback el `next build`
+    // del target Edge revienta con `Module not found: net`. ioredis +
+    // pg también referencian `tls`/`dns` transitivamente — los agregamos
+    // preventivamente para evitar el próximo round de hotfix.
     if (nextRuntime === "edge" || !isServer) {
       config.resolve = config.resolve || {};
       config.resolve.fallback = {
@@ -74,6 +84,11 @@ const nextConfig = {
         path: false,
         "stream/promises": false,
         zlib: false,
+        net: false,
+        crypto: false,
+        worker_threads: false,
+        tls: false,
+        dns: false,
         "node:child_process": false,
         "node:fs": false,
         "node:fs/promises": false,
@@ -81,6 +96,11 @@ const nextConfig = {
         "node:path": false,
         "node:stream/promises": false,
         "node:zlib": false,
+        "node:net": false,
+        "node:crypto": false,
+        "node:worker_threads": false,
+        "node:tls": false,
+        "node:dns": false,
       };
     }
 
