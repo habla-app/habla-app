@@ -193,9 +193,15 @@ export async function encolarJobCaptura(
   // garantiza que dos jobs con el mismo `jobId` no coexisten en la cola
   // — el segundo add se vuelve idempotente. El sufijo cambia entre el
   // trigger admin y el cron diario para que ambos no se pisen.
+  //
+  // Lote V.9.3: BullMQ rechaza custom IDs con `:` (`Custom Id cannot
+  // contain :`). El bug estaba latente desde el Lote V — nunca se había
+  // notado porque el discovery HTTP fallaba siempre y se encolaban 0
+  // jobs. V.9.1 destapó el bug al encolar las 7 casas siempre.
+  // Reemplazamos `:` por `-` como separador.
   const jobId = data.esRefresh
-    ? `cuotas:${data.partidoId}:${data.casa}:refresh`
-    : `cuotas:${data.partidoId}:${data.casa}:initial`;
+    ? `cuotas-${data.partidoId}-${data.casa}-refresh`
+    : `cuotas-${data.partidoId}-${data.casa}-initial`;
 
   const job = await queue.add("captura", data, { jobId });
   return job.id ?? null;
