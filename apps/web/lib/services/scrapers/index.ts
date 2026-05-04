@@ -8,11 +8,12 @@
 // scrapers a este registry sin tocar el worker:
 //   - V.2 ✅ Te Apuesto + Stake + Apuesta Total + Doradobet (Altenar dual)
 //   - V.3 ✅ Coolbet + Inkabet
-//   - V.4    Betano (dual API + Playwright)
+//   - V.4 ✅ Betano (dual API + Playwright)
 //
 // El nombre de la función se mantiene `registrarScrapersV2` por
-// compatibilidad con `instrumentation.ts` — al cerrar V.4 se renombra
-// a `registrarScrapers` o se mantiene como alias.
+// compatibilidad con `instrumentation.ts` — al cerrar V.5 puede renombrarse
+// a `registrarScrapers` o quedar como alias. Por ahora el alias se mantiene
+// y registra las 7 casas activas.
 
 import { logger } from "../logger";
 import { registrarScraper } from "../cuotas-worker";
@@ -22,6 +23,7 @@ import stakeScraper from "./stake.scraper";
 import { apuestaTotalScraper, doradobetScraper } from "./altenar.scraper";
 import coolbetScraper from "./coolbet.scraper";
 import inkabetScraper from "./inkabet.scraper";
+import betanoScraper from "./betano.scraper";
 
 let yaRegistrados = false;
 
@@ -44,6 +46,7 @@ export function registrarScrapersV2(): void {
   registrarScraper(doradobetScraper);
   registrarScraper(coolbetScraper);
   registrarScraper(inkabetScraper);
+  registrarScraper(betanoScraper);
 
   logger.info(
     {
@@ -54,10 +57,11 @@ export function registrarScrapersV2(): void {
         doradobetScraper.nombre,
         coolbetScraper.nombre,
         inkabetScraper.nombre,
+        betanoScraper.nombre,
       ],
       source: "scrapers:registry",
     },
-    "scrapers V.2 + V.3 registrados",
+    "scrapers V.2 + V.3 + V.4 registrados (7 casas)",
   );
 }
 
@@ -69,4 +73,5 @@ export {
   doradobetScraper,
   coolbetScraper,
   inkabetScraper,
+  betanoScraper,
 };
