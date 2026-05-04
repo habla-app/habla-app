@@ -101,6 +101,8 @@ import {
   fechasCercanas,
   matchearEquiposContraPartido,
 } from "./alias-equipo";
+import { capturarPartidoPorCasa } from "./playwright-scrape";
+import { PLAYWRIGHT_CONFIGS } from "./playwright-config";
 import type { CuotasCapturadas, ResultadoScraper, Scraper } from "./types";
 
 interface PartidoSlim {
@@ -861,6 +863,15 @@ function extraerEventos(payload: unknown): BetanoCandidatoCrudo[] {
 
 const betanoScraper: Scraper = {
   nombre: "betano",
+
+  async capturarConPlaywright(partido, urlPartidoEnCasa) {
+    return capturarPartidoPorCasa(
+      "betano",
+      partido,
+      urlPartidoEnCasa,
+      PLAYWRIGHT_CONFIGS,
+    );
+  },
 
   async buscarEventIdExterno(partido: PartidoSlim): Promise<string | null> {
     // Único endpoint público confirmado en POC §2.5. Devuelve "top events"

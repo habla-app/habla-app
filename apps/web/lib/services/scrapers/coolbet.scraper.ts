@@ -44,6 +44,8 @@ import {
   fechasCercanas,
   matchearEquiposContraPartido,
 } from "./alias-equipo";
+import { capturarPartidoPorCasa } from "./playwright-scrape";
+import { PLAYWRIGHT_CONFIGS } from "./playwright-config";
 import type { CuotasCapturadas, ResultadoScraper, Scraper } from "./types";
 
 interface PartidoSlim {
@@ -603,6 +605,15 @@ function extraerEventosCoolbet(payload: unknown): CoolbetEvento[] {
 
 const coolbetScraper: Scraper = {
   nombre: "coolbet",
+
+  async capturarConPlaywright(partido, urlPartidoEnCasa) {
+    return capturarPartidoPorCasa(
+      "coolbet",
+      partido,
+      urlPartidoEnCasa,
+      PLAYWRIGHT_CONFIGS,
+    );
+  },
 
   async buscarEventIdExterno(partido: PartidoSlim): Promise<string | null> {
     // V.5: probamos endpoints upcoming candidato. Para evitar 503, hacemos

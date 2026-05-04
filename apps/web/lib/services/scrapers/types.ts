@@ -106,17 +106,29 @@ export interface ResultadoScraper {
  * con esta interfaz y se registra en el dispatcher del worker.
  *
  * - `nombre`: clave canónica de la casa (debe coincidir con CasaCuotas).
- * - `buscarEventIdExterno`: discovery automático (sección 5.1 del plan).
- *   Devuelve `null` cuando no encuentra match único — la casa queda
- *   pendiente de vinculación manual via la vista admin.
- * - `capturarCuotas`: dado un eventId resuelto, devuelve los 4 mercados
- *   (los que la casa sirva). Lanza Error si el endpoint falla o si la
- *   respuesta no se puede parsear — el worker traduce eso a `estado="ERROR"`.
+ * - `buscarEventIdExterno` y `capturarCuotas` (legacy V.1-V.8): flow vía
+ *   API HTTP directo. Los endpoints actuales están rotos/bloqueados pero
+ *   los métodos quedan en el contrato como fallback opcional.
+ * - `capturarConPlaywright` (V.9): flow nuevo agnóstico de liga vía
+ *   browser headless. Si está presente, el worker la prefiere sobre el
+ *   par buscar+capturar HTTP. Retorna `null` cuando la casa no cubre
+ *   el partido (liga no mapeada o partido no aparece en el listado);
+ *   lanza Error si Playwright falla técnicamente.
  */
 export interface Scraper {
   nombre: CasaCuotas;
   buscarEventIdExterno(partido: Partido): Promise<string | null>;
   capturarCuotas(eventIdExterno: string): Promise<ResultadoScraper>;
+  /**
+   * Lote V.9: captura via Playwright. Si está presente, el worker la usa
+   * en lugar del par HTTP. Recibe el partido completo (necesita liga +
+   * equipos para navegar el sportsbook) y opcionalmente la URL directa
+   * del partido en la casa cuando hay vinculación manual previa.
+   */
+  capturarConPlaywright?(
+    partido: Partido,
+    urlPartidoEnCasa?: string | null,
+  ): Promise<ResultadoScraper | null>;
 }
 
 /**

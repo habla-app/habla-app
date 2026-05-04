@@ -30,6 +30,8 @@ import {
   matchearEquiposContraPartido,
   fechasCercanas,
 } from "./alias-equipo";
+import { capturarPartidoPorCasa } from "./playwright-scrape";
+import { PLAYWRIGHT_CONFIGS } from "./playwright-config";
 import type {
   CuotasCapturadas,
   ResultadoScraper,
@@ -448,6 +450,15 @@ async function matchearCandidatosTeApuesto(
 
 const teApuestoScraper: Scraper = {
   nombre: "te_apuesto",
+
+  async capturarConPlaywright(partido, urlPartidoEnCasa) {
+    return capturarPartidoPorCasa(
+      "te_apuesto",
+      partido,
+      urlPartidoEnCasa,
+      PLAYWRIGHT_CONFIGS,
+    );
+  },
 
   async buscarEventIdExterno(partido: PartidoSlim): Promise<string | null> {
     const torneoId = tournamentIdParaLiga(partido.liga);

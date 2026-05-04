@@ -49,6 +49,8 @@ import {
   fechasCercanas,
   matchearEquiposContraPartido,
 } from "./alias-equipo";
+import { capturarPartidoPorCasa } from "./playwright-scrape";
+import { PLAYWRIGHT_CONFIGS } from "./playwright-config";
 import {
   CapturaSinDatosError,
   type CuotasCapturadas,
@@ -552,6 +554,15 @@ function extraerEventosInkabet(payload: unknown): InkabetEvento[] {
 
 const inkabetScraper: Scraper = {
   nombre: "inkabet",
+
+  async capturarConPlaywright(partido, urlPartidoEnCasa) {
+    return capturarPartidoPorCasa(
+      "inkabet",
+      partido,
+      urlPartidoEnCasa,
+      PLAYWRIGHT_CONFIGS,
+    );
+  },
 
   async buscarEventIdExterno(partido: PartidoSlim): Promise<string | null> {
     // V.5: probamos endpoints upcoming candidato del playground. Si todos

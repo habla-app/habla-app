@@ -44,6 +44,8 @@ import {
   fechasCercanas,
   matchearEquiposContraPartido,
 } from "./alias-equipo";
+import { capturarPartidoPorCasa } from "./playwright-scrape";
+import { PLAYWRIGHT_CONFIGS } from "./playwright-config";
 import type { CuotasCapturadas, ResultadoScraper, Scraper } from "./types";
 
 interface PartidoSlim {
@@ -296,6 +298,15 @@ function extraerEventosStake(payload: unknown): StakeEvento[] {
 
 const stakeScraper: Scraper = {
   nombre: "stake",
+
+  async capturarConPlaywright(partido, urlPartidoEnCasa) {
+    return capturarPartidoPorCasa(
+      "stake",
+      partido,
+      urlPartidoEnCasa,
+      PLAYWRIGHT_CONFIGS,
+    );
+  },
 
   async buscarEventIdExterno(partido: PartidoSlim): Promise<string | null> {
     // V.5: probamos los endpoints upcoming en orden hasta que uno responda
