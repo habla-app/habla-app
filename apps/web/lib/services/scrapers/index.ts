@@ -1,14 +1,18 @@
 // Registro central de scrapers del motor de captura de cuotas (Lote V).
 //
-// Los scrapers concretos viven cada uno en su archivo (`te-apuesto.scraper.ts`,
-// `stake.scraper.ts`, `altenar.scraper.ts`). Acá los importamos y los
-// registramos en el dispatcher del worker (`cuotas-worker.ts`).
+// Los scrapers concretos viven cada uno en su archivo. Acá los importamos
+// y los registramos en el dispatcher del worker (`cuotas-worker.ts`).
 //
 // Patrón: el cron en `instrumentation.ts` llama a `registrarScrapersV2()`
-// justo después de `iniciarMotorCuotas()`. La fase actual habilita 4 casas
-// (Te Apuesto + Stake + Apuesta Total + Doradobet, los dos últimos vía
-// el módulo Altenar dual). V.3 agrega Coolbet + Inkabet, V.4 agrega
-// Betano. Cada lote sólo TOCA este archivo para sumar su `registrarScraper`.
+// justo después de `iniciarMotorCuotas()`. Cada fase del Lote V suma sus
+// scrapers a este registry sin tocar el worker:
+//   - V.2 ✅ Te Apuesto + Stake + Apuesta Total + Doradobet (Altenar dual)
+//   - V.3 ✅ Coolbet + Inkabet
+//   - V.4    Betano (dual API + Playwright)
+//
+// El nombre de la función se mantiene `registrarScrapersV2` por
+// compatibilidad con `instrumentation.ts` — al cerrar V.4 se renombra
+// a `registrarScrapers` o se mantiene como alias.
 
 import { logger } from "../logger";
 import { registrarScraper } from "../cuotas-worker";
@@ -16,6 +20,8 @@ import { registrarScraper } from "../cuotas-worker";
 import teApuestoScraper from "./te-apuesto.scraper";
 import stakeScraper from "./stake.scraper";
 import { apuestaTotalScraper, doradobetScraper } from "./altenar.scraper";
+import coolbetScraper from "./coolbet.scraper";
+import inkabetScraper from "./inkabet.scraper";
 
 let yaRegistrados = false;
 
@@ -36,6 +42,8 @@ export function registrarScrapersV2(): void {
   registrarScraper(stakeScraper);
   registrarScraper(apuestaTotalScraper);
   registrarScraper(doradobetScraper);
+  registrarScraper(coolbetScraper);
+  registrarScraper(inkabetScraper);
 
   logger.info(
     {
@@ -44,12 +52,21 @@ export function registrarScrapersV2(): void {
         stakeScraper.nombre,
         apuestaTotalScraper.nombre,
         doradobetScraper.nombre,
+        coolbetScraper.nombre,
+        inkabetScraper.nombre,
       ],
       source: "scrapers:registry",
     },
-    "scrapers V.2 registrados",
+    "scrapers V.2 + V.3 registrados",
   );
 }
 
 // Re-export para conveniencia (tests, scripts).
-export { teApuestoScraper, stakeScraper, apuestaTotalScraper, doradobetScraper };
+export {
+  teApuestoScraper,
+  stakeScraper,
+  apuestaTotalScraper,
+  doradobetScraper,
+  coolbetScraper,
+  inkabetScraper,
+};
