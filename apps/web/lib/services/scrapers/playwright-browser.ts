@@ -89,6 +89,14 @@ export interface PlaywrightPage {
     state?: "load" | "domcontentloaded" | "networkidle",
     opts?: { timeout?: number },
   ): Promise<void>;
+  waitForURL(
+    matcher: string | RegExp | ((url: string) => boolean),
+    opts?: { timeout?: number; waitUntil?: "load" | "domcontentloaded" | "networkidle" },
+  ): Promise<void>;
+  waitForFunction<R>(
+    fn: () => R | Promise<R>,
+    opts?: { timeout?: number; polling?: number | "raf" },
+  ): Promise<unknown>;
   locator(selector: string): PlaywrightLocator;
   evaluate<T>(fn: () => T): Promise<T>;
   evaluate<T, A>(fn: (arg: A) => T, arg: A): Promise<T>;
