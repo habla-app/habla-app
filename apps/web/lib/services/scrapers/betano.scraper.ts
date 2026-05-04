@@ -869,6 +869,7 @@ const betanoScraper: Scraper = {
     // de la home, no lo encontramos. Cuando V.5 capture el endpoint
     // específico de Liga 1 (típicamente `/api/sport/futbol/region/peru/...`)
     // se extiende este método sin tocar la captura.
+    // Lote V.8.1: instrumentación detallada por endpoint y al final.
     const url = `https://${HOST}/api/home/top-events-v2/`;
     let probe;
     try {
@@ -881,29 +882,33 @@ const betanoScraper: Scraper = {
         },
       });
     } catch (err) {
-      logger.debug(
+      logger.info(
         {
           partidoId: partido.id,
+          url,
           err: (err as Error).message,
           source: "scrapers:betano:discovery",
         },
-        "discovery — fetch falló",
+        `betano discovery probe falló: ${(err as Error).message}`,
       );
       return null;
     }
     if (probe.status !== 200 || probe.data === null) {
-      logger.debug(
+      logger.info(
         {
           partidoId: partido.id,
+          url,
           status: probe.status,
           source: "scrapers:betano:discovery",
         },
-        "discovery — top-events-v2 no respondió 200",
+        `betano discovery: top-events-v2 respondió ${probe.status}`,
       );
       return null;
     }
 
     const candidatos = extraerEventos(probe.data);
+    let dentroVentana = 0;
+    let matched = 0;
     let match: BetanoCandidatoCrudo | null = null;
     for (const cand of candidatos) {
       if (
@@ -911,16 +916,18 @@ const betanoScraper: Scraper = {
       ) {
         continue;
       }
+      dentroVentana++;
       const ok = await matchearEquiposContraPartido(
         partido,
         { local: cand.homeName, visita: cand.awayName },
         "betano",
       );
       if (ok) {
+        matched++;
         if (match) {
-          logger.warn(
+          logger.info(
             { partidoId: partido.id, source: "scrapers:betano:discovery" },
-            "discovery ambiguo — varios matches por equipos+fecha",
+            "betano discovery ambiguo — varios matches por equipos+fecha",
           );
           return null;
         }
@@ -928,18 +935,20 @@ const betanoScraper: Scraper = {
       }
     }
 
-    if (!match) {
-      logger.debug(
-        {
-          partidoId: partido.id,
-          equipoLocal: partido.equipoLocal,
-          equipoVisita: partido.equipoVisita,
-          source: "scrapers:betano:discovery",
-        },
-        "discovery sin match — pendiente de vinculación manual",
-      );
-      return null;
-    }
+    logger.info(
+      {
+        partidoId: partido.id,
+        liga: partido.liga,
+        url,
+        candidatos: candidatos.length,
+        dentroVentana,
+        matched,
+        source: "scrapers:betano:discovery",
+      },
+      `betano discovery: ${candidatos.length} candidatos · ${dentroVentana} en ventana · ${matched} matchearon equipos`,
+    );
+
+    if (!match) return null;
     return match.id;
   },
 

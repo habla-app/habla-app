@@ -615,7 +615,14 @@ const coolbetScraper: Scraper = {
       cookieHeader = "";
     }
 
+    // Lote V.8.1: instrumentación detallada por endpoint y al final.
     let candidatos: CoolbetEvento[] = [];
+    let endpointHit: string | null = null;
+    const endpointStats: Array<{
+      url: string;
+      status: number | "fetch-fail";
+      eventos: number;
+    }> = [];
     for (const builder of ENDPOINTS_DISCOVERY) {
       const url = builder();
       try {
@@ -628,39 +635,62 @@ const coolbetScraper: Scraper = {
             ...(cookieHeader ? { Cookie: cookieHeader } : {}),
           },
         });
-        if (probe.status !== 200 || probe.data === null) continue;
-        const lista = extraerEventosCoolbet(probe.data);
-        if (lista.length === 0) continue;
-        candidatos = lista;
-        break;
-      } catch {
+        const lista =
+          probe.status === 200 && probe.data !== null
+            ? extraerEventosCoolbet(probe.data)
+            : [];
+        endpointStats.push({ url, status: probe.status, eventos: lista.length });
+        if (lista.length > 0) {
+          candidatos = lista;
+          endpointHit = url;
+          break;
+        }
+      } catch (err) {
+        endpointStats.push({ url, status: "fetch-fail", eventos: 0 });
+        logger.info(
+          {
+            partidoId: partido.id,
+            url,
+            err: (err as Error).message,
+            source: "scrapers:coolbet:discovery",
+          },
+          `coolbet discovery probe falló: ${(err as Error).message}`,
+        );
         continue;
       }
     }
 
     if (candidatos.length === 0) {
-      logger.debug(
-        { partidoId: partido.id, source: "scrapers:coolbet:discovery" },
-        "discovery — ningún endpoint upcoming devolvió eventos, vincular manualmente",
+      logger.info(
+        {
+          partidoId: partido.id,
+          endpointStats,
+          source: "scrapers:coolbet:discovery",
+        },
+        `coolbet discovery: ningún endpoint devolvió eventos (probados ${endpointStats.length})`,
       );
       return null;
     }
 
+    let dentroVentana = 0;
+    let matched = 0;
     let match: CoolbetEvento | null = null;
     for (const cand of candidatos) {
       if (!fechasCercanas(cand.kickoff, partido.fechaInicio, VENTANA_DISCOVERY_MIN)) {
         continue;
       }
+      dentroVentana++;
       const ok = await matchearEquiposContraPartido(
         partido,
         { local: cand.homeName, visita: cand.awayName },
         "coolbet",
       );
       if (ok) {
+        matched++;
         if (match) {
-          logger.warn(
+          logger.info(
             { partidoId: partido.id, source: "scrapers:coolbet:discovery" },
-            "discovery ambiguo — varios matches por equipos+fecha",
+            "coolbet discovery ambiguo — varios matches por equipos+fecha",
           );
           return null;
         }
@@ -668,18 +698,20 @@ const coolbetScraper: Scraper = {
       }
     }
 
-    if (!match) {
-      logger.debug(
-        {
-          partidoId: partido.id,
-          equipoLocal: partido.equipoLocal,
-          equipoVisita: partido.equipoVisita,
-          source: "scrapers:coolbet:discovery",
-        },
-        "discovery sin match único — pendiente de vinculación manual",
-      );
-      return null;
-    }
+    logger.info(
+      {
+        partidoId: partido.id,
+        liga: partido.liga,
+        endpointHit,
+        candidatos: candidatos.length,
+        dentroVentana,
+        matched,
+        source: "scrapers:coolbet:discovery",
+      },
+      `coolbet discovery: ${candidatos.length} candidatos · ${dentroVentana} en ventana · ${matched} matchearon equipos`,
+    );
+
+    if (!match) return null;
     return match.id;
   },
 

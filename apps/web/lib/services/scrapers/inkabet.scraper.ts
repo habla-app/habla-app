@@ -556,7 +556,14 @@ const inkabetScraper: Scraper = {
   async buscarEventIdExterno(partido: PartidoSlim): Promise<string | null> {
     // V.5: probamos endpoints upcoming candidato del playground. Si todos
     // fallan o no devuelven match único, fallback manual via modal admin.
+    // Lote V.8.1: instrumentación detallada por endpoint y al final.
     let candidatos: InkabetEvento[] = [];
+    let endpointHit: string | null = null;
+    const endpointStats: Array<{
+      url: string;
+      status: number | "fetch-fail";
+      eventos: number;
+    }> = [];
     for (const builder of ENDPOINTS_DISCOVERY) {
       const url = builder();
       try {
@@ -568,39 +575,62 @@ const inkabetScraper: Scraper = {
             Referer: "https://www.inkabet.pe/pe/apuestas-deportivas",
           },
         });
-        if (probe.status !== 200 || probe.data === null) continue;
-        const lista = extraerEventosInkabet(probe.data);
-        if (lista.length === 0) continue;
-        candidatos = lista;
-        break;
-      } catch {
+        const lista =
+          probe.status === 200 && probe.data !== null
+            ? extraerEventosInkabet(probe.data)
+            : [];
+        endpointStats.push({ url, status: probe.status, eventos: lista.length });
+        if (lista.length > 0) {
+          candidatos = lista;
+          endpointHit = url;
+          break;
+        }
+      } catch (err) {
+        endpointStats.push({ url, status: "fetch-fail", eventos: 0 });
+        logger.info(
+          {
+            partidoId: partido.id,
+            url,
+            err: (err as Error).message,
+            source: "scrapers:inkabet:discovery",
+          },
+          `inkabet discovery probe falló: ${(err as Error).message}`,
+        );
         continue;
       }
     }
 
     if (candidatos.length === 0) {
-      logger.debug(
-        { partidoId: partido.id, source: "scrapers:inkabet:discovery" },
-        "discovery — ningún endpoint upcoming devolvió eventos, vincular manualmente",
+      logger.info(
+        {
+          partidoId: partido.id,
+          endpointStats,
+          source: "scrapers:inkabet:discovery",
+        },
+        `inkabet discovery: ningún endpoint devolvió eventos (probados ${endpointStats.length})`,
       );
       return null;
     }
 
+    let dentroVentana = 0;
+    let matched = 0;
     let match: InkabetEvento | null = null;
     for (const cand of candidatos) {
       if (!fechasCercanas(cand.kickoff, partido.fechaInicio, VENTANA_DISCOVERY_MIN)) {
         continue;
       }
+      dentroVentana++;
       const ok = await matchearEquiposContraPartido(
         partido,
         { local: cand.homeName, visita: cand.awayName },
         "inkabet",
       );
       if (ok) {
+        matched++;
         if (match) {
-          logger.warn(
+          logger.info(
             { partidoId: partido.id, source: "scrapers:inkabet:discovery" },
-            "discovery ambiguo — varios matches por equipos+fecha",
+            "inkabet discovery ambiguo — varios matches por equipos+fecha",
           );
           return null;
         }
@@ -608,18 +638,20 @@ const inkabetScraper: Scraper = {
       }
     }
 
-    if (!match) {
-      logger.debug(
-        {
-          partidoId: partido.id,
-          equipoLocal: partido.equipoLocal,
-          equipoVisita: partido.equipoVisita,
-          source: "scrapers:inkabet:discovery",
-        },
-        "discovery sin match único — pendiente de vinculación manual",
-      );
-      return null;
-    }
+    logger.info(
+      {
+        partidoId: partido.id,
+        liga: partido.liga,
+        endpointHit,
+        candidatos: candidatos.length,
+        dentroVentana,
+        matched,
+        source: "scrapers:inkabet:discovery",
+      },
+      `inkabet discovery: ${candidatos.length} candidatos · ${dentroVentana} en ventana · ${matched} matchearon equipos`,
+    );
+
+    if (!match) return null;
     return match.id;
   },
 
