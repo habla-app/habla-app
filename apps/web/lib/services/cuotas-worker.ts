@@ -74,18 +74,36 @@ export function obtenerScraper(casa: CasaCuotas): Scraper | undefined {
   return scraperRegistry[casa];
 }
 
-let workerInstance: BullMQWorkerLike | null | undefined;
+// Lote V.10.8: cache via globalThis para sobrevivir module isolation
+// entre contextos de Next.js. Mismo patrón que `cuotas-cola.ts`.
+const globalForWorker = globalThis as unknown as {
+  __cuotasWorkerInstance?: BullMQWorkerLike | null | undefined;
+  __cuotasHeartbeatTimer?: ReturnType<typeof setInterval> | null;
+  __cuotasWorkerModuleId?: string;
+};
+
+const WORKER_MODULE_ID = `cuotas-worker-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+if (!globalForWorker.__cuotasWorkerModuleId) {
+  globalForWorker.__cuotasWorkerModuleId = WORKER_MODULE_ID;
+}
+
+function getWorkerInstance(): BullMQWorkerLike | null | undefined {
+  return globalForWorker.__cuotasWorkerInstance;
+}
+
+function setWorkerInstance(v: BullMQWorkerLike | null): void {
+  globalForWorker.__cuotasWorkerInstance = v;
+}
 
 // Lote V.10.4: heartbeat para diagnosticar worker que no procesa.
-let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
 function iniciarHeartbeatWorker(): void {
-  if (heartbeatTimer) return;
-  heartbeatTimer = setInterval(() => {
+  if (globalForWorker.__cuotasHeartbeatTimer) return;
+  globalForWorker.__cuotasHeartbeatTimer = setInterval(() => {
     void (async () => {
       try {
         const queue = getCuotasQueue();
-        const worker = workerInstance;
+        const worker = getWorkerInstance();
         if (!queue || !worker) {
           logger.warn(
             {
@@ -158,8 +176,9 @@ function iniciarHeartbeatWorker(): void {
       }
     })();
   }, 60_000);
-  if (typeof (heartbeatTimer as { unref?: () => void }).unref === "function") {
-    (heartbeatTimer as { unref: () => void }).unref();
+  const t = globalForWorker.__cuotasHeartbeatTimer;
+  if (t && typeof (t as { unref?: () => void }).unref === "function") {
+    (t as { unref: () => void }).unref();
   }
 }
 
@@ -343,10 +362,22 @@ export async function procesarJobCaptura(job: BullMQJobLike): Promise<void> {
  * REDIS_URL o en Edge runtime), permitiendo que el caller siga su flujo.
  */
 export function iniciarCuotasWorker(): BullMQWorkerLike | null {
-  if (workerInstance !== undefined) return workerInstance;
+  const cached = getWorkerInstance();
+  if (cached !== undefined) {
+    logger.debug(
+      {
+        moduleId: WORKER_MODULE_ID,
+        cachedFromGlobalThis:
+          globalForWorker.__cuotasWorkerModuleId !== WORKER_MODULE_ID,
+        source: "cuotas-worker",
+      },
+      "iniciarCuotasWorker: reusando worker de globalThis",
+    );
+    return cached as BullMQWorkerLike | null;
+  }
 
   if (typeof process === "undefined" || !process.versions?.node) {
-    workerInstance = null;
+    setWorkerInstance(null);
     return null;
   }
 
@@ -355,7 +386,7 @@ export function iniciarCuotasWorker(): BullMQWorkerLike | null {
     logger.warn(
       "cuotas-worker — Redis no disponible, worker no se inicia",
     );
-    workerInstance = null;
+    setWorkerInstance(null);
     return null;
   }
 
@@ -470,14 +501,17 @@ export function iniciarCuotasWorker(): BullMQWorkerLike | null {
       );
     });
 
-    workerInstance = worker;
+    setWorkerInstance(worker);
     logger.info(
       {
         cola: CUOTAS_CONFIG.NOMBRE_COLA,
         concurrencia: CUOTAS_CONFIG.CONCURRENCIA_BULLMQ,
         rateLimitMs: CUOTAS_CONFIG.RATE_LIMIT_POR_WORKER_MS,
+        moduleId: WORKER_MODULE_ID,
+        primeraVezEnGlobalThis:
+          globalForWorker.__cuotasWorkerModuleId === WORKER_MODULE_ID,
       },
-      "cuotas-worker iniciado",
+      `cuotas-worker iniciado (moduleId=${WORKER_MODULE_ID})`,
     );
 
     // Heartbeat cada 60s: confirma que el worker sigue vivo + reporta
@@ -491,7 +525,7 @@ export function iniciarCuotasWorker(): BullMQWorkerLike | null {
       { err: (err as Error).message },
       "cuotas-worker — fallo al iniciar",
     );
-    workerInstance = null;
+    setWorkerInstance(null);
     return null;
   }
 }
@@ -500,13 +534,14 @@ export function iniciarCuotasWorker(): BullMQWorkerLike | null {
  * Detiene el worker y libera la conexión. Sólo en tests/shutdown explícito.
  */
 export async function detenerCuotasWorker(): Promise<void> {
-  if (heartbeatTimer) {
-    clearInterval(heartbeatTimer);
-    heartbeatTimer = null;
+  if (globalForWorker.__cuotasHeartbeatTimer) {
+    clearInterval(globalForWorker.__cuotasHeartbeatTimer);
+    globalForWorker.__cuotasHeartbeatTimer = null;
   }
-  if (workerInstance) {
+  const worker = getWorkerInstance();
+  if (worker) {
     try {
-      await workerInstance.close();
+      await worker.close();
     } catch (err) {
       logger.warn(
         { err: (err as Error).message },
@@ -514,5 +549,5 @@ export async function detenerCuotasWorker(): Promise<void> {
       );
     }
   }
-  workerInstance = null;
+  setWorkerInstance(null);
 }

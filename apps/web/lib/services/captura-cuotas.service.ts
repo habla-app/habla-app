@@ -36,6 +36,8 @@ import {
   cancelarJobsDePartido,
   getCuotasQueue,
 } from "./cuotas-cola";
+// Lote V.10.8: import explícito de getCuotasQueue para verificar empíricamente
+// que los jobs encolados son visibles desde el mismo contexto.
 import {
   iniciarCuotasWorker,
   detenerCuotasWorker,
@@ -159,6 +161,44 @@ export async function iniciarCaptura(
     },
     `iniciarCaptura · ${casasEncoladas.length}/7 encoladas, ${casasFallidas.length} fallaron al encolar, ${casasSinEventId.length} sin cola`,
   );
+
+  // Lote V.10.8: verificación empírica post-encolar. Lee `getJobCounts`
+  // INMEDIATAMENTE para confirmar que los jobs realmente están en Redis y
+  // visibles desde este contexto. Si counts.waiting < casasEncoladas,
+  // hay un problema de module-isolation o el Redis del handler no es el
+  // mismo que el del worker.
+  if (casasEncoladas.length > 0) {
+    try {
+      const queue = getCuotasQueue();
+      if (queue) {
+        const counts = await queue.getJobCounts(
+          "waiting",
+          "active",
+          "delayed",
+          "failed",
+          "completed",
+        );
+        logger.info(
+          {
+            partidoId,
+            encoladas: casasEncoladas.length,
+            counts,
+            source: "captura-cuotas:verificar",
+          },
+          `iniciarCaptura post-encolar · counts: waiting=${counts.waiting ?? 0} active=${counts.active ?? 0} delayed=${counts.delayed ?? 0} failed=${counts.failed ?? 0} completed=${counts.completed ?? 0}`,
+        );
+      }
+    } catch (err) {
+      logger.warn(
+        {
+          partidoId,
+          err: (err as Error)?.message,
+          source: "captura-cuotas:verificar",
+        },
+        `iniciarCaptura: verificación post-encolar falló — ${(err as Error)?.message ?? "?"}`,
+      );
+    }
+  }
 
   return { partidoId, casasEncoladas, casasSinEventId };
 }
