@@ -2129,3 +2129,334 @@
 .estado-vacio-desc { margin-top: 12px; font-size: 14px; color: var(--text-body); line-height: 1.5; }
 .estado-vacio-ctas { margin-top: 24px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
 @media (min-width: 600px) { .estado-vacio-ctas { flex-direction: row; justify-content: center; } }
+
+/* ============================================================================
+   LOTE V — Motor de captura de cuotas (mayo 2026)
+   ============================================================================
+   Extensión de infraestructura: las clases acá son específicas del Lote V
+   (vista admin de captura por partido, dashboard /admin/motor-cuotas y
+   comparador público leyendo de CuotasCasa). NO existen en el mockup HTML
+   v3.2 — el mockup precede al motor de captura. Convención visual: reutilizan
+   `var(--*)`, paddings y radii del sistema. Cero hex hardcodeados.
+   ---------------------------------------------------------------------------- */
+
+/* --- Captura de cuotas en /admin/partidos/[id] --- */
+.cuotas-casa-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+@media (min-width: 1024px) {
+  .cuotas-casa-grid { grid-template-columns: 1fr 1fr; }
+}
+
+.cuotas-casa-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cuotas-casa-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cuotas-casa-card-title {
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-dark);
+  text-transform: uppercase;
+}
+.cuotas-casa-card-time {
+  font-size: 11px;
+  color: var(--text-muted-d);
+}
+.cuotas-casa-card-actions {
+  margin-left: auto;
+}
+.cuotas-casa-card-error {
+  font-size: 11px;
+  color: var(--pred-wrong);
+  background: rgba(220, 38, 38, 0.06);
+  border-left: 3px solid var(--pred-wrong);
+  padding: 6px 10px;
+  border-radius: 4px;
+}
+
+.cuotas-mercado-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dark);
+  font-variant-numeric: tabular-nums;
+}
+.cuotas-mercado-cuota { display: inline-flex; align-items: center; gap: 4px; }
+.cuotas-mercado-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted-d);
+  font-weight: 700;
+}
+.cuotas-mercado-valor {
+  font-weight: 800;
+  font-family: 'Roboto Mono', ui-monospace, monospace;
+}
+
+.cuota-var-flat { color: var(--text-muted-d); font-size: 11px; }
+.cuota-var-up { color: var(--pred-right); font-size: 11px; font-weight: 700; }
+.cuota-var-down { color: var(--pred-wrong); font-size: 11px; font-weight: 700; }
+
+.cuotas-casa-card-event {
+  font-size: 11px;
+  color: var(--text-muted-d);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+  border-top: 1px dashed var(--border-light);
+  padding-top: 6px;
+}
+.cuotas-casa-card-event-id {
+  font-family: 'Roboto Mono', ui-monospace, monospace;
+  font-size: 11px;
+  background: var(--bg-page);
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--text-dark);
+}
+
+/* --- Alertas de cambios en /admin/partidos/[id] --- */
+.alertas-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.alerta-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+}
+.alerta-row-flecha {
+  font-size: 18px;
+  font-weight: 900;
+  width: 22px;
+  text-align: center;
+}
+.alerta-row-up { color: var(--pred-right); }
+.alerta-row-down { color: var(--pred-wrong); }
+.alerta-row-info { display: flex; flex-direction: column; gap: 2px; }
+.alerta-row-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-dark);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.alerta-row-cuotas {
+  font-size: 13px;
+  color: var(--text-body);
+  font-family: 'Roboto Mono', ui-monospace, monospace;
+}
+.alerta-row-time {
+  font-size: 11px;
+  color: var(--text-muted-d);
+  white-space: nowrap;
+}
+
+/* --- CuotasGridV5 (comparador público leyendo de CuotasCasa) --- */
+.cuotas-comparator-v5 {
+  margin: 24px 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.cuotas-comparator-v5-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 18px;
+  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--border-light);
+}
+.cuotas-comparator-v5-title {
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--blue-main);
+}
+.cuotas-comparator-v5-time {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted-d);
+  background: var(--bg-card);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.cuotas-comparator-v5-mercado {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-light);
+}
+.cuotas-comparator-v5-mercado:last-of-type { border-bottom: 0; }
+.cuotas-comparator-v5-mercado-titulo {
+  margin: 0 0 10px 0;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-dark);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cuotas-comparator-v5-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cuotas-comparator-v5-linea {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cuotas-comparator-v5-linea-titulo {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted-d);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.cuotas-comparator-v5-linea-cells {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+@media (min-width: 768px) {
+  .cuotas-comparator-v5-linea-cells {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.cuotas-comparator-v5-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  background: var(--bg-page);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  text-decoration: none;
+  color: var(--text-dark);
+  transition: transform 0.12s, box-shadow 0.12s;
+  font-size: 12px;
+}
+.cuotas-comparator-v5-cell:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+.cuotas-comparator-v5-cell.best {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #000;
+}
+.cuotas-comparator-v5-cell.stale {
+  background: var(--bg-page);
+  border-style: dashed;
+  opacity: 0.78;
+}
+.cuotas-comparator-v5-cell-casa {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+.cuotas-comparator-v5-cell-valor {
+  font-family: 'Roboto Mono', ui-monospace, monospace;
+  font-size: 16px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.cuotas-comparator-v5-cell-best {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: rgba(0, 0, 0, 0.78);
+}
+.cuotas-comparator-v5-cell-stale {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted-d);
+  font-style: italic;
+}
+
+.cuotas-comparator-v5-foot {
+  margin: 0;
+  padding: 10px 18px;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text-muted-d);
+  background: var(--bg-subtle);
+  border-top: 1px solid var(--border-light);
+}
+
+.cuotas-comparator-v5-empty {
+  padding: 32px 18px;
+  text-align: center;
+}
+.cuotas-comparator-v5-empty-title {
+  margin: 0;
+  font-family: var(--font-barlow), 'Barlow Condensed', sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text-dark);
+  text-transform: uppercase;
+}
+.cuotas-comparator-v5-empty-body {
+  margin: 8px auto 16px;
+  max-width: 420px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-muted-d);
+}
+.cuotas-comparator-v5-empty-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 16px;
+  border: 1px solid var(--border-light);
+  border-radius: 4px;
+  background: var(--bg-card);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-dark);
+  text-decoration: none;
+}
+.cuotas-comparator-v5-empty-cta:hover {
+  border-color: var(--blue-main);
+  color: var(--blue-main);
+}
+
+/* --- KPI status pills extra (admin/motor-cuotas) --- */
+.admin-kpi-status-good { color: var(--pred-right); }
+.admin-kpi-status-amber { color: var(--gold); }
+.admin-kpi-status-red { color: var(--pred-wrong); }
+
