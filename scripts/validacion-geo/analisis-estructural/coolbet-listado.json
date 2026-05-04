@@ -1,0 +1,675 @@
+{
+  "totalElementos": 3259,
+  "tags": [
+    {
+      "tag": "div",
+      "count": 804
+    },
+    {
+      "tag": "span",
+      "count": 600
+    },
+    {
+      "tag": "path",
+      "count": 503
+    },
+    {
+      "tag": "symbol",
+      "count": 396
+    },
+    {
+      "tag": "svg",
+      "count": 170
+    },
+    {
+      "tag": "use",
+      "count": 168
+    },
+    {
+      "tag": "a",
+      "count": 167
+    },
+    {
+      "tag": "button",
+      "count": 163
+    },
+    {
+      "tag": "img",
+      "count": 88
+    },
+    {
+      "tag": "g",
+      "count": 24
+    },
+    {
+      "tag": "script",
+      "count": 22
+    },
+    {
+      "tag": "meta",
+      "count": 21
+    },
+    {
+      "tag": "defs",
+      "count": 21
+    },
+    {
+      "tag": "clippath",
+      "count": 20
+    },
+    {
+      "tag": "link",
+      "count": 16
+    },
+    {
+      "tag": "p",
+      "count": 16
+    },
+    {
+      "tag": "h2",
+      "count": 8
+    },
+    {
+      "tag": "style",
+      "count": 7
+    },
+    {
+      "tag": "nav",
+      "count": 7
+    },
+    {
+      "tag": "header",
+      "count": 6
+    },
+    {
+      "tag": "rect",
+      "count": 5
+    },
+    {
+      "tag": "li",
+      "count": 4
+    },
+    {
+      "tag": "strong",
+      "count": 4
+    },
+    {
+      "tag": "mask",
+      "count": 3
+    },
+    {
+      "tag": "noscript",
+      "count": 2
+    }
+  ],
+  "topClases": [
+    {
+      "clase": "[object",
+      "count": 175
+    },
+    {
+      "clase": "SVGAnimatedString]",
+      "count": 175
+    },
+    {
+      "clase": "yHkC5Q",
+      "count": 101
+    },
+    {
+      "clase": "sc-dnaUSb",
+      "count": 97
+    },
+    {
+      "clase": "gXjUWd",
+      "count": 97
+    },
+    {
+      "clase": "sc-kyMESl",
+      "count": 90
+    },
+    {
+      "clase": "fguqLs",
+      "count": 90
+    },
+    {
+      "clase": "odds-button",
+      "count": 90
+    },
+    {
+      "clase": "odds-value",
+      "count": 90
+    },
+    {
+      "clase": "outcome-value",
+      "count": 90
+    },
+    {
+      "clase": "sc-fqcNSE",
+      "count": 84
+    },
+    {
+      "clase": "fFnnAY",
+      "count": 84
+    },
+    {
+      "clase": "sport-nav-link-label",
+      "count": 84
+    },
+    {
+      "clase": "wNiB02",
+      "count": 74
+    },
+    {
+      "clase": "YjsluC",
+      "count": 72
+    },
+    {
+      "clase": "odds-outcome",
+      "count": 72
+    },
+    {
+      "clase": "outcome-name",
+      "count": 72
+    },
+    {
+      "clase": "outcome-line",
+      "count": 72
+    },
+    {
+      "clase": "raw-line",
+      "count": 72
+    },
+    {
+      "clase": "hlif1k",
+      "count": 71
+    },
+    {
+      "clase": "sc-iSnsYj",
+      "count": 71
+    },
+    {
+      "clase": "iuskir",
+      "count": 71
+    },
+    {
+      "clase": "rxf4ir",
+      "count": 71
+    },
+    {
+      "clase": "button-icon",
+      "count": 71
+    },
+    {
+      "clase": "sc-jHofgq",
+      "count": 68
+    },
+    {
+      "clase": "hWiSbs",
+      "count": 68
+    },
+    {
+      "clase": "sport-nav-link-postfix",
+      "count": 68
+    },
+    {
+      "clase": "sc-ZubPq",
+      "count": 64
+    },
+    {
+      "clase": "dQqMfU",
+      "count": 63
+    },
+    {
+      "clase": "animated",
+      "count": 31
+    },
+    {
+      "clase": "sc-AmOMz",
+      "count": 27
+    },
+    {
+      "clase": "fA-dEen",
+      "count": 27
+    },
+    {
+      "clase": "match-market",
+      "count": 27
+    },
+    {
+      "clase": "match-market-outcome",
+      "count": 27
+    },
+    {
+      "clase": "PcbB_A",
+      "count": 24
+    },
+    {
+      "clase": "kiQOsK",
+      "count": 18
+    },
+    {
+      "clase": "jBuo6f",
+      "count": 18
+    },
+    {
+      "clase": "match-extra",
+      "count": 18
+    },
+    {
+      "clase": "Cjp62l",
+      "count": 18
+    },
+    {
+      "clase": "gVYX6H",
+      "count": 18
+    }
+  ],
+  "dataAttributos": [
+    "data-gramm",
+    "data-gramm_editor",
+    "data-id",
+    "data-index",
+    "data-name",
+    "data-react-helmet",
+    "data-state",
+    "data-styled",
+    "data-styled-version",
+    "data-test",
+    "data-tooltip-event",
+    "data-tooltip-id",
+    "data-version"
+  ],
+  "topPrefijosClase": [
+    {
+      "prefijo": "sc",
+      "count": 567
+    },
+    {
+      "prefijo": "odds",
+      "count": 252
+    },
+    {
+      "prefijo": "outcome",
+      "count": 234
+    },
+    {
+      "prefijo": "sport",
+      "count": 161
+    },
+    {
+      "prefijo": "match",
+      "count": 126
+    },
+    {
+      "prefijo": "button",
+      "count": 74
+    },
+    {
+      "prefijo": "raw",
+      "count": 72
+    },
+    {
+      "prefijo": "slick",
+      "count": 29
+    },
+    {
+      "prefijo": "fA",
+      "count": 27
+    },
+    {
+      "prefijo": "line",
+      "count": 18
+    },
+    {
+      "prefijo": "market",
+      "count": 18
+    },
+    {
+      "prefijo": "ui",
+      "count": 10
+    },
+    {
+      "prefijo": "pick",
+      "count": 4
+    },
+    {
+      "prefijo": "menu",
+      "count": 3
+    },
+    {
+      "prefijo": "edge",
+      "count": 3
+    }
+  ],
+  "muestraLinks": [
+    {
+      "text": "DEPORTES",
+      "href": "https://www.coolbet.pe/pe/deportes"
+    },
+    {
+      "text": "CASINO",
+      "href": "https://www.coolbet.pe/pe/casino"
+    },
+    {
+      "text": "PROMOCIONES\n11",
+      "href": "https://www.coolbet.pe/pe/promociones"
+    },
+    {
+      "text": "REGÍSTRATE",
+      "href": "https://www.coolbet.pe/pe/registrarse"
+    },
+    {
+      "text": "Deportes",
+      "href": "https://www.coolbet.pe/pe/deportes/recommendations"
+    },
+    {
+      "text": "Apuestas en Vivo\n50",
+      "href": "https://www.coolbet.pe/pe/deportes/live"
+    },
+    {
+      "text": "Mis Favoritos",
+      "href": "https://www.coolbet.pe/pe/deportes/favorites"
+    },
+    {
+      "text": "Bet Builder",
+      "href": "https://www.coolbet.pe/pe/deportes/betbuilder"
+    },
+    {
+      "text": "Apuestas Entrantes",
+      "href": "https://www.coolbet.pe/pe/deportes/incoming-bets"
+    },
+    {
+      "text": "Copa Sudamericana",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/am%C3%A9ricas/copa-sudamericana"
+    },
+    {
+      "text": "Liga 1",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/per%C3%BA/primera-division-peruana"
+    },
+    {
+      "text": "La Liga",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/espa%C3%B1a/la-liga"
+    },
+    {
+      "text": "Premier League",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/inglaterra/premier-league"
+    },
+    {
+      "text": "Serie A",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/italia/serie-a"
+    },
+    {
+      "text": "Champions League",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/europa/uefa-champions-league"
+    },
+    {
+      "text": "Copa Libertadores",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/am%C3%A9ricas/copa-libertadores"
+    },
+    {
+      "text": "Brasileirao",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/brasil/serie-a"
+    },
+    {
+      "text": "Primera Argentina",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/argentina/primera-division"
+    },
+    {
+      "text": "NBA",
+      "href": "https://www.coolbet.pe/pe/deportes/baloncesto/norteamerica/nba"
+    },
+    {
+      "text": "Esports",
+      "href": "https://www.coolbet.pe/pe/deportes/esports"
+    },
+    {
+      "text": "Fútbol",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol"
+    },
+    {
+      "text": "Europa",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/europa"
+    },
+    {
+      "text": "Perú",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/per%C3%BA"
+    },
+    {
+      "text": "Américas",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/am%C3%A9ricas"
+    },
+    {
+      "text": "Inglaterra",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/inglaterra"
+    },
+    {
+      "text": "España",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/espa%C3%B1a"
+    },
+    {
+      "text": "Italia",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/italia"
+    },
+    {
+      "text": "Argentina",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/argentina"
+    },
+    {
+      "text": "Alemania",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/alemania"
+    },
+    {
+      "text": "Brasil",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/brasil"
+    },
+    {
+      "text": "Australia",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/australia"
+    },
+    {
+      "text": "Austria",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/austria"
+    },
+    {
+      "text": "Azerbaiyán",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/azerbaiy%C3%A1n"
+    },
+    {
+      "text": "Bélgica",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/b%C3%A9lgica"
+    },
+    {
+      "text": "Bolivia",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/bolivia"
+    },
+    {
+      "text": "Bulgaria",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/bulgaria"
+    },
+    {
+      "text": "Canada",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/canada"
+    },
+    {
+      "text": "Chile",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/chile"
+    },
+    {
+      "text": "China",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/china"
+    },
+    {
+      "text": "Colombia",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/colombia"
+    },
+    {
+      "text": "Costa Rica",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/costa-rica"
+    },
+    {
+      "text": "Croacia",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/croacia"
+    },
+    {
+      "text": "Chipre",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/chipre"
+    },
+    {
+      "text": "República Checa",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/rep%C3%BAblica-checa"
+    },
+    {
+      "text": "Dinamarca",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/dinamarca"
+    },
+    {
+      "text": "Ecuador",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/ecuador"
+    },
+    {
+      "text": "Egipto",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/egipto"
+    },
+    {
+      "text": "eSoccer",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/eSoccer"
+    },
+    {
+      "text": "Estonia",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/estonia"
+    },
+    {
+      "text": "Etiopía",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/etiop%C3%ADa"
+    },
+    {
+      "text": "Finlandia",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/finlandia"
+    },
+    {
+      "text": "Francia",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/francia"
+    },
+    {
+      "text": "Georgia",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/georgia"
+    },
+    {
+      "text": "Grecia",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/grecia"
+    },
+    {
+      "text": "Islandia",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/islandia"
+    },
+    {
+      "text": "India",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/india"
+    },
+    {
+      "text": "Irlanda",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/irlanda"
+    },
+    {
+      "text": "Israel",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/israel"
+    },
+    {
+      "text": "Japón",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/jap%C3%B3n"
+    },
+    {
+      "text": "Lituania",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/lituania"
+    },
+    {
+      "text": "Malta",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/malta"
+    },
+    {
+      "text": "Mexico",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/mexico"
+    },
+    {
+      "text": "Holanda",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/holanda"
+    },
+    {
+      "text": "Nigeria",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/nigeria"
+    },
+    {
+      "text": "Northern Ireland",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/northern-ireland"
+    },
+    {
+      "text": "Noruega",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/noruega"
+    },
+    {
+      "text": "Polonia",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/polonia"
+    },
+    {
+      "text": "Portugal",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/portugal"
+    },
+    {
+      "text": "Rumania",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/rumania"
+    },
+    {
+      "text": "Arabia Saudí",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/arabia-saudi"
+    },
+    {
+      "text": "Escocia",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/escocia"
+    },
+    {
+      "text": "Singapur",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/singapur"
+    },
+    {
+      "text": "Eslovaquia",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/eslovaquia"
+    },
+    {
+      "text": "Eslovenia",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/eslovenia"
+    },
+    {
+      "text": "Sud Africa",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/sud-africa"
+    },
+    {
+      "text": "Corea del Sur",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/south-korea"
+    },
+    {
+      "text": "Suecia",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/suecia"
+    },
+    {
+      "text": "Suiza",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/suiza"
+    },
+    {
+      "text": "Turquía",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/turqu%C3%ADa"
+    },
+    {
+      "text": "Ucrania",
+      "href": "https://www.coolbet.pe/pe/deportes/futbol/ucrania"
+    }
+  ],
+  "probablesPartidos": [
+    {
+      "textoMuestra": "Libro de Reclamaciones - Hoja de reclamación",
+      "tagName": "A",
+      "clases": "PcbB_A",
+      "dataAttrs": [],
+      "bbox": 10263
+    }
+  ]
+}

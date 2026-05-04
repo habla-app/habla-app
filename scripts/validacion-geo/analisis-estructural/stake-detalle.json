@@ -1,0 +1,996 @@
+{
+  "totalElementos": 2011,
+  "tags": [
+    {
+      "tag": "div",
+      "count": 988
+    },
+    {
+      "tag": "span",
+      "count": 358
+    },
+    {
+      "tag": "a",
+      "count": 156
+    },
+    {
+      "tag": "img",
+      "count": 100
+    },
+    {
+      "tag": "li",
+      "count": 83
+    },
+    {
+      "tag": "td",
+      "count": 50
+    },
+    {
+      "tag": "b",
+      "count": 37
+    },
+    {
+      "tag": "betslip-progress-bar",
+      "count": 37
+    },
+    {
+      "tag": "script",
+      "count": 36
+    },
+    {
+      "tag": "i",
+      "count": 25
+    },
+    {
+      "tag": "button",
+      "count": 15
+    },
+    {
+      "tag": "meta",
+      "count": 13
+    },
+    {
+      "tag": "header",
+      "count": 13
+    },
+    {
+      "tag": "ul",
+      "count": 12
+    },
+    {
+      "tag": "tr",
+      "count": 11
+    },
+    {
+      "tag": "p",
+      "count": 10
+    },
+    {
+      "tag": "svg",
+      "count": 9
+    },
+    {
+      "tag": "path",
+      "count": 9
+    },
+    {
+      "tag": "link",
+      "count": 8
+    },
+    {
+      "tag": "style",
+      "count": 8
+    },
+    {
+      "tag": "th",
+      "count": 5
+    },
+    {
+      "tag": "section",
+      "count": 4
+    },
+    {
+      "tag": "option",
+      "count": 4
+    },
+    {
+      "tag": "noscript",
+      "count": 3
+    },
+    {
+      "tag": "main",
+      "count": 3
+    }
+  ],
+  "topClases": [
+    {
+      "clase": "collapsed",
+      "count": 108
+    },
+    {
+      "clase": "wpm-menu-item",
+      "count": 107
+    },
+    {
+      "clase": "wpm-menu-item__title",
+      "count": 107
+    },
+    {
+      "clase": "wpm-menu-item__title__text",
+      "count": 107
+    },
+    {
+      "clase": "sb-icon-arrow-right",
+      "count": 105
+    },
+    {
+      "clase": "wpm-menu-item__title__arrow",
+      "count": 104
+    },
+    {
+      "clase": "wol-odd-changer",
+      "count": 79
+    },
+    {
+      "clase": "wpm-menu-item--2ndLevel",
+      "count": 74
+    },
+    {
+      "clase": "wsb-flag",
+      "count": 74
+    },
+    {
+      "clase": "wpm-menu-item__title__countryEventsCount",
+      "count": 74
+    },
+    {
+      "clase": "wsb-info",
+      "count": 49
+    },
+    {
+      "clase": "wol-odd",
+      "count": 42
+    },
+    {
+      "clase": "wol-odd__info",
+      "count": 37
+    },
+    {
+      "clase": "purple",
+      "count": 37
+    },
+    {
+      "clase": "wol-odd__value",
+      "count": 37
+    },
+    {
+      "clase": "gc-link",
+      "count": 36
+    },
+    {
+      "clase": "sb-icon-favourite",
+      "count": 34
+    },
+    {
+      "clase": "wpm-menu-item--1stLevel",
+      "count": 32
+    },
+    {
+      "clase": "wpm-menu-item__title__icon",
+      "count": 32
+    },
+    {
+      "clase": "wpm-menu-item__title__icon__wrp",
+      "count": 32
+    },
+    {
+      "clase": "item",
+      "count": 25
+    },
+    {
+      "clase": "active",
+      "count": 22
+    },
+    {
+      "clase": "text-right",
+      "count": 22
+    },
+    {
+      "clase": "wpm-menu-item__title__favourite",
+      "count": 21
+    },
+    {
+      "clase": "wol-odds-container",
+      "count": 20
+    },
+    {
+      "clase": "wol-odds-container--2",
+      "count": 18
+    },
+    {
+      "clase": "wol-tooltip",
+      "count": 16
+    },
+    {
+      "clase": "color",
+      "count": 15
+    },
+    {
+      "clase": "show",
+      "count": 14
+    },
+    {
+      "clase": "sb-icon-football",
+      "count": 13
+    },
+    {
+      "clase": "nohover",
+      "count": 13
+    },
+    {
+      "clase": "sb-icon-arrow-up",
+      "count": 12
+    },
+    {
+      "clase": "wrm--tb__bet_details",
+      "count": 12
+    },
+    {
+      "clase": "wrm--tb__info",
+      "count": 12
+    },
+    {
+      "clase": "wrm--tb__icon",
+      "count": 12
+    },
+    {
+      "clase": "wrm--tb__title",
+      "count": 12
+    },
+    {
+      "clase": "wrm--tb__choice",
+      "count": 12
+    },
+    {
+      "clase": "wrm--tb__odd",
+      "count": 12
+    },
+    {
+      "clase": "sb-icon-betbuilder",
+      "count": 11
+    },
+    {
+      "clase": "wol-market",
+      "count": 11
+    }
+  ],
+  "dataAttributos": [
+    "data-additional-value",
+    "data-cf-beacon",
+    "data-event-id",
+    "data-event-odd-id",
+    "data-is-final-child",
+    "data-market-id",
+    "data-odd-denominator",
+    "data-odd-id",
+    "data-odd-numerator",
+    "data-odd-team_side",
+    "data-odd-ttl",
+    "data-odd-value",
+    "data-order-num",
+    "data-regular-odd",
+    "data-rh",
+    "data-sport-path",
+    "data-styled",
+    "data-styled-version",
+    "data-symbol-name",
+    "data-test-id",
+    "data-tournament-path"
+  ],
+  "topPrefijosClase": [
+    {
+      "prefijo": "wpm",
+      "count": 712
+    },
+    {
+      "prefijo": "wol",
+      "count": 303
+    },
+    {
+      "prefijo": "sb",
+      "count": 217
+    },
+    {
+      "prefijo": "wrm",
+      "count": 140
+    },
+    {
+      "prefijo": "wsb",
+      "count": 135
+    },
+    {
+      "prefijo": "gc",
+      "count": 36
+    },
+    {
+      "prefijo": "text",
+      "count": 33
+    },
+    {
+      "prefijo": "footer",
+      "count": 32
+    },
+    {
+      "prefijo": "icon",
+      "count": 25
+    },
+    {
+      "prefijo": "wbc",
+      "count": 20
+    },
+    {
+      "prefijo": "wmf",
+      "count": 20
+    },
+    {
+      "prefijo": "sidebar",
+      "count": 15
+    },
+    {
+      "prefijo": "page",
+      "count": 14
+    },
+    {
+      "prefijo": "wbs",
+      "count": 11
+    },
+    {
+      "prefijo": "is",
+      "count": 10
+    }
+  ],
+  "muestraLinks": [
+    {
+      "text": "CASINO",
+      "href": "https://stake.pe/casino/principal"
+    },
+    {
+      "text": "DEPORTES",
+      "href": "https://stake.pe/deportes"
+    },
+    {
+      "text": "En juego",
+      "href": "https://stake.pe/en-vivo"
+    },
+    {
+      "text": "E-sports",
+      "href": "https://stake.pe/e-sports"
+    },
+    {
+      "text": "Fútbol (819)",
+      "href": "https://stake.pe/deportes/football"
+    },
+    {
+      "text": "Perú",
+      "href": "https://stake.pe/deportes/football/peru"
+    },
+    {
+      "text": "Primera Division",
+      "href": "https://stake.pe/deportes/football/peru/primera-division"
+    },
+    {
+      "text": "América del Sur",
+      "href": "https://stake.pe/deportes/football/south-america"
+    },
+    {
+      "text": "Inglaterra",
+      "href": "https://stake.pe/deportes/football/england"
+    },
+    {
+      "text": "España",
+      "href": "https://stake.pe/deportes/football/spain"
+    },
+    {
+      "text": "Italia",
+      "href": "https://stake.pe/deportes/football/italy"
+    },
+    {
+      "text": "Alemania",
+      "href": "https://stake.pe/deportes/football/germany"
+    },
+    {
+      "text": "Francia",
+      "href": "https://stake.pe/deportes/football/france"
+    },
+    {
+      "text": "Europa",
+      "href": "https://stake.pe/deportes/football/europe"
+    },
+    {
+      "text": "Brasil",
+      "href": "https://stake.pe/deportes/football/brazil"
+    },
+    {
+      "text": "Mundo",
+      "href": "https://stake.pe/deportes/football/world"
+    },
+    {
+      "text": "Austria",
+      "href": "https://stake.pe/deportes/football/austria"
+    },
+    {
+      "text": "Australia",
+      "href": "https://stake.pe/deportes/football/australia"
+    },
+    {
+      "text": "Argentina",
+      "href": "https://stake.pe/deportes/football/argentina"
+    },
+    {
+      "text": "Bélgica",
+      "href": "https://stake.pe/deportes/football/belgium"
+    },
+    {
+      "text": "Baréin",
+      "href": "https://stake.pe/deportes/football/bahrain"
+    },
+    {
+      "text": "Bulgaria",
+      "href": "https://stake.pe/deportes/football/bulgaria"
+    },
+    {
+      "text": "Azerbaiyán",
+      "href": "https://stake.pe/deportes/football/azerbaijan"
+    },
+    {
+      "text": "Asia",
+      "href": "https://stake.pe/deportes/football/asia"
+    },
+    {
+      "text": "República Checa",
+      "href": "https://stake.pe/deportes/football/czech-republic"
+    },
+    {
+      "text": "Chile",
+      "href": "https://stake.pe/deportes/football/chile"
+    },
+    {
+      "text": "Costa Rica",
+      "href": "https://stake.pe/deportes/football/costa-rica"
+    },
+    {
+      "text": "Colombia",
+      "href": "https://stake.pe/deportes/football/colombia"
+    },
+    {
+      "text": "Chipre",
+      "href": "https://stake.pe/deportes/football/cyprus"
+    },
+    {
+      "text": "Croacia",
+      "href": "https://stake.pe/deportes/football/croatia"
+    },
+    {
+      "text": "China",
+      "href": "https://stake.pe/deportes/football/china"
+    },
+    {
+      "text": "Canadá",
+      "href": "https://stake.pe/deportes/football/canada"
+    },
+    {
+      "text": "Dinamarca",
+      "href": "https://stake.pe/deportes/football/denmark"
+    },
+    {
+      "text": "Etiopía",
+      "href": "https://stake.pe/deportes/football/ethiopia"
+    },
+    {
+      "text": "Egipto",
+      "href": "https://stake.pe/deportes/football/egypt"
+    },
+    {
+      "text": "Estonia",
+      "href": "https://stake.pe/deportes/football/estonia"
+    },
+    {
+      "text": "Finlandia",
+      "href": "https://stake.pe/deportes/football/finland"
+    },
+    {
+      "text": "Grecia",
+      "href": "https://stake.pe/deportes/football/greece"
+    },
+    {
+      "text": "Georgia",
+      "href": "https://stake.pe/deportes/football/georgia"
+    },
+    {
+      "text": "Islandia",
+      "href": "https://stake.pe/deportes/football/iceland"
+    },
+    {
+      "text": "Rep. de Irlanda",
+      "href": "https://stake.pe/deportes/football/ireland"
+    },
+    {
+      "text": "Israel",
+      "href": "https://stake.pe/deportes/football/israel"
+    },
+    {
+      "text": "Japón",
+      "href": "https://stake.pe/deportes/football/japan"
+    },
+    {
+      "text": "Lituania",
+      "href": "https://stake.pe/deportes/football/lithuania"
+    },
+    {
+      "text": "México",
+      "href": "https://stake.pe/deportes/football/mexico"
+    },
+    {
+      "text": "India",
+      "href": "https://stake.pe/deportes/football/india"
+    },
+    {
+      "text": "Países Bajos",
+      "href": "https://stake.pe/deportes/football/netherlands"
+    },
+    {
+      "text": "Indonesia",
+      "href": "https://stake.pe/deportes/football/indonesia"
+    },
+    {
+      "text": "América del Norte",
+      "href": "https://stake.pe/deportes/football/north-america"
+    },
+    {
+      "text": "Noruega",
+      "href": "https://stake.pe/deportes/football/norway"
+    },
+    {
+      "text": "Paraguay",
+      "href": "https://stake.pe/deportes/football/paraguay"
+    },
+    {
+      "text": "Polonia",
+      "href": "https://stake.pe/deportes/football/poland"
+    },
+    {
+      "text": "Portugal",
+      "href": "https://stake.pe/deportes/football/portugal"
+    },
+    {
+      "text": "Rumanía",
+      "href": "https://stake.pe/deportes/football/romania"
+    },
+    {
+      "text": "Arabia Saudí",
+      "href": "https://stake.pe/deportes/football/saudi-arabia"
+    },
+    {
+      "text": "Escocia",
+      "href": "https://stake.pe/deportes/football/scotland"
+    },
+    {
+      "text": "Eslovaquia",
+      "href": "https://stake.pe/deportes/football/slovak-republic"
+    },
+    {
+      "text": "Suecia",
+      "href": "https://stake.pe/deportes/football/sweden"
+    },
+    {
+      "text": "Singapur",
+      "href": "https://stake.pe/deportes/football/singapore"
+    },
+    {
+      "text": "Corea del Sur",
+      "href": "https://stake.pe/deportes/football/south-korea"
+    },
+    {
+      "text": "Eslovenia",
+      "href": "https://stake.pe/deportes/football/slovenia"
+    },
+    {
+      "text": "Sudáfrica",
+      "href": "https://stake.pe/deportes/football/south-africa"
+    },
+    {
+      "text": "Suiza",
+      "href": "https://stake.pe/deportes/football/switzerland"
+    },
+    {
+      "text": "Tanzania",
+      "href": "https://stake.pe/deportes/football/tanzania"
+    },
+    {
+      "text": "Turquía",
+      "href": "https://stake.pe/deportes/football/turkey"
+    },
+    {
+      "text": "EE.UU.",
+      "href": "https://stake.pe/deportes/football/usa"
+    },
+    {
+      "text": "Ucrania",
+      "href": "https://stake.pe/deportes/football/ukraine"
+    },
+    {
+      "text": "Uruguay",
+      "href": "https://stake.pe/deportes/football/uruguay"
+    },
+    {
+      "text": "Tailandia",
+      "href": "https://stake.pe/deportes/football/thailand"
+    },
+    {
+      "text": "Bolivia",
+      "href": "https://stake.pe/deportes/football/bolivia"
+    },
+    {
+      "text": "Catar",
+      "href": "https://stake.pe/deportes/football/qatar"
+    },
+    {
+      "text": "Costa de Marfil",
+      "href": "https://stake.pe/deportes/football/cote-d-ivoire"
+    },
+    {
+      "text": "EAU",
+      "href": "https://stake.pe/deportes/football/uae"
+    },
+    {
+      "text": "Ecuador",
+      "href": "https://stake.pe/deportes/football/ecuador"
+    },
+    {
+      "text": "Honduras",
+      "href": "https://stake.pe/deportes/football/honduras"
+    },
+    {
+      "text": "Iraq",
+      "href": "https://stake.pe/deportes/football/iraq"
+    },
+    {
+      "text": "Omán",
+      "href": "https://stake.pe/deportes/football/oman"
+    },
+    {
+      "text": "Panamá",
+      "href": "https://stake.pe/deportes/football/panama"
+    },
+    {
+      "text": "San Marino",
+      "href": "https://stake.pe/deportes/football/san-marino"
+    },
+    {
+      "text": "Serbia",
+      "href": "https://stake.pe/deportes/football/serbia"
+    }
+  ],
+  "probablesPartidos": [
+    {
+      "textoMuestra": "Ajustes\nDecimal 1.50\nGMT-05:00",
+      "tagName": "LI",
+      "clases": "wpm-menu-item wpm-menu-item--1stLevel wpm-menu-item--settings wpm-menu-item--settings-not-collapsibl",
+      "dataAttrs": [],
+      "bbox": 32032
+    },
+    {
+      "textoMuestra": "UTC Cajamarca vs. FC Cajamarca",
+      "tagName": "LI",
+      "clases": "wbc-breadcrumb",
+      "dataAttrs": [],
+      "bbox": 9686
+    },
+    {
+      "textoMuestra": "UTC Cajamarca\n1.75",
+      "tagName": "DIV",
+      "clases": "wol-odd ",
+      "dataAttrs": [
+        "eventOddId",
+        "eventId",
+        "oddValue",
+        "oddNumerator",
+        "oddDenominator",
+        "orderNum",
+        "oddId",
+        "oddTeam_side"
+      ],
+      "bbox": 9301
+    },
+    {
+      "textoMuestra": "FC Cajamarca\n4.55",
+      "tagName": "DIV",
+      "clases": "wol-odd ",
+      "dataAttrs": [
+        "eventOddId",
+        "eventId",
+        "oddValue",
+        "oddNumerator",
+        "oddDenominator",
+        "orderNum",
+        "oddId",
+        "oddTeam_side"
+      ],
+      "bbox": 9301
+    },
+    {
+      "textoMuestra": "Apuesta sin empate - UTC Cajamarca\n1.30",
+      "tagName": "DIV",
+      "clases": "wol-odd ",
+      "dataAttrs": [
+        "eventOddId",
+        "eventId",
+        "oddValue",
+        "oddNumerator",
+        "oddDenominator",
+        "orderNum",
+        "oddId",
+        "oddTeam_side"
+      ],
+      "bbox": 14153
+    },
+    {
+      "textoMuestra": "Apuesta sin empate - FC Cajamarca\n3.20",
+      "tagName": "DIV",
+      "clases": "wol-odd ",
+      "dataAttrs": [
+        "eventOddId",
+        "eventId",
+        "oddValue",
+        "oddNumerator",
+        "oddDenominator",
+        "orderNum",
+        "oddId",
+        "oddTeam_side"
+      ],
+      "bbox": 14153
+    },
+    {
+      "textoMuestra": "Ambos equipos marcan - SÍ\n1.75",
+      "tagName": "DIV",
+      "clases": "wol-odd ",
+      "dataAttrs": [
+        "eventOddId",
+        "eventId",
+        "oddValue",
+        "oddNumerator",
+        "oddDenominator",
+        "orderNum",
+        "oddId",
+        "oddTeam_side"
+      ],
+      "bbox": 14153
+    },
+    {
+      "textoMuestra": "Ambos equipos marcan - NO\n1.95",
+      "tagName": "DIV",
+      "clases": "wol-odd ",
+      "dataAttrs": [
+        "eventOddId",
+        "eventId",
+        "oddValue",
+        "oddNumerator",
+        "oddDenominator",
+        "orderNum",
+        "oddId",
+        "oddTeam_side"
+      ],
+      "bbox": 14153
+    },
+    {
+      "textoMuestra": "UTC Cajamarca (-1.5)\n3.05",
+      "tagName": "DIV",
+      "clases": "wol-odd ",
+      "dataAttrs": [
+        "eventOddId",
+        "eventId",
+        "additionalValue",
+        "oddValue",
+        "oddNumerator",
+        "oddDenominator",
+        "orderNum",
+        "oddId",
+        "oddTeam_side"
+      ],
+      "bbox": 14153
+    },
+    {
+      "textoMuestra": "FC Cajamarca (+1.5)\n1.33",
+      "tagName": "DIV",
+      "clases": "wol-odd ",
+      "dataAttrs": [
+        "eventOddId",
+        "eventId",
+        "additionalValue",
+        "oddValue",
+        "oddNumerator",
+        "oddDenominator",
+        "orderNum",
+        "oddId",
+        "oddTeam_side"
+      ],
+      "bbox": 14153
+    },
+    {
+      "textoMuestra": "UTC Cajamarca (-3.5)\n12.00",
+      "tagName": "DIV",
+      "clases": "wol-odd ",
+      "dataAttrs": [
+        "eventOddId",
+        "eventId",
+        "additionalValue",
+        "oddValue",
+        "oddNumerator",
+        "oddDenominator",
+        "orderNum",
+        "oddId",
+        "oddTeam_side"
+      ],
+      "bbox": 14153
+    },
+    {
+      "textoMuestra": "UTC Cajamarca (-2.5)\n5.55",
+      "tagName": "DIV",
+      "clases": "wol-odd ",
+      "dataAttrs": [
+        "eventOddId",
+        "eventId",
+        "additionalValue",
+        "oddValue",
+        "oddNumerator",
+        "oddDenominator",
+        "orderNum",
+        "oddId",
+        "oddTeam_side"
+      ],
+      "bbox": 14153
+    },
+    {
+      "textoMuestra": "FC Cajamarca (+2.5)\n1.11",
+      "tagName": "DIV",
+      "clases": "wol-odd ",
+      "dataAttrs": [
+        "eventOddId",
+        "eventId",
+        "additionalValue",
+        "oddValue",
+        "oddNumerator",
+        "oddDenominator",
+        "orderNum",
+        "oddId",
+        "oddTeam_side"
+      ],
+      "bbox": 14153
+    },
+    {
+      "textoMuestra": "FC Cajamarca (-1.5)\n11.00",
+      "tagName": "DIV",
+      "clases": "wol-odd ",
+      "dataAttrs": [
+        "eventOddId",
+        "eventId",
+        "additionalValue",
+        "oddValue",
+        "oddNumerator",
+        "oddDenominator",
+        "orderNum",
+        "oddId",
+        "oddTeam_side"
+      ],
+      "bbox": 14153
+    },
+    {
+      "textoMuestra": "Más de 2.5\n1.80",
+      "tagName": "DIV",
+      "clases": "wol-odd ",
+      "dataAttrs": [
+        "eventOddId",
+        "eventId",
+        "additionalValue",
+        "oddValue",
+        "oddNumerator",
+        "oddDenominator",
+        "orderNum",
+        "oddId",
+        "oddTeam_side",
+        "oddTtl"
+      ],
+      "bbox": 14153
+    },
+    {
+      "textoMuestra": "Menos de 2.5\n1.95",
+      "tagName": "DIV",
+      "clases": "wol-odd ",
+      "dataAttrs": [
+        "eventOddId",
+        "eventId",
+        "additionalValue",
+        "oddValue",
+        "oddNumerator",
+        "oddDenominator",
+        "orderNum",
+        "oddId",
+        "oddTeam_side",
+        "oddTtl"
+      ],
+      "bbox": 14153
+    },
+    {
+      "textoMuestra": "Menos de 0.5\n10.00",
+      "tagName": "DIV",
+      "clases": "wol-odd ",
+      "dataAttrs": [
+        "eventOddId",
+        "eventId",
+        "additionalValue",
+        "oddValue",
+        "oddNumerator",
+        "oddDenominator",
+        "orderNum",
+        "oddId",
+        "oddTeam_side",
+        "oddTtl"
+      ],
+      "bbox": 14153
+    },
+    {
+      "textoMuestra": "Más de 1.5\n1.26",
+      "tagName": "DIV",
+      "clases": "wol-odd ",
+      "dataAttrs": [
+        "eventOddId",
+        "eventId",
+        "additionalValue",
+        "oddValue",
+        "oddNumerator",
+        "oddDenominator",
+        "orderNum",
+        "oddId",
+        "oddTeam_side",
+        "oddTtl"
+      ],
+      "bbox": 14153
+    },
+    {
+      "textoMuestra": "Menos de 1.5\n3.50",
+      "tagName": "DIV",
+      "clases": "wol-odd ",
+      "dataAttrs": [
+        "eventOddId",
+        "eventId",
+        "additionalValue",
+        "oddValue",
+        "oddNumerator",
+        "oddDenominator",
+        "orderNum",
+        "oddId",
+        "oddTeam_side",
+        "oddTtl"
+      ],
+      "bbox": 14153
+    },
+    {
+      "textoMuestra": "Más de 3.5\n3.10",
+      "tagName": "DIV",
+      "clases": "wol-odd ",
+      "dataAttrs": [
+        "eventOddId",
+        "eventId",
+        "additionalValue",
+        "oddValue",
+        "oddNumerator",
+        "oddDenominator",
+        "orderNum",
+        "oddId",
+        "oddTeam_side",
+        "oddTtl"
+      ],
+      "bbox": 14153
+    }
+  ]
+}

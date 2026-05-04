@@ -104,11 +104,13 @@ async function intentarAceptarCookies(page) {
         "aceptar",
         "aceptar todo",
         "aceptar todas",
+        "aceptar cookies",
         "acepto",
         "acepto todo",
         "acepto todas",
         "accept",
         "accept all",
+        "accept cookies",
         "ok",
         "got it",
         "i accept",
@@ -141,6 +143,212 @@ async function intentarAceptarCookies(page) {
     });
   } catch {
     return false;
+  }
+}
+
+/**
+ * Cierra modales/popups overlay que pueden bloquear el contenido del
+ * listado (Doradobet muestra un modal de "Iniciar Sesión" al entrar
+ * fresh, por ejemplo). Estrategia en cascada:
+ *
+ *   1. Buscar botones con aria-label="Close"/"Cerrar".
+ *   2. Buscar elementos con clase que contenga "close" / "modal-close" /
+ *      "dialog-close".
+ *   3. Buscar botones cuyo texto sea "X", "×", "✕", "✗".
+ *   4. Si nada funciona, presionar tecla Escape.
+ *
+ * Repite hasta 3 veces porque puede haber modales en cadena (cookie banner
+ * + login modal + promo modal). Devuelve la cantidad cerrados.
+ */
+async function cerrarModalesOverlay(page) {
+  let cerrados = 0;
+  for (let i = 0; i < 3; i++) {
+    const cerrado = await page
+      .evaluate(() => {
+        // 1. aria-label
+        const SELECTORES_ARIA = [
+          '[aria-label="Close"]',
+          '[aria-label="close"]',
+          '[aria-label="Cerrar"]',
+          '[aria-label="cerrar"]',
+          '[aria-label="Cerrar modal"]',
+          '[aria-label="Close dialog"]',
+        ];
+        for (const sel of SELECTORES_ARIA) {
+          try {
+            const el = document.querySelector(sel);
+            if (el instanceof HTMLElement) {
+              const rect = el.getBoundingClientRect();
+              if (rect.width > 0 && rect.height > 0 && rect.width < 100) {
+                el.click();
+                return "aria-label";
+              }
+            }
+          } catch {
+            /* sigue */
+          }
+        }
+
+        // 2. Clase con "close" o "modal-close"
+        const SELECTORES_CLASE = [
+          '[class*="modal-close" i]',
+          '[class*="dialog-close" i]',
+          '[class*="popup-close" i]',
+          'button[class*="close" i]',
+        ];
+        for (const sel of SELECTORES_CLASE) {
+          try {
+            const el = document.querySelector(sel);
+            if (el instanceof HTMLElement) {
+              const rect = el.getBoundingClientRect();
+              if (rect.width > 0 && rect.height > 0 && rect.width < 100) {
+                el.click();
+                return "class-close";
+              }
+            }
+          } catch {
+            /* sigue */
+          }
+        }
+
+        // 3. Botón con texto X/×/✕/✗
+        const botones = document.querySelectorAll(
+          "button, [role='button'], a, span, div",
+        );
+        for (const el of Array.from(botones)) {
+          if (!(el instanceof HTMLElement)) continue;
+          const txt = (el.innerText ?? el.textContent ?? "").trim();
+          if (txt === "×" || txt === "✕" || txt === "✗" || txt === "X") {
+            const rect = el.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0 && rect.width < 60) {
+              el.click();
+              return "x-button";
+            }
+          }
+        }
+
+        return null;
+      })
+      .catch(() => null);
+
+    if (cerrado) {
+      cerrados++;
+      await page.waitForTimeout(800);
+    } else {
+      // Fallback: presionar Escape.
+      try {
+        await page.keyboard.press("Escape");
+        await page.waitForTimeout(500);
+      } catch {
+        /* ignore */
+      }
+      break;
+    }
+  }
+  return cerrados;
+}
+
+/**
+ * Detecta todos los iframes del documento y devuelve metadata útil para
+ * diagnosticar dónde vive realmente el contenido del sportsbook (algunos
+ * SPAs como Apuesta Total embeben el sportsbook en un iframe externo).
+ */
+async function detectarIframes(page) {
+  return page.evaluate(() => {
+    const out = [];
+    for (const f of Array.from(document.querySelectorAll("iframe"))) {
+      if (!(f instanceof HTMLIFrameElement)) continue;
+      const rect = f.getBoundingClientRect();
+      let sameOrigin = false;
+      let originSrc = "";
+      try {
+        originSrc = new URL(f.src, window.location.href).origin;
+        sameOrigin = originSrc === window.location.origin;
+      } catch {
+        sameOrigin = false;
+      }
+      out.push({
+        src: f.src || "",
+        srcOrigin: originSrc,
+        sameOrigin,
+        ancho: Math.round(rect.width),
+        alto: Math.round(rect.height),
+        visible: rect.width > 100 && rect.height > 100,
+        id: f.id || "",
+        name: f.name || "",
+      });
+    }
+    return out;
+  });
+}
+
+/**
+ * Click + esperar navegación. Si el candidato tiene href, navega
+ * directo. Si no, clickea el elemento por texto y espera URL change
+ * o aparición de selectores específicos del detalle.
+ */
+async function clickYEsperarNavegacion(page, candidato) {
+  if (candidato.href && candidato.href.startsWith("http")) {
+    try {
+      await page.goto(candidato.href, {
+        waitUntil: "domcontentloaded",
+        timeout: 30_000,
+      });
+      return { navegado: true, urlNueva: page.url(), via: "href" };
+    } catch (err) {
+      return { navegado: false, error: err.message, via: "href" };
+    }
+  }
+
+  const urlAntes = page.url();
+  try {
+    const clicked = await page.evaluate((textoBuscado) => {
+      const norm = (s) =>
+        s
+          .normalize("NFD")
+          .replace(/[̀-ͯ]/g, "")
+          .toLowerCase();
+      const inicio = norm(textoBuscado).slice(0, 30);
+      const SEL = "div, a, button, [role='button'], li, article";
+      for (const el of Array.from(document.querySelectorAll(SEL))) {
+        if (!(el instanceof HTMLElement)) continue;
+        const txt = norm(el.innerText ?? el.textContent ?? "");
+        if (txt.startsWith(inicio)) {
+          const rect = el.getBoundingClientRect();
+          if (rect.width > 100 && rect.height > 25) {
+            try {
+              el.click();
+              return true;
+            } catch {
+              return false;
+            }
+          }
+        }
+      }
+      return false;
+    }, candidato.textoMuestra);
+
+    if (!clicked) {
+      return { navegado: false, error: "no se pudo clickear", via: "click" };
+    }
+
+    try {
+      await page.waitForURL((url) => String(url) !== urlAntes, {
+        timeout: 8_000,
+      });
+      return { navegado: true, urlNueva: page.url(), via: "click" };
+    } catch {
+      // No cambió URL — esperar 3s por si es modal in-page.
+      await page.waitForTimeout(3000);
+      return {
+        navegado: false,
+        error: "URL no cambió tras click (¿modal in-page?)",
+        urlActual: page.url(),
+        via: "click",
+      };
+    }
+  } catch (err) {
+    return { navegado: false, error: err.message, via: "click" };
   }
 }
 
@@ -436,13 +644,11 @@ async function extraerCuotasStake(page) {
       });
     }
 
-    const local1x2 = allOdds.find((o) => o.oddId === "3" && o.teamSide === "1");
-    const empate1x2 = allOdds.find(
-      (o) => o.oddId === "4" && o.teamSide === "0",
-    );
-    const visita1x2 = allOdds.find(
-      (o) => o.oddId === "5" && o.teamSide === "2",
-    );
+    // Lote V.2: el atributo data-odd-team_side solo aparece en el listado,
+    // NO en la página de detalle. Identificamos 1X2 solo por oddId estable.
+    const local1x2 = allOdds.find((o) => o.oddId === "3");
+    const empate1x2 = allOdds.find((o) => o.oddId === "4");
+    const visita1x2 = allOdds.find((o) => o.oddId === "5");
     const m1x2 =
       local1x2?.oddValue && empate1x2?.oddValue && visita1x2?.oddValue
         ? {
@@ -531,6 +737,8 @@ async function probarCasa({ casa, url, waitExtraMs }) {
       urlFinal: "",
       bodyTextLength: 0,
       cookiesAceptadas: false,
+      modalesCerrados: 0,
+      iframes: [],
       ms: 0,
       error: null,
     },
@@ -570,8 +778,35 @@ async function probarCasa({ casa, url, waitExtraMs }) {
       console.log(`  [A] cookies: sin banner detectado o no se pudo clickear`);
     }
 
+    // Cerrar cualquier modal/popup que cubra el contenido (Doradobet
+    // muestra modal de "Iniciar Sesión", otras casas tienen modales
+    // promocionales similares).
+    resultado.listado.modalesCerrados = await cerrarModalesOverlay(page);
+    if (resultado.listado.modalesCerrados > 0) {
+      console.log(
+        `  [A] ${resultado.listado.modalesCerrados} modal(es) overlay cerrado(s)`,
+      );
+      await page.waitForTimeout(1500);
+    }
+
     const sleepMs = waitExtraMs ?? SLEEP_HIDRATACION_DEFAULT_MS;
     await page.waitForTimeout(sleepMs);
+
+    // Detectar iframes (puede ser que el sportsbook real esté embebido).
+    resultado.listado.iframes = await detectarIframes(page);
+    if (resultado.listado.iframes.some((f) => f.visible && f.ancho > 500)) {
+      const grandes = resultado.listado.iframes.filter(
+        (f) => f.visible && f.ancho > 500,
+      );
+      console.log(
+        `  [A] ${grandes.length} iframe(s) grande(s) detectado(s)`,
+      );
+      for (const f of grandes) {
+        console.log(
+          `      iframe: ${f.ancho}x${f.alto} sameOrigin=${f.sameOrigin} src=${(f.src || "").slice(0, 100)}`,
+        );
+      }
+    }
 
     const diag = await page.evaluate(() => {
       const titulo = document.title?.slice(0, 200) ?? "";
@@ -676,18 +911,45 @@ async function probarCasa({ casa, url, waitExtraMs }) {
   }
 
   // ── FASE C: navegación al detalle ──
-  if (resultado.busqueda.candidatoElegido?.href) {
-    const hrefDetalle = resultado.busqueda.candidatoElegido.href;
+  if (resultado.busqueda.candidatoElegido) {
     try {
-      console.log(`  [C] navegando al detalle`);
+      console.log(`  [C] intentando navegar al detalle`);
       const tC = Date.now();
-      await page.goto(hrefDetalle, {
-        waitUntil: "domcontentloaded",
-        timeout: 30_000,
-      });
-      // No re-aceptamos cookies — el contexto las preserva.
-      const sleepMs = waitExtraMs ?? SLEEP_HIDRATACION_DEFAULT_MS;
-      await page.waitForTimeout(sleepMs);
+      const navResult = await clickYEsperarNavegacion(
+        page,
+        resultado.busqueda.candidatoElegido,
+      );
+      console.log(
+        `  [C] ${navResult.navegado ? "OK" : "FAIL"} via=${navResult.via}${navResult.urlNueva ? ` urlNueva=${navResult.urlNueva}` : ""}${navResult.error ? ` error="${navResult.error}"` : ""}`,
+      );
+      resultado.detalle.via = navResult.via;
+      resultado.detalle.error = navResult.error ?? null;
+
+      if (!navResult.navegado) {
+        // Si no logramos navegar, capturamos screenshot+HTML del estado
+        // actual igual (por si hay modal in-page con cuotas).
+        await page.screenshot({
+          path: join(DIR_SCREENSHOTS, `${casa}-detalle.png`),
+          fullPage: false,
+        });
+        const htmlPostClick = await capturarHtmlBody(page);
+        await writeFile(
+          join(DIR_HTML, `${casa}-detalle.html`),
+          htmlPostClick,
+          "utf-8",
+        );
+        const analisisPostClick = await generarAnalisisEstructural(page);
+        await writeFile(
+          join(DIR_ANALISIS, `${casa}-detalle.json`),
+          JSON.stringify(analisisPostClick, null, 2),
+          "utf-8",
+        );
+        resultado.detalle.url = page.url();
+        resultado.detalle.ms = Date.now() - tC;
+      } else {
+        // Navegación exitosa — esperar hidratación.
+        const sleepMs = waitExtraMs ?? SLEEP_HIDRATACION_DEFAULT_MS;
+        await page.waitForTimeout(sleepMs);
 
       const diagDetalle = await page.evaluate(() => ({
         url: window.location.href,
@@ -716,9 +978,10 @@ async function probarCasa({ casa, url, waitExtraMs }) {
 
       resultado.detalle.ms = Date.now() - tC;
       console.log(
-        `  [C] ${resultado.detalle.ok ? "OK  " : "FAIL"} body=${diagDetalle.bodyTextLength} (${resultado.detalle.ms}ms)`,
+        `      ${resultado.detalle.ok ? "OK  " : "FAIL"} body=${diagDetalle.bodyTextLength} (${resultado.detalle.ms}ms)`,
       );
       console.log(`      url: ${diagDetalle.url}`);
+      } // cierra else navResult.navegado
     } catch (err) {
       resultado.detalle.error = err.message;
       console.log(`  [C] FAIL ERROR: ${err.message}`);

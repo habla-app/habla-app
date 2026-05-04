@@ -1,0 +1,366 @@
+{
+  "totalElementos": 402,
+  "tags": [
+    {
+      "tag": "script",
+      "count": 127
+    },
+    {
+      "tag": "div",
+      "count": 65
+    },
+    {
+      "tag": "link",
+      "count": 53
+    },
+    {
+      "tag": "meta",
+      "count": 30
+    },
+    {
+      "tag": "a",
+      "count": 22
+    },
+    {
+      "tag": "path",
+      "count": 12
+    },
+    {
+      "tag": "span",
+      "count": 11
+    },
+    {
+      "tag": "img",
+      "count": 10
+    },
+    {
+      "tag": "style",
+      "count": 8
+    },
+    {
+      "tag": "iframe",
+      "count": 8
+    },
+    {
+      "tag": "li",
+      "count": 8
+    },
+    {
+      "tag": "p",
+      "count": 7
+    },
+    {
+      "tag": "button",
+      "count": 7
+    },
+    {
+      "tag": "noscript",
+      "count": 6
+    },
+    {
+      "tag": "svg",
+      "count": 6
+    },
+    {
+      "tag": "h3",
+      "count": 5
+    },
+    {
+      "tag": "section",
+      "count": 4
+    },
+    {
+      "tag": "h2",
+      "count": 2
+    },
+    {
+      "tag": "html",
+      "count": 1
+    },
+    {
+      "tag": "head",
+      "count": 1
+    },
+    {
+      "tag": "title",
+      "count": 1
+    },
+    {
+      "tag": "body",
+      "count": 1
+    },
+    {
+      "tag": "main",
+      "count": 1
+    },
+    {
+      "tag": "article",
+      "count": 1
+    },
+    {
+      "tag": "br",
+      "count": 1
+    }
+  ],
+  "topClases": [
+    {
+      "clase": "sc-iLWXdy",
+      "count": 5
+    },
+    {
+      "clase": "levvFc",
+      "count": 5
+    },
+    {
+      "clase": "sc-huFNyZ",
+      "count": 5
+    },
+    {
+      "clase": "fVDjsQ",
+      "count": 5
+    },
+    {
+      "clase": "sc-enkILE",
+      "count": 5
+    },
+    {
+      "clase": "jlZMwU",
+      "count": 5
+    },
+    {
+      "clase": "sc-bcSKrn",
+      "count": 5
+    },
+    {
+      "clase": "dlbxuO",
+      "count": 5
+    },
+    {
+      "clase": "sc-jkTpcO",
+      "count": 5
+    },
+    {
+      "clase": "dRpxZg",
+      "count": 5
+    },
+    {
+      "clase": "sc-iQbOkh",
+      "count": 5
+    },
+    {
+      "clase": "frNQLg",
+      "count": 5
+    },
+    {
+      "clase": "sc-lmUcrn",
+      "count": 4
+    },
+    {
+      "clase": "djCMkr",
+      "count": 4
+    },
+    {
+      "clase": "sc-gplwa-d",
+      "count": 2
+    },
+    {
+      "clase": "dDCtVq",
+      "count": 2
+    },
+    {
+      "clase": "sc-ezreuY",
+      "count": 1
+    },
+    {
+      "clase": "fWAvMg",
+      "count": 1
+    },
+    {
+      "clase": "sc-iA-DsXs",
+      "count": 1
+    },
+    {
+      "clase": "bXoNXC",
+      "count": 1
+    },
+    {
+      "clase": "sc-iNIeMn",
+      "count": 1
+    },
+    {
+      "clase": "iErhwm",
+      "count": 1
+    },
+    {
+      "clase": "top",
+      "count": 1
+    },
+    {
+      "clase": "top-left",
+      "count": 1
+    },
+    {
+      "clase": "sc-jwZKMi",
+      "count": 1
+    },
+    {
+      "clase": "gDOfvl",
+      "count": 1
+    },
+    {
+      "clase": "sc-rPWID",
+      "count": 1
+    },
+    {
+      "clase": "gMdJxd",
+      "count": 1
+    },
+    {
+      "clase": "sc-dChVcU",
+      "count": 1
+    },
+    {
+      "clase": "giNaAJ",
+      "count": 1
+    },
+    {
+      "clase": "sc-gJCZQp",
+      "count": 1
+    },
+    {
+      "clase": "jTKOmj",
+      "count": 1
+    },
+    {
+      "clase": "right",
+      "count": 1
+    },
+    {
+      "clase": "sc-evdWiO",
+      "count": 1
+    },
+    {
+      "clase": "kPBKbO",
+      "count": 1
+    },
+    {
+      "clase": "sc-cvalOF",
+      "count": 1
+    },
+    {
+      "clase": "ikjQGW",
+      "count": 1
+    },
+    {
+      "clase": "bottom",
+      "count": 1
+    },
+    {
+      "clase": "sc-kpKSZj",
+      "count": 1
+    },
+    {
+      "clase": "dkWFZu",
+      "count": 1
+    }
+  ],
+  "dataAttributos": [
+    "data-at-header",
+    "data-cf-beacon",
+    "data-href",
+    "data-id",
+    "data-n-css",
+    "data-n-g",
+    "data-nscript",
+    "data-reactroot",
+    "data-style",
+    "data-styled",
+    "data-styled-version",
+    "data-ueto"
+  ],
+  "topPrefijosClase": [
+    {
+      "prefijo": "sc",
+      "count": 68
+    },
+    {
+      "prefijo": "top",
+      "count": 1
+    },
+    {
+      "prefijo": "menu",
+      "count": 1
+    }
+  ],
+  "muestraLinks": [
+    {
+      "text": "Teleservicios",
+      "href": "https://teleservicios.at/juega/"
+    },
+    {
+      "text": "¿Quieres ser un agente AT?",
+      "href": "https://agentes-at.com/"
+    },
+    {
+      "text": "Apuestas en vivo",
+      "href": "https://www.apuestatotal.com/apuestas-en-vivo/"
+    },
+    {
+      "text": "Apuestas deportivas",
+      "href": "https://www.apuestatotal.com/apuestas-deportivas/"
+    },
+    {
+      "text": "Casino",
+      "href": "https://www.apuestatotal.com/casino/"
+    },
+    {
+      "text": "La Ruta del Ajuste",
+      "href": "https://www.apuestatotal.com/ruta-del-ajuste/"
+    },
+    {
+      "text": "Football Studio",
+      "href": "https://www.apuestatotal.com/casino-en-vivo/evolution3/Football-Studio/"
+    },
+    {
+      "text": "Casino en vivo",
+      "href": "https://www.apuestatotal.com/casino-en-vivo/"
+    },
+    {
+      "text": "Poker",
+      "href": "https://www.apuestatotal.com/casino-en-vivo/EvenBet/EvenBet/"
+    },
+    {
+      "text": "Misiones",
+      "href": "https://www.apuestatotal.com/misiones/"
+    },
+    {
+      "text": "Promociones",
+      "href": "https://www.apuestatotal.com/promociones/"
+    },
+    {
+      "text": "Juegos Virtuales",
+      "href": "https://www.apuestatotal.com/juegos-virtuales/"
+    },
+    {
+      "text": "Acerca de Teleservicios",
+      "href": "https://www.apuestatotal.com/teleservicios/"
+    },
+    {
+      "text": "Torneos",
+      "href": "https://www.apuestatotal.com/torneos/"
+    },
+    {
+      "text": "Sorteos",
+      "href": "https://www.apuestatotal.com/sorteos/"
+    },
+    {
+      "text": "Nuestras tiendas",
+      "href": "https://www.apuestatotal.com/nuestras-tiendas/"
+    },
+    {
+      "text": "Tutoriales",
+      "href": "https://www.apuestatotal.com/tutoriales/"
+    }
+  ],
+  "probablesPartidos": []
+}
