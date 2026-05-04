@@ -331,7 +331,8 @@ const teApuestoConfig: CasaPlaywrightConfig = {
       return "https://www.teapuesto.pe/sport/detail/futbol/argentina/primera-lpf?id=1,56,9892";
     if (esEuropaLeague(liga))
       return "https://www.teapuesto.pe/sport/detail/futbol/internacional-clubes/uefa-europa-league?id=1,143,1952";
-    // Te Apuesto no cubre Copa Sudamericana hoy → null.
+    if (esSudamericana(liga))
+      return "https://www.teapuesto.pe/sport/detail/futbol/internacional-clubes/conmebol-sudamericana?id=1,143,10531";
     if (esMundial(liga))
       return "https://www.teapuesto.pe/sport/detail/futbol/internacional/copa-mundial?id=1,1,1197";
     return null;
