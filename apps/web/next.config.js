@@ -66,15 +66,47 @@ const nextConfig = {
     // al bundlear cualquier archivo que importe `node:fs`/`node:path`
     // hacia targets que no soportan el scheme.
     //
-    // Lote V (May 2026) — bullmq importa `net` + `worker_threads` desde
-    // `classes/child.js` y `crypto` desde `classes/repeat.js` + `utils/
-    // index.js`; playwright-core importa `net` desde `remote/
-    // playwrightPipeServer.js`. Sin estos en fallback el `next build`
-    // del target Edge revienta con `Module not found: net`. ioredis +
-    // pg también referencian `tls`/`dns` transitivamente — los agregamos
-    // preventivamente para evitar el próximo round de hotfix.
+    // Lote V (May 2026) — playwright-core es un caso especial. Su árbol
+    // de imports incluye:
+    //   1. Node builtins exóticos (net/crypto/worker_threads/readline/
+    //      http/https/tls/dns) — agregables a fallback uno por uno pero
+    //      con riesgo de seguir descubriendo más.
+    //   2. Peer-deps OPCIONALES no instaladas (chromium-bidi, electron) —
+    //      NO son builtins, no resuelven con fallback. Sólo se instalan
+    //      si activamente usás modo BiDi o Electron, que no es el caso.
+    //   3. Assets binarios (.ttf, .html del recorder de Playwright) —
+    //      webpack no sabe procesarlos, requiere loader específico.
+    //
+    // En Edge runtime el código de scrapers nunca se ejecuta (el guard
+    // `NEXT_RUNTIME !== "nodejs"` retorna antes de tocar playwright). La
+    // solución correcta es **aliasear playwright-chromium y playwright-core
+    // a `false`** para que webpack reemplace TODO ese subárbol por módulo
+    // vacío en Edge + client. Esto cierra de un solo cambio:
+    //   - chromium-bidi (peer no instalada)
+    //   - electron (peer no instalada)
+    //   - readline / http / https / cualquier builtin futuro
+    //   - assets binarios .ttf / .html del recorder
+    //   - todo el resto del árbol interno de playwright-core
+    //
+    // Para Node server, playwright SIGUE siendo external (ver bloque
+    // arriba) — ahí se carga con require() en runtime contra
+    // node_modules. Sólo cambiamos el comportamiento en Edge + client.
+    //
+    // bullmq también vive en este bloque vía sus builtins (net/crypto/
+    // worker_threads cubiertos en hotfix #3).
     if (nextRuntime === "edge" || !isServer) {
       config.resolve = config.resolve || {};
+
+      // Aliasing de paquetes server-only a módulo vacío en Edge/client.
+      // playwright-chromium/playwright-core arrastran chromium-bidi (peer
+      // opcional no instalada), electron (peer opcional no instalada) y
+      // assets binarios del recorder — alias false corta el subárbol.
+      config.resolve.alias = {
+        ...(config.resolve.alias || {}),
+        "playwright-chromium": false,
+        "playwright-core": false,
+      };
+
       config.resolve.fallback = {
         ...(config.resolve.fallback || {}),
         child_process: false,
@@ -89,6 +121,9 @@ const nextConfig = {
         worker_threads: false,
         tls: false,
         dns: false,
+        readline: false,
+        http: false,
+        https: false,
         "node:child_process": false,
         "node:fs": false,
         "node:fs/promises": false,
@@ -101,6 +136,9 @@ const nextConfig = {
         "node:worker_threads": false,
         "node:tls": false,
         "node:dns": false,
+        "node:readline": false,
+        "node:http": false,
+        "node:https": false,
       };
     }
 
