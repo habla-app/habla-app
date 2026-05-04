@@ -40,28 +40,75 @@ interface BullMQQueueLike {
   getJobCounts(...states: string[]): Promise<Record<string, number>>;
 }
 
-let queueInstance: BullMQQueueLike | null | undefined;
-let connectionInstance: unknown | null | undefined;
+// Lote V.10.8: cache via globalThis para sobrevivir module isolation
+// entre contextos de Next.js (instrumentation.ts vs route handlers).
+// Sin esto, cada contexto creaba su propia Queue y los jobs encolados en
+// el contexto del route handler no eran procesados por el worker que
+// vive en el contexto del boot.
+//
+// El patrón `globalThis as unknown as {...}` es el estándar de Next.js
+// para singletons cross-context (Prisma client lo usa, por ejemplo).
+const globalForCuotas = globalThis as unknown as {
+  __cuotasQueueInstance?: BullMQQueueLike | null | undefined;
+  __cuotasConnectionInstance?: unknown | null | undefined;
+  __cuotasModuleId?: string;
+};
+
+// Stable module ID para diagnosticar cuántos contextos cargaron el módulo.
+const MODULE_ID = `cuotas-cola-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+if (!globalForCuotas.__cuotasModuleId) {
+  globalForCuotas.__cuotasModuleId = MODULE_ID;
+}
+
+function getQueueInstance(): BullMQQueueLike | null | undefined {
+  return globalForCuotas.__cuotasQueueInstance;
+}
+
+function setQueueInstance(v: BullMQQueueLike | null): void {
+  globalForCuotas.__cuotasQueueInstance = v;
+}
+
+function getConnectionInstance(): unknown | null | undefined {
+  return globalForCuotas.__cuotasConnectionInstance;
+}
+
+function setConnectionInstance(v: unknown | null): void {
+  globalForCuotas.__cuotasConnectionInstance = v;
+}
 
 /**
  * Construye (lazy) y devuelve la `Queue` BullMQ. Devuelve null cuando no
  * es posible (Edge runtime o sin REDIS_URL). Los callers MUST tolerar
  * null para no romper en build/edge.
+ *
+ * Lote V.10.8: usa cache `globalThis` para singleton inter-contexto.
+ * Si otro contexto ya inicializó la Queue, la reusa sin crear otra.
  */
 export function getCuotasQueue(): BullMQQueueLike | null {
-  if (queueInstance !== undefined) return queueInstance;
+  const cached = getQueueInstance();
+  if (cached !== undefined) {
+    logger.debug(
+      {
+        moduleId: MODULE_ID,
+        cachedFromGlobalThis: globalForCuotas.__cuotasModuleId !== MODULE_ID,
+        source: "cuotas-cola",
+      },
+      "getCuotasQueue: reusando Queue de globalThis",
+    );
+    return cached as BullMQQueueLike | null;
+  }
 
   const url = process.env.REDIS_URL;
   if (!url) {
     logger.warn(
       "REDIS_URL no configurada — cola cuotas-captura deshabilitada",
     );
-    queueInstance = null;
+    setQueueInstance(null);
     return null;
   }
 
   if (typeof process === "undefined" || !process.versions?.node) {
-    queueInstance = null;
+    setQueueInstance(null);
     return null;
   }
 
@@ -85,7 +132,7 @@ export function getCuotasQueue(): BullMQQueueLike | null {
       // Mismo lookup dual-stack que el resto del repo (Railway IPv6 internal).
       family: 0,
     });
-    connectionInstance = connection;
+    setConnectionInstance(connection);
 
     // Lote V.10.4: listeners explícitos para diagnosticar conexión que
     // se desconecta silenciosamente. Si el worker no procesa jobs y los
@@ -151,18 +198,24 @@ export function getCuotasQueue(): BullMQQueueLike | null {
     });
 
     logger.info(
-      { cola: CUOTAS_CONFIG.NOMBRE_COLA },
-      "BullMQ — cola cuotas-captura inicializada",
+      {
+        cola: CUOTAS_CONFIG.NOMBRE_COLA,
+        moduleId: MODULE_ID,
+        primeraVezEnGlobalThis:
+          globalForCuotas.__cuotasModuleId === MODULE_ID,
+        source: "cuotas-cola",
+      },
+      `BullMQ — cola cuotas-captura inicializada (moduleId=${MODULE_ID})`,
     );
 
-    queueInstance = queue;
+    setQueueInstance(queue);
     return queue;
   } catch (err) {
     logger.error(
       { err: (err as Error).message },
       "BullMQ — fallo al inicializar cola cuotas-captura",
     );
-    queueInstance = null;
+    setQueueInstance(null);
     return null;
   }
 }
@@ -172,11 +225,11 @@ export function getCuotasQueue(): BullMQQueueLike | null {
  * El worker lee este getter para reusar la misma conexión.
  */
 export function getCuotasRedisConnection(): unknown | null {
-  if (queueInstance === undefined) {
+  if (getQueueInstance() === undefined) {
     // Forzar inicialización si nadie pidió la queue todavía.
     getCuotasQueue();
   }
-  return connectionInstance ?? null;
+  return getConnectionInstance() ?? null;
 }
 
 /**
@@ -189,12 +242,15 @@ export function getCuotasRedisConnection(): unknown | null {
  * checks que requieren conexión activa.
  */
 async function esperarRedisReady(timeoutMs: number = 5_000): Promise<void> {
-  if (!connectionInstance) return;
-  const conn = connectionInstance as {
-    status?: string;
-    once?: (event: string, listener: () => void) => void;
-    off?: (event: string, listener: () => void) => void;
-  };
+  const conn = getConnectionInstance() as
+    | {
+        status?: string;
+        once?: (event: string, listener: () => void) => void;
+        off?: (event: string, listener: () => void) => void;
+      }
+    | null
+    | undefined;
+  if (!conn) return;
   if (conn.status === "ready" || conn.status === "connect") return;
   if (typeof conn.once !== "function") return;
 
@@ -250,7 +306,22 @@ export async function encolarJobCaptura(
     ? `cuotas-${data.partidoId}-${data.casa}-refresh`
     : `cuotas-${data.partidoId}-${data.casa}-initial`;
 
+  // Lote V.10.8: log diagnóstico antes/después del add para verificar
+  // que el escribe llegó al Redis correcto.
+  const conn = getConnectionInstance() as { status?: string } | null | undefined;
   const job = await queue.add("captura", data, { jobId });
+  logger.debug(
+    {
+      jobId,
+      casa: data.casa,
+      partidoId: data.partidoId,
+      jobIdAsignado: job.id ?? null,
+      connStatus: conn?.status ?? null,
+      moduleId: MODULE_ID,
+      source: "cuotas-cola:encolar",
+    },
+    `encolarJobCaptura · ${data.casa} jobId=${jobId} → asignado=${job.id ?? "null"} connStatus=${conn?.status ?? "?"}`,
+  );
   return job.id ?? null;
 }
 
@@ -293,9 +364,10 @@ export async function cancelarJobsDePartido(partidoId: string): Promise<number> 
  * (tests o señales). En runtime productivo la cola vive el proceso entero.
  */
 export async function cerrarCuotasQueue(): Promise<void> {
-  if (queueInstance) {
+  const queue = getQueueInstance();
+  if (queue) {
     try {
-      await queueInstance.close();
+      await queue.close();
     } catch (err) {
       logger.warn(
         { err: (err as Error).message },
@@ -303,13 +375,14 @@ export async function cerrarCuotasQueue(): Promise<void> {
       );
     }
   }
-  queueInstance = null;
-  if (connectionInstance && typeof (connectionInstance as { quit?: () => Promise<void> }).quit === "function") {
+  setQueueInstance(null);
+  const conn = getConnectionInstance();
+  if (conn && typeof (conn as { quit?: () => Promise<void> }).quit === "function") {
     try {
-      await (connectionInstance as { quit: () => Promise<void> }).quit();
+      await (conn as { quit: () => Promise<void> }).quit();
     } catch {
       // ignore
     }
   }
-  connectionInstance = null;
+  setConnectionInstance(null);
 }
