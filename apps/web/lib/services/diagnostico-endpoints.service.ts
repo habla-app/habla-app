@@ -299,39 +299,92 @@ async function probarUnEndpoint(
 }
 
 /**
+ * Lote V.8.3: opciones de diagnóstico. Si `urlsCustom` está presente,
+ * el servicio prueba ESAS URLs en lugar de las predefinidas. Permite
+ * que el admin pruebe URLs descubiertas en DevTools sin esperar redeploy.
+ *
+ * Las URLs custom se agrupan por casa para preservar la estructura de
+ * salida (`casas[].endpoints[]`). Si una casa no aparece en `urlsCustom`,
+ * se omite del diagnóstico (no se prueba con sus URLs predefinidas).
+ *
+ * Ejemplo de body:
+ *   {
+ *     "urlsCustom": [
+ *       { "casa": "stake", "url": "https://nuevo.host/api/events", "headers": { "Origin": "https://stake.pe" } },
+ *       { "casa": "stake", "url": "https://otra.url/v2/list" },
+ *       { "casa": "te_apuesto", "url": "https://api.teapuesto.pe/api/v4/foo?language_id=1" }
+ *     ]
+ *   }
+ */
+export interface UrlCustomDef {
+  casa: CasaCuotas;
+  url: string;
+  headers?: Record<string, string>;
+}
+
+export interface OpcionesDiagnostico {
+  urlsCustom?: UrlCustomDef[];
+}
+
+/**
  * Ejecuta probes contra todos los endpoints de discovery de las 7 casas en
  * paralelo (paralelismo total — ~25 requests simultáneos, todas las casas
  * son independientes). Devuelve resumen estructurado para que el endpoint
  * admin lo serialice como JSON.
+ *
+ * Lote V.8.3: si `opciones.urlsCustom` está presente, se prueba ese set en
+ * lugar de los endpoints predefinidos. Útil para iterar URLs nuevas sin
+ * redeploy.
  */
-export async function ejecutarDiagnosticoEndpoints(): Promise<DiagnosticoCompleto> {
+export async function ejecutarDiagnosticoEndpoints(
+  opciones: OpcionesDiagnostico = {},
+): Promise<DiagnosticoCompleto> {
   const iniciadoEn = new Date();
   const tInicio = Date.now();
 
-  const promesas: Promise<DiagnosticoCasa>[] = (
-    Object.keys(ENDPOINTS_POR_CASA) as CasaCuotas[]
-  ).map(async (casa) => {
-    const defs = ENDPOINTS_POR_CASA[casa];
-    const resultados = await Promise.all(
-      defs.map((d) => probarUnEndpoint(d, `diagnostico:${casa}`)),
-    );
-    let totalEventosDetectados = 0;
-    let mejorEndpoint: string | null = null;
-    let mejorCount = 0;
-    for (const r of resultados) {
-      totalEventosDetectados += r.eventosDetectados;
-      if (r.eventosDetectados > mejorCount) {
-        mejorCount = r.eventosDetectados;
-        mejorEndpoint = r.url;
-      }
+  // Construir el mapping casa → endpoints a probar:
+  //   - Si urlsCustom presente, agrupamos por casa (solo casas presentes).
+  //   - Si no, usamos ENDPOINTS_POR_CASA completo.
+  let mapping: Partial<Record<CasaCuotas, EndpointDef[]>>;
+  let usandoCustom = false;
+  if (opciones.urlsCustom && opciones.urlsCustom.length > 0) {
+    usandoCustom = true;
+    mapping = {};
+    for (const u of opciones.urlsCustom) {
+      const lista = mapping[u.casa] ?? [];
+      lista.push({ url: u.url, headers: u.headers });
+      mapping[u.casa] = lista;
     }
-    return {
-      casa,
-      endpoints: resultados,
-      totalEventosDetectados,
-      mejorEndpoint,
-    };
-  });
+  } else {
+    mapping = ENDPOINTS_POR_CASA;
+  }
+
+  const casasParaProbar = Object.keys(mapping) as CasaCuotas[];
+
+  const promesas: Promise<DiagnosticoCasa>[] = casasParaProbar.map(
+    async (casa) => {
+      const defs = mapping[casa] ?? [];
+      const resultados = await Promise.all(
+        defs.map((d) => probarUnEndpoint(d, `diagnostico:${casa}`)),
+      );
+      let totalEventosDetectados = 0;
+      let mejorEndpoint: string | null = null;
+      let mejorCount = 0;
+      for (const r of resultados) {
+        totalEventosDetectados += r.eventosDetectados;
+        if (r.eventosDetectados > mejorCount) {
+          mejorCount = r.eventosDetectados;
+          mejorEndpoint = r.url;
+        }
+      }
+      return {
+        casa,
+        endpoints: resultados,
+        totalEventosDetectados,
+        mejorEndpoint,
+      };
+    },
+  );
 
   const casas = await Promise.all(promesas);
   const duracionMs = Date.now() - tInicio;
@@ -339,6 +392,7 @@ export async function ejecutarDiagnosticoEndpoints(): Promise<DiagnosticoComplet
   logger.info(
     {
       duracionMs,
+      usandoCustom,
       casas: casas.map((c) => ({
         casa: c.casa,
         endpoints: c.endpoints.length,
@@ -347,7 +401,7 @@ export async function ejecutarDiagnosticoEndpoints(): Promise<DiagnosticoComplet
       })),
       source: "diagnostico-endpoints",
     },
-    `diagnóstico endpoints completado en ${duracionMs}ms`,
+    `diagnóstico endpoints completado en ${duracionMs}ms${usandoCustom ? " (urlsCustom)" : ""}`,
   );
 
   return { iniciadoEn, duracionMs, casas };
