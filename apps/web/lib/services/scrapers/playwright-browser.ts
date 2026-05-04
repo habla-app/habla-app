@@ -106,6 +106,12 @@ export interface PlaywrightPage {
   ): Promise<void>;
   url(): string;
   content(): Promise<string>;
+  screenshot(opts?: {
+    fullPage?: boolean;
+    type?: "png" | "jpeg";
+    quality?: number;
+    clip?: { x: number; y: number; width: number; height: number };
+  }): Promise<Buffer>;
   close(): Promise<void>;
 }
 
