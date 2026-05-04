@@ -158,3 +158,22 @@ export type SeleccionAlerta =
   | "under25"
   | "btts_si"
   | "btts_no";
+
+/**
+ * Señal que un scraper emite cuando la casa no expone cuotas de la variante
+ * canónica para ese partido en ese momento (ej. Inkabet con la variante
+ * regular suspendida y sólo "Pago Anticipado" disponible — V.3).
+ *
+ * El worker la detecta y persiste la fila con `estado = "SIN_DATOS"`
+ * SIN penalizar `SaludScraper` y SIN re-throwear (no hay retry de BullMQ).
+ * El próximo ciclo del cron 24h reintenta naturalmente.
+ *
+ * Distinto de `Error` genérico: una falla de red o un endpoint caído deben
+ * seguir siendo `Error` regular para que disparen retry y bajen salud.
+ */
+export class CapturaSinDatosError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CapturaSinDatosError";
+  }
+}

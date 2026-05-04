@@ -22,10 +22,12 @@ import { getCuotasRedisConnection, getCuotasQueue } from "./cuotas-cola";
 import {
   persistirCuotas,
   persistirError,
+  persistirSinDatos,
   actualizarSaludScraper,
   recalcularEstadoCapturaPartido,
 } from "./cuotas-persistencia";
 import type { CasaCuotas, CuotasJobData, Scraper } from "./scrapers/types";
+import { CapturaSinDatosError } from "./scrapers/types";
 
 interface BullMQWorkerLike {
   on(event: string, listener: (...args: unknown[]) => void): unknown;
@@ -110,6 +112,26 @@ export async function procesarJobCaptura(job: BullMQJobLike): Promise<void> {
     );
   } catch (err) {
     const mensaje = (err as Error)?.message ?? "error desconocido";
+
+    // SIN_DATOS: la casa no expone la variante canónica en este momento
+    // (ej. Inkabet con la variante regular suspendida). NO es una falla
+    // del scraper — no penaliza salud y no triggerea retry de BullMQ.
+    // El próximo ciclo del cron 24h reintenta naturalmente.
+    if (err instanceof CapturaSinDatosError) {
+      await persistirSinDatos({
+        partidoId,
+        casa,
+        eventIdExterno,
+        mensaje,
+      });
+      await recalcularEstadoCapturaPartido(partidoId);
+      logger.info(
+        { partidoId, casa, mensaje, source: "cuotas-worker" },
+        "captura sin datos — variante canónica suspendida, próximo ciclo reintenta",
+      );
+      return;
+    }
+
     await persistirError({
       partidoId,
       casa,

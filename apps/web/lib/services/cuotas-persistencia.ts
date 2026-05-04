@@ -320,6 +320,46 @@ export async function persistirError(params: {
 }
 
 /**
+ * Marca la fila como `SIN_DATOS` cuando el scraper detectó que la casa no
+ * sirve la variante canónica del partido en ese momento (ej. Inkabet con
+ * la variante regular suspendida pre-kickoff). NO incrementa
+ * `intentosFallidos` (no fue una falla — fue una situación intencional de
+ * la casa). NO penaliza `SaludScraper`. El próximo ciclo del cron diario
+ * reintenta naturalmente.
+ *
+ * Preserva las cuotas previas si existían: el caller espera ver la última
+ * captura exitosa con el badge "datos desactualizados" en la UI admin
+ * mientras la casa vuelve a operar.
+ */
+export async function persistirSinDatos(params: {
+  partidoId: string;
+  casa: CasaCuotas;
+  eventIdExterno: string;
+  mensaje: string;
+}): Promise<void> {
+  const { partidoId, casa, eventIdExterno, mensaje } = params;
+  const ahora = new Date();
+
+  await prisma.cuotasCasa.upsert({
+    where: { partidoId_casa: { partidoId, casa } },
+    create: {
+      partido: { connect: { id: partidoId } },
+      casa,
+      eventIdExterno,
+      estado: "SIN_DATOS",
+      ultimoIntento: ahora,
+      errorMensaje: mensaje.slice(0, 500),
+      intentosFallidos: 0,
+    },
+    update: {
+      estado: "SIN_DATOS",
+      ultimoIntento: ahora,
+      errorMensaje: mensaje.slice(0, 500),
+    },
+  });
+}
+
+/**
  * Mueve estado de `salud_scrapers` para una casa. Llama a esta función
  * desde el worker tras cada job. La transición a BLOQUEADO ocurre cuando
  * `diasConsecutivosError >= BLOQUEADO_TRAS_DIAS_ERROR`.
