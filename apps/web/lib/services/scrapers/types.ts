@@ -80,10 +80,25 @@ export interface CuotasCapturadas {
  * Resultado completo de un ciclo de scraping. `fuente` permite trazar
  * desde dónde se leyó (URL del endpoint o de la página) y cuándo, lo
  * que alimenta tanto el debug como la UI admin "última captura".
+ *
+ * Lote V.7 (May 2026): el campo opcional `equipos` permite que el worker
+ * alimente `AliasEquipo` automáticamente tras una captura exitosa. Si el
+ * scraper expone los nombres de los equipos tal como la casa los publica,
+ * el worker compara contra el canónico y persiste el alias cuando difiere.
+ *
+ * El campo es opcional para no obligar a tocar los 7 scrapers en el mismo
+ * lote — los scrapers que no lo expongan funcionan exactamente igual; el
+ * aprendizaje solo aplica a los que sí lo emiten.
  */
 export interface ResultadoScraper {
   cuotas: CuotasCapturadas;
   fuente: { url: string; capturadoEn: Date };
+  /**
+   * Lote V.7. Nombres de equipo tal como la casa los publica en el payload
+   * de captura (no en el listado de discovery). Si están presentes, el
+   * worker los usa para alimentar `AliasEquipo` vía `aprenderAlias()`.
+   */
+  equipos?: { local: string; visita: string };
 }
 
 /**
