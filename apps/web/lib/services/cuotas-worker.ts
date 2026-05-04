@@ -28,6 +28,7 @@ import {
   recalcularEstadoCapturaPartido,
 } from "./cuotas-persistencia";
 import { aprenderAlias } from "./scrapers/alias-equipo";
+import { browserPlaywrightInicializado } from "./scrapers/playwright-browser";
 import type {
   CasaCuotas,
   CuotasJobData,
@@ -99,20 +100,46 @@ function iniciarHeartbeatWorker(): void {
         const counts = await queue
           .getJobCounts("waiting", "active", "delayed", "failed", "completed")
           .catch(() => ({}) as Record<string, number>);
-        const isPaused =
-          typeof worker.isPaused === "function"
-            ? await worker.isPaused().catch(() => null)
+        // Lote V.10.7: BullMQ.isPaused() puede retornar boolean sincrono o
+        // Promise<boolean> según versión. Resolvemos uniformemente con
+        // Promise.resolve() y atrapamos cualquier error para no romper el
+        // heartbeat (la observabilidad nunca debe matar al worker).
+        let isPaused: boolean | null = null;
+        try {
+          if (typeof worker.isPaused === "function") {
+            const r = worker.isPaused() as unknown;
+            isPaused =
+              r && typeof (r as Promise<boolean>).then === "function"
+                ? await (r as Promise<boolean>)
+                : (r as boolean);
+          }
+        } catch {
+          isPaused = null;
+        }
+        let isRunning: boolean | null = null;
+        try {
+          if (typeof worker.isRunning === "function") {
+            isRunning = worker.isRunning();
+          }
+        } catch {
+          isRunning = null;
+        }
+        // Lote V.10.7: enriquecer heartbeat con más telemetría operativa.
+        const browserVivo = browserPlaywrightInicializado();
+        const memMb =
+          typeof process.memoryUsage === "function"
+            ? Math.round(process.memoryUsage().rss / (1024 * 1024))
             : null;
-        const isRunning =
-          typeof worker.isRunning === "function" ? worker.isRunning() : null;
         logger.info(
           {
             counts,
             isPaused,
             isRunning,
+            browserPlaywright: browserVivo,
+            rssMb: memMb,
             source: "cuotas-worker:heartbeat",
           },
-          `heartbeat · waiting=${counts.waiting ?? 0} active=${counts.active ?? 0} delayed=${counts.delayed ?? 0} failed=${counts.failed ?? 0} completed=${counts.completed ?? 0} · paused=${isPaused} running=${isRunning}`,
+          `heartbeat · waiting=${counts.waiting ?? 0} active=${counts.active ?? 0} delayed=${counts.delayed ?? 0} failed=${counts.failed ?? 0} completed=${counts.completed ?? 0} · paused=${isPaused} running=${isRunning} · browserPW=${browserVivo} · rss=${memMb ?? "?"}MB`,
         );
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err ?? "?");

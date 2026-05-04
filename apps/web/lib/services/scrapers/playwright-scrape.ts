@@ -69,6 +69,16 @@ interface CandidatoEnDOM {
   textoVisita: string;
 }
 
+/** Lote V.10.7: snapshot diagnóstico cuando 0 candidatos. */
+interface DiagnosticoDOM {
+  totalClickables: number;
+  conLocal: number;
+  conVisita: number;
+  conAmbos: number;
+  muestrasConLocal: string[];
+  muestrasConVisita: string[];
+}
+
 /**
  * Busca candidatos en el DOM. Estrategia mejorada vs V.9:
  *   - Primero busca elementos pequeños que contengan AMBOS equipos (caso
@@ -78,6 +88,78 @@ interface CandidatoEnDOM {
  *     SPAs con spans separados).
  *   - Re-rank por similitud Jaro-Winkler.
  */
+async function diagnosticarDOM(
+  page: PlaywrightPage,
+  equipoLocal: string,
+  equipoVisita: string,
+): Promise<DiagnosticoDOM> {
+  return page.evaluate(
+    ({ local, visita }: { local: string; visita: string }) => {
+      function normalizar(s: string): string {
+        return s
+          .normalize("NFD")
+          .replace(/[̀-ͯ]/g, "")
+          .toLowerCase()
+          .replace(/[^a-z0-9 ]/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+      }
+      function tokensRel(s: string): string[] {
+        return normalizar(s)
+          .split(" ")
+          .filter((t) => t.length >= 4);
+      }
+      function tieneAlguno(tokens: string[], txt: string): boolean {
+        for (const t of tokens) if (txt.includes(t)) return true;
+        return false;
+      }
+      const tL = tokensRel(local);
+      const tV = tokensRel(visita);
+      const SEL =
+        "a, [role='link'], [role='button'], button, [data-event-id], " +
+        "[data-match-id], [data-fixture-id], [class*='event' i], " +
+        "[class*='match' i], [class*='fixture' i], [class*='game' i], " +
+        "li, article";
+      const els = document.querySelectorAll(SEL);
+      let total = 0;
+      let conLocal = 0;
+      let conVisita = 0;
+      let conAmbos = 0;
+      const muestrasLocal: string[] = [];
+      const muestrasVisita: string[] = [];
+      for (const el of Array.from(els)) {
+        if (!(el instanceof HTMLElement)) continue;
+        const rect = el.getBoundingClientRect();
+        if (rect.width < 30 || rect.height < 20) continue;
+        if (rect.width > 1500 || rect.height > 800) continue;
+        const txt = normalizar(el.innerText ?? el.textContent ?? "");
+        if (txt.length < 6 || txt.length > 400) continue;
+        total++;
+        const hL = tL.length > 0 && tieneAlguno(tL, txt);
+        const hV = tV.length > 0 && tieneAlguno(tV, txt);
+        if (hL) conLocal++;
+        if (hV) conVisita++;
+        if (hL && hV) conAmbos++;
+        if (hL && !hV && muestrasLocal.length < 5) {
+          muestrasLocal.push(txt.slice(0, 80));
+        }
+        if (hV && !hL && muestrasVisita.length < 5) {
+          muestrasVisita.push(txt.slice(0, 80));
+        }
+      }
+      return {
+        totalClickables: total,
+        conLocal,
+        conVisita,
+        conAmbos,
+        muestrasConLocal: muestrasLocal,
+        muestrasConVisita: muestrasVisita,
+      };
+    },
+    { local: equipoLocal, visita: equipoVisita },
+  );
+}
+
 async function buscarCandidatosEnDOM(
   page: PlaywrightPage,
   equipoLocal: string,
@@ -333,16 +415,34 @@ async function buscarPartidoIterativo(
       equipoVisita,
     );
     candidato = elegirMejorCandidato(candidatos, equipoLocal, equipoVisita);
-    logger.info(
-      {
-        casa,
-        intento: intento + 1,
-        candidatosEncontrados: candidatos.length,
-        elegidoTexto: candidato?.texto?.slice(0, 80) ?? null,
-        source: `scrapers:${casa}:playwright:buscar`,
-      },
-      `${casa} intento ${intento + 1}: ${candidatos.length} candidatos · elegido=${candidato ? candidato.texto.slice(0, 60) + "..." : "ninguno"}`,
-    );
+
+    if (candidatos.length > 0) {
+      logger.info(
+        {
+          casa,
+          intento: intento + 1,
+          candidatosEncontrados: candidatos.length,
+          elegidoTexto: candidato?.texto?.slice(0, 80) ?? null,
+          source: `scrapers:${casa}:playwright:buscar`,
+        },
+        `${casa} intento ${intento + 1}: ${candidatos.length} candidatos · elegido=${candidato ? candidato.texto.slice(0, 60) + "..." : "ninguno"}`,
+      );
+    } else {
+      // Lote V.10.7: 0 candidatos = diagnóstico DOM rico para entender por
+      // qué no encontró nada. Permite distinguir página vacía vs nombres
+      // distintos vs DOM no hidratado.
+      const diag = await diagnosticarDOM(page, equipoLocal, equipoVisita);
+      logger.info(
+        {
+          casa,
+          intento: intento + 1,
+          ...diag,
+          urlActual: page.url(),
+          source: `scrapers:${casa}:playwright:buscar:diag`,
+        },
+        `${casa} intento ${intento + 1}: 0 candidatos · DOM tiene ${diag.totalClickables} clickables (${diag.conLocal} con local, ${diag.conVisita} con visita, ${diag.conAmbos} con ambos)${diag.muestrasConLocal.length > 0 ? " · muestras-local=" + JSON.stringify(diag.muestrasConLocal.slice(0, 3)) : ""}${diag.muestrasConVisita.length > 0 ? " · muestras-visita=" + JSON.stringify(diag.muestrasConVisita.slice(0, 3)) : ""}`,
+      );
+    }
     if (candidato) break;
 
     // No encontrado. Acción según el intento.
@@ -862,11 +962,32 @@ export async function capturarPartidoConPlaywright(
 
   try {
     // ── Paso 1: navegar a URL inicial ──
+    const tNavStart = Date.now();
+    let httpStatus: number | null = null;
     try {
-      await page.goto(urlInicial, {
+      const resp = (await page.goto(urlInicial, {
         waitUntil: "domcontentloaded",
         timeout: timeoutListadoMs,
-      });
+      })) as { status?: () => number } | null;
+      // Lote V.10.7: Playwright Response.status() puede no estar en
+      // nuestro tipo estructural. Lo intentamos por si acaso.
+      try {
+        httpStatus =
+          resp && typeof resp.status === "function" ? resp.status() : null;
+      } catch {
+        httpStatus = null;
+      }
+      const tNav = Date.now() - tNavStart;
+      logger.info(
+        {
+          casa,
+          url: urlInicial,
+          httpStatus,
+          ms: tNav,
+          source: `scrapers:${casa}:playwright:goto`,
+        },
+        `${casa} goto OK · ${urlInicial} · status=${httpStatus ?? "?"} · ${tNav}ms`,
+      );
     } catch (err) {
       throw new Error(
         `${casa}: navegación a ${urlInicial} falló — ${(err as Error).message}`,
@@ -888,6 +1009,47 @@ export async function capturarPartidoConPlaywright(
       } catch {
         /* networkidle puede no llegar */
       }
+    }
+
+    // Lote V.10.7: snapshot del DOM tras hidratación. Permite diagnosticar
+    // sin acceso al browser real qué tipo de página cargó (real, captcha,
+    // splash, geo-block, etc).
+    try {
+      const snapshot = await page.evaluate(() => {
+        const titulo = document.title?.slice(0, 120) ?? "";
+        const h1 = (
+          document.querySelector("h1")?.textContent ??
+          document.querySelector("h2")?.textContent ??
+          ""
+        )
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 120);
+        const totalElementos = document.querySelectorAll("*").length;
+        const totalLinks = document.querySelectorAll("a").length;
+        const totalBotones = document.querySelectorAll(
+          "button, [role='button']",
+        ).length;
+        return { titulo, h1, totalElementos, totalLinks, totalBotones };
+      });
+      logger.info(
+        {
+          casa,
+          urlActual: page.url(),
+          ...snapshot,
+          source: `scrapers:${casa}:playwright:hidratacion`,
+        },
+        `${casa} DOM hidratado · titulo="${snapshot.titulo}" h1="${snapshot.h1}" · elementos=${snapshot.totalElementos} links=${snapshot.totalLinks} botones=${snapshot.totalBotones}`,
+      );
+    } catch (err) {
+      logger.warn(
+        {
+          casa,
+          err: (err as Error).message,
+          source: `scrapers:${casa}:playwright:hidratacion`,
+        },
+        `${casa}: snapshot DOM falló — ${(err as Error).message}`,
+      );
     }
 
     // ── Paso 3-4: buscar partido + click + validar navegación ──
@@ -933,8 +1095,59 @@ export async function capturarPartidoConPlaywright(
 
     if (Object.keys(cuotas).length === 0) {
       const ms = Date.now() - tInicio;
+      // Lote V.10.7: diagnóstico DOM al fallar extracción. Cuántos
+      // botones / decimales / clases odd-* hay para entender por qué.
+      let diag = "";
+      try {
+        const d = await page.evaluate(() => {
+          const totalBotones = document.querySelectorAll(
+            "button, [role='button']",
+          ).length;
+          const elsConOdd = document.querySelectorAll(
+            "[class*='odd' i], [class*='price' i], [class*='value' i]",
+          ).length;
+          let totalDecimales = 0;
+          const todos = document.querySelectorAll(
+            "button, [role='button'], span, div",
+          );
+          for (const el of Array.from(todos)) {
+            if (!(el instanceof HTMLElement)) continue;
+            const t = (el.innerText ?? el.textContent ?? "").trim();
+            if (/^\s*\d+[.,]\d{1,3}\s*$/.test(t)) {
+              const v = parseFloat(t.replace(",", "."));
+              if (Number.isFinite(v) && v > 1 && v < 100) totalDecimales++;
+            }
+          }
+          const titulo = (document.title ?? "").slice(0, 100);
+          const h1 = (document.querySelector("h1")?.textContent ?? "")
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, 100);
+          return { totalBotones, elsConOdd, totalDecimales, titulo, h1 };
+        });
+        diag = ` · DOM tiene ${d.totalBotones} botones · ${d.elsConOdd} elementos con clase odd/price/value · ${d.totalDecimales} decimales válidos · titulo="${d.titulo}" h1="${d.h1}"`;
+        logger.warn(
+          {
+            casa,
+            ms,
+            url: page.url(),
+            ...d,
+            source: `scrapers:${casa}:playwright:extraccion`,
+          },
+          `${casa}: extracción de mercados falló${diag}`,
+        );
+      } catch (err) {
+        logger.warn(
+          {
+            casa,
+            err: (err as Error).message,
+            source: `scrapers:${casa}:playwright:extraccion`,
+          },
+          `${casa}: extracción + diagnóstico fallaron`,
+        );
+      }
       throw new Error(
-        `${casa}: cargó la página pero no se extrajo ningún mercado (${ms}ms, url=${page.url()})`,
+        `${casa}: cargó la página pero no se extrajo ningún mercado (${ms}ms, url=${page.url()})${diag}`,
       );
     }
 
