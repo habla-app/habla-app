@@ -98,64 +98,52 @@ export async function procesarJobCaptura(job: BullMQJobLike): Promise<void> {
     return;
   }
 
-  // Lote V.9.2: log explícito al arrancar el procesado para confirmar
-  // que el worker está activo y qué vía va a tomar.
+  // Lote V.10.1: log explícito al arrancar el procesado. Tras la
+  // limpieza, todos los scrapers tienen `capturarConPlaywright` (es
+  // requerido en el contrato). Ya no hay rama HTTP fallback.
   const tInicioJob = Date.now();
-  const viaPlaywright = typeof scraper.capturarConPlaywright === "function";
   logger.info(
     {
       partidoId,
       casa,
       eventIdExterno,
-      via: viaPlaywright ? "playwright" : "http-legacy",
       source: "cuotas-worker",
     },
-    `procesando job ${casa} vía ${viaPlaywright ? "playwright" : "http-legacy"}`,
+    `procesando job ${casa} vía playwright`,
   );
 
   try {
-    // Lote V.9: preferimos `capturarConPlaywright` si el scraper la
-    // implementa. El método nuevo recibe el partido completo y maneja
-    // discovery + captura en una sola pasada via browser headless.
-    // El método HTTP queda como fallback histórico para scrapers que
-    // todavía no migraron (en V.9 todos migran, pero el fallback se
-    // queda por si algún deploy sin Playwright operativo).
-    let resultado: ResultadoScraper;
-    if (scraper.capturarConPlaywright) {
-      const partidoEntidad = await prisma.partido.findUnique({
-        where: { id: partidoId },
-      });
-      if (!partidoEntidad) {
-        throw new Error(`partido ${partidoId} no existe`);
-      }
-      // Si tenemos eventIdExterno guardado y parece URL, lo pasamos como
-      // hint para que el scraper navegue directo (vinculación manual).
-      const urlHint =
-        eventIdExterno && /^https?:\/\//i.test(eventIdExterno)
-          ? eventIdExterno
-          : null;
-      const r = await scraper.capturarConPlaywright(partidoEntidad, urlHint);
-      if (r === null) {
-        // Casa no cubre la liga / partido no aparece en listado.
-        // No es ERROR técnico — registramos como SIN_DATOS para que el
-        // próximo ciclo reintente sin penalizar salud.
-        await persistirSinDatos({
-          partidoId,
-          casa,
-          eventIdExterno,
-          mensaje: "casa no cubre la liga o partido no encontrado en listado",
-        });
-        await recalcularEstadoCapturaPartido(partidoId);
-        logger.info(
-          { partidoId, casa, source: "cuotas-worker:playwright" },
-          `${casa} playwright: sin match (liga no mapeada o partido no listado)`,
-        );
-        return;
-      }
-      resultado = r;
-    } else {
-      resultado = await scraper.capturarCuotas(eventIdExterno);
+    const partidoEntidad = await prisma.partido.findUnique({
+      where: { id: partidoId },
+    });
+    if (!partidoEntidad) {
+      throw new Error(`partido ${partidoId} no existe`);
     }
+    // Si tenemos eventIdExterno guardado y parece URL, lo pasamos como
+    // hint para que el scraper navegue directo (vinculación manual).
+    const urlHint =
+      eventIdExterno && /^https?:\/\//i.test(eventIdExterno)
+        ? eventIdExterno
+        : null;
+    const r = await scraper.capturarConPlaywright(partidoEntidad, urlHint);
+    if (r === null) {
+      // Casa no cubre la liga / partido no aparece en listado.
+      // No es ERROR técnico — registramos como SIN_DATOS para que el
+      // próximo ciclo reintente sin penalizar salud.
+      await persistirSinDatos({
+        partidoId,
+        casa,
+        eventIdExterno,
+        mensaje: "casa no cubre la liga o partido no encontrado en listado",
+      });
+      await recalcularEstadoCapturaPartido(partidoId);
+      logger.info(
+        { partidoId, casa, source: "cuotas-worker:playwright" },
+        `${casa} playwright: sin match (liga no mapeada o partido no listado)`,
+      );
+      return;
+    }
+    const resultado = r;
 
     const { alertasCreadas } = await persistirCuotas({
       partidoId,
@@ -248,7 +236,6 @@ export async function procesarJobCaptura(job: BullMQJobLike): Promise<void> {
         casa,
         err: mensaje,
         ms: msTotalJob,
-        via: viaPlaywright ? "playwright" : "http-legacy",
         source: "cuotas-worker",
       },
       `captura falló · ${casa} (${msTotalJob}ms) — ${mensaje}`,

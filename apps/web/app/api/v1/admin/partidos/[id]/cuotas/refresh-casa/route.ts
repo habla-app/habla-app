@@ -72,21 +72,19 @@ export async function POST(
     });
     if (!partido) throw new PartidoNoEncontrado(params.id);
 
+    // Lote V.10.1: con Playwright universal ya no exigimos EventIdExterno
+    // previo. Si existe (vinculación manual), lo usamos como hint de URL;
+    // si no, encolamos con "auto" y el scraper Playwright resuelve solo.
     const eventIdRow = await prisma.eventIdExterno.findUnique({
       where: { partidoId_casa: { partidoId: partido.id, casa } },
       select: { eventIdExterno: true, metodoDiscovery: true },
     });
-    if (!eventIdRow) {
-      throw new ValidacionFallida(
-        `No hay eventId externo para ${casa} en este partido. Vinculá manualmente primero.`,
-        { casa, partidoId: partido.id },
-      );
-    }
+    const hint = eventIdRow?.eventIdExterno ?? "auto";
 
     const jobId = await encolarJobCaptura({
       partidoId: partido.id,
       casa,
-      eventIdExterno: eventIdRow.eventIdExterno,
+      eventIdExterno: hint,
       esRefresh: true,
     });
 
@@ -118,8 +116,8 @@ export async function POST(
       resumen: `Refresh manual de cuotas (${casa}) sobre ${partido.equipoLocal} vs ${partido.equipoVisita}`,
       metadata: {
         casa,
-        eventIdExterno: eventIdRow.eventIdExterno,
-        metodoDiscovery: eventIdRow.metodoDiscovery,
+        eventIdExterno: hint,
+        metodoDiscovery: eventIdRow?.metodoDiscovery ?? "AUTO",
         jobId,
       },
     });
