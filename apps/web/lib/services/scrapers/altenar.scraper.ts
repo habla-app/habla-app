@@ -556,9 +556,32 @@ function buildScraperAltenar(operador: AltenarOperador): Scraper {
         );
       }
 
+      // Lote V.7: extraer nombres de equipo del payload single-event para
+      // alimentar AliasEquipo. Altenar normalmente expone los equipos en
+      // el top-level o anidados en `event`/`teams`.
+      const p = payload as Record<string, unknown>;
+      const evento =
+        (p.event && typeof p.event === "object")
+          ? (p.event as Record<string, unknown>)
+          : p;
+      let local = leerNombreEquipoAltenar(
+        evento.homeName ?? evento.homeTeam ?? evento.home,
+      );
+      let visita = leerNombreEquipoAltenar(
+        evento.awayName ?? evento.awayTeam ?? evento.away,
+      );
+      if ((!local || !visita) && evento.teams && typeof evento.teams === "object") {
+        const t = evento.teams as Record<string, unknown>;
+        if (!local) local = leerNombreEquipoAltenar(t.home);
+        if (!visita) visita = leerNombreEquipoAltenar(t.away);
+      }
+      const equipos =
+        local && visita ? { local, visita } : undefined;
+
       return {
         cuotas,
         fuente: { url, capturadoEn: new Date() },
+        ...(equipos ? { equipos } : {}),
       };
     },
   };

@@ -16,6 +16,7 @@
 // vive el lifetime del container. En tests el caller debe llamar a
 // `detenerCuotasWorker()` para no leakear.
 
+import { prisma } from "@habla/db";
 import { logger } from "./logger";
 import { CUOTAS_CONFIG } from "../config/cuotas";
 import { getCuotasRedisConnection, getCuotasQueue } from "./cuotas-cola";
@@ -26,6 +27,7 @@ import {
   actualizarSaludScraper,
   recalcularEstadoCapturaPartido,
 } from "./cuotas-persistencia";
+import { aprenderAlias } from "./scrapers/alias-equipo";
 import type { CasaCuotas, CuotasJobData, Scraper } from "./scrapers/types";
 import { CapturaSinDatosError } from "./scrapers/types";
 
@@ -101,11 +103,46 @@ export async function procesarJobCaptura(job: BullMQJobLike): Promise<void> {
     });
     await actualizarSaludScraper(casa, "OK");
     await recalcularEstadoCapturaPartido(partidoId);
+
+    // Lote V.7: auto-aprendizaje de aliases. Si el scraper expuso
+    // los nombres de los equipos en el payload, comparamos contra el
+    // canónico del partido y persistimos el alias cuando difiere. Esto
+    // cubre el caso de vinculación MANUAL (admin pega URL → primer job
+    // corre acá → alias aprendido) sin tocar el contrato Scraper para
+    // las casas que aún no exponen `equipos`.
+    if (resultado.equipos) {
+      void (async () => {
+        try {
+          const partido = await prisma.partido.findUnique({
+            where: { id: partidoId },
+            select: { equipoLocal: true, equipoVisita: true },
+          });
+          if (partido) {
+            await Promise.all([
+              aprenderAlias(resultado.equipos!.local, casa, partido.equipoLocal),
+              aprenderAlias(resultado.equipos!.visita, casa, partido.equipoVisita),
+            ]);
+          }
+        } catch (err) {
+          logger.warn(
+            {
+              partidoId,
+              casa,
+              err: (err as Error)?.message,
+              source: "cuotas-worker:aprender-alias",
+            },
+            "auto-aprendizaje post-captura falló (no crítico)",
+          );
+        }
+      })();
+    }
+
     logger.info(
       {
         partidoId,
         casa,
         alertasCreadas,
+        equiposEnPayload: resultado.equipos !== undefined,
         source: "cuotas-worker",
       },
       "captura OK",
