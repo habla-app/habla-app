@@ -12,6 +12,15 @@ const nextConfig = {
     // torneos vencidos (Sub-Sprint 3) + poller de partidos (Sub-Sprint 5).
     // En Next.js 15+ es on-by-default.
     instrumentationHook: true,
+    // Lote V (May 2026) — playwright-chromium y playwright-core NO deben
+    // bundlearse: son librerías Node con dependencias opcionales (electron,
+    // chromium-bidi) y assets binarios (ttf, html del recorder) que webpack
+    // no puede procesar y revientan el build con `Module not found`. En
+    // server runtime los cargamos vía `require("playwright-chromium")` lazy
+    // desde `lib/services/scrapers/playwright-browser.ts`. Esta lista hace
+    // que Next emita el require como literal y lo resuelva contra
+    // `node_modules` en runtime, sin pasar por webpack.
+    serverComponentsExternalPackages: ["playwright-chromium", "playwright-core"],
   },
   webpack: (config, { isServer, nextRuntime }) => {
     if (isServer) {
@@ -29,6 +38,13 @@ const nextConfig = {
       // pesa ~2MB y no tiene sentido bundlearlo en chunks de Next.
       if (nextRuntime !== "edge") {
         serverExternals.push("@aws-sdk/client-s3");
+        // Lote V — playwright-chromium / playwright-core también son Node
+        // server-only (los scrapers los cargan con require() lazy en
+        // `playwright-browser.ts`). Marcarlos como externals evita que
+        // webpack intente bundlear sus dependencias opcionales (electron,
+        // chromium-bidi, recorder assets), las cuales rompen el build con
+        // Module not found / Module parse failed.
+        serverExternals.push("playwright-chromium", "playwright-core");
       }
       config.externals = [...externals, ...serverExternals];
     }
