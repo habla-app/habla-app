@@ -24,18 +24,35 @@
 //                                    → ODD_TTL_1_OVR, ODD_TTL_1_UND
 //   - union_id 21301 = BTTS         → ODD_FTB_BOTHTEAMSSCORE_YES/NO
 //
-// Discovery: el POC no logró identificar el endpoint de búsqueda público
-// usado por la sidebar de stake.pe (la URL `/deportes/.../{slug}/event/{id}`
-// se obtiene via autocomplete que parece consumir un endpoint backend
-// no expuesto). Para V.2 dejamos `buscarEventIdExterno` devolviendo null
-// — el admin vincula manualmente desde la UI de Lote V.5 pegando la URL
-// del partido (regex `/event/(\d+)/`). Cuando V.5 identifique el endpoint
-// público o agreguemos algún listing alternativo, el método se extiende
-// sin tocar el resto.
+// Discovery V.5 — Lote V fase V.5:
+//   El cache CDN de Stake (`pre-143o-sp.websbkt.com`) expone también un
+//   endpoint de listado por liga: `/cache/{operatorId}/{lang}/{country}/sportsbookcommon/upcoming-events.json`
+//   y variantes por torneo. La estrategia es defensiva: probamos los
+//   endpoints conocidos en orden hasta que uno responda con eventos.
+//
+//   Liga 1 Perú aparece en el listado upcoming con `tournament_id`
+//   propio. El POC no documentó el ID exacto del torneo en Stake, así
+//   que el discovery primero baja la lista upcoming completa y filtra
+//   por equipo + fecha vía AliasEquipo.
+//
+//   Si el listado no devuelve nada (ej. liga no habilitada en Perú o
+//   endpoint cambiado), retornamos null y queda al fallback manual.
 
 import { logger } from "../logger";
-import { httpFetchJson } from "./http";
+import { httpFetchJson, httpProbeJson } from "./http";
+import {
+  fechasCercanas,
+  matchearEquiposContraPartido,
+} from "./alias-equipo";
 import type { CuotasCapturadas, ResultadoScraper, Scraper } from "./types";
+
+interface PartidoSlim {
+  id: string;
+  liga: string;
+  equipoLocal: string;
+  equipoVisita: string;
+  fechaInicio: Date;
+}
 
 const OPERATOR_ID = "143";
 const LANG = "es";
@@ -166,19 +183,189 @@ function buildUrl(eventId: string): string {
   return `https://${HOST}/cache/${OPERATOR_ID}/${LANG}/${COUNTRY}/${eventId}/single-pre-event.json`;
 }
 
+// Endpoints candidato de discovery (V.5). Probamos en orden hasta que uno
+// devuelva eventos. Las rutas son las observadas en otras instalaciones
+// WebSBKT — al ser misma plataforma, alta probabilidad de hit en Stake Perú.
+const ENDPOINTS_DISCOVERY: Array<(qs: URLSearchParams) => string> = [
+  () =>
+    `https://${HOST}/cache/${OPERATOR_ID}/${LANG}/${COUNTRY}/sportsbookcommon/upcoming-events.json`,
+  () =>
+    `https://${HOST}/cache/${OPERATOR_ID}/${LANG}/${COUNTRY}/sportsbookcommon/pre-events.json`,
+  (qs) =>
+    `https://${HOST}/cache/${OPERATOR_ID}/${LANG}/${COUNTRY}/sportsbookcommon/events-by-sport.json?${qs.toString()}`,
+];
+
+const VENTANA_DISCOVERY_MIN = 60;
+
+interface StakeEvento {
+  id: string;
+  homeName: string;
+  awayName: string;
+  kickoff: Date;
+}
+
+function leerNombreEquipoStake(v: unknown): string {
+  if (typeof v === "string") return v;
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    if (typeof o.name === "string") return o.name;
+    if (typeof o.shortName === "string") return o.shortName;
+  }
+  return "";
+}
+
+function leerFechaStake(v: unknown): Date | null {
+  if (!v) return null;
+  if (v instanceof Date) return v;
+  if (typeof v === "number") {
+    const ms = v < 1e12 ? v * 1000 : v;
+    const d = new Date(ms);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof v === "string") {
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
+
+function extraerEventosStake(payload: unknown): StakeEvento[] {
+  function rec(node: unknown, depth = 0): unknown[] {
+    if (depth > 6 || !node || typeof node !== "object") return [];
+    if (Array.isArray(node)) {
+      const sample = node.find((it) => it && typeof it === "object");
+      if (
+        sample &&
+        typeof sample === "object" &&
+        ("home_team" in (sample as object) ||
+          "homeTeam" in (sample as object) ||
+          "team_home" in (sample as object) ||
+          "teams" in (sample as object) ||
+          "h" in (sample as object))
+      ) {
+        return node;
+      }
+      for (const item of node) {
+        const found = rec(item, depth + 1);
+        if (found.length) return found;
+      }
+      return [];
+    }
+    const obj = node as Record<string, unknown>;
+    for (const key of [
+      "events",
+      "matches",
+      "items",
+      "data",
+      "list",
+      "results",
+      "fixtures",
+    ]) {
+      if (key in obj) {
+        const found = rec(obj[key], depth + 1);
+        if (found.length) return found;
+      }
+    }
+    return [];
+  }
+
+  const arr = rec(payload);
+  const out: StakeEvento[] = [];
+  for (const node of arr) {
+    if (!node || typeof node !== "object") continue;
+    const m = node as Record<string, unknown>;
+    const id = String(m.id ?? m.event_id ?? m.eventId ?? "");
+    if (!id || !/^\d+$/.test(id)) continue;
+
+    const homeName = leerNombreEquipoStake(
+      m.home_team ?? m.homeTeam ?? m.team_home ?? m.h ?? m.home,
+    );
+    const awayName = leerNombreEquipoStake(
+      m.away_team ?? m.awayTeam ?? m.team_away ?? m.a ?? m.away,
+    );
+    if (!homeName || !awayName) continue;
+
+    const kickoff = leerFechaStake(
+      m.start_time ?? m.startTime ?? m.kickoff ?? m.starts_at ?? m.date ?? m.timestamp,
+    );
+    if (!kickoff) continue;
+    out.push({ id, homeName, awayName, kickoff });
+  }
+  return out;
+}
+
 const stakeScraper: Scraper = {
   nombre: "stake",
 
-  async buscarEventIdExterno(): Promise<string | null> {
-    // POC no documentó endpoint de búsqueda público. Fallback manual del
-    // Lote V.5 cubre este caso (admin pega URL del partido y el regex
-    // `/event/(\d+)/` extrae el id). El logger.debug deja traza para
-    // poder cuantificar cuántas veces el discovery quedó pendiente.
-    logger.debug(
-      { source: "scrapers:stake" },
-      "discovery automático no disponible — vincular manualmente",
-    );
-    return null;
+  async buscarEventIdExterno(partido: PartidoSlim): Promise<string | null> {
+    // V.5: probamos los endpoints upcoming en orden hasta que uno responda
+    // con eventos. Si NINGUNO devuelve match único, queda al fallback manual.
+    let candidatos: StakeEvento[] = [];
+    for (const builder of ENDPOINTS_DISCOVERY) {
+      const qs = new URLSearchParams({ sport: "1" });
+      const url = builder(qs);
+      try {
+        const probe = await httpProbeJson<unknown>(url, {
+          source: "scrapers:stake:discovery",
+          timeoutMs: 8_000,
+          headers: {
+            Origin: "https://stake.pe",
+            Referer: "https://stake.pe/deportes/",
+          },
+        });
+        if (probe.status !== 200 || probe.data === null) continue;
+        const lista = extraerEventosStake(probe.data);
+        if (lista.length === 0) continue;
+        candidatos = lista;
+        break;
+      } catch {
+        continue;
+      }
+    }
+
+    if (candidatos.length === 0) {
+      logger.debug(
+        { partidoId: partido.id, source: "scrapers:stake:discovery" },
+        "discovery — ningún endpoint upcoming devolvió eventos, vincular manualmente",
+      );
+      return null;
+    }
+
+    let match: StakeEvento | null = null;
+    for (const cand of candidatos) {
+      if (!fechasCercanas(cand.kickoff, partido.fechaInicio, VENTANA_DISCOVERY_MIN)) {
+        continue;
+      }
+      const ok = await matchearEquiposContraPartido(
+        partido,
+        { local: cand.homeName, visita: cand.awayName },
+        "stake",
+      );
+      if (ok) {
+        if (match) {
+          logger.warn(
+            { partidoId: partido.id, source: "scrapers:stake:discovery" },
+            "discovery ambiguo — varios matches por equipos+fecha",
+          );
+          return null;
+        }
+        match = cand;
+      }
+    }
+
+    if (!match) {
+      logger.debug(
+        {
+          partidoId: partido.id,
+          equipoLocal: partido.equipoLocal,
+          equipoVisita: partido.equipoVisita,
+          source: "scrapers:stake:discovery",
+        },
+        "discovery sin match único — pendiente de vinculación manual",
+      );
+      return null;
+    }
+    return match.id;
   },
 
   async capturarCuotas(eventIdExterno: string): Promise<ResultadoScraper> {

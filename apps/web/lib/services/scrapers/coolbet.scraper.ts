@@ -40,7 +40,19 @@
 
 import { logger } from "../logger";
 import { httpFetchJson, httpProbeJson } from "./http";
+import {
+  fechasCercanas,
+  matchearEquiposContraPartido,
+} from "./alias-equipo";
 import type { CuotasCapturadas, ResultadoScraper, Scraper } from "./types";
+
+interface PartidoSlim {
+  id: string;
+  liga: string;
+  equipoLocal: string;
+  equipoVisita: string;
+  fechaInicio: Date;
+}
 
 const HOST = "www.coolbet.pe";
 const HOME_URL = `https://${HOST}/`;
@@ -478,21 +490,197 @@ async function fetchOddsConRetry(eventId: string): Promise<FetchOddsResult> {
   throw new Error(`Coolbet: retry budget agotado (eventId ${eventId})`);
 }
 
+// V.5 — Endpoints de discovery candidato. GAN Sports (backend de Coolbet)
+// expone listados pre-match en estos paths típicos. Probamos en orden hasta
+// que uno responda con eventos; el resto cae al fallback manual.
+const ENDPOINTS_DISCOVERY: Array<() => string> = [
+  () => `https://${HOST}/s/sports/v1/upcoming?sportId=1`,
+  () => `https://${HOST}/s/sb-odds/odds/upcoming?sportId=1`,
+  () => `https://${HOST}/s/sports/in-play/upcoming?sportId=1`,
+  () => `https://${HOST}/s/sports/v1/events?sport=football&status=upcoming`,
+];
+
+const VENTANA_DISCOVERY_MIN = 60;
+
+interface CoolbetEvento {
+  id: string;
+  homeName: string;
+  awayName: string;
+  kickoff: Date;
+}
+
+function leerNombreEquipoCoolbet(v: unknown): string {
+  if (typeof v === "string") return v;
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    if (typeof o.name === "string") return o.name;
+    if (typeof o.shortName === "string") return o.shortName;
+    if (typeof o.title === "string") return o.title;
+  }
+  return "";
+}
+
+function leerFechaCoolbet(v: unknown): Date | null {
+  if (!v) return null;
+  if (v instanceof Date) return v;
+  if (typeof v === "number") {
+    const ms = v < 1e12 ? v * 1000 : v;
+    const d = new Date(ms);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof v === "string") {
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
+
+function extraerEventosCoolbet(payload: unknown): CoolbetEvento[] {
+  function rec(node: unknown, depth = 0): unknown[] {
+    if (depth > 6 || !node || typeof node !== "object") return [];
+    if (Array.isArray(node)) {
+      const sample = node.find((it) => it && typeof it === "object");
+      if (
+        sample &&
+        typeof sample === "object" &&
+        ("homeName" in (sample as object) ||
+          "homeTeam" in (sample as object) ||
+          "home" in (sample as object) ||
+          "teams" in (sample as object) ||
+          "participants" in (sample as object))
+      ) {
+        return node;
+      }
+      for (const item of node) {
+        const found = rec(item, depth + 1);
+        if (found.length) return found;
+      }
+      return [];
+    }
+    const obj = node as Record<string, unknown>;
+    for (const key of [
+      "events",
+      "matches",
+      "items",
+      "data",
+      "list",
+      "result",
+      "fixtures",
+    ]) {
+      if (key in obj) {
+        const found = rec(obj[key], depth + 1);
+        if (found.length) return found;
+      }
+    }
+    return [];
+  }
+
+  const arr = rec(payload);
+  const out: CoolbetEvento[] = [];
+  for (const node of arr) {
+    if (!node || typeof node !== "object") continue;
+    const m = node as Record<string, unknown>;
+    const id = String(m.id ?? m.eventId ?? m.matchId ?? "");
+    if (!id || !/^\d+$/.test(id)) continue;
+
+    let homeName = leerNombreEquipoCoolbet(m.homeName ?? m.homeTeam ?? m.home);
+    let awayName = leerNombreEquipoCoolbet(m.awayName ?? m.awayTeam ?? m.away);
+    if ((!homeName || !awayName) && m.teams && typeof m.teams === "object") {
+      const t = m.teams as Record<string, unknown>;
+      if (!homeName) homeName = leerNombreEquipoCoolbet(t.home);
+      if (!awayName) awayName = leerNombreEquipoCoolbet(t.away);
+    }
+    if (!homeName || !awayName) continue;
+
+    const kickoff = leerFechaCoolbet(
+      m.startTime ?? m.startsAt ?? m.kickoff ?? m.date ?? m.timestamp,
+    );
+    if (!kickoff) continue;
+    out.push({ id, homeName, awayName, kickoff });
+  }
+  return out;
+}
+
 const coolbetScraper: Scraper = {
   nombre: "coolbet",
 
-  async buscarEventIdExterno(): Promise<string | null> {
-    // POC §2.3 capturó las URLs de partido (`/en/sports/match/{id}`) pero
-    // no aisló un endpoint público de listado pre-match consumible
-    // server-side. El endpoint observado `/s/sports/in-play/find` cubre
-    // sólo eventos LIVE. Sin endpoint confirmado, dejamos discovery
-    // pendiente del fallback manual de V.5 (regex `/match/(\d+)`) y
-    // logueamos cada intento para cuantificar los pendientes.
-    logger.debug(
-      { source: "scrapers:coolbet" },
-      "discovery automático no disponible — vincular manualmente",
-    );
-    return null;
+  async buscarEventIdExterno(partido: PartidoSlim): Promise<string | null> {
+    // V.5: probamos endpoints upcoming candidato. Para evitar 503, hacemos
+    // warmup primero (igual que en captura). Si todos los endpoints fallan
+    // cae a manual.
+    let cookieHeader = "";
+    try {
+      cookieHeader = await obtenerCookieHeader();
+    } catch {
+      cookieHeader = "";
+    }
+
+    let candidatos: CoolbetEvento[] = [];
+    for (const builder of ENDPOINTS_DISCOVERY) {
+      const url = builder();
+      try {
+        const probe = await httpProbeJson<unknown>(url, {
+          source: "scrapers:coolbet:discovery",
+          timeoutMs: 8_000,
+          headers: {
+            Origin: `https://${HOST}`,
+            Referer: `https://${HOST}/`,
+            ...(cookieHeader ? { Cookie: cookieHeader } : {}),
+          },
+        });
+        if (probe.status !== 200 || probe.data === null) continue;
+        const lista = extraerEventosCoolbet(probe.data);
+        if (lista.length === 0) continue;
+        candidatos = lista;
+        break;
+      } catch {
+        continue;
+      }
+    }
+
+    if (candidatos.length === 0) {
+      logger.debug(
+        { partidoId: partido.id, source: "scrapers:coolbet:discovery" },
+        "discovery — ningún endpoint upcoming devolvió eventos, vincular manualmente",
+      );
+      return null;
+    }
+
+    let match: CoolbetEvento | null = null;
+    for (const cand of candidatos) {
+      if (!fechasCercanas(cand.kickoff, partido.fechaInicio, VENTANA_DISCOVERY_MIN)) {
+        continue;
+      }
+      const ok = await matchearEquiposContraPartido(
+        partido,
+        { local: cand.homeName, visita: cand.awayName },
+        "coolbet",
+      );
+      if (ok) {
+        if (match) {
+          logger.warn(
+            { partidoId: partido.id, source: "scrapers:coolbet:discovery" },
+            "discovery ambiguo — varios matches por equipos+fecha",
+          );
+          return null;
+        }
+        match = cand;
+      }
+    }
+
+    if (!match) {
+      logger.debug(
+        {
+          partidoId: partido.id,
+          equipoLocal: partido.equipoLocal,
+          equipoVisita: partido.equipoVisita,
+          source: "scrapers:coolbet:discovery",
+        },
+        "discovery sin match único — pendiente de vinculación manual",
+      );
+      return null;
+    }
+    return match.id;
   },
 
   async capturarCuotas(eventIdExterno: string): Promise<ResultadoScraper> {

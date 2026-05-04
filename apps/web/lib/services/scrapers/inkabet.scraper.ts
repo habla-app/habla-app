@@ -44,13 +44,25 @@
 //   sin tocar la lógica de captura.
 
 import { logger } from "../logger";
-import { httpFetchJson } from "./http";
+import { httpFetchJson, httpProbeJson } from "./http";
+import {
+  fechasCercanas,
+  matchearEquiposContraPartido,
+} from "./alias-equipo";
 import {
   CapturaSinDatosError,
   type CuotasCapturadas,
   type ResultadoScraper,
   type Scraper,
 } from "./types";
+
+interface PartidoSlim {
+  id: string;
+  liga: string;
+  equipoLocal: string;
+  equipoVisita: string;
+  fechaInicio: Date;
+}
 
 const HOST = "d-cf.inkabetplayground.net";
 
@@ -426,20 +438,189 @@ function procesarMercadosInkabet(markets: unknown[]): {
   return { cuotas, marcadores: m };
 }
 
+// V.5 — Endpoints de discovery candidato. El playground de Inkabet expone
+// listados por sport/liga en estos paths. Como POC no aisló el path exacto,
+// probamos en orden hasta que uno responda con eventos y caemos a manual
+// si todos fallan. Los IDs alfanuméricos los preserva el extractor.
+const ENDPOINTS_DISCOVERY: Array<() => string> = [
+  () => `https://${HOST}/api/upcoming?sportId=1`,
+  () => `https://${HOST}/api/sport/1/events`,
+  () => `https://${HOST}/api/events?sport=football&status=upcoming`,
+  () => `https://${HOST}/api/v1/events/upcoming?sportId=1`,
+];
+
+const VENTANA_DISCOVERY_MIN = 60;
+
+interface InkabetEvento {
+  id: string;
+  homeName: string;
+  awayName: string;
+  kickoff: Date;
+}
+
+function leerNombreEquipoInkabet(v: unknown): string {
+  if (typeof v === "string") return v;
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    if (typeof o.name === "string") return o.name;
+    if (typeof o.shortName === "string") return o.shortName;
+    if (typeof o.title === "string") return o.title;
+  }
+  return "";
+}
+
+function leerFechaInkabet(v: unknown): Date | null {
+  if (!v) return null;
+  if (v instanceof Date) return v;
+  if (typeof v === "number") {
+    const ms = v < 1e12 ? v * 1000 : v;
+    const d = new Date(ms);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof v === "string") {
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
+
+function extraerEventosInkabet(payload: unknown): InkabetEvento[] {
+  function rec(node: unknown, depth = 0): unknown[] {
+    if (depth > 6 || !node || typeof node !== "object") return [];
+    if (Array.isArray(node)) {
+      const sample = node.find((it) => it && typeof it === "object");
+      if (
+        sample &&
+        typeof sample === "object" &&
+        ("homeName" in (sample as object) ||
+          "homeTeam" in (sample as object) ||
+          "home" in (sample as object) ||
+          "teams" in (sample as object))
+      ) {
+        return node;
+      }
+      for (const item of node) {
+        const found = rec(item, depth + 1);
+        if (found.length) return found;
+      }
+      return [];
+    }
+    const obj = node as Record<string, unknown>;
+    for (const key of [
+      "events",
+      "matches",
+      "items",
+      "data",
+      "list",
+      "result",
+      "fixtures",
+    ]) {
+      if (key in obj) {
+        const found = rec(obj[key], depth + 1);
+        if (found.length) return found;
+      }
+    }
+    return [];
+  }
+
+  const arr = rec(payload);
+  const out: InkabetEvento[] = [];
+  for (const node of arr) {
+    if (!node || typeof node !== "object") continue;
+    const m = node as Record<string, unknown>;
+    // ID alfanumérico — NO restringimos a /^\d+$/ acá.
+    const id = String(m.id ?? m.eventId ?? m.matchId ?? "");
+    if (!id || !eventIdValido(id)) continue;
+
+    let homeName = leerNombreEquipoInkabet(m.homeName ?? m.homeTeam ?? m.home);
+    let awayName = leerNombreEquipoInkabet(m.awayName ?? m.awayTeam ?? m.away);
+    if ((!homeName || !awayName) && m.teams && typeof m.teams === "object") {
+      const t = m.teams as Record<string, unknown>;
+      if (!homeName) homeName = leerNombreEquipoInkabet(t.home);
+      if (!awayName) awayName = leerNombreEquipoInkabet(t.away);
+    }
+    if (!homeName || !awayName) continue;
+
+    const kickoff = leerFechaInkabet(
+      m.startTime ?? m.startsAt ?? m.kickoff ?? m.date ?? m.timestamp,
+    );
+    if (!kickoff) continue;
+    out.push({ id, homeName, awayName, kickoff });
+  }
+  return out;
+}
+
 const inkabetScraper: Scraper = {
   nombre: "inkabet",
 
-  async buscarEventIdExterno(): Promise<string | null> {
-    // POC §2.6 confirma que los event IDs vienen en formato base64-like
-    // alfanumérico, accesibles via query `eventId=...` de la URL del
-    // partido. El listado por liga del backend del playground existe
-    // pero no fue capturado empíricamente. V.5 cubre este gap con el
-    // fallback manual (regex `eventId=([\w-]+)`).
-    logger.debug(
-      { source: "scrapers:inkabet" },
-      "discovery automático no disponible — vincular manualmente",
-    );
-    return null;
+  async buscarEventIdExterno(partido: PartidoSlim): Promise<string | null> {
+    // V.5: probamos endpoints upcoming candidato del playground. Si todos
+    // fallan o no devuelven match único, fallback manual via modal admin.
+    let candidatos: InkabetEvento[] = [];
+    for (const builder of ENDPOINTS_DISCOVERY) {
+      const url = builder();
+      try {
+        const probe = await httpProbeJson<unknown>(url, {
+          source: "scrapers:inkabet:discovery",
+          timeoutMs: 8_000,
+          headers: {
+            Origin: "https://www.inkabet.pe",
+            Referer: "https://www.inkabet.pe/pe/apuestas-deportivas",
+          },
+        });
+        if (probe.status !== 200 || probe.data === null) continue;
+        const lista = extraerEventosInkabet(probe.data);
+        if (lista.length === 0) continue;
+        candidatos = lista;
+        break;
+      } catch {
+        continue;
+      }
+    }
+
+    if (candidatos.length === 0) {
+      logger.debug(
+        { partidoId: partido.id, source: "scrapers:inkabet:discovery" },
+        "discovery — ningún endpoint upcoming devolvió eventos, vincular manualmente",
+      );
+      return null;
+    }
+
+    let match: InkabetEvento | null = null;
+    for (const cand of candidatos) {
+      if (!fechasCercanas(cand.kickoff, partido.fechaInicio, VENTANA_DISCOVERY_MIN)) {
+        continue;
+      }
+      const ok = await matchearEquiposContraPartido(
+        partido,
+        { local: cand.homeName, visita: cand.awayName },
+        "inkabet",
+      );
+      if (ok) {
+        if (match) {
+          logger.warn(
+            { partidoId: partido.id, source: "scrapers:inkabet:discovery" },
+            "discovery ambiguo — varios matches por equipos+fecha",
+          );
+          return null;
+        }
+        match = cand;
+      }
+    }
+
+    if (!match) {
+      logger.debug(
+        {
+          partidoId: partido.id,
+          equipoLocal: partido.equipoLocal,
+          equipoVisita: partido.equipoVisita,
+          source: "scrapers:inkabet:discovery",
+        },
+        "discovery sin match único — pendiente de vinculación manual",
+      );
+      return null;
+    }
+    return match.id;
   },
 
   async capturarCuotas(eventIdExterno: string): Promise<ResultadoScraper> {

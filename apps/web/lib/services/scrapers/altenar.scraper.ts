@@ -36,7 +36,122 @@
 
 import { logger } from "../logger";
 import { httpFetchJson, httpFetchText, httpProbeJson } from "./http";
+import {
+  fechasCercanas,
+  matchearEquiposContraPartido,
+} from "./alias-equipo";
 import type { CuotasCapturadas, ResultadoScraper, Scraper } from "./types";
+
+interface PartidoSlim {
+  id: string;
+  liga: string;
+  equipoLocal: string;
+  equipoVisita: string;
+  fechaInicio: Date;
+}
+
+const VENTANA_DISCOVERY_MIN = 60;
+
+interface AltenarEvento {
+  id: string;
+  homeName: string;
+  awayName: string;
+  kickoff: Date;
+}
+
+function leerNombreEquipoAltenar(v: unknown): string {
+  if (typeof v === "string") return v;
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    if (typeof o.name === "string") return o.name;
+    if (typeof o.shortName === "string") return o.shortName;
+    if (typeof o.title === "string") return o.title;
+  }
+  return "";
+}
+
+function leerFechaAltenar(v: unknown): Date | null {
+  if (!v) return null;
+  if (v instanceof Date) return v;
+  if (typeof v === "number") {
+    const ms = v < 1e12 ? v * 1000 : v;
+    const d = new Date(ms);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof v === "string") {
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
+
+function extraerEventosAltenar(payload: unknown): AltenarEvento[] {
+  function rec(node: unknown, depth = 0): unknown[] {
+    if (depth > 6 || !node || typeof node !== "object") return [];
+    if (Array.isArray(node)) {
+      const sample = node.find((it) => it && typeof it === "object");
+      if (
+        sample &&
+        typeof sample === "object" &&
+        ("homeName" in (sample as object) ||
+          "homeTeam" in (sample as object) ||
+          "home" in (sample as object) ||
+          "teams" in (sample as object) ||
+          "participants" in (sample as object))
+      ) {
+        return node;
+      }
+      for (const item of node) {
+        const found = rec(item, depth + 1);
+        if (found.length) return found;
+      }
+      return [];
+    }
+    const obj = node as Record<string, unknown>;
+    for (const key of [
+      "events",
+      "matches",
+      "items",
+      "data",
+      "list",
+      "result",
+      "fixtures",
+      "Events",
+      "Result",
+    ]) {
+      if (key in obj) {
+        const found = rec(obj[key], depth + 1);
+        if (found.length) return found;
+      }
+    }
+    return [];
+  }
+
+  const arr = rec(payload);
+  const out: AltenarEvento[] = [];
+  for (const node of arr) {
+    if (!node || typeof node !== "object") continue;
+    const m = node as Record<string, unknown>;
+    const id = String(m.id ?? m.eventId ?? m.Id ?? m.matchId ?? "");
+    if (!id || !/^\d+$/.test(id)) continue;
+
+    let homeName = leerNombreEquipoAltenar(m.homeName ?? m.homeTeam ?? m.home);
+    let awayName = leerNombreEquipoAltenar(m.awayName ?? m.awayTeam ?? m.away);
+    if ((!homeName || !awayName) && m.teams && typeof m.teams === "object") {
+      const t = m.teams as Record<string, unknown>;
+      if (!homeName) homeName = leerNombreEquipoAltenar(t.home);
+      if (!awayName) awayName = leerNombreEquipoAltenar(t.away);
+    }
+    if (!homeName || !awayName) continue;
+
+    const kickoff = leerFechaAltenar(
+      m.startTime ?? m.startsAt ?? m.kickoff ?? m.date ?? m.timestamp ?? m.startDate,
+    );
+    if (!kickoff) continue;
+    out.push({ id, homeName, awayName, kickoff });
+  }
+  return out;
+}
 
 type AltenarOperador = "apuesta_total" | "doradobet";
 
@@ -315,16 +430,88 @@ function buildScraperAltenar(operador: AltenarOperador): Scraper {
   return {
     nombre: operador,
 
-    async buscarEventIdExterno(): Promise<string | null> {
-      // Discovery automático no implementado en V.2 (POC no documentó el
-      // endpoint de listado/búsqueda público para Altenar). Vincular
-      // manualmente desde el Lote V.5 (regex `\/(\d{15,})$` para Apuesta
-      // Total, `/partido/(\d+)` para Doradobet).
-      logger.debug(
-        { source: `scrapers:${operador}` },
-        "discovery automático no disponible — vincular manualmente",
-      );
-      return null;
+    async buscarEventIdExterno(partido: PartidoSlim): Promise<string | null> {
+      // V.5: Altenar B2B expone listados upcoming en estos paths típicos.
+      // Probamos en orden hasta que uno responda con eventos. El widgetId
+      // de Doradobet aplica también a su discovery.
+      const host = await resolverHostActivo(operador, "0", cfg);
+      const candidatos: Array<() => string> =
+        operador === "doradobet"
+          ? [
+              () =>
+                cfg.widgetId
+                  ? `https://${host}/api/Widget/GetEventList?widgetId=${cfg.widgetId}&sportId=66`
+                  : `https://${host}/api/eventbrowser/upcoming?sportId=66`,
+              () => `https://${host}/api/eventbrowser/upcoming?sportId=66`,
+              () => `https://${host}/api/eventbrowser/sport/66/events`,
+            ]
+          : [
+              () => `https://${host}/api/eventbrowser/upcoming?sportId=66`,
+              () => `https://${host}/api/sportsbookv2/sports/66/events`,
+              () => `https://${host}/api/eventbrowser/sport/66/events`,
+            ];
+
+      let eventos: AltenarEvento[] = [];
+      for (const builder of candidatos) {
+        const url = builder();
+        try {
+          const probe = await httpProbeJson<unknown>(url, {
+            source: `scrapers:${operador}:discovery`,
+            timeoutMs: 8_000,
+            headers: { Origin: cfg.origin, Referer: cfg.referer },
+          });
+          if (probe.status !== 200 || probe.data === null) continue;
+          const lista = extraerEventosAltenar(probe.data);
+          if (lista.length === 0) continue;
+          eventos = lista;
+          break;
+        } catch {
+          continue;
+        }
+      }
+
+      if (eventos.length === 0) {
+        logger.debug(
+          { partidoId: partido.id, source: `scrapers:${operador}:discovery` },
+          "discovery — ningún endpoint upcoming devolvió eventos, vincular manualmente",
+        );
+        return null;
+      }
+
+      let match: AltenarEvento | null = null;
+      for (const cand of eventos) {
+        if (!fechasCercanas(cand.kickoff, partido.fechaInicio, VENTANA_DISCOVERY_MIN)) {
+          continue;
+        }
+        const ok = await matchearEquiposContraPartido(
+          partido,
+          { local: cand.homeName, visita: cand.awayName },
+          operador,
+        );
+        if (ok) {
+          if (match) {
+            logger.warn(
+              { partidoId: partido.id, source: `scrapers:${operador}:discovery` },
+              "discovery ambiguo — varios matches por equipos+fecha",
+            );
+            return null;
+          }
+          match = cand;
+        }
+      }
+      if (!match) {
+        logger.debug(
+          {
+            partidoId: partido.id,
+            equipoLocal: partido.equipoLocal,
+            equipoVisita: partido.equipoVisita,
+            source: `scrapers:${operador}:discovery`,
+          },
+          "discovery sin match único — pendiente de vinculación manual",
+        );
+        return null;
+      }
+      return match.id;
     },
 
     async capturarCuotas(eventIdExterno: string): Promise<ResultadoScraper> {
