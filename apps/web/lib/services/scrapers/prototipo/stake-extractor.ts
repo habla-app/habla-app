@@ -38,12 +38,33 @@ export interface CandidatoElegido extends CandidatoListado {
   scoreMin: number;
 }
 
+export interface DiagnosticoListado {
+  /** Título del documento tras navegar (window.document.title). */
+  titulo: string;
+  /** URL final tras posibles redirects de Stake. */
+  urlFinal: string;
+  /** Tamaño total del innerText del body en chars (signal de página vacía vs cargada). */
+  bodyTextLength: number;
+  /** Primeros 2000 chars del innerText del body (sin HTML, solo texto visible). */
+  bodyTextSnippet: string;
+  /** Contadores de elementos comunes — distingue página real vs página vacía. */
+  totalElementos: number;
+  totalLinks: number;
+  totalBotones: number;
+  totalDivs: number;
+  /** ¿Hay algún `.wpt-` en la página? Si no, el sportsbook no se renderizó. */
+  hayElementosWpt: boolean;
+  /** ¿Hay algún `.wol-` en la página? */
+  hayElementosWol: boolean;
+}
+
 export interface ResultadoBusqueda {
   urlListado: string;
   candidatosTotales: number;
   todosLosCandidatos: CandidatoListado[];
   candidatoElegido: CandidatoElegido | null;
   motivoNoElegido?: string;
+  diagnostico?: DiagnosticoListado;
 }
 
 export interface MercadosExtraidos {
@@ -135,6 +156,39 @@ export async function buscarPartidoEnListadoStake(
         : c.hrefDetalle,
   }));
 
+  // Diagnóstico SIEMPRE — independiente de si se encontró o no el partido.
+  // Permite distinguir "Stake nos bloqueó / mostró otra página" vs "Stake
+  // cargó OK pero el partido no estaba en el listado" vs "Stake cargó pero
+  // los nombres de los equipos son distintos a los nuestros".
+  const diagnostico: DiagnosticoListado = await page.evaluate(() => {
+    const titulo = document.title?.slice(0, 200) ?? "";
+    const urlFinal = window.location.href;
+    const bodyText = document.body?.innerText ?? "";
+    const bodyTextLength = bodyText.length;
+    const bodyTextSnippet = bodyText.slice(0, 2000);
+    const totalElementos = document.querySelectorAll("*").length;
+    const totalLinks = document.querySelectorAll("a").length;
+    const totalBotones = document.querySelectorAll("button, [role='button']")
+      .length;
+    const totalDivs = document.querySelectorAll("div").length;
+    const hayElementosWpt =
+      document.querySelectorAll("[class*='wpt-']").length > 0;
+    const hayElementosWol =
+      document.querySelectorAll("[class*='wol-']").length > 0;
+    return {
+      titulo,
+      urlFinal,
+      bodyTextLength,
+      bodyTextSnippet,
+      totalElementos,
+      totalLinks,
+      totalBotones,
+      totalDivs,
+      hayElementosWpt,
+      hayElementosWol,
+    };
+  });
+
   // Buscar mejor match server-side con Jaro-Winkler.
   let mejor: CandidatoElegido | null = null;
   let mejorScore = 0;
@@ -163,6 +217,7 @@ export async function buscarPartidoEnListadoStake(
         todosLosCandidatos.length === 0
           ? "no se encontraron tarjetas de partido en el listado"
           : `mejor score (${mejorScore.toFixed(3)}) por debajo del umbral ${UMBRAL_MATCH_PARTIDO}`,
+      diagnostico,
     };
   }
 
@@ -171,6 +226,7 @@ export async function buscarPartidoEnListadoStake(
     candidatosTotales: todosLosCandidatos.length,
     todosLosCandidatos,
     candidatoElegido: mejor,
+    diagnostico,
   };
 }
 
