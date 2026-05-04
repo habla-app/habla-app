@@ -451,7 +451,14 @@ function buildScraperAltenar(operador: AltenarOperador): Scraper {
               () => `https://${host}/api/eventbrowser/sport/66/events`,
             ];
 
+      // Lote V.8.1: instrumentación detallada por endpoint y al final.
       let eventos: AltenarEvento[] = [];
+      let endpointHit: string | null = null;
+      const endpointStats: Array<{
+        url: string;
+        status: number | "fetch-fail";
+        eventos: number;
+      }> = [];
       for (const builder of candidatos) {
         const url = builder();
         try {
@@ -460,57 +467,83 @@ function buildScraperAltenar(operador: AltenarOperador): Scraper {
             timeoutMs: 8_000,
             headers: { Origin: cfg.origin, Referer: cfg.referer },
           });
-          if (probe.status !== 200 || probe.data === null) continue;
-          const lista = extraerEventosAltenar(probe.data);
-          if (lista.length === 0) continue;
-          eventos = lista;
-          break;
-        } catch {
+          const lista =
+            probe.status === 200 && probe.data !== null
+              ? extraerEventosAltenar(probe.data)
+              : [];
+          endpointStats.push({ url, status: probe.status, eventos: lista.length });
+          if (lista.length > 0) {
+            eventos = lista;
+            endpointHit = url;
+            break;
+          }
+        } catch (err) {
+          endpointStats.push({ url, status: "fetch-fail", eventos: 0 });
+          logger.info(
+            {
+              partidoId: partido.id,
+              url,
+              err: (err as Error).message,
+              source: `scrapers:${operador}:discovery`,
+            },
+            `${operador} discovery probe falló: ${(err as Error).message}`,
+          );
           continue;
         }
       }
 
       if (eventos.length === 0) {
-        logger.debug(
-          { partidoId: partido.id, source: `scrapers:${operador}:discovery` },
-          "discovery — ningún endpoint upcoming devolvió eventos, vincular manualmente",
+        logger.info(
+          {
+            partidoId: partido.id,
+            endpointStats,
+            source: `scrapers:${operador}:discovery`,
+          },
+          `${operador} discovery: ningún endpoint devolvió eventos (probados ${endpointStats.length})`,
         );
         return null;
       }
 
+      let dentroVentana = 0;
+      let matched = 0;
       let match: AltenarEvento | null = null;
       for (const cand of eventos) {
         if (!fechasCercanas(cand.kickoff, partido.fechaInicio, VENTANA_DISCOVERY_MIN)) {
           continue;
         }
+        dentroVentana++;
         const ok = await matchearEquiposContraPartido(
           partido,
           { local: cand.homeName, visita: cand.awayName },
           operador,
         );
         if (ok) {
+          matched++;
           if (match) {
-            logger.warn(
+            logger.info(
               { partidoId: partido.id, source: `scrapers:${operador}:discovery` },
-              "discovery ambiguo — varios matches por equipos+fecha",
+              `${operador} discovery ambiguo — varios matches por equipos+fecha`,
             );
             return null;
           }
           match = cand;
         }
       }
-      if (!match) {
-        logger.debug(
-          {
-            partidoId: partido.id,
-            equipoLocal: partido.equipoLocal,
-            equipoVisita: partido.equipoVisita,
-            source: `scrapers:${operador}:discovery`,
-          },
-          "discovery sin match único — pendiente de vinculación manual",
-        );
-        return null;
-      }
+
+      logger.info(
+        {
+          partidoId: partido.id,
+          liga: partido.liga,
+          endpointHit,
+          candidatos: eventos.length,
+          dentroVentana,
+          matched,
+          source: `scrapers:${operador}:discovery`,
+        },
+        `${operador} discovery: ${eventos.length} candidatos · ${dentroVentana} en ventana · ${matched} matchearon equipos`,
+      );
+
+      if (!match) return null;
       return match.id;
     },
 

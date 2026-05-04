@@ -300,7 +300,14 @@ const stakeScraper: Scraper = {
   async buscarEventIdExterno(partido: PartidoSlim): Promise<string | null> {
     // V.5: probamos los endpoints upcoming en orden hasta que uno responda
     // con eventos. Si NINGUNO devuelve match único, queda al fallback manual.
+    // V.8.1: instrumentación detallada por endpoint y al final.
     let candidatos: StakeEvento[] = [];
+    let endpointHit: string | null = null;
+    const endpointStats: Array<{
+      url: string;
+      status: number | "fetch-fail";
+      eventos: number;
+    }> = [];
     for (const builder of ENDPOINTS_DISCOVERY) {
       const qs = new URLSearchParams({ sport: "1" });
       const url = builder(qs);
@@ -313,39 +320,66 @@ const stakeScraper: Scraper = {
             Referer: "https://stake.pe/deportes/",
           },
         });
-        if (probe.status !== 200 || probe.data === null) continue;
-        const lista = extraerEventosStake(probe.data);
-        if (lista.length === 0) continue;
-        candidatos = lista;
-        break;
-      } catch {
+        const lista =
+          probe.status === 200 && probe.data !== null
+            ? extraerEventosStake(probe.data)
+            : [];
+        endpointStats.push({ url, status: probe.status, eventos: lista.length });
+        if (lista.length > 0) {
+          candidatos = lista;
+          endpointHit = url;
+          break;
+        }
+      } catch (err) {
+        endpointStats.push({
+          url,
+          status: "fetch-fail",
+          eventos: 0,
+        });
+        logger.info(
+          {
+            partidoId: partido.id,
+            url,
+            err: (err as Error).message,
+            source: "scrapers:stake:discovery",
+          },
+          `stake discovery probe falló: ${(err as Error).message}`,
+        );
         continue;
       }
     }
 
     if (candidatos.length === 0) {
-      logger.debug(
-        { partidoId: partido.id, source: "scrapers:stake:discovery" },
-        "discovery — ningún endpoint upcoming devolvió eventos, vincular manualmente",
+      logger.info(
+        {
+          partidoId: partido.id,
+          endpointStats,
+          source: "scrapers:stake:discovery",
+        },
+        `stake discovery: ningún endpoint devolvió eventos (probados ${endpointStats.length})`,
       );
       return null;
     }
 
+    let dentroVentana = 0;
+    let matched = 0;
     let match: StakeEvento | null = null;
     for (const cand of candidatos) {
       if (!fechasCercanas(cand.kickoff, partido.fechaInicio, VENTANA_DISCOVERY_MIN)) {
         continue;
       }
+      dentroVentana++;
       const ok = await matchearEquiposContraPartido(
         partido,
         { local: cand.homeName, visita: cand.awayName },
         "stake",
       );
       if (ok) {
+        matched++;
         if (match) {
-          logger.warn(
+          logger.info(
             { partidoId: partido.id, source: "scrapers:stake:discovery" },
-            "discovery ambiguo — varios matches por equipos+fecha",
+            "stake discovery ambiguo — varios matches por equipos+fecha",
           );
           return null;
         }
@@ -353,18 +387,20 @@ const stakeScraper: Scraper = {
       }
     }
 
-    if (!match) {
-      logger.debug(
-        {
-          partidoId: partido.id,
-          equipoLocal: partido.equipoLocal,
-          equipoVisita: partido.equipoVisita,
-          source: "scrapers:stake:discovery",
-        },
-        "discovery sin match único — pendiente de vinculación manual",
-      );
-      return null;
-    }
+    logger.info(
+      {
+        partidoId: partido.id,
+        liga: partido.liga,
+        endpointHit,
+        candidatos: candidatos.length,
+        dentroVentana,
+        matched,
+        source: "scrapers:stake:discovery",
+      },
+      `stake discovery: ${candidatos.length} candidatos · ${dentroVentana} en ventana · ${matched} matchearon equipos`,
+    );
+
+    if (!match) return null;
     return match.id;
   },
 
