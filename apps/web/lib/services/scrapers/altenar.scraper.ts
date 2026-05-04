@@ -40,6 +40,8 @@ import {
   fechasCercanas,
   matchearEquiposContraPartido,
 } from "./alias-equipo";
+import { capturarPartidoPorCasa } from "./playwright-scrape";
+import { PLAYWRIGHT_CONFIGS } from "./playwright-config";
 import type { CuotasCapturadas, ResultadoScraper, Scraper } from "./types";
 
 interface PartidoSlim {
@@ -429,6 +431,15 @@ function buildScraperAltenar(operador: AltenarOperador): Scraper {
 
   return {
     nombre: operador,
+
+    async capturarConPlaywright(partido, urlPartidoEnCasa) {
+      return capturarPartidoPorCasa(
+        operador,
+        partido,
+        urlPartidoEnCasa,
+        PLAYWRIGHT_CONFIGS,
+      );
+    },
 
     async buscarEventIdExterno(partido: PartidoSlim): Promise<string | null> {
       // V.5: Altenar B2B expone listados upcoming en estos paths típicos.

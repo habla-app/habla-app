@@ -72,6 +72,12 @@ export interface PlaywrightLocator {
   first(): PlaywrightLocator;
 }
 
+export interface PlaywrightRoute {
+  abort(): Promise<void>;
+  continue(): Promise<void>;
+  request(): { resourceType(): string; url(): string };
+}
+
 export interface PlaywrightPage {
   goto(
     url: string,
@@ -79,8 +85,18 @@ export interface PlaywrightPage {
   ): Promise<unknown>;
   waitForSelector(selector: string, opts?: { timeout?: number }): Promise<unknown>;
   waitForTimeout(ms: number): Promise<void>;
+  waitForLoadState(
+    state?: "load" | "domcontentloaded" | "networkidle",
+    opts?: { timeout?: number },
+  ): Promise<void>;
   locator(selector: string): PlaywrightLocator;
   evaluate<T>(fn: () => T): Promise<T>;
+  evaluate<T, A>(fn: (arg: A) => T, arg: A): Promise<T>;
+  route(
+    pattern: string | RegExp,
+    handler: (route: PlaywrightRoute) => void | Promise<void>,
+  ): Promise<void>;
+  url(): string;
   content(): Promise<string>;
   close(): Promise<void>;
 }
@@ -121,6 +137,46 @@ interface BrowserHandle {
 let browserHandle: BrowserHandle | null = null;
 let pendingLaunch: Promise<BrowserHandle | null> | null = null;
 let cleanupRegistrado = false;
+
+// ─── Auto-shutdown idle (Lote V.9) ─────────────────────────────────────
+//
+// El browser warm consume ~150MB RAM. Si nadie pide capturas durante un
+// rato (ej. después del cron 5am Lima, hasta el próximo Filtro 1 ON), no
+// hay razón para mantenerlo vivo. Cada vez que `crearPagePlaywright` se
+// usa, actualizamos `ultimoUsoMs`. Un timer cada 5min chequea si llevamos
+// `IDLE_TIMEOUT_MS` sin uso → cerramos el browser. La próxima llamada
+// relanza warm sin problema (~3s de cold start, aceptable).
+//
+// Pages activas (capturas en vuelo) bloquean el shutdown vía pagesEnVuelo.
+const IDLE_TIMEOUT_MS = 15 * 60 * 1000; // 15 min
+const IDLE_CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 min
+let ultimoUsoMs: number = Date.now();
+let pagesEnVuelo = 0;
+let idleTimer: ReturnType<typeof setInterval> | null = null;
+
+function tocarUso(): void {
+  ultimoUsoMs = Date.now();
+}
+
+function asegurarIdleTimer(): void {
+  if (idleTimer) return;
+  idleTimer = setInterval(() => {
+    if (!browserHandle) return;
+    if (pagesEnVuelo > 0) return;
+    const idleMs = Date.now() - ultimoUsoMs;
+    if (idleMs >= IDLE_TIMEOUT_MS) {
+      logger.info(
+        { idleMs, source: "scrapers:playwright" },
+        "playwright browser idle — cerrando para liberar RAM",
+      );
+      void cerrarBrowser();
+    }
+  }, IDLE_CHECK_INTERVAL_MS);
+  // No bloquear el event loop si Node quiere salir.
+  if (typeof (idleTimer as { unref?: () => void }).unref === "function") {
+    (idleTimer as { unref: () => void }).unref();
+  }
+}
 
 /**
  * Lanza el browser warm. Idempotente. Devuelve null si no se pudo lanzar
@@ -270,8 +326,54 @@ export async function obtenerBrowserPlaywright(): Promise<BrowserHandle | null> 
 }
 
 /**
+ * Tipos de recurso que NO necesitamos para scraping de cuotas. Los
+ * bloqueamos vía `page.route` para reducir bandwidth + memoria ~70%.
+ *
+ * Mantenemos `document` (HTML), `script` (SPA necesita JS), `xhr`/`fetch`
+ * (las cuotas vienen vía API interna del frontend) y `websocket` (Stake
+ * actualiza odds via WS).
+ */
+const ASSET_TYPES_BLOQUEADOS = new Set([
+  "image",
+  "media",
+  "font",
+  "stylesheet",
+  "imageset",
+]);
+
+/**
+ * Aplica asset blocking a una page. Llamado automáticamente desde
+ * `crearPagePlaywright`. Si `page.route` falla, sigue funcionando sin
+ * blocking — más lento pero no rompe.
+ */
+async function aplicarAssetBlocking(page: PlaywrightPage): Promise<void> {
+  try {
+    await page.route("**/*", (route) => {
+      const tipo = route.request().resourceType();
+      if (ASSET_TYPES_BLOQUEADOS.has(tipo)) {
+        void route.abort();
+      } else {
+        void route.continue();
+      }
+    });
+  } catch (err) {
+    logger.warn(
+      { err: (err as Error).message, source: "scrapers:playwright" },
+      "page.route() falló — siguiendo sin asset blocking",
+    );
+  }
+}
+
+/**
  * Crea una `Page` nueva sobre el context warm. Cada captura debe llamar
  * `page.close()` al terminar (try/finally) — el context queda vivo.
+ *
+ * Lote V.9: aplica asset blocking automático (image/font/media/stylesheet)
+ * y registra la page en `pagesEnVuelo` para que el idle-timer no cierre
+ * el browser mientras hay capturas activas. Cuando el caller llame
+ * `liberarPagePlaywright(page)` (o `page.close()` directo), el contador
+ * baja. El uso recomendado es `liberarPagePlaywright` para que también
+ * actualice `ultimoUsoMs`.
  *
  * Si el browser no está disponible devuelve null.
  */
@@ -279,7 +381,12 @@ export async function crearPagePlaywright(): Promise<PlaywrightPage | null> {
   const handle = await obtenerBrowserPlaywright();
   if (!handle) return null;
   try {
-    return await handle.context.newPage();
+    const page = await handle.context.newPage();
+    pagesEnVuelo++;
+    tocarUso();
+    asegurarIdleTimer();
+    await aplicarAssetBlocking(page);
+    return page;
   } catch (err) {
     logger.warn(
       { err: (err as Error).message, source: "scrapers:playwright" },
@@ -293,6 +400,26 @@ export async function crearPagePlaywright(): Promise<PlaywrightPage | null> {
 }
 
 /**
+ * Cierra la page y libera el slot de pagesEnVuelo. Llamar siempre desde
+ * un finally para que el counter no se quede atascado.
+ */
+export async function liberarPagePlaywright(
+  page: PlaywrightPage | null,
+): Promise<void> {
+  if (!page) return;
+  try {
+    await page.close();
+  } catch (err) {
+    logger.warn(
+      { err: (err as Error).message, source: "scrapers:playwright" },
+      "page.close() falló al liberar",
+    );
+  }
+  if (pagesEnVuelo > 0) pagesEnVuelo--;
+  tocarUso();
+}
+
+/**
  * Cierra el browser warm. Idempotente. Llamado automáticamente por el
  * handler `beforeExit` registrado en `lanzarBrowser`.
  *
@@ -303,6 +430,11 @@ export async function cerrarBrowser(): Promise<void> {
   if (!browserHandle) return;
   const { browser, context } = browserHandle;
   browserHandle = null;
+  pagesEnVuelo = 0;
+  if (idleTimer) {
+    clearInterval(idleTimer);
+    idleTimer = null;
+  }
   try {
     await context.close();
   } catch (err) {
