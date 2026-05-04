@@ -1,35 +1,30 @@
-// Flow genérico de scraping con Playwright para los 7 scrapers
-// (Lote V.9 — May 2026).
+// Flow Playwright iterativo para los 7 scrapers — Lote V.10.5 (May 2026).
 //
-// La premisa: en lugar de hablar con la API JSON de cada casa (que cambia,
-// se bloquea por WAF, o requiere parámetros que descubrir), navegamos la
-// página real como un browser y extraemos las cuotas del DOM. Replica el
-// approach que validamos manualmente con Claude Cowork — cada casa tiene
-// un sportsbook accesible para humanos, y desde adentro las cuotas son
-// visibles.
+// Reemplaza la heurística genérica del Lote V.9 que recorría el DOM completo
+// una sola vez. La nueva arquitectura emula el approach de Claude Cowork:
+// navegar la página, esperar hidratación SPA, scroll para lazy-load, click
+// en tabs si hace falta, validar que el click navegó al detalle, y extraer
+// cuotas por bloque de mercado.
 //
-// Flujo común a las 7 casas:
-//   1. Navegar a la URL del listado de la liga (ej. liga 1 de Stake).
-//   2. Esperar render del SPA (networkidle o selector).
-//   3. Buscar el partido por texto: encontrar el elemento que contenga
-//      AMBOS nombres de equipo (con normalización + fuzzy si falta).
-//   4. Click en el elemento → la casa carga la página de mercados.
-//   5. Esperar render.
-//   6. Leer cuotas por heurística de proximidad a labels (1, X, 2, +2.5,
-//      Sí, etc.) extrayendo números decimales del DOM.
-//   7. Retornar resultado uniforme para que el worker lo persista.
+// Etapas del flow:
 //
-// Lo que NO hace este módulo:
-//   - Selectores DOM específicos por casa. Cada casa tiene su propio HTML.
-//     Si la heurística genérica no alcanza, la `CasaPlaywrightConfig` por
-//     casa puede sobreescribir las funciones de `buscar` o `extraer`.
+//   1. NAVEGAR a la URL del listado de la liga.
+//   2. ESPERAR hidratación SPA (combinación de selectores + delay).
+//   3. BUSCAR PARTIDO con hasta 4 intentos:
+//      - Intento 1: heurística DOM directa (mejorada).
+//      - Intento 2: scroll down → retry (cubre lazy-load).
+//      - Intento 3: click en tab "Próximos"/"Upcoming"/"Todos" → retry.
+//      - Intento 4: más scroll → retry.
+//   4. CLICK en candidato y VALIDAR navegación (URL cambió o detail-view
+//      selector apareció).
+//   5. ESPERAR cuotas visibles en detalle.
+//   6. EXTRAER por bloque de mercado: encuentra el header del mercado
+//      ("Resultado"/"1X2", "Doble Oportunidad", "Goles Total", "Ambos
+//      Anotan") y dentro del bloque busca las cuotas etiquetadas.
+//   7. Si bloques no funcionan, fallback a heurística genérica vieja.
 //
-// Memoria/CPU:
-//   - Asset blocking (image/font/media/css) ya aplicado por
-//     `crearPagePlaywright` → bandwidth ~70% menor.
-//   - Reusamos `page` para listado + detalle: un partido se navega en una
-//     sola page (open → goto listado → click partido → leer → close).
-//   - Concurrencia limitada a 3 capturas simultáneas (config en cuotas).
+// Cada paso loggea con detalle para que en producción se vea exactamente
+// dónde falla cuando una casa no rinde.
 
 import { logger } from "../logger";
 import {
@@ -48,196 +43,388 @@ import { CapturaSinDatosError } from "./types";
 // ─── Configuración por casa ────────────────────────────────────────────
 
 export interface CasaPlaywrightConfig {
-  /**
-   * URL del listado de partidos para la liga dada. Devuelve null si la
-   * combinación casa+liga no está mapeada todavía (la casa NO la cubre o
-   * no descubrimos su URL aún) — en ese caso skipeamos la captura para
-   * esa casa silenciosamente.
-   *
-   * El admin puede ampliar esta función agregando ramas para más ligas
-   * (Premier, La Liga, etc.) sin tocar el resto del scraper.
-   */
   urlListado(liga: string): string | null;
-
-  /**
-   * Si la casa requiere un selector específico para esperar a que el
-   * listado de partidos esté renderizado (ej. SPA que tarda en hidratar),
-   * declararlo acá. Si null, usamos networkidle como heurística general.
-   */
   selectorListadoListo?: string;
-
-  /**
-   * Tiempo máximo que esperamos a que el listado cargue, en ms.
-   * Default 25s (incluye SPA + WAF interstitials de Cloudflare/Imperva).
-   */
   timeoutListadoMs?: number;
-
-  /**
-   * Tiempo máximo total para capturar un partido (listado + click +
-   * detalle + lectura). Default 60s.
-   */
   timeoutTotalMs?: number;
-
-  /**
-   * Override de la búsqueda de partido por texto. Si una casa publica los
-   * partidos con un wrapper específico, esto puede ser más eficiente que
-   * la heurística genérica.
-   */
   buscarPartidoEnListado?(
     page: PlaywrightPage,
     equipoLocal: string,
     equipoVisita: string,
   ): Promise<{ clicked: boolean; href?: string } | null>;
-
-  /**
-   * Override de extracción de cuotas. Por defecto usamos la heurística
-   * genérica `extraerCuotasGenerico`.
-   */
   extraerCuotas?(page: PlaywrightPage): Promise<CuotasCapturadas>;
 }
 
-const TIMEOUT_LISTADO_DEFAULT_MS = 25_000;
-const TIMEOUT_TOTAL_DEFAULT_MS = 60_000;
+const TIMEOUT_LISTADO_DEFAULT_MS = 30_000;
+const TIMEOUT_TOTAL_DEFAULT_MS = 90_000;
 
-// ─── Heurística genérica de búsqueda de partido ────────────────────────
+// ─── Heurística iterativa de búsqueda de partido ───────────────────────
+
+interface CandidatoEnDOM {
+  texto: string;
+  href: string | null;
+  bbox: number;
+  index: number;
+  textoLocal: string;
+  textoVisita: string;
+}
 
 /**
- * Recorre todos los elementos del DOM y busca el más pequeño que contenga
- * AMBOS nombres de equipo. Usa similitud Jaro-Winkler para tolerar variantes.
- *
- * Estrategia:
- *   1. Normalizar texto del DOM (lowercase + sin acentos).
- *   2. Iterar elementos visibles (filtra `display: none`).
- *   3. Para cada uno, ver si contiene ambos equipos (exacto o fuzzy).
- *   4. Quedarse con el de menor texto (más específico, menos noise).
- *   5. Click en él (o el ancestro clickeable más cercano).
- *
- * Ejecutado vía `page.evaluate` para correr en el contexto del browser.
- * Devuelve `{ clicked: boolean, href?: string }`:
- *   - `clicked = true` si pudo hacer click y se navegó.
- *   - `href` si encontró un anchor con URL del partido (para metadata).
+ * Busca candidatos en el DOM. Estrategia mejorada vs V.9:
+ *   - Primero busca elementos pequeños que contengan AMBOS equipos (caso
+ *     fácil — link/card del partido entero).
+ *   - Si no encuentra, busca elementos con el equipo LOCAL y verifica que
+ *     un elemento sibling/descendiente cercano tenga el visita (caso
+ *     SPAs con spans separados).
+ *   - Re-rank por similitud Jaro-Winkler.
  */
-async function buscarPartidoGenerico(
+async function buscarCandidatosEnDOM(
   page: PlaywrightPage,
   equipoLocal: string,
   equipoVisita: string,
-): Promise<{ clicked: boolean; href?: string } | null> {
-  // El page.evaluate corre en el browser context, sin acceso a las funciones
-  // del módulo. Pasamos los strings como argumentos y reimplementamos un
-  // matching simple inline. La similitud completa se hace en server side
-  // post-evaluate si encontramos varios candidatos.
-  const candidatos: { texto: string; href: string | null; bbox: number; index: number }[] =
-    await page.evaluate(
-      ({ local, visita }: { local: string; visita: string }) => {
-        function normalizar(s: string): string {
-          return s
-            .normalize("NFD")
-            .replace(/[̀-ͯ]/g, "")
-            .toLowerCase()
-            .replace(/[^a-z0-9 ]/g, " ")
-            .replace(/\s+/g, " ")
-            .trim();
+): Promise<CandidatoEnDOM[]> {
+  const candidatos: CandidatoEnDOM[] = await page.evaluate(
+    ({ local, visita }: { local: string; visita: string }) => {
+      function normalizar(s: string): string {
+        return s
+          .normalize("NFD")
+          .replace(/[̀-ͯ]/g, "")
+          .toLowerCase()
+          .replace(/[^a-z0-9 ]/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+      }
+      function tokensRelevantes(s: string): string[] {
+        return normalizar(s)
+          .split(" ")
+          .filter((t) => t.length >= 4); // tokens cortos (de, fc, cd) se ignoran
+      }
+      function tieneAlguno(tokens: string[], texto: string): boolean {
+        for (const t of tokens) {
+          if (texto.includes(t)) return true;
         }
-        const tokensLocal = normalizar(local).split(" ").filter((t) => t.length >= 3);
-        const tokensVisita = normalizar(visita).split(" ").filter((t) => t.length >= 3);
-        if (tokensLocal.length === 0 || tokensVisita.length === 0) return [];
+        return false;
+      }
 
-        function tieneAlmenosUno(tokens: string[], texto: string): boolean {
-          for (const t of tokens) {
-            if (texto.includes(t)) return true;
+      const tokensLocal = tokensRelevantes(local);
+      const tokensVisita = tokensRelevantes(visita);
+      if (tokensLocal.length === 0 || tokensVisita.length === 0) return [];
+
+      const out: CandidatoEnDOM[] = [];
+      // Selector amplio que cubre la mayoría de patrones de partidos en
+      // sportsbook SPAs.
+      const SELECTORES =
+        "a, [role='link'], [role='button'], button, [data-event-id], " +
+        "[data-match-id], [data-fixture-id], [class*='event' i], " +
+        "[class*='match' i], [class*='fixture' i], [class*='game' i], " +
+        "li, article";
+      const elementos = document.querySelectorAll(SELECTORES);
+      let idx = 0;
+      const seenTextos = new Set<string>();
+
+      // ── Estrategia 1: elementos que contienen AMBOS equipos ─────────
+      for (const el of Array.from(elementos)) {
+        if (!(el instanceof HTMLElement)) continue;
+        const rect = el.getBoundingClientRect();
+        if (rect.width < 30 || rect.height < 20) continue;
+        if (rect.width > 1500 || rect.height > 800) continue; // demasiado grande
+        const texto = normalizar(el.innerText ?? el.textContent ?? "");
+        if (texto.length < 6 || texto.length > 400) continue;
+        if (!tieneAlguno(tokensLocal, texto)) continue;
+        if (!tieneAlguno(tokensVisita, texto)) continue;
+
+        // Dedup por texto exacto (varios elementos pueden contener lo mismo).
+        if (seenTextos.has(texto)) continue;
+        seenTextos.add(texto);
+
+        const href =
+          el instanceof HTMLAnchorElement
+            ? el.href
+            : (el.querySelector("a") as HTMLAnchorElement | null)?.href ?? null;
+        out.push({
+          texto: texto.slice(0, 200),
+          href,
+          bbox: rect.width * rect.height,
+          index: idx,
+          textoLocal: local,
+          textoVisita: visita,
+        });
+        idx++;
+        if (idx >= 200) break;
+      }
+
+      // Si no encontramos en la estrategia 1, fallback estrategia 2:
+      // elementos pequeños con SOLO local, verificando que el visita
+      // esté en un elemento sibling/parent dentro de un container común.
+      if (out.length === 0) {
+        for (const elLocal of Array.from(elementos)) {
+          if (!(elLocal instanceof HTMLElement)) continue;
+          const rect = elLocal.getBoundingClientRect();
+          if (rect.width < 20 || rect.height < 15) continue;
+          const texto = normalizar(elLocal.innerText ?? elLocal.textContent ?? "");
+          if (texto.length < 3 || texto.length > 60) continue;
+          if (!tieneAlguno(tokensLocal, texto)) continue;
+          if (tieneAlguno(tokensVisita, texto)) continue; // ya cubierto en estrategia 1
+
+          // Subir al ancestro hasta encontrar uno que también contenga al
+          // visita. Limitar profundidad a 5 niveles.
+          let actual: HTMLElement | null = elLocal;
+          for (let depth = 0; depth < 5 && actual; depth++) {
+            actual = actual.parentElement;
+            if (!actual) break;
+            const textoAncestro = normalizar(
+              actual.innerText ?? actual.textContent ?? "",
+            );
+            if (textoAncestro.length > 600) break; // ancestro demasiado grande
+            if (tieneAlguno(tokensVisita, textoAncestro)) {
+              const ancestroRect = actual.getBoundingClientRect();
+              if (ancestroRect.width < 30 || ancestroRect.height < 20) continue;
+              const dedupKey = textoAncestro.slice(0, 100);
+              if (seenTextos.has(dedupKey)) break;
+              seenTextos.add(dedupKey);
+
+              const href =
+                actual instanceof HTMLAnchorElement
+                  ? actual.href
+                  : (actual.querySelector("a") as HTMLAnchorElement | null)
+                      ?.href ?? null;
+              out.push({
+                texto: textoAncestro.slice(0, 200),
+                href,
+                bbox: ancestroRect.width * ancestroRect.height,
+                index: idx,
+                textoLocal: local,
+                textoVisita: visita,
+              });
+              idx++;
+              break;
+            }
           }
-          return false;
+          if (idx >= 100) break;
         }
+      }
 
-        const out: {
-          texto: string;
-          href: string | null;
-          bbox: number;
-          index: number;
-        }[] = [];
-        const elementos = document.querySelectorAll("a, [role='link'], [data-event-id], [data-match-id], li, article, div");
-        let idx = 0;
-        for (const el of Array.from(elementos)) {
-          if (!(el instanceof HTMLElement)) continue;
-          const rect = el.getBoundingClientRect();
-          if (rect.width < 20 || rect.height < 20) continue;
-          const texto = normalizar(el.innerText ?? el.textContent ?? "");
-          if (texto.length < 6 || texto.length > 600) continue;
-          if (!tieneAlmenosUno(tokensLocal, texto)) continue;
-          if (!tieneAlmenosUno(tokensVisita, texto)) continue;
-          // Tomamos el más pequeño = más específico.
-          const href =
-            el instanceof HTMLAnchorElement
-              ? el.href
-              : (el.querySelector("a") as HTMLAnchorElement | null)?.href ?? null;
-          out.push({
-            texto: texto.slice(0, 200),
-            href,
-            bbox: rect.width * rect.height,
-            index: idx,
-          });
-          idx++;
-          if (idx >= 200) break;
-        }
-        return out;
-      },
-      { local: equipoLocal, visita: equipoVisita },
-    );
-
-  if (candidatos.length === 0) {
-    return null;
-  }
+      return out;
+    },
+    { local: equipoLocal, visita: equipoVisita },
+  );
 
   // Ordenar por bbox ascendente (más específico primero).
   candidatos.sort((a, b) => a.bbox - b.bbox);
-  // Re-ranking server-side por similitud: el primero que tenga score
-  // alto en ambos lados gana.
-  const tokensLocalNorm = normalizar(equipoLocal);
-  const tokensVisitaNorm = normalizar(equipoVisita);
+  return candidatos;
+}
+
+/**
+ * Re-rankea candidatos por similitud Jaro-Winkler server-side y elige el mejor.
+ */
+function elegirMejorCandidato(
+  candidatos: CandidatoEnDOM[],
+  equipoLocal: string,
+  equipoVisita: string,
+): CandidatoEnDOM | null {
+  if (candidatos.length === 0) return null;
   let mejorIdx = 0;
   let mejorScore = 0;
   for (let i = 0; i < Math.min(candidatos.length, 30); i++) {
     const c = candidatos[i]!;
-    const sLocal = similitudEquipos(c.texto, tokensLocalNorm);
-    const sVisita = similitudEquipos(c.texto, tokensVisitaNorm);
+    const sLocal = similitudEquipos(c.texto, equipoLocal);
+    const sVisita = similitudEquipos(c.texto, equipoVisita);
     const score = Math.min(sLocal, sVisita);
     if (score > mejorScore) {
       mejorScore = score;
       mejorIdx = i;
     }
   }
+  // Solo aceptamos si score es razonable (>= umbral fuzzy).
+  if (mejorScore < UMBRAL_FUZZY_DEFAULT * 0.7) {
+    // Score muy bajo — probablemente match falso positivo.
+    return null;
+  }
+  return candidatos[mejorIdx] ?? null;
+}
 
-  const elegido = candidatos[mejorIdx]!;
-  const href = elegido.href ?? undefined;
+/**
+ * Intenta hacer click en un tab/filtro común para que aparezcan más
+ * partidos (Próximos/Upcoming/Todos/Hoy/Mañana). No falla si no encuentra.
+ */
+async function intentarClickearTabComun(
+  page: PlaywrightPage,
+  casa: CasaCuotas,
+): Promise<boolean> {
+  try {
+    const ok = await page.evaluate(() => {
+      function n(s: string): string {
+        return s
+          .normalize("NFD")
+          .replace(/[̀-ͯ]/g, "")
+          .toLowerCase()
+          .trim();
+      }
+      const targets = [
+        "proximos",
+        "próximos",
+        "upcoming",
+        "todos",
+        "all",
+        "hoy",
+        "today",
+        "manana",
+        "mañana",
+        "tomorrow",
+        "pre-match",
+        "prepartido",
+      ];
+      const candidatos = document.querySelectorAll(
+        "button, [role='tab'], [role='button'], a, label, span",
+      );
+      for (const el of Array.from(candidatos)) {
+        if (!(el instanceof HTMLElement)) continue;
+        const rect = el.getBoundingClientRect();
+        if (rect.width < 30 || rect.height < 15) continue;
+        if (rect.width > 250 || rect.height > 80) continue; // tabs son chicos
+        const texto = n(el.innerText ?? el.textContent ?? "");
+        if (texto.length === 0 || texto.length > 25) continue;
+        for (const t of targets) {
+          if (texto === t || texto.startsWith(t + " ") || texto.endsWith(" " + t)) {
+            try {
+              el.click();
+              return true;
+            } catch {
+              return false;
+            }
+          }
+        }
+      }
+      return false;
+    });
+    if (ok) {
+      logger.info(
+        { casa, source: `scrapers:${casa}:playwright:tab` },
+        `${casa}: click en tab "Próximos/Upcoming/Todos" exitoso`,
+      );
+    }
+    return ok;
+  } catch {
+    return false;
+  }
+}
 
-  // Click en el elemento elegido. Si tiene href, podemos navegar directo
-  // — más confiable que click (evita pop-ups, ad layers, etc.).
-  if (href) {
+/**
+ * Búsqueda iterativa del partido: hasta 4 intentos con scroll/tabs entre
+ * ellos. Si encuentra candidato sólido, hace click y valida que la
+ * navegación al detalle ocurrió.
+ */
+async function buscarPartidoIterativo(
+  page: PlaywrightPage,
+  casa: CasaCuotas,
+  equipoLocal: string,
+  equipoVisita: string,
+): Promise<{ clicked: boolean; href?: string } | null> {
+  // Espera adicional de hidratación inicial (post networkidle del flow).
+  // Algunos SPAs (Coolbet/Betano con WAFs) tardan más en renderear.
+  await page.waitForTimeout(2500);
+
+  const maxIntentos = 4;
+  let candidato: CandidatoEnDOM | null = null;
+  for (let intento = 0; intento < maxIntentos; intento++) {
+    const candidatos = await buscarCandidatosEnDOM(
+      page,
+      equipoLocal,
+      equipoVisita,
+    );
+    candidato = elegirMejorCandidato(candidatos, equipoLocal, equipoVisita);
+    logger.info(
+      {
+        casa,
+        intento: intento + 1,
+        candidatosEncontrados: candidatos.length,
+        elegidoTexto: candidato?.texto?.slice(0, 80) ?? null,
+        source: `scrapers:${casa}:playwright:buscar`,
+      },
+      `${casa} intento ${intento + 1}: ${candidatos.length} candidatos · elegido=${candidato ? candidato.texto.slice(0, 60) + "..." : "ninguno"}`,
+    );
+    if (candidato) break;
+
+    // No encontrado. Acción según el intento.
+    if (intento === 0) {
+      // Scroll down medio para forzar lazy-load.
+      try {
+        await page.evaluate(() => window.scrollBy(0, 600));
+      } catch {
+        /* ignore */
+      }
+      await page.waitForTimeout(2000);
+    } else if (intento === 1) {
+      // Click en tab común.
+      const tabClicked = await intentarClickearTabComun(page, casa);
+      if (tabClicked) {
+        await page.waitForTimeout(2500);
+      } else {
+        // Scroll más como fallback.
+        try {
+          await page.evaluate(() => window.scrollBy(0, 800));
+        } catch {
+          /* ignore */
+        }
+        await page.waitForTimeout(2000);
+      }
+    } else if (intento === 2) {
+      // Scroll grande.
+      try {
+        await page.evaluate(() => window.scrollBy(0, 1500));
+      } catch {
+        /* ignore */
+      }
+      await page.waitForTimeout(2500);
+    }
+  }
+
+  if (!candidato) return null;
+
+  // Click + validar navegación.
+  const urlAntes = page.url();
+  const href = candidato.href ?? undefined;
+
+  if (href && href !== urlAntes && href.startsWith("http")) {
+    // Preferir navegación directa por href (más confiable).
     try {
       await page.goto(href, {
         waitUntil: "domcontentloaded",
-        timeout: 25_000,
+        timeout: 30_000,
       });
+      logger.info(
+        { casa, href, source: `scrapers:${casa}:playwright:click` },
+        `${casa}: navegación por href exitosa`,
+      );
       return { clicked: true, href };
     } catch (err) {
       logger.warn(
-        { href, err: (err as Error).message, source: "scrapers:playwright:buscar" },
-        "navegación directa por href falló — fallback a click",
+        {
+          casa,
+          href,
+          err: (err as Error).message,
+          source: `scrapers:${casa}:playwright:click`,
+        },
+        `${casa}: navegación por href falló — fallback a click DOM`,
       );
     }
   }
 
-  // Fallback: click via evaluate.
+  // Fallback: click via evaluate + esperar URL change o selector de detalle.
   try {
     const ok = await page.evaluate((idx: number) => {
-      const elementos = document.querySelectorAll(
-        "a, [role='link'], [data-event-id], [data-match-id], li, article, div",
-      );
+      const SELECTORES =
+        "a, [role='link'], [role='button'], button, [data-event-id], " +
+        "[data-match-id], [data-fixture-id], [class*='event' i], " +
+        "[class*='match' i], [class*='fixture' i], [class*='game' i], " +
+        "li, article";
+      const elementos = document.querySelectorAll(SELECTORES);
       let i = 0;
       for (const el of Array.from(elementos)) {
         if (!(el instanceof HTMLElement)) continue;
         const rect = el.getBoundingClientRect();
-        if (rect.width < 20 || rect.height < 20) continue;
+        if (rect.width < 30 || rect.height < 20) continue;
+        if (rect.width > 1500 || rect.height > 800) continue;
         if (i === idx) {
           el.click();
           return true;
@@ -245,43 +432,92 @@ async function buscarPartidoGenerico(
         i++;
       }
       return false;
-    }, elegido.index);
-    if (!ok) return null;
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
-    return { clicked: true, href: undefined };
+    }, candidato.index);
+    if (!ok) {
+      logger.info(
+        { casa, source: `scrapers:${casa}:playwright:click` },
+        `${casa}: click via evaluate no encontró elemento (DOM cambió?)`,
+      );
+      return null;
+    }
+
+    // Esperar navegación: URL cambia o aparece selector de detalle.
+    const urlCambio = await page
+      .waitForURL((url) => String(url) !== urlAntes, { timeout: 10_000 })
+      .then(() => true)
+      .catch(() => false);
+
+    if (urlCambio) {
+      logger.info(
+        { casa, urlAntes, urlDespues: page.url(), source: `scrapers:${casa}:playwright:click` },
+        `${casa}: URL cambió tras click`,
+      );
+      try {
+        await page.waitForLoadState("domcontentloaded", { timeout: 10_000 });
+      } catch {
+        /* ok */
+      }
+      return { clicked: true };
+    }
+
+    // URL no cambió. Puede ser modal in-page o el click no funcionó.
+    // Esperar igual unos segundos y verificar si aparecieron cuotas (señal
+    // de que el detalle se cargó como modal).
+    await page.waitForTimeout(2500);
+    logger.info(
+      { casa, urlAntes, urlActual: page.url(), source: `scrapers:${casa}:playwright:click` },
+      `${casa}: click no produjo cambio de URL — asumiendo modal in-page`,
+    );
+    return { clicked: true };
   } catch (err) {
     logger.warn(
-      { err: (err as Error).message, source: "scrapers:playwright:buscar" },
-      "click fallback falló",
+      {
+        casa,
+        err: (err as Error).message,
+        source: `scrapers:${casa}:playwright:click`,
+      },
+      `${casa}: click fallback falló`,
     );
     return null;
   }
 }
 
-function normalizar(s: string): string {
-  return s
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9 ]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-// ─── Heurística genérica de extracción de cuotas ───────────────────────
+// ─── Extracción de cuotas mejorada ─────────────────────────────────────
 
 /**
- * Lee las cuotas del DOM via heurística por proximidad a labels conocidos.
- *
- * Para cada mercado (1X2, doble_op, ±2.5, BTTS), busca el bloque que
- * contenga las labels esperadas y extrae los 2-3 números decimales más
- * cercanos. Es defensivo: si no encuentra un mercado, lo deja undefined
- * en lugar de romper.
+ * Extracción mejorada que primero intenta encontrar el bloque de cada
+ * mercado por su header (texto "Resultado", "Doble Oportunidad", etc.) y
+ * después busca las cuotas dentro del bloque. Si el bloque-aware approach
+ * falla, fallback a la heurística de labels global del Lote V.9.
  */
-async function extraerCuotasGenerico(
+async function extraerCuotasIterativo(
   page: PlaywrightPage,
 ): Promise<CuotasCapturadas> {
-  const html = await page.content();
+  // Esperar a que aparezca al menos una cuota visible (decimal en botón
+  // o elemento con clase odd/price/value).
+  try {
+    await page.waitForFunction(
+      () => {
+        const els = document.querySelectorAll(
+          "button, [class*='odd' i], [class*='price' i], [class*='value' i], span, div",
+        );
+        for (const el of Array.from(els)) {
+          if (!(el instanceof HTMLElement)) continue;
+          const txt = (el.innerText ?? el.textContent ?? "").trim();
+          if (/^\s*\d+[.,]\d{1,3}\s*$/.test(txt)) {
+            const v = parseFloat(txt.replace(",", "."));
+            if (Number.isFinite(v) && v > 1 && v < 100) return true;
+          }
+        }
+        return false;
+      },
+      { timeout: 8_000 },
+    );
+  } catch {
+    // No apareció ninguna cuota — la página puede no haber cargado. Igual
+    // intentamos extraer (puede estar en un nodo más profundo).
+  }
+
   const cuotas = await page.evaluate(() => {
     function n(s: string): string {
       return s
@@ -291,61 +527,135 @@ async function extraerCuotasGenerico(
         .replace(/\s+/g, " ")
         .trim();
     }
-    /**
-     * Lee texto de un elemento intentando filtrar children invisibles.
-     * Muchos sportsbook ponen "1.85" en un `<span class="odd-value">`
-     * dentro del botón con label "1".
-     */
     function texto(el: Element): string {
       if (!(el instanceof HTMLElement)) return "";
       return n(el.innerText ?? el.textContent ?? "");
     }
-    /** Convierte string a número decimal positivo o null. */
     function num(s: string | null | undefined): number | null {
       if (!s) return null;
       const m = /(\d+[.,]\d{1,3})/.exec(s);
       if (!m) return null;
       const v = parseFloat(m[1]!.replace(",", "."));
-      if (!Number.isFinite(v) || v <= 1) return null;
+      if (!Number.isFinite(v) || v <= 1 || v > 100) return null;
       return v;
     }
+
     /**
-     * Encuentra el botón/span con texto que matchea el label exacto y
-     * devuelve su cuota (busca número decimal en el mismo elemento o en
-     * su sibling/descendant más cercano).
+     * Encuentra el bloque (section/div) que contiene un mercado dado por
+     * keywords en su header. Retorna el bloque o null.
      */
-    function buscarCuotaPorLabel(
-      labels: string[],
-      hint?: string,
-    ): number | null {
+    function encontrarBloqueMercado(keywords: string[]): HTMLElement | null {
       const candidatos = document.querySelectorAll(
-        "button, [role='button'], .odd, [class*='odd' i], [class*='selection' i], [class*='market' i], div, span, label",
+        "section, article, [class*='market' i], [class*='odds' i], div",
       );
-      const buscarEnHint = hint ? n(hint) : null;
       for (const el of Array.from(candidatos)) {
         if (!(el instanceof HTMLElement)) continue;
+        const rect = el.getBoundingClientRect();
+        if (rect.width < 100 || rect.height < 30) continue;
+        if (rect.width > 1400 || rect.height > 600) continue;
         const txt = texto(el);
-        if (txt.length === 0 || txt.length > 100) continue;
-        if (buscarEnHint) {
-          // Si tenemos un hint de mercado (ej. "doble oportunidad"), el
-          // ancestro debe contenerlo.
-          const ancestroTxt = texto(el.closest("section, div, li, article") ?? el);
-          if (!ancestroTxt.includes(buscarEnHint)) continue;
+        if (txt.length === 0 || txt.length > 800) continue;
+        // El bloque contiene al menos una keyword del mercado en el primer
+        // tercio de su texto (probable header).
+        const primerTercio = txt.slice(0, Math.max(60, Math.floor(txt.length / 3)));
+        for (const kw of keywords) {
+          if (primerTercio.includes(kw)) {
+            // Validar que el bloque también contiene al menos un decimal
+            // (sino es solo header sin cuotas).
+            const tieneCuota = /\d+[.,]\d{1,3}/.test(txt);
+            if (tieneCuota) return el;
+          }
         }
+      }
+      return null;
+    }
+
+    /**
+     * Dentro de un bloque, busca cuotas por label exacto.
+     */
+    function cuotaEnBloque(bloque: HTMLElement, labels: string[]): number | null {
+      const elementos = bloque.querySelectorAll(
+        "button, [role='button'], span, div, label",
+      );
+      for (const el of Array.from(elementos)) {
+        if (!(el instanceof HTMLElement)) continue;
+        const txt = texto(el);
+        if (txt.length === 0 || txt.length > 80) continue;
         for (const label of labels) {
-          const labelN = n(label);
-          if (txt === labelN || txt.startsWith(labelN + " ") || txt.endsWith(" " + labelN)) {
-            // Buscar cuota: en el propio texto, o en sibling, o en descendant.
+          if (
+            txt === label ||
+            txt.startsWith(label + " ") ||
+            txt.endsWith(" " + label) ||
+            txt === label + " " ||
+            txt === " " + label
+          ) {
+            // Match label. Extraer cuota.
             const propio = num(txt);
             if (propio !== null) return propio;
-            const desc = el.querySelector("[class*='odd' i], [class*='value' i], [class*='price' i], span");
+            const desc = el.querySelector(
+              "[class*='odd' i], [class*='value' i], [class*='price' i], span, b, strong",
+            );
             if (desc) {
               const v = num(texto(desc));
               if (v !== null) return v;
             }
-            const sibling = el.nextElementSibling;
-            if (sibling) {
-              const v = num(texto(sibling));
+            // Sibling next.
+            const sib = el.nextElementSibling;
+            if (sib) {
+              const v = num(texto(sib));
+              if (v !== null) return v;
+            }
+            // Parent: a veces la cuota está en otra parte del padre.
+            const padre = el.parentElement;
+            if (padre) {
+              const v = num(texto(padre));
+              if (v !== null && txt !== texto(padre)) return v;
+            }
+          }
+        }
+      }
+      return null;
+    }
+
+    /**
+     * Fallback: heurística genérica del Lote V.9 — busca labels en todo
+     * el documento, filtrando por contexto opcional.
+     */
+    function buscarCuotaGlobal(
+      labels: string[],
+      contextHint?: string,
+    ): number | null {
+      const candidatos = document.querySelectorAll(
+        "button, [role='button'], [class*='odd' i], [class*='selection' i], span, label",
+      );
+      const ctx = contextHint ? n(contextHint) : null;
+      for (const el of Array.from(candidatos)) {
+        if (!(el instanceof HTMLElement)) continue;
+        const txt = texto(el);
+        if (txt.length === 0 || txt.length > 100) continue;
+        if (ctx) {
+          const ancestro = el.closest("section, article, div, li");
+          const ancestroTxt = ancestro ? texto(ancestro) : txt;
+          if (!ancestroTxt.includes(ctx)) continue;
+        }
+        for (const label of labels) {
+          if (
+            txt === label ||
+            txt.startsWith(label + " ") ||
+            txt.endsWith(" " + label)
+          ) {
+            const propio = num(txt);
+            if (propio !== null) return propio;
+            const desc = el.querySelector(
+              "[class*='odd' i], [class*='value' i], [class*='price' i], span",
+            );
+            if (desc) {
+              const v = num(texto(desc));
+              if (v !== null) return v;
+            }
+            const sib = el.nextElementSibling;
+            if (sib) {
+              const v = num(texto(sib));
               if (v !== null) return v;
             }
           }
@@ -354,32 +664,130 @@ async function extraerCuotasGenerico(
       return null;
     }
 
-    // 1X2
-    const local = buscarCuotaPorLabel(["1", "local", "home"]);
-    const empate = buscarCuotaPorLabel(["x", "empate", "draw"]);
-    const visita = buscarCuotaPorLabel(["2", "visitante", "away"]);
-
-    // Doble oportunidad (label "doble oportunidad", "double chance")
-    const x1 = buscarCuotaPorLabel(["1x"], "doble");
-    const x12 = buscarCuotaPorLabel(["12"], "doble");
-    const xx2 = buscarCuotaPorLabel(["x2"], "doble");
-
-    // Más/Menos 2.5
-    const over = buscarCuotaPorLabel([
-      "mas 2.5", "mas 2,5", "+2.5", "+2,5", "over 2.5", "over 2,5",
+    // ── 1X2 ────────────────────────────────────────────────────────
+    let local: number | null = null;
+    let empate: number | null = null;
+    let visita: number | null = null;
+    const bloque1X2 = encontrarBloqueMercado([
+      "resultado",
+      "1x2",
+      "match result",
+      "match winner",
+      "ganador del partido",
+      "ganador",
     ]);
-    const under = buscarCuotaPorLabel([
-      "menos 2.5", "menos 2,5", "-2.5", "-2,5", "under 2.5", "under 2,5",
+    if (bloque1X2) {
+      local = cuotaEnBloque(bloque1X2, ["1", "local", "home", "casa"]);
+      empate = cuotaEnBloque(bloque1X2, ["x", "empate", "draw"]);
+      visita = cuotaEnBloque(bloque1X2, ["2", "visitante", "visita", "away"]);
+    }
+    if (local === null) local = buscarCuotaGlobal(["1", "local", "home"]);
+    if (empate === null) empate = buscarCuotaGlobal(["x", "empate", "draw"]);
+    if (visita === null)
+      visita = buscarCuotaGlobal(["2", "visitante", "visita", "away"]);
+
+    // ── Doble oportunidad ─────────────────────────────────────────
+    let x1: number | null = null;
+    let x12: number | null = null;
+    let xx2: number | null = null;
+    const bloqueDoble = encontrarBloqueMercado([
+      "doble oportunidad",
+      "doble op",
+      "double chance",
+      "doblechance",
     ]);
+    if (bloqueDoble) {
+      x1 = cuotaEnBloque(bloqueDoble, ["1x", "1 o x", "1 x"]);
+      x12 = cuotaEnBloque(bloqueDoble, ["12", "1 o 2", "1 2"]);
+      xx2 = cuotaEnBloque(bloqueDoble, ["x2", "x o 2", "x 2"]);
+    }
+    if (x1 === null) x1 = buscarCuotaGlobal(["1x"], "doble");
+    if (x12 === null) x12 = buscarCuotaGlobal(["12"], "doble");
+    if (xx2 === null) xx2 = buscarCuotaGlobal(["x2"], "doble");
 
-    // BTTS
-    const bttsSi = buscarCuotaPorLabel(["si", "yes"], "ambos");
-    const bttsNo = buscarCuotaPorLabel(["no"], "ambos");
+    // ── Más/Menos 2.5 ────────────────────────────────────────────
+    let over: number | null = null;
+    let under: number | null = null;
+    const bloqueTotal = encontrarBloqueMercado([
+      "goles",
+      "total",
+      "totales",
+      "over/under",
+      "mas/menos",
+      "mas menos",
+      "over under",
+    ]);
+    if (bloqueTotal) {
+      over = cuotaEnBloque(bloqueTotal, [
+        "mas 2.5",
+        "mas 2,5",
+        "+2.5",
+        "+2,5",
+        "over 2.5",
+        "over 2,5",
+        "over",
+      ]);
+      under = cuotaEnBloque(bloqueTotal, [
+        "menos 2.5",
+        "menos 2,5",
+        "-2.5",
+        "-2,5",
+        "under 2.5",
+        "under 2,5",
+        "under",
+      ]);
+    }
+    if (over === null)
+      over = buscarCuotaGlobal([
+        "mas 2.5",
+        "mas 2,5",
+        "+2.5",
+        "+2,5",
+        "over 2.5",
+        "over 2,5",
+      ]);
+    if (under === null)
+      under = buscarCuotaGlobal([
+        "menos 2.5",
+        "menos 2,5",
+        "-2.5",
+        "-2,5",
+        "under 2.5",
+        "under 2,5",
+      ]);
 
-    return { local, empate, visita, x1, x12, xx2, over, under, bttsSi, bttsNo };
+    // ── BTTS ──────────────────────────────────────────────────────
+    let bttsSi: number | null = null;
+    let bttsNo: number | null = null;
+    const bloqueBtts = encontrarBloqueMercado([
+      "ambos anotan",
+      "ambos equipos anotan",
+      "ambos marcan",
+      "btts",
+      "both teams to score",
+      "gg/ng",
+      "gg ng",
+    ]);
+    if (bloqueBtts) {
+      bttsSi = cuotaEnBloque(bloqueBtts, ["si", "yes", "gg"]);
+      bttsNo = cuotaEnBloque(bloqueBtts, ["no", "ng"]);
+    }
+    if (bttsSi === null) bttsSi = buscarCuotaGlobal(["si", "yes"], "ambos");
+    if (bttsNo === null) bttsNo = buscarCuotaGlobal(["no"], "ambos");
+
+    return {
+      local,
+      empate,
+      visita,
+      x1,
+      x12,
+      xx2,
+      over,
+      under,
+      bttsSi,
+      bttsNo,
+    };
   });
-
-  void html; // por si necesitamos debug downstream
 
   const out: CuotasCapturadas = {};
   if (
@@ -393,11 +801,7 @@ async function extraerCuotasGenerico(
       visita: cuotas.visita,
     };
   }
-  if (
-    cuotas.x1 !== null &&
-    cuotas.x12 !== null &&
-    cuotas.xx2 !== null
-  ) {
+  if (cuotas.x1 !== null && cuotas.x12 !== null && cuotas.xx2 !== null) {
     out.doble_op = { x1: cuotas.x1, x12: cuotas.x12, xx2: cuotas.xx2 };
   }
   if (cuotas.over !== null && cuotas.under !== null) {
@@ -415,22 +819,9 @@ export interface PartidoParaScraping {
   liga: string;
   equipoLocal: string;
   equipoVisita: string;
-  /**
-   * URL directa del partido en la casa, si la conocemos via vinculación
-   * manual (admin pegó URL desde EventIdExterno). Si presente, skipeamos
-   * el listado y vamos directo. Default null.
-   */
   urlPartidoEnCasa?: string | null;
 }
 
-/**
- * Captura las cuotas de UN partido en UNA casa via Playwright. Maneja
- * todo el flow: open page → listado → buscar → click → detalle → leer.
- *
- * Retorna `null` si no encontró el partido (no es una falla, es "esta
- * casa no tiene este partido" — ej. liga no cubierta). Lanza Error en
- * caso de falla técnica (browser no disponible, page crashed, timeout).
- */
 export async function capturarPartidoConPlaywright(
   casa: CasaCuotas,
   partido: PartidoParaScraping,
@@ -440,7 +831,6 @@ export async function capturarPartidoConPlaywright(
   const timeoutTotalMs = config.timeoutTotalMs ?? TIMEOUT_TOTAL_DEFAULT_MS;
   const timeoutListadoMs = config.timeoutListadoMs ?? TIMEOUT_LISTADO_DEFAULT_MS;
 
-  // Decidir URL inicial: directa (si vinculación manual) o listado de liga.
   let urlInicial: string;
   let viaListado: boolean;
   if (partido.urlPartidoEnCasa) {
@@ -466,12 +856,12 @@ export async function capturarPartidoConPlaywright(
   const page = await crearPagePlaywright();
   if (!page) {
     throw new Error(
-      `${casa}: Playwright no disponible (browser no se pudo lanzar). Revisar PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH y que playwright-chromium esté instalado.`,
+      `${casa}: Playwright no disponible (browser no se pudo lanzar).`,
     );
   }
 
   try {
-    // ── Paso 1: navegar a la URL inicial ──
+    // ── Paso 1: navegar a URL inicial ──
     try {
       await page.goto(urlInicial, {
         waitUntil: "domcontentloaded",
@@ -483,35 +873,36 @@ export async function capturarPartidoConPlaywright(
       );
     }
 
-    // Ventana de hidratación SPA. Si la casa declara `selectorListadoListo`,
-    // esperamos eso. Si no, networkidle con timeout corto.
+    // ── Paso 2: esperar hidratación ──
     if (config.selectorListadoListo) {
       try {
         await page.waitForSelector(config.selectorListadoListo, {
           timeout: 10_000,
         });
       } catch {
-        // No es fatal — la heurística de búsqueda igual va a funcionar
-        // si el listado terminó de cargar antes del selector.
+        /* ok */
       }
     } else {
       try {
-        await page.waitForLoadState("networkidle", { timeout: 10_000 });
+        await page.waitForLoadState("networkidle", { timeout: 8_000 });
       } catch {
-        // OK, networkidle puede no llegar nunca en sitios con polling.
+        /* networkidle puede no llegar */
       }
     }
 
-    // ── Paso 2: si fuimos al listado, buscar partido y click ──
+    // ── Paso 3-4: buscar partido + click + validar navegación ──
     if (viaListado) {
-      const buscar = config.buscarPartidoEnListado ?? buscarPartidoGenerico;
-      const resultado = await buscar(
-        page,
-        partido.equipoLocal,
-        partido.equipoVisita,
-      );
+      const buscar = config.buscarPartidoEnListado ?? null;
+      const resultado = buscar
+        ? await buscar(page, partido.equipoLocal, partido.equipoVisita)
+        : await buscarPartidoIterativo(
+            page,
+            casa,
+            partido.equipoLocal,
+            partido.equipoVisita,
+          );
       if (!resultado || !resultado.clicked) {
-        const msEjecutado = Date.now() - tInicio;
+        const ms = Date.now() - tInicio;
         logger.info(
           {
             casa,
@@ -519,50 +910,40 @@ export async function capturarPartidoConPlaywright(
             equipoLocal: partido.equipoLocal,
             equipoVisita: partido.equipoVisita,
             urlListado: urlInicial,
-            ms: msEjecutado,
+            ms,
             source: `scrapers:${casa}:playwright`,
           },
-          `${casa}: partido no encontrado en listado (${msEjecutado}ms) — pendiente vinculación manual`,
+          `${casa}: partido no encontrado en listado tras 4 intentos (${ms}ms)`,
         );
         return null;
       }
 
-      // Espera a que el detalle del partido cargue.
+      // Espera a que cargue detalle.
       try {
-        await page.waitForLoadState("networkidle", { timeout: 15_000 });
+        await page.waitForLoadState("networkidle", { timeout: 10_000 });
       } catch {
-        // Continuamos igual.
+        /* ok */
       }
-      // Pequeña espera para que las cuotas terminen de hidratar.
-      await page.waitForTimeout(1500);
+      await page.waitForTimeout(2000);
     }
 
-    // ── Paso 3: extraer cuotas ──
-    const extraer = config.extraerCuotas ?? extraerCuotasGenerico;
+    // ── Paso 5-6: extraer cuotas ──
+    const extraer = config.extraerCuotas ?? extraerCuotasIterativo;
     const cuotas = await extraer(page);
 
     if (Object.keys(cuotas).length === 0) {
-      // No es CapturaSinDatosError — probablemente la página cargó pero
-      // el extractor no reconoció ningún mercado. Lanzamos para que el
-      // worker lo refleje como ERROR + admin lo vea.
-      const msEjecutado = Date.now() - tInicio;
+      const ms = Date.now() - tInicio;
       throw new Error(
-        `${casa}: cargó la página pero no se extrajo ningún mercado (${msEjecutado}ms, url=${page.url()})`,
+        `${casa}: cargó la página pero no se extrajo ningún mercado (${ms}ms, url=${page.url()})`,
       );
     }
 
     const fuente = { url: page.url(), capturadoEn: new Date() };
+    const ms = Date.now() - tInicio;
 
-    // Verificar que no excedimos el timeout total.
-    const msEjecutado = Date.now() - tInicio;
-    if (msEjecutado > timeoutTotalMs) {
+    if (ms > timeoutTotalMs) {
       logger.warn(
-        {
-          casa,
-          ms: msEjecutado,
-          timeoutTotalMs,
-          source: `scrapers:${casa}:playwright`,
-        },
+        { casa, ms, timeoutTotalMs, source: `scrapers:${casa}:playwright` },
         `${casa}: captura completada pero excedió timeoutTotalMs`,
       );
     }
@@ -571,21 +952,17 @@ export async function capturarPartidoConPlaywright(
       {
         casa,
         liga: partido.liga,
-        ms: msEjecutado,
+        ms,
         mercadosCapturados: Object.keys(cuotas),
         url: fuente.url,
         source: `scrapers:${casa}:playwright`,
       },
-      `${casa} playwright OK (${msEjecutado}ms · ${Object.keys(cuotas).length} mercados)`,
+      `${casa} playwright OK (${ms}ms · ${Object.keys(cuotas).length} mercados)`,
     );
 
     return {
       cuotas,
       fuente,
-      // Equipos que vimos en el sitio: no los extraemos del DOM por ahora
-      // (heurística genérica no lo soporta sin ruido). Si una casa quiere
-      // alimentar AliasEquipo vía V.7, sobrescribe `extraerCuotas` y
-      // adjunta `equipos` al return.
     };
   } finally {
     void liberarPagePlaywright(page);
@@ -593,10 +970,7 @@ export async function capturarPartidoConPlaywright(
 }
 
 /**
- * Helper de conveniencia para los 7 scrapers: dado un Partido del modelo
- * Prisma, lo adapta al shape `PartidoParaScraping` y dispara la captura
- * con la config registrada para la casa. Cada scraper concreto implementa
- * `capturarConPlaywright` con una sola línea: `capturarPartidoPorCasa(...)`.
+ * Helper de conveniencia para los 7 scrapers.
  */
 export async function capturarPartidoPorCasa(
   casa: CasaCuotas,
@@ -617,11 +991,5 @@ export async function capturarPartidoPorCasa(
   );
 }
 
-// Re-exports de utilities para que scrapers que sobrescriban funciones
-// puedan reusar la heurística base.
-export { buscarPartidoGenerico, extraerCuotasGenerico };
-
-// CapturaSinDatosError re-export para que scrapers concretos puedan
-// lanzarlo cuando la casa no tiene el partido publicado todavía (sin
-// penalizar salud).
+// CapturaSinDatosError re-export.
 export { CapturaSinDatosError };
