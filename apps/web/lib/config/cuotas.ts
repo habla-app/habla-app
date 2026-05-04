@@ -60,8 +60,16 @@ export const CUOTAS_CONFIG = {
   BLOQUEADO_TRAS_DIAS_ERROR: 3,
 
   // ---- BullMQ ----
-  /** Workers procesando en paralelo. 7 = 1 por casa. */
-  CONCURRENCIA_BULLMQ: 7,
+  /**
+   * Workers procesando en paralelo.
+   *
+   * Lote V.9: bajado de 7 a 3 porque cada captura ahora usa Playwright
+   * (browser singleton compartido pero N pages simultáneas). Cada page
+   * consume ~30-50MB durante la captura. 3 paralelas = ~150MB extra del
+   * browser warm (~150MB) → ~300MB total durante una corrida del cron.
+   * Manejable en Railway 1GB. Si subimos a 7, riesgo de OOM.
+   */
+  CONCURRENCIA_BULLMQ: 3,
   /** Rate limit por worker (ms entre jobs). Reduce risk de IP bans. */
   RATE_LIMIT_POR_WORKER_MS: 1500,
   /** Retención en cola de jobs completados (count). */

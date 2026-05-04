@@ -28,7 +28,12 @@ import {
   recalcularEstadoCapturaPartido,
 } from "./cuotas-persistencia";
 import { aprenderAlias } from "./scrapers/alias-equipo";
-import type { CasaCuotas, CuotasJobData, Scraper } from "./scrapers/types";
+import type {
+  CasaCuotas,
+  CuotasJobData,
+  ResultadoScraper,
+  Scraper,
+} from "./scrapers/types";
 import { CapturaSinDatosError } from "./scrapers/types";
 
 interface BullMQWorkerLike {
@@ -94,7 +99,49 @@ export async function procesarJobCaptura(job: BullMQJobLike): Promise<void> {
   }
 
   try {
-    const resultado = await scraper.capturarCuotas(eventIdExterno);
+    // Lote V.9: preferimos `capturarConPlaywright` si el scraper la
+    // implementa. El método nuevo recibe el partido completo y maneja
+    // discovery + captura en una sola pasada via browser headless.
+    // El método HTTP queda como fallback histórico para scrapers que
+    // todavía no migraron (en V.9 todos migran, pero el fallback se
+    // queda por si algún deploy sin Playwright operativo).
+    let resultado: ResultadoScraper;
+    if (scraper.capturarConPlaywright) {
+      const partidoEntidad = await prisma.partido.findUnique({
+        where: { id: partidoId },
+      });
+      if (!partidoEntidad) {
+        throw new Error(`partido ${partidoId} no existe`);
+      }
+      // Si tenemos eventIdExterno guardado y parece URL, lo pasamos como
+      // hint para que el scraper navegue directo (vinculación manual).
+      const urlHint =
+        eventIdExterno && /^https?:\/\//i.test(eventIdExterno)
+          ? eventIdExterno
+          : null;
+      const r = await scraper.capturarConPlaywright(partidoEntidad, urlHint);
+      if (r === null) {
+        // Casa no cubre la liga / partido no aparece en listado.
+        // No es ERROR técnico — registramos como SIN_DATOS para que el
+        // próximo ciclo reintente sin penalizar salud.
+        await persistirSinDatos({
+          partidoId,
+          casa,
+          eventIdExterno,
+          mensaje: "casa no cubre la liga o partido no encontrado en listado",
+        });
+        await recalcularEstadoCapturaPartido(partidoId);
+        logger.info(
+          { partidoId, casa, source: "cuotas-worker:playwright" },
+          `${casa} playwright: sin match (liga no mapeada o partido no listado)`,
+        );
+        return;
+      }
+      resultado = r;
+    } else {
+      resultado = await scraper.capturarCuotas(eventIdExterno);
+    }
+
     const { alertasCreadas } = await persistirCuotas({
       partidoId,
       casa,
