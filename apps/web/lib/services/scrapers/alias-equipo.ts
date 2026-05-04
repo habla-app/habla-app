@@ -8,7 +8,7 @@
 // de api-football), normalizamos texto y consultamos la tabla
 // `AliasEquipo` del Lote V.1.
 //
-// Estrategia de match:
+// Estrategia de match (Lote V.7 — actualizada):
 //   1. Normalización: NFD + lowercase + trim + colapsar espacios.
 //   2. Match directo normalizado contra el canónico del partido. Si pega,
 //      no consultamos BD (caso optimista — la mayoría de casas usa el
@@ -16,15 +16,24 @@
 //   3. Si no pega directo, consultamos `AliasEquipo` con
 //      `OR: [{ alias, casa }, { alias, casa: null }]` (la fila específica
 //      para la casa gana sobre la global, en caso de duplicados).
+//   4. Si tampoco pega vía AliasEquipo, fallback a similitud fuzzy
+//      (Jaro-Winkler, umbral 0.88 default). Si matchea, write-back a
+//      AliasEquipo fire-and-forget para que la próxima vez sea exact-hit.
 //
-// La tabla `AliasEquipo` no garantiza completitud — el primer mes en
-// producción habrá nombres no resueltos. La sección 9.2 del plan habilita
-// el fallback manual: el admin pega la URL del partido y bypassea el
-// matching automático. La tabla crece con cada vinculación manual que
-// expone un alias nuevo.
+// La tabla `AliasEquipo` ya no depende de seed manual: se autoalimenta vía
+// el paso 4 (fuzzy en discovery) y vía `aprenderAlias()` invocado desde el
+// worker tras capturas exitosas que exponen los nombres del candidato
+// (Lote V.7). El primer mes en producción debería resolver >90% de casos
+// sin intervención del admin.
 
 import { prisma } from "@habla/db";
+import { logger } from "../logger";
 import type { CasaCuotas } from "./types";
+import {
+  similitudEquipos,
+  UMBRAL_FUZZY_DEFAULT,
+  UMBRAL_FUZZY_BAJA_CONFIANZA,
+} from "./fuzzy-match";
 
 /**
  * Normaliza un nombre de equipo a su forma canónica de comparación.
@@ -73,13 +82,81 @@ export async function resolverNombreCanonico(
 }
 
 /**
+ * Persiste un alias en `AliasEquipo` (Lote V.7 — auto-aprendizaje).
+ *
+ * Idempotente: el unique `(alias, casa)` evita duplicados; segundo
+ * llamado actualiza `equipoCanonicoNombre` si cambió. Fire-and-forget en
+ * los callers — no re-lanza errores; loggea y sigue.
+ *
+ * Reglas:
+ *   - Normaliza el alias antes de persistir (single source of truth para
+ *     futuros lookups).
+ *   - Si el alias normalizado coincide con el canónico normalizado, NO
+ *     persiste (no aporta información nueva).
+ *   - Persiste con `casa = casa` (no global) — evita que un alias
+ *     aprendido de Coolbet contamine Stake.
+ */
+export async function aprenderAlias(
+  aliasRaw: string,
+  casa: CasaCuotas,
+  canonico: string,
+): Promise<void> {
+  const aliasNorm = normalizarNombreEquipo(aliasRaw);
+  const canonNorm = normalizarNombreEquipo(canonico);
+  if (!aliasNorm || !canonNorm) return;
+  if (aliasNorm === canonNorm) return;
+
+  try {
+    await prisma.aliasEquipo.upsert({
+      where: { alias_casa: { alias: aliasNorm, casa } },
+      create: {
+        alias: aliasNorm,
+        casa,
+        equipoCanonicoNombre: canonico,
+      },
+      update: {
+        equipoCanonicoNombre: canonico,
+      },
+    });
+    logger.info(
+      {
+        alias: aliasNorm,
+        casa,
+        canonico,
+        source: "alias-equipo:aprender",
+      },
+      "alias aprendido y persistido",
+    );
+  } catch (err) {
+    logger.warn(
+      {
+        alias: aliasNorm,
+        casa,
+        canonico,
+        err: (err as Error)?.message,
+        source: "alias-equipo:aprender",
+      },
+      "aprenderAlias — upsert falló (no crítico)",
+    );
+  }
+}
+
+/**
  * Compara los nombres de equipos del candidato (los que devolvió la API
  * de la casa) contra el `Partido` canónico. Devuelve true si los DOS
  * matchean — el orden local/visita debe ser el mismo (las casas peruanas
  * respetan home/away consistentemente con api-football, validado en POC).
  *
- * Hace primero el match directo normalizado para ahorrar DB. Si no pega,
- * resuelve aliases.
+ * Estrategia (Lote V.7):
+ *   1. Match directo normalizado. Si pega → true (sin BD).
+ *   2. Resolver via AliasEquipo. Si pega → true.
+ *   3. Fuzzy Jaro-Winkler con umbral configurable. Si pega → true +
+ *      write-back fire-and-forget a AliasEquipo (auto-aprendizaje).
+ *   4. Si nada pega → false.
+ *
+ * El write-back del paso 3 es crítico: evita que el mismo equipo dispare
+ * fuzzy una y otra vez. Tras la primera resolución, el mismo nombre pega
+ * en el paso 2 directamente.
  */
 export async function matchearEquiposContraPartido(
   partido: { equipoLocal: string; equipoVisita: string },
@@ -92,11 +169,12 @@ export async function matchearEquiposContraPartido(
   const candLocal = normalizarNombreEquipo(candidato.local);
   const candVisita = normalizarNombreEquipo(candidato.visita);
 
+  // Paso 1 — match directo normalizado.
   if (candLocal === targetLocal && candVisita === targetVisita) {
     return true;
   }
 
-  // Resolver aliases en paralelo.
+  // Paso 2 — resolver aliases en paralelo.
   const [aliasLocal, aliasVisita] = await Promise.all([
     resolverNombreCanonico(candidato.local, casa),
     resolverNombreCanonico(candidato.visita, casa),
@@ -109,7 +187,49 @@ export async function matchearEquiposContraPartido(
     ? normalizarNombreEquipo(aliasVisita)
     : candVisita;
 
-  return resueltoLocal === targetLocal && resueltoVisita === targetVisita;
+  if (resueltoLocal === targetLocal && resueltoVisita === targetVisita) {
+    return true;
+  }
+
+  // Paso 3 — fallback fuzzy Jaro-Winkler. Solo aplica si AMBOS lados
+  // pegan por encima del umbral (no aceptamos un equipo exacto + un equipo
+  // dudoso, sería ambiguo). El write-back se hace solo si el alias real
+  // difiere del canónico.
+  const scoreLocal = similitudEquipos(candidato.local, partido.equipoLocal);
+  const scoreVisita = similitudEquipos(candidato.visita, partido.equipoVisita);
+  const fuzzyOk =
+    scoreLocal >= UMBRAL_FUZZY_DEFAULT && scoreVisita >= UMBRAL_FUZZY_DEFAULT;
+
+  if (!fuzzyOk) return false;
+
+  // Log de baja confianza para revisión manual durante las primeras
+  // semanas. Encima del umbral de baja confianza, no loggeamos para
+  // mantener el ruido bajo.
+  if (
+    scoreLocal < UMBRAL_FUZZY_BAJA_CONFIANZA ||
+    scoreVisita < UMBRAL_FUZZY_BAJA_CONFIANZA
+  ) {
+    logger.info(
+      {
+        casa,
+        partidoCanonico: `${partido.equipoLocal} vs ${partido.equipoVisita}`,
+        candidatoCasa: `${candidato.local} vs ${candidato.visita}`,
+        scoreLocal: Number(scoreLocal.toFixed(3)),
+        scoreVisita: Number(scoreVisita.toFixed(3)),
+        umbral: UMBRAL_FUZZY_DEFAULT,
+        source: "alias-equipo:fuzzy",
+      },
+      "match fuzzy con baja confianza — revisar si es falso positivo",
+    );
+  }
+
+  // Auto-aprendizaje: persistir aliases para que la próxima vuelta pegue
+  // por exact-match. Fire-and-forget — un fallo de upsert no debe
+  // contaminar el discovery en curso.
+  void aprenderAlias(candidato.local, casa, partido.equipoLocal);
+  void aprenderAlias(candidato.visita, casa, partido.equipoVisita);
+
+  return true;
 }
 
 /**
