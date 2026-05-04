@@ -87,6 +87,53 @@ export function getCuotasQueue(): BullMQQueueLike | null {
     });
     connectionInstance = connection;
 
+    // Lote V.10.4: listeners explícitos para diagnosticar conexión que
+    // se desconecta silenciosamente. Si el worker no procesa jobs y los
+    // listeners de BullMQ no disparan, suele ser que ioredis se
+    // reconectó silencioso y el worker dejó de pollar.
+    const conn = connection as {
+      on?: (event: string, listener: (...args: unknown[]) => void) => void;
+    };
+    if (typeof conn.on === "function") {
+      conn.on("connect", () => {
+        logger.info(
+          { source: "cuotas-cola:redis" },
+          "ioredis (cuotas) connect · TCP establecido",
+        );
+      });
+      conn.on("ready", () => {
+        logger.info(
+          { source: "cuotas-cola:redis" },
+          "ioredis (cuotas) ready · listo para comandos",
+        );
+      });
+      conn.on("error", (err: unknown) => {
+        const e = err as Error | undefined;
+        logger.error(
+          { err: e?.message, source: "cuotas-cola:redis" },
+          `ioredis (cuotas) error · ${e?.message ?? "?"}`,
+        );
+      });
+      conn.on("close", () => {
+        logger.warn(
+          { source: "cuotas-cola:redis" },
+          "ioredis (cuotas) close · conexión cerrada (reconnect debería disparar)",
+        );
+      });
+      conn.on("reconnecting", (delay: unknown) => {
+        logger.warn(
+          { delay, source: "cuotas-cola:redis" },
+          `ioredis (cuotas) reconnecting · intentando reconectar en ${delay}ms`,
+        );
+      });
+      conn.on("end", () => {
+        logger.error(
+          { source: "cuotas-cola:redis" },
+          "ioredis (cuotas) end · conexión terminada definitivamente (worker NO procesa más jobs)",
+        );
+      });
+    }
+
     const bullmqMod: { Queue: new (name: string, opts: object) => BullMQQueueLike } =
       require("bullmq");
 
