@@ -368,46 +368,154 @@ async function fetchMatchesDelTorneo(
   return extraerMatches(payload);
 }
 
+/**
+ * Lote V.8.1: probar si `matches-of-the-day` sin filtro `tournament_id`
+ * devuelve TODOS los partidos del día. Usado solo cuando la liga del
+ * partido no está en `TOURNAMENT_ID_POR_LIGA` — sirve para diagnosticar
+ * (V.8.1) y eventualmente para fallback productivo (V.8.2).
+ */
+async function fetchMatchesSinFiltro(): Promise<TeApuestoMatchCrudo[]> {
+  const url = ENDPOINT_BASE;
+  const payload = await httpFetchJson<unknown>(url, {
+    source: "scrapers:te-apuesto:sin-filtro",
+    headers: {
+      Origin: "https://www.teapuesto.pe",
+      Referer: "https://www.teapuesto.pe/",
+    },
+  });
+  return extraerMatches(payload);
+}
+
+/**
+ * Lote V.8.1: helper compartido para matchear candidatos contra un
+ * `Partido` canónico. Replica la lógica de `buscarEventIdExterno` para
+ * que el path "sin filtro" pueda reutilizarla.
+ */
+async function matchearCandidatosTeApuesto(
+  partido: PartidoSlim,
+  candidatos: TeApuestoMatchCrudo[],
+): Promise<string | null> {
+  let dentroVentana = 0;
+  let matched = 0;
+  let match: TeApuestoMatchCrudo | null = null;
+  for (const cand of candidatos) {
+    if (!fechasCercanas(cand.kickoff, partido.fechaInicio, VENTANA_MATCH_MIN)) {
+      continue;
+    }
+    dentroVentana++;
+    const ok = await matchearEquiposContraPartido(
+      partido,
+      { local: cand.homeName, visita: cand.awayName },
+      "te_apuesto",
+    );
+    if (ok) {
+      matched++;
+      if (match) {
+        logger.info(
+          { partidoId: partido.id, source: "scrapers:te-apuesto:sin-filtro" },
+          "te-apuesto discovery sin filtro: ambiguo — varios matches",
+        );
+        return null;
+      }
+      match = cand;
+    }
+  }
+  logger.info(
+    {
+      partidoId: partido.id,
+      liga: partido.liga,
+      candidatos: candidatos.length,
+      dentroVentana,
+      matched,
+      source: "scrapers:te-apuesto:sin-filtro",
+    },
+    `te-apuesto discovery sin filtro: ${candidatos.length} candidatos · ${dentroVentana} en ventana · ${matched} matchearon equipos`,
+  );
+  return match?.id ?? null;
+}
+
 const teApuestoScraper: Scraper = {
   nombre: "te_apuesto",
 
   async buscarEventIdExterno(partido: PartidoSlim): Promise<string | null> {
     const torneoId = tournamentIdParaLiga(partido.liga);
     if (torneoId === null) {
-      logger.debug(
-        { partidoId: partido.id, liga: partido.liga, source: "scrapers:te-apuesto" },
-        "discovery omitido — liga sin tournament_id mapeado",
+      // Lote V.8.1: subido a INFO + intento fallback "todos los matches del
+      // día sin filtro" para validar empíricamente si el endpoint soporta
+      // discovery agnóstico de liga (V.8.2 decide si lo dejamos productivo).
+      logger.info(
+        {
+          partidoId: partido.id,
+          liga: partido.liga,
+          source: "scrapers:te-apuesto",
+        },
+        "te-apuesto discovery: liga sin tournament_id mapeado, intentando fetch sin filtro",
       );
-      return null;
+      let fallbackCandidatos: TeApuestoMatchCrudo[] = [];
+      try {
+        fallbackCandidatos = await fetchMatchesSinFiltro();
+        logger.info(
+          {
+            partidoId: partido.id,
+            liga: partido.liga,
+            candidatosSinFiltro: fallbackCandidatos.length,
+            source: "scrapers:te-apuesto",
+          },
+          `te-apuesto discovery sin filtro: ${fallbackCandidatos.length} candidatos`,
+        );
+      } catch (err) {
+        logger.info(
+          {
+            partidoId: partido.id,
+            liga: partido.liga,
+            err: (err as Error).message,
+            source: "scrapers:te-apuesto",
+          },
+          "te-apuesto discovery sin filtro: fetch falló",
+        );
+        return null;
+      }
+      return await matchearCandidatosTeApuesto(partido, fallbackCandidatos);
     }
 
     let candidatos: TeApuestoMatchCrudo[];
     try {
       candidatos = await fetchMatchesDelTorneo(torneoId);
     } catch (err) {
-      logger.warn(
-        { err: (err as Error).message, partidoId: partido.id, source: "scrapers:te-apuesto" },
-        "discovery — fetch falló",
+      // Lote V.8.1: subido de WARN a INFO con error completo + flag para
+      // que el log de Railway sea siempre visible.
+      logger.info(
+        {
+          partidoId: partido.id,
+          torneoId,
+          err: (err as Error).message,
+          source: "scrapers:te-apuesto",
+        },
+        `te-apuesto discovery: fetch del torneo ${torneoId} falló — ${(err as Error).message}`,
       );
       return null;
     }
 
+    // Lote V.8.1: log de contadores de candidatos / ventana / matched.
+    let dentroVentana = 0;
+    let matched = 0;
     let match: TeApuestoMatchCrudo | null = null;
     for (const cand of candidatos) {
       if (!fechasCercanas(cand.kickoff, partido.fechaInicio, VENTANA_MATCH_MIN)) {
         continue;
       }
+      dentroVentana++;
       const ok = await matchearEquiposContraPartido(
         partido,
         { local: cand.homeName, visita: cand.awayName },
         "te_apuesto",
       );
       if (ok) {
+        matched++;
         if (match) {
-          // Match ambiguo (>1 candidato) → no resolver, dejar al manual.
-          logger.warn(
+          logger.info(
             { partidoId: partido.id, source: "scrapers:te-apuesto" },
-            "discovery ambiguo — varios matches por equipos+fecha",
+            "te-apuesto discovery ambiguo — varios matches por equipos+fecha",
           );
           return null;
         }
@@ -415,8 +523,21 @@ const teApuestoScraper: Scraper = {
       }
     }
 
+    logger.info(
+      {
+        partidoId: partido.id,
+        liga: partido.liga,
+        torneoId,
+        candidatos: candidatos.length,
+        dentroVentana,
+        matched,
+        source: "scrapers:te-apuesto",
+      },
+      `te-apuesto discovery: ${candidatos.length} candidatos · ${dentroVentana} en ventana · ${matched} matchearon equipos`,
+    );
+
     if (!match) {
-      logger.debug(
+      logger.info(
         {
           partidoId: partido.id,
           equipoLocal: partido.equipoLocal,
