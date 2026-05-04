@@ -335,17 +335,24 @@ export async function obtenerBrowserPlaywright(): Promise<BrowserHandle | null> 
 
 /**
  * Tipos de recurso que NO necesitamos para scraping de cuotas. Los
- * bloqueamos vía `page.route` para reducir bandwidth + memoria ~70%.
+ * bloqueamos vía `page.route` para reducir bandwidth + memoria.
  *
- * Mantenemos `document` (HTML), `script` (SPA necesita JS), `xhr`/`fetch`
- * (las cuotas vienen vía API interna del frontend) y `websocket` (Stake
- * actualiza odds via WS).
+ * Mantenemos `document` (HTML), `script` (SPA necesita JS), `stylesheet`
+ * (Lote V.10.7: los SPAs modernos usan CSS para layout/display crítico
+ * — sin CSS los partidos no se rendean correctamente o quedan con bbox
+ * 0×0 que el matcher filtra), `xhr`/`fetch` (las cuotas vienen vía API
+ * interna del frontend) y `websocket` (Stake actualiza odds via WS).
+ *
+ * Lote V.10.7: removido `stylesheet` del bloqueo. El smoke V.10.6 mostró
+ * que las 7 casas devolvían 0 candidatos uniformemente — síntoma típico
+ * de CSS faltante que rompe layout/visibility de los SPAs. Conservamos
+ * el bloqueo de imágenes/fuentes/media que es el grueso del bandwidth
+ * sin afectar render.
  */
 const ASSET_TYPES_BLOQUEADOS = new Set([
   "image",
   "media",
   "font",
-  "stylesheet",
   "imageset",
 ]);
 
