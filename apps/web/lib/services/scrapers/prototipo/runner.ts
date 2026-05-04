@@ -21,6 +21,7 @@ import {
   extraerCuotasStake,
   type CandidatoElegido,
   type CandidatoListado,
+  type DiagnosticoListado,
   type ResultadoExtraccion,
 } from "./stake-extractor";
 
@@ -49,6 +50,7 @@ export interface ResultadoPrototipo {
       muestraCandidatos: CandidatoListado[];
       candidatoElegido: CandidatoElegido | null;
       motivoNoElegido?: string;
+      diagnostico?: DiagnosticoListado;
     };
     detalle?: {
       url: string;
@@ -58,8 +60,10 @@ export interface ResultadoPrototipo {
   };
   advertencias: string[];
   errores: string[];
-  /** Screenshot del detalle del partido en base64 PNG (si pudo generarse). */
-  screenshotBase64?: string | null;
+  /** Screenshot del listado en base64 PNG (siempre se intenta capturar). */
+  screenshotListadoBase64?: string | null;
+  /** Screenshot del detalle del partido en base64 PNG (si llegamos al detalle). */
+  screenshotDetalleBase64?: string | null;
 }
 
 export async function ejecutarPrototipoStake(
@@ -70,7 +74,8 @@ export async function ejecutarPrototipoStake(
   const errores: string[] = [];
   const tiempos: ResultadoPrototipo["tiempos"] = { total: 0 };
   const etapas: ResultadoPrototipo["etapas"] = {};
-  let screenshotBase64: string | null = null;
+  let screenshotListadoBase64: string | null = null;
+  let screenshotDetalleBase64: string | null = null;
 
   const page = await crearPagePlaywright();
   if (!page) {
@@ -104,7 +109,20 @@ export async function ejecutarPrototipoStake(
       muestraCandidatos: busqueda.todosLosCandidatos.slice(0, 10),
       candidatoElegido: busqueda.candidatoElegido,
       motivoNoElegido: busqueda.motivoNoElegido,
+      diagnostico: busqueda.diagnostico,
     };
+
+    // Screenshot del listado SIEMPRE — independiente del éxito del match.
+    // Permite ver qué cargó realmente Stake en el browser (página real,
+    // splash, captcha, geo-block, etc).
+    try {
+      const buf = await page.screenshot({ fullPage: false, type: "png" });
+      screenshotListadoBase64 = buf.toString("base64");
+    } catch (err) {
+      advertencias.push(
+        `screenshot del listado falló: ${(err as Error).message}`,
+      );
+    }
 
     if (!busqueda.candidatoElegido) {
       errores.push(
@@ -119,6 +137,7 @@ export async function ejecutarPrototipoStake(
         etapas,
         advertencias,
         errores,
+        screenshotListadoBase64,
       };
     }
 
@@ -135,6 +154,7 @@ export async function ejecutarPrototipoStake(
         etapas,
         advertencias,
         errores,
+        screenshotListadoBase64,
       };
     }
 
@@ -158,6 +178,7 @@ export async function ejecutarPrototipoStake(
         etapas,
         advertencias,
         errores,
+        screenshotListadoBase64,
       };
     }
     tiempos.navegacionDetalle = Date.now() - t2;
@@ -196,9 +217,11 @@ export async function ejecutarPrototipoStake(
     // ── Paso 4: screenshot del detalle (visible viewport) ──
     try {
       const buf = await page.screenshot({ fullPage: false, type: "png" });
-      screenshotBase64 = buf.toString("base64");
+      screenshotDetalleBase64 = buf.toString("base64");
     } catch (err) {
-      advertencias.push(`screenshot falló: ${(err as Error).message}`);
+      advertencias.push(
+        `screenshot del detalle falló: ${(err as Error).message}`,
+      );
     }
 
     tiempos.total = Date.now() - tInicio;
@@ -214,7 +237,8 @@ export async function ejecutarPrototipoStake(
       etapas,
       advertencias,
       errores,
-      screenshotBase64,
+      screenshotListadoBase64,
+      screenshotDetalleBase64,
     };
   } catch (err) {
     errores.push(`error inesperado: ${(err as Error).message}`);
@@ -230,7 +254,8 @@ export async function ejecutarPrototipoStake(
       etapas,
       advertencias,
       errores,
-      screenshotBase64,
+      screenshotListadoBase64,
+      screenshotDetalleBase64,
     };
   } finally {
     void liberarPagePlaywright(page);
