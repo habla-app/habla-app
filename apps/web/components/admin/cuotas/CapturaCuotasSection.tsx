@@ -18,6 +18,7 @@ import { RefreshPartidoBtn } from "./RefreshPartidoBtn";
 import { RefreshCasaBtn } from "./RefreshCasaBtn";
 import { VincularEventIdModal } from "./VincularEventIdModal";
 import { AlertasSection } from "./AlertasSection";
+import { ReDiscoveryBtn } from "./ReDiscoveryBtn";
 
 interface Props {
   partidoId: string;
@@ -365,8 +366,16 @@ export async function CapturaCuotasSection({
             </div>
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
+        >
           <RefreshPartidoBtn partidoId={partidoId} />
+          <ReDiscoveryBtn partidoId={partidoId} />
           <a
             href={
               verAlertas
