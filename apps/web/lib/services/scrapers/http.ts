@@ -45,10 +45,25 @@ export interface HttpOpts {
 }
 
 function buildHeaders(opts: HttpOpts): Record<string, string> {
+  // Lote V.8.2: agregamos Sec-Fetch-* + Cache-Control que ciertos WAFs
+  // (Cloudflare, Akamai, DataDome) validan. Algunos casos del POC reciente
+  // — Betano top-events-v2 → 403 — sugieren que el bloqueo no es por
+  // User-Agent sino por la ausencia del set completo de fetch metadata
+  // que un Chrome real envía por default. Los caller siguen pudiendo
+  // override cualquier header vía `opts.headers`.
   const out: Record<string, string> = {
     "User-Agent": DEFAULT_USER_AGENT,
     "Accept-Language": "es-PE,es;q=0.9,en;q=0.8",
     Accept: "application/json, text/plain, */*",
+    "Sec-Ch-Ua":
+      '"Chromium";v="147", "Not.A/Brand";v="24", "Google Chrome";v="147"',
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"Windows"',
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-site",
+    "Cache-Control": "no-cache",
+    Pragma: "no-cache",
     ...opts.headers,
   };
   // Si mandamos body objeto, forzamos Content-Type JSON salvo override.
