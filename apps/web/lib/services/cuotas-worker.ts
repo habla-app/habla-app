@@ -115,9 +115,18 @@ function iniciarHeartbeatWorker(): void {
           `heartbeat · waiting=${counts.waiting ?? 0} active=${counts.active ?? 0} delayed=${counts.delayed ?? 0} failed=${counts.failed ?? 0} completed=${counts.completed ?? 0} · paused=${isPaused} running=${isRunning}`,
         );
       } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err ?? "?");
+        const errStack =
+          err instanceof Error
+            ? (err.stack?.split("\n").slice(0, 3).join(" | ") ?? "")
+            : "";
         logger.warn(
-          { err: (err as Error)?.message, source: "cuotas-worker:heartbeat" },
-          "heartbeat falló",
+          {
+            err: errMsg,
+            stack: errStack,
+            source: "cuotas-worker:heartbeat",
+          },
+          `heartbeat falló — ${errMsg}`,
         );
       }
     })();
