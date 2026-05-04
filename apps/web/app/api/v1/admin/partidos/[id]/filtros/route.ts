@@ -198,9 +198,22 @@ export async function PATCH(
             `filtros: iniciarCaptura completado · ${r.casasEncoladas.length}/7 jobs en cola`,
           );
         } catch (err) {
+          // Lote V.9.2: incluir error message en msg para que sea visible
+          // en Railway sin drill-down a structured fields.
+          const errMsg =
+            err instanceof Error ? err.message : String(err ?? "?");
+          const errStack =
+            err instanceof Error
+              ? (err.stack?.split("\n").slice(0, 5).join(" | ") ?? "")
+              : "";
           logger.error(
-            { err, partidoId: partido.id, source: "admin:partidos:filtros:captura" },
-            "filtros: iniciarCaptura falló",
+            {
+              err: errMsg,
+              stack: errStack,
+              partidoId: partido.id,
+              source: "admin:partidos:filtros:captura",
+            },
+            `filtros: iniciarCaptura falló — ${errMsg}`,
           );
         }
       })();

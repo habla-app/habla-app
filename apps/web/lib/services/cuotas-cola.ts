@@ -133,6 +133,49 @@ export function getCuotasRedisConnection(): unknown | null {
 }
 
 /**
+ * Espera a que la conexión ioredis subyacente esté en estado "ready".
+ * Lote V.9.2: cubre la race condition observada al primer add tras una
+ * inicialización lazy de la cola (logs muestran "BullMQ inicializada"
+ * + "redis conectado" sucediendo simultáneamente, y el primer add
+ * lanzando antes de que la conexión esté lista). ioredis bufferea
+ * comandos por default, pero algunas versiones de bullmq igual hacen
+ * checks que requieren conexión activa.
+ */
+async function esperarRedisReady(timeoutMs: number = 5_000): Promise<void> {
+  if (!connectionInstance) return;
+  const conn = connectionInstance as {
+    status?: string;
+    once?: (event: string, listener: () => void) => void;
+    off?: (event: string, listener: () => void) => void;
+  };
+  if (conn.status === "ready" || conn.status === "connect") return;
+  if (typeof conn.once !== "function") return;
+
+  await new Promise<void>((resolve) => {
+    let resolved = false;
+    const finish = (): void => {
+      if (resolved) return;
+      resolved = true;
+      resolve();
+    };
+    const timer = setTimeout(finish, timeoutMs);
+    if (typeof timer.unref === "function") timer.unref();
+    conn.once!("ready", () => {
+      clearTimeout(timer);
+      finish();
+    });
+    conn.once!("connect", () => {
+      clearTimeout(timer);
+      finish();
+    });
+    conn.once!("error", () => {
+      clearTimeout(timer);
+      finish();
+    });
+  });
+}
+
+/**
  * Encola un job de captura. No-op si la cola no está disponible (sin
  * REDIS_URL). Devuelve el id del job o null.
  */
@@ -141,6 +184,10 @@ export async function encolarJobCaptura(
 ): Promise<string | null> {
   const queue = getCuotasQueue();
   if (!queue) return null;
+
+  // Lote V.9.2: esperar a que Redis esté ready antes del primer add.
+  // Idempotente — si ya está conectado retorna inmediatamente.
+  await esperarRedisReady();
 
   // jobId determinístico por (partidoId, casa, esRefresh-or-not). BullMQ
   // garantiza que dos jobs con el mismo `jobId` no coexisten en la cola

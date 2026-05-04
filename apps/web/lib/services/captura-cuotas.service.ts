@@ -80,21 +80,44 @@ export interface ResumenRefresh {
 export async function iniciarCaptura(
   partidoId: string,
 ): Promise<ResumenIniciarCaptura> {
-  await prisma.partido.update({
-    where: { id: partidoId },
-    data: { estadoCaptura: "INICIANDO" },
-  });
+  // Lote V.9.2: error handling robusto + logs explícitos por step para
+  // diagnosticar fallos en producción. Cada paso atrapa errores
+  // individualmente — un fallo en el update de estadoCaptura no debe
+  // impedir encolar las 7 casas.
+  try {
+    await prisma.partido.update({
+      where: { id: partidoId },
+      data: { estadoCaptura: "INICIANDO" },
+    });
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err ?? "?");
+    logger.warn(
+      { partidoId, err: errMsg, source: "captura-cuotas" },
+      `iniciarCaptura: update estadoCaptura falló — ${errMsg} (continuando)`,
+    );
+    // No abortamos — el flow puede seguir.
+  }
 
-  const eventIds = await prisma.eventIdExterno.findMany({
-    where: { partidoId },
-    select: { casa: true, eventIdExterno: true },
-  });
+  let eventIds: Array<{ casa: string; eventIdExterno: string }> = [];
+  try {
+    eventIds = await prisma.eventIdExterno.findMany({
+      where: { partidoId },
+      select: { casa: true, eventIdExterno: true },
+    });
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err ?? "?");
+    logger.warn(
+      { partidoId, err: errMsg, source: "captura-cuotas" },
+      `iniciarCaptura: lectura EventIdExterno falló — ${errMsg} (continuando sin hints)`,
+    );
+  }
   const hintsPorCasa = new Map<string, string>(
     eventIds.map((row) => [row.casa, row.eventIdExterno]),
   );
 
   const casasEncoladas: CasaCuotas[] = [];
-  const casasSinEventId: CasaCuotas[] = []; // se mantiene en API por compat; con Playwright ya casi no aplica.
+  const casasSinEventId: CasaCuotas[] = [];
+  const casasFallidas: { casa: CasaCuotas; error: string }[] = [];
 
   for (const casa of CUOTAS_CONFIG.CASAS) {
     // Si hay vinculación manual previa, usamos esa URL/eventId como hint.
@@ -107,12 +130,21 @@ export async function iniciarCaptura(
       eventIdExterno: hint,
       esRefresh: false,
     };
-    const jobId = await encolarJobCaptura(data);
-    if (jobId) {
-      casasEncoladas.push(casa);
-    } else {
-      // Cola no disponible (sin REDIS_URL).
-      casasSinEventId.push(casa);
+    try {
+      const jobId = await encolarJobCaptura(data);
+      if (jobId) {
+        casasEncoladas.push(casa);
+      } else {
+        // Cola no disponible (sin REDIS_URL o construcción falló).
+        casasSinEventId.push(casa);
+      }
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err ?? "?");
+      casasFallidas.push({ casa, error: errMsg });
+      logger.warn(
+        { partidoId, casa, err: errMsg, source: "captura-cuotas" },
+        `iniciarCaptura: encolar ${casa} falló — ${errMsg}`,
+      );
     }
   }
 
@@ -121,9 +153,11 @@ export async function iniciarCaptura(
       partidoId,
       encoladas: casasEncoladas.length,
       sinCola: casasSinEventId.length,
+      fallidas: casasFallidas.length,
+      casasFallidas: casasFallidas.map((f) => `${f.casa}:${f.error.slice(0, 80)}`),
       source: "captura-cuotas",
     },
-    `iniciarCaptura · ${casasEncoladas.length}/7 casas encoladas`,
+    `iniciarCaptura · ${casasEncoladas.length}/7 encoladas, ${casasFallidas.length} fallaron al encolar, ${casasSinEventId.length} sin cola`,
   );
 
   return { partidoId, casasEncoladas, casasSinEventId };

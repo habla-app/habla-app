@@ -98,6 +98,21 @@ export async function procesarJobCaptura(job: BullMQJobLike): Promise<void> {
     return;
   }
 
+  // Lote V.9.2: log explícito al arrancar el procesado para confirmar
+  // que el worker está activo y qué vía va a tomar.
+  const tInicioJob = Date.now();
+  const viaPlaywright = typeof scraper.capturarConPlaywright === "function";
+  logger.info(
+    {
+      partidoId,
+      casa,
+      eventIdExterno,
+      via: viaPlaywright ? "playwright" : "http-legacy",
+      source: "cuotas-worker",
+    },
+    `procesando job ${casa} vía ${viaPlaywright ? "playwright" : "http-legacy"}`,
+  );
+
   try {
     // Lote V.9: preferimos `capturarConPlaywright` si el scraper la
     // implementa. El método nuevo recibe el partido completo y maneja
@@ -184,15 +199,17 @@ export async function procesarJobCaptura(job: BullMQJobLike): Promise<void> {
       })();
     }
 
+    const msTotalJob = Date.now() - tInicioJob;
     logger.info(
       {
         partidoId,
         casa,
         alertasCreadas,
         equiposEnPayload: resultado.equipos !== undefined,
+        ms: msTotalJob,
         source: "cuotas-worker",
       },
-      "captura OK",
+      `captura OK · ${casa} (${msTotalJob}ms)`,
     );
   } catch (err) {
     const mensaje = (err as Error)?.message ?? "error desconocido";
@@ -224,9 +241,17 @@ export async function procesarJobCaptura(job: BullMQJobLike): Promise<void> {
     });
     await actualizarSaludScraper(casa, "ERROR", mensaje);
     await recalcularEstadoCapturaPartido(partidoId);
+    const msTotalJob = Date.now() - tInicioJob;
     logger.warn(
-      { partidoId, casa, err: mensaje, source: "cuotas-worker" },
-      "captura falló",
+      {
+        partidoId,
+        casa,
+        err: mensaje,
+        ms: msTotalJob,
+        via: viaPlaywright ? "playwright" : "http-legacy",
+        source: "cuotas-worker",
+      },
+      `captura falló · ${casa} (${msTotalJob}ms) — ${mensaje}`,
     );
     // Re-lanzar para que BullMQ aplique la política de reintentos.
     throw err;
