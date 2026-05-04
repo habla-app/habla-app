@@ -56,6 +56,8 @@ export interface DiagnosticoListado {
   hayElementosWpt: boolean;
   /** ¿Hay algún `.wol-` en la página? */
   hayElementosWol: boolean;
+  /** ¿El cookie banner se detectó y se clickeó "Aceptar"? */
+  cookiesAceptadas: boolean;
 }
 
 export interface ResultadoBusqueda {
@@ -90,6 +92,62 @@ export interface ResultadoExtraccion {
 }
 
 /**
+ * Intenta cerrar el cookie banner de Stake (si está visible).
+ *
+ * Stake muestra "Usamos cookies para que la web funcione correctamente.
+ * Al continuar, aceptas su uso..." con un botón "Aceptar". Hasta que se
+ * acepte, el componente del listado de partidos NO renderea sus filas
+ * (`.wpt-table__row`) — solo muestra skeleton loaders. Playwright entra
+ * fresh cada corrida sin cookies previas, así que SIEMPRE necesita
+ * aceptar.
+ *
+ * Idempotente: si el banner no aparece (ya aceptado en una corrida
+ * anterior dentro del browser warm) no hace nada.
+ */
+async function aceptarCookiesStake(page: PlaywrightPage): Promise<boolean> {
+  // Pequeña espera para dar tiempo a que aparezca el banner.
+  await page.waitForTimeout(1500);
+  const aceptado = await page.evaluate(() => {
+    function texto(el: Element): string {
+      if (!(el instanceof HTMLElement)) return "";
+      return (el.innerText ?? el.textContent ?? "")
+        .trim()
+        .toLowerCase();
+    }
+    // El banner de Stake tiene un <button> cuyo texto es "Aceptar".
+    // Buscamos por texto exacto + variantes razonables. Filtramos por
+    // tamaño (botones de cookie son típicamente medianos, no enormes).
+    const botones = document.querySelectorAll("button, a, [role='button']");
+    for (const btn of Array.from(botones)) {
+      if (!(btn instanceof HTMLElement)) continue;
+      const t = texto(btn);
+      if (
+        t === "aceptar" ||
+        t === "aceptar todo" ||
+        t === "accept" ||
+        t === "accept all" ||
+        t === "i accept" ||
+        t === "ok"
+      ) {
+        try {
+          btn.click();
+          return true;
+        } catch {
+          /* sigue intentando */
+        }
+      }
+    }
+    return false;
+  });
+  if (aceptado) {
+    // Espera para que la app procese el consent + dispare las requests
+    // al backend de partidos.
+    await page.waitForTimeout(2000);
+  }
+  return aceptado;
+}
+
+/**
  * Navega al listado de Liga 1 en Stake, recorre todas las tarjetas de
  * partido (.wpt-table__row) y devuelve el mejor match contra los nombres
  * provistos según similitud Jaro-Winkler.
@@ -104,11 +162,16 @@ export async function buscarPartidoEnListadoStake(
     timeout: 30_000,
   });
 
-  // Esperar a que aparezca al menos una fila de partido.
+  // Aceptar cookies ANTES de esperar el listado — sin esto, Stake no
+  // renderea los partidos y .wpt-table__row nunca aparece.
+  const cookiesAceptadas = await aceptarCookiesStake(page);
+
+  // Esperar a que aparezca al menos una fila de partido. Subimos a 25s
+  // porque tras el click de cookies la SPA puede demorar en hidratar.
   try {
-    await page.waitForSelector(".wpt-table__row", { timeout: 15_000 });
+    await page.waitForSelector(".wpt-table__row", { timeout: 25_000 });
   } catch {
-    // Sin filas — devolvemos vacío.
+    // Sin filas — devolvemos vacío. El diagnóstico de abajo dice por qué.
   }
 
   // Pequeña espera adicional para que termine de hidratar (cuotas + links).
@@ -160,7 +223,7 @@ export async function buscarPartidoEnListadoStake(
   // Permite distinguir "Stake nos bloqueó / mostró otra página" vs "Stake
   // cargó OK pero el partido no estaba en el listado" vs "Stake cargó pero
   // los nombres de los equipos son distintos a los nuestros".
-  const diagnostico: DiagnosticoListado = await page.evaluate(() => {
+  const diagnosticoBrowser = await page.evaluate(() => {
     const titulo = document.title?.slice(0, 200) ?? "";
     const urlFinal = window.location.href;
     const bodyText = document.body?.innerText ?? "";
@@ -188,6 +251,10 @@ export async function buscarPartidoEnListadoStake(
       hayElementosWol,
     };
   });
+  const diagnostico: DiagnosticoListado = {
+    ...diagnosticoBrowser,
+    cookiesAceptadas,
+  };
 
   // Buscar mejor match server-side con Jaro-Winkler.
   let mejor: CandidatoElegido | null = null;
