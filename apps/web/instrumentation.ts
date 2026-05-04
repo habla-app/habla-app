@@ -945,6 +945,116 @@ export async function register() {
     }, ANALISIS_EVAL_INTERVAL_MS);
   }, 320_000);
 
+  // -------------------------------------------------------------------
+  // Job V — Refresh diario de cuotas (Lote V — May 2026). Tick cada 1h.
+  // Sólo dispara cuando hora local Lima ≥ 05:00 PET y todavía no se corrió
+  // hoy (chequeo contra `Partido.ultimaCapturaEn` más reciente).
+  //
+  // Recorre partidos con Filtro 1 ON, estado=PROGRAMADO, fechaInicio>now y
+  // encola un job de captura por casa con event ID resuelto. El worker
+  // BullMQ procesa los 7 scrapers en paralelo respetando rate limit.
+  //
+  // El plan original decía "Job O", pero la letra O ya está tomada por
+  // generar-picks-premium del Lote E. Adoptamos "Job V" para evitar
+  // colisión y para alinear con el nombre del Lote.
+  //
+  // Recovery al boot: 30s tras boot, encolamos refresh para todo partido
+  // con Filtro 1 ON cuya última captura sea > 25h o nunca hubo. Cubre el
+  // caso de un container que estuvo down más que el período del cron.
+  //
+  // Sin REDIS_URL → la cola no se inicializa, el cron sigue corriendo
+  // pero los `encolarJobCaptura` retornan null y el contador queda en 0.
+  // El motor degrada graciosamente.
+  // -------------------------------------------------------------------
+  const {
+    iniciar: iniciarMotorCuotas,
+    refrescarCuotasDelDia,
+    recuperarJobsHuerfanos,
+  } = await import("./lib/services/captura-cuotas.service");
+  const { CUOTAS_CONFIG } = await import("./lib/config/cuotas");
+  const { prisma: prismaCuotas } = await import("@habla/db");
+  const { registrarScrapersV2 } = await import(
+    "./lib/services/scrapers"
+  );
+
+  // Iniciar el worker BullMQ y registrar los scrapers V.2 inmediatamente.
+  // Si Redis no está disponible, `iniciarMotorCuotas` es no-op pero el
+  // registro de scrapers igual se hace (los jobs simplemente no llegan).
+  iniciarMotorCuotas();
+  registrarScrapersV2();
+
+  const CUOTAS_TICK_INTERVAL_MS = CUOTAS_CONFIG.CRON_TICK_INTERVAL_MS;
+  const CUOTAS_TARGET_LIMA_HOUR = CUOTAS_CONFIG.REFRESH_HORA_LIMA;
+
+  async function yaCorrioCuotasHoy(now: Date): Promise<boolean> {
+    // Inicio del día Lima → UTC. Lima es UTC-5 sin DST.
+    const offsetUtcMin = -300;
+    const limaNow = new Date(now.getTime() + offsetUtcMin * 60_000);
+    const inicioDiaLima = new Date(limaNow);
+    inicioDiaLima.setUTCHours(0, 0, 0, 0);
+    const inicioDiaUtc = new Date(
+      inicioDiaLima.getTime() - offsetUtcMin * 60_000,
+    );
+    const ultima = await prismaCuotas.partido.findFirst({
+      where: {
+        mostrarAlPublico: true,
+        ultimaCapturaEn: { gte: inicioDiaUtc },
+      },
+      orderBy: { ultimaCapturaEn: "desc" },
+      select: { id: true },
+    });
+    return !!ultima;
+  }
+
+  async function tickRefreshCuotas() {
+    try {
+      const now = new Date();
+      if (horaLima(now) < CUOTAS_TARGET_LIMA_HOUR) return;
+      if (await yaCorrioCuotasHoy(now)) return;
+
+      logger.info("[cron in-process] disparando refresh-cuotas-diario");
+      const r = await refrescarCuotasDelDia();
+      logger.info(
+        { ...r, source: "cron:cuotas:refresh" },
+        "[cron in-process] ciclo refresh-cuotas-diario",
+      );
+    } catch (err) {
+      logger.error(
+        { err, source: "cron:cuotas:refresh" },
+        "[cron in-process] tick refresh-cuotas-diario falló",
+      );
+    }
+  }
+
+  // Primera corrida 340s tras boot — deja al sistema estabilizarse y al
+  // import de partidos (Job C, 30s) tener al menos un ciclo.
+  setTimeout(() => {
+    void tickRefreshCuotas();
+    setInterval(() => {
+      void tickRefreshCuotas();
+    }, CUOTAS_TICK_INTERVAL_MS);
+  }, 340_000);
+
+  // Recovery al boot: 30s tras start. Si BullMQ no está disponible,
+  // recuperarJobsHuerfanos no-op silencioso (encolarJobCaptura retorna null).
+  setTimeout(() => {
+    recuperarJobsHuerfanos()
+      .then((r) => {
+        if (r.partidosRecuperados > 0) {
+          logger.info(
+            { ...r, source: "cuotas-worker:recovery" },
+            "[cron in-process] recovery jobs huérfanos de cuotas",
+          );
+        }
+      })
+      .catch((err) => {
+        logger.error(
+          { err: (err as Error).message, source: "cuotas-worker:recovery" },
+          "[cron in-process] recovery jobs huérfanos de cuotas falló",
+        );
+      });
+  }, 30_000);
+
   logger.info(
     {
       cerrarTorneos: `${CERRAR_INTERVAL_MS / 1000}s`,
@@ -964,6 +1074,7 @@ export async function register() {
       lighthouseSemanal: `${LIGHTHOUSE_INTERVAL_MS / 1000 / 60}min (lunes ≥${LIGHTHOUSE_TARGET_LIMA_HOUR}:00 PET)`,
       generarAnalisisPartido: `${ANALISIS_GEN_INTERVAL_MS / 1000 / 60}min`,
       evaluarAnalisisFinalizados: `${ANALISIS_EVAL_INTERVAL_MS / 1000 / 60}min`,
+      refreshCuotasDiario: `${CUOTAS_TICK_INTERVAL_MS / 1000 / 60}min (target ${CUOTAS_TARGET_LIMA_HOUR}:00 PET)`,
     },
     "cron in-process registrado",
   );

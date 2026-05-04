@@ -226,9 +226,16 @@ export default async function AdminPartidosPage({ searchParams }: PageProps) {
                   <div style={{ fontWeight: 700, color: "#001050" }}>{dia}</div>
                 </td>
                 <td>
-                  <div style={{ fontWeight: 700, color: "#001050" }}>
+                  <a
+                    href={`/admin/partidos/${p.id}`}
+                    style={{
+                      fontWeight: 700,
+                      color: "#001050",
+                      textDecoration: "none",
+                    }}
+                  >
                     {p.equipoLocal} vs {p.equipoVisita}
-                  </div>
+                  </a>
                   <div style={{ fontSize: 11, color: "rgba(0,16,80,.42)" }}>
                     {p.tipsters > 0
                       ? `${p.tipsters.toLocaleString("es-PE")} tipsters${p.vistas > 0 ? ` · ${p.vistas.toLocaleString("es-PE")} vistas` : ""}`

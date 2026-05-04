@@ -149,10 +149,21 @@ model Partido {
   elegibleLiga        Boolean              @default(false)
   visibilidadOverride VisibilidadOverride?
 
-  torneos         Torneo[]
-  eventos         EventoPartido[]
-  picksPremium    PickPremium[]
-  analisisPartido AnalisisPartido?
+  // Lote V (May 2026) — Motor de captura de cuotas v3.2.
+  //   - estadoCaptura: estado agregado del pipeline de captura para los 7
+  //     scrapers de este partido. INACTIVA hasta que admin activa Filtro 1.
+  //   - ultimaCapturaEn: timestamp del último ciclo de captura completo
+  //     (sea total o parcial). Si null, el partido nunca tuvo captura.
+  estadoCaptura       String               @default("INACTIVA")
+  ultimaCapturaEn     DateTime?
+
+  torneos          Torneo[]
+  eventos          EventoPartido[]
+  picksPremium     PickPremium[]
+  analisisPartido  AnalisisPartido?
+  cuotasCasa       CuotasCasa[]
+  eventIdsExternos EventIdExterno[]
+  alertasCuota     AlertaCuota[]
 
   @@map("partidos")
 }
@@ -1217,4 +1228,142 @@ enum EstadoAnalisis {
   APROBADO
   RECHAZADO
   ARCHIVADO
+}
+
+// ==========================================
+// Lote V (May 2026) — Motor de captura de cuotas
+// ==========================================
+//
+// Sustituye al sistema previo de odds (api-football, 4 casas globales,
+// ventana 24h) por captura empírica de las 7 casas peruanas que cubren
+// ~86% del tráfico (Stake, Apuesta Total, Coolbet, Doradobet, Betano,
+// Inkabet, Te Apuesto). Sin histórico de snapshots: sólo cuota actual +
+// cuotaAnterior por mercado para detectar variaciones ≥5%.
+//
+// Decisiones cubiertas (ver docs/plan-tecnico-lote-v-motor-cuotas.md):
+//   §3.1 — CuotasCasa: una fila por (partido, casa) con los 4 mercados
+//   §3.2 — Partido.estadoCaptura + ultimaCapturaEn (arriba)
+//   §3.3 — EventIdExterno: discovery automático con fallback manual
+//   §3.4 — AliasEquipo: 18 equipos de Liga 1 con aliases por casa
+//   §3.5 — AlertaCuota: variaciones ≥5% para revisar en admin
+//   §3.6 — SaludScraper: estado por casa (SANO/DEGRADADO/BLOQUEADO)
+//
+// Desviación documentada: el plan dice AliasEquipo.equipoCanonicoId con
+// FK a un modelo Equipo. Ese modelo NO existe en el repo (Partido usa
+// equipoLocal/equipoVisita como strings). Para no agregar una 6ta tabla
+// fuera del alcance "5 tablas nuevas", se persiste equipoCanonicoNombre
+// como string (el nombre canónico ES el identificador). El matcher de
+// scrapers compara strings normalizados.
+
+model CuotasCasa {
+  id             String  @id @default(cuid())
+  partidoId      String
+  partido        Partido @relation(fields: [partidoId], references: [id], onDelete: Cascade)
+  casa           String // "stake" | "apuesta_total" | "coolbet" | "doradobet" | "betano" | "inkabet" | "te_apuesto"
+  eventIdExterno String // ID del partido en la casa (alfanumérico para Inkabet)
+
+  // === MERCADO 1: 1X2 ===
+  cuotaLocal          Decimal? @db.Decimal(7, 3)
+  cuotaLocalAnterior  Decimal? @db.Decimal(7, 3)
+  cuotaEmpate         Decimal? @db.Decimal(7, 3)
+  cuotaEmpateAnterior Decimal? @db.Decimal(7, 3)
+  cuotaVisita         Decimal? @db.Decimal(7, 3)
+  cuotaVisitaAnterior Decimal? @db.Decimal(7, 3)
+
+  // === MERCADO 2: Doble Oportunidad ===
+  cuota1X         Decimal? @db.Decimal(7, 3)
+  cuota1XAnterior Decimal? @db.Decimal(7, 3)
+  cuota12         Decimal? @db.Decimal(7, 3)
+  cuota12Anterior Decimal? @db.Decimal(7, 3)
+  cuotaX2         Decimal? @db.Decimal(7, 3)
+  cuotaX2Anterior Decimal? @db.Decimal(7, 3)
+
+  // === MERCADO 3: Total ±2.5 goles ===
+  cuotaOver25          Decimal? @db.Decimal(7, 3)
+  cuotaOver25Anterior  Decimal? @db.Decimal(7, 3)
+  cuotaUnder25         Decimal? @db.Decimal(7, 3)
+  cuotaUnder25Anterior Decimal? @db.Decimal(7, 3)
+
+  // === MERCADO 4: BTTS ===
+  cuotaBttsSi         Decimal? @db.Decimal(7, 3)
+  cuotaBttsSiAnterior Decimal? @db.Decimal(7, 3)
+  cuotaBttsNo         Decimal? @db.Decimal(7, 3)
+  cuotaBttsNoAnterior Decimal? @db.Decimal(7, 3)
+
+  // === Estado y trazabilidad ===
+  estado           String // "OK" | "STALE" | "ERROR" | "BLOQUEADO" | "SIN_DATOS"
+  ultimoIntento    DateTime
+  ultimoExito      DateTime?
+  errorMensaje     String?
+  intentosFallidos Int       @default(0)
+
+  capturadoEn DateTime @default(now())
+
+  @@unique([partidoId, casa])
+  @@index([partidoId])
+  @@index([casa, estado])
+  @@map("cuotas_casa")
+}
+
+model EventIdExterno {
+  id             String  @id @default(cuid())
+  partidoId      String
+  partido        Partido @relation(fields: [partidoId], references: [id], onDelete: Cascade)
+  casa           String
+  eventIdExterno String
+
+  metodoDiscovery String // "AUTOMATICO" | "MANUAL"
+  resueltoPor     String? // userId si fue manual
+  resueltoEn      DateTime @default(now())
+
+  @@unique([partidoId, casa])
+  @@index([partidoId])
+  @@map("event_ids_externos")
+}
+
+model AliasEquipo {
+  id                   String  @id @default(cuid())
+  alias                String
+  casa                 String? // null = aplica a todas las casas
+  equipoCanonicoNombre String // ej. "FBC Melgar" (sin FK porque no hay tabla Equipo)
+
+  @@unique([alias, casa])
+  @@index([alias])
+  @@index([equipoCanonicoNombre])
+  @@map("alias_equipos")
+}
+
+model AlertaCuota {
+  id        String  @id @default(cuid())
+  partidoId String
+  partido   Partido @relation(fields: [partidoId], references: [id], onDelete: Cascade)
+
+  casa      String
+  mercado   String // "1X2" | "DOBLE_OP" | "MAS_MENOS_25" | "BTTS"
+  seleccion String // "local" | "empate" | "visita" | "1x" | "12" | "x2" | "over25" | "under25" | "btts_si" | "btts_no"
+
+  cuotaAnterior Decimal @db.Decimal(7, 3)
+  cuotaNueva    Decimal @db.Decimal(7, 3)
+  variacionPct  Decimal @db.Decimal(7, 3)
+
+  vistaPorAdmin Boolean  @default(false)
+  detectadoEn   DateTime @default(now())
+
+  @@index([partidoId, vistaPorAdmin])
+  @@index([detectadoEn])
+  @@map("alertas_cuota")
+}
+
+model SaludScraper {
+  id                    String    @id @default(cuid())
+  casa                  String    @unique
+  estado                String // "SANO" | "DEGRADADO" | "BLOQUEADO"
+  ultimaEjecucion       DateTime?
+  ultimoExito           DateTime?
+  diasConsecutivosError Int       @default(0)
+  detalleError          String?
+
+  actualizadoEn DateTime @updatedAt
+
+  @@map("salud_scrapers")
 }

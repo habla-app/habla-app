@@ -75,6 +75,7 @@ export function AdminLayoutShell({ user, counters, children }: AdminLayoutShellP
           counter: counters?.picksPendientes,
         },
         { label: "Salud del motor", href: "/admin/motor", icon: "🤖" },
+        { label: "Motor de cuotas", href: "/admin/motor-cuotas", icon: "💱" },
         { label: "Free vs Socios", href: "/admin/paywall", icon: "🔓" },
       ],
     },
