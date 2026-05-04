@@ -1,13 +1,18 @@
-// CapturaCuotasSection — Lote V fase V.5.
+// CapturaCuotasSection — Lote V fase V.5 + Lote V.9.4 (May 2026).
 //
-// Sección server-rendered en /admin/partidos/[id] con los 7 bloques de
-// casa (uno por scraper) + header con estado global + botones de
-// refresh global y "Ver alertas (N)".
+// Sección server-rendered en /admin/partidos/[id] con la tabla de cuotas
+// de las 7 casas + header con estado global + botones de refresh global,
+// re-ejecutar discovery (V.6), y "Ver alertas (N)".
+//
+// Lote V.9.4: la vista pasa de 7 cards (.cuotas-casa-card) a una tabla
+// densa (.cuotas-tabla) con 1 fila por casa. Permite comparar cuotas
+// entre casas de un solo vistazo (ej. ver qué casa tiene el mejor 1
+// para el local). Las columnas son: Casa, Estado, Última, 1X2, Doble Op,
+// ±2.5, BTTS, Event ID, Acciones.
 //
 // Cero clases Tailwind utility — usa clases nominadas del mockup
 // (`adm-pill`, `card`, `section-bar`, `btn`, etc) y CSS específico del
-// Lote V que vive en mockup-styles.css (`.cuotas-casa-card`,
-// `.cuotas-mercado-row`, `.cuotas-mercado-cuota`, etc).
+// Lote V que vive en mockup-styles.css.
 
 import {
   obtenerCapturaCuotasPartido,
@@ -30,12 +35,12 @@ function tiempoRelativo(d: Date | null): string {
   if (!d) return "—";
   const diffMs = Date.now() - d.getTime();
   const diffMin = Math.floor(diffMs / 60_000);
-  if (diffMin < 1) return "hace <1 min";
-  if (diffMin < 60) return `hace ${diffMin} min`;
+  if (diffMin < 1) return "<1m";
+  if (diffMin < 60) return `${diffMin}m`;
   const diffH = Math.floor(diffMin / 60);
-  if (diffH < 24) return `hace ${diffH} h`;
+  if (diffH < 24) return `${diffH}h`;
   const diffD = Math.floor(diffH / 24);
-  return `hace ${diffD} d`;
+  return `${diffD}d`;
 }
 
 function fechaCorta(d: Date | null): string {
@@ -50,25 +55,21 @@ function fechaCorta(d: Date | null): string {
 }
 
 function variacion(actual: number | null, anterior: number | null): {
-  signo: "=" | "↑" | "↓";
   texto: string;
   className: string;
 } {
   if (actual === null || anterior === null || anterior === 0) {
-    return { signo: "=", texto: "(=)", className: "cuota-var-flat" };
+    return { texto: "", className: "cuota-var-flat" };
   }
   const pct = ((actual - anterior) / anterior) * 100;
-  if (Math.abs(pct) < 0.5)
-    return { signo: "=", texto: "(=)", className: "cuota-var-flat" };
+  if (Math.abs(pct) < 0.5) return { texto: "", className: "cuota-var-flat" };
   if (pct > 0)
     return {
-      signo: "↑",
-      texto: `(↑${Math.abs(pct).toFixed(1)}%)`,
+      texto: `↑${Math.abs(pct).toFixed(1)}%`,
       className: "cuota-var-up",
     };
   return {
-    signo: "↓",
-    texto: `(↓${Math.abs(pct).toFixed(1)}%)`,
+    texto: `↓${Math.abs(pct).toFixed(1)}%`,
     className: "cuota-var-down",
   };
 }
@@ -97,21 +98,50 @@ function fmtCuota(v: number | null): string {
   return v === null ? "—" : v.toFixed(2);
 }
 
-function CuotaConVar({
-  label,
+/**
+ * Celda con valor de cuota + flecha de variación arriba.
+ * Compacta: el valor en grande, la variación pequeña debajo.
+ */
+function CeldaCuota({
   actual,
   anterior,
 }: {
-  label: string;
   actual: number | null;
   anterior: number | null;
 }) {
   const v = variacion(actual, anterior);
   return (
-    <span className="cuotas-mercado-cuota">
-      <span className="cuotas-mercado-label">{label}</span>{" "}
-      <span className="cuotas-mercado-valor">{fmtCuota(actual)}</span>{" "}
-      <span className={v.className}>{v.texto}</span>
+    <span className="cuota-celda">
+      <span className="cuota-celda-valor">{fmtCuota(actual)}</span>
+      {v.texto ? (
+        <span className={`cuota-celda-var ${v.className}`}>{v.texto}</span>
+      ) : null}
+    </span>
+  );
+}
+
+/**
+ * Bloque de mercado: 2-3 celdas separadas por slash. Cada celda con
+ * label arriba (chico) y valor abajo. Mantiene la info densa pero legible.
+ */
+function MercadoCelda({
+  pares,
+}: {
+  pares: { label: string; actual: number | null; anterior: number | null }[];
+}) {
+  return (
+    <span className="cuotas-mercado-grupo">
+      {pares.map((p, i) => (
+        <span key={p.label} className="cuotas-mercado-par">
+          <span className="cuotas-mercado-par-label">{p.label}</span>
+          <CeldaCuota actual={p.actual} anterior={p.anterior} />
+          {i < pares.length - 1 ? (
+            <span className="cuotas-mercado-par-sep" aria-hidden="true">
+              /
+            </span>
+          ) : null}
+        </span>
+      ))}
     </span>
   );
 }
@@ -124,164 +154,162 @@ function FilaCasa({
   partidoId: string;
 }) {
   const pill = pillEstado(fila.estado);
-  const tiempo =
+  const tiempoTxt =
     fila.estado === "STALE" && fila.ultimoExito
-      ? `último éxito ${tiempoRelativo(fila.ultimoExito)}`
+      ? `OK hace ${tiempoRelativo(fila.ultimoExito)}`
       : fila.estado === "OK" && fila.capturadoEn
-        ? tiempoRelativo(fila.capturadoEn)
+        ? `hace ${tiempoRelativo(fila.capturadoEn)}`
         : fila.ultimoIntento
-          ? tiempoRelativo(fila.ultimoIntento)
+          ? `hace ${tiempoRelativo(fila.ultimoIntento)}`
           : "nunca";
 
+  // Filas tinted según estado (rojo / amber / normal).
+  const rowCls =
+    fila.estado === "ERROR"
+      ? "cuotas-tabla-row cuotas-tabla-row-err"
+      : fila.estado === "STALE"
+        ? "cuotas-tabla-row cuotas-tabla-row-warn"
+        : "cuotas-tabla-row";
+
   return (
-    <div className="cuotas-casa-card">
-      <div className="cuotas-casa-card-head">
-        <div className="cuotas-casa-card-title">
-          {ETIQUETAS_CASA[fila.casa]}
-        </div>
+    <tr className={rowCls}>
+      <td className="cuotas-tabla-casa">{ETIQUETAS_CASA[fila.casa]}</td>
+      <td className="cuotas-tabla-estado">
         <span className={pill.cls}>{pill.label}</span>
-        <span className="cuotas-casa-card-time">· {tiempo}</span>
-        <div className="cuotas-casa-card-actions">
-          <RefreshCasaBtn
-            partidoId={partidoId}
-            casa={fila.casa}
-            disabled={!fila.eventIdExterno}
-          />
-        </div>
-      </div>
-
-      {fila.estado === "ERROR" && fila.errorMensaje ? (
-        <div className="cuotas-casa-card-error">
-          {fila.intentosFallidos > 0
-            ? `${fila.intentosFallidos} intentos fallidos · `
-            : ""}
-          {fila.errorMensaje}
-        </div>
-      ) : null}
-
-      {fila.eventIdExterno ? (
-        <div className="cuotas-mercado-row">
-          <CuotaConVar
-            label="Local"
-            actual={fila.cuotaLocal}
-            anterior={fila.cuotaLocalAnterior}
-          />
-          <span className="cuota-sep" aria-hidden="true">
-            ·
-          </span>
-          <CuotaConVar
-            label="Emp"
-            actual={fila.cuotaEmpate}
-            anterior={fila.cuotaEmpateAnterior}
-          />
-          <span className="cuota-sep" aria-hidden="true">
-            ·
-          </span>
-          <CuotaConVar
-            label="Vis"
-            actual={fila.cuotaVisita}
-            anterior={fila.cuotaVisitaAnterior}
-          />
-        </div>
-      ) : null}
-
-      {fila.eventIdExterno ? (
-        <div className="cuotas-mercado-row">
-          <CuotaConVar
-            label="1X"
-            actual={fila.cuota1X}
-            anterior={fila.cuota1XAnterior}
-          />
-          <span className="cuota-sep" aria-hidden="true">
-            ·
-          </span>
-          <CuotaConVar
-            label="12"
-            actual={fila.cuota12}
-            anterior={fila.cuota12Anterior}
-          />
-          <span className="cuota-sep" aria-hidden="true">
-            ·
-          </span>
-          <CuotaConVar
-            label="X2"
-            actual={fila.cuotaX2}
-            anterior={fila.cuotaX2Anterior}
-          />
-        </div>
-      ) : null}
-
-      {fila.eventIdExterno ? (
-        <div className="cuotas-mercado-row">
-          <CuotaConVar
-            label="Over 2.5"
-            actual={fila.cuotaOver25}
-            anterior={fila.cuotaOver25Anterior}
-          />
-          <span className="cuota-sep" aria-hidden="true">
-            ·
-          </span>
-          <CuotaConVar
-            label="Under 2.5"
-            actual={fila.cuotaUnder25}
-            anterior={fila.cuotaUnder25Anterior}
-          />
-        </div>
-      ) : null}
-
-      {fila.eventIdExterno ? (
-        <div className="cuotas-mercado-row">
-          <CuotaConVar
-            label="BTTS Sí"
-            actual={fila.cuotaBttsSi}
-            anterior={fila.cuotaBttsSiAnterior}
-          />
-          <span className="cuota-sep" aria-hidden="true">
-            ·
-          </span>
-          <CuotaConVar
-            label="BTTS No"
-            actual={fila.cuotaBttsNo}
-            anterior={fila.cuotaBttsNoAnterior}
-          />
-        </div>
-      ) : null}
-
-      <div className="cuotas-casa-card-event">
-        Event ID externo:{" "}
+      </td>
+      <td className="cuotas-tabla-tiempo" title={fechaCorta(fila.capturadoEn)}>
+        {tiempoTxt}
+      </td>
+      <td>
         {fila.eventIdExterno ? (
-          <>
+          <MercadoCelda
+            pares={[
+              {
+                label: "1",
+                actual: fila.cuotaLocal,
+                anterior: fila.cuotaLocalAnterior,
+              },
+              {
+                label: "X",
+                actual: fila.cuotaEmpate,
+                anterior: fila.cuotaEmpateAnterior,
+              },
+              {
+                label: "2",
+                actual: fila.cuotaVisita,
+                anterior: fila.cuotaVisitaAnterior,
+              },
+            ]}
+          />
+        ) : (
+          <span className="cuotas-tabla-sin-datos">—</span>
+        )}
+      </td>
+      <td>
+        {fila.eventIdExterno ? (
+          <MercadoCelda
+            pares={[
+              {
+                label: "1X",
+                actual: fila.cuota1X,
+                anterior: fila.cuota1XAnterior,
+              },
+              {
+                label: "12",
+                actual: fila.cuota12,
+                anterior: fila.cuota12Anterior,
+              },
+              {
+                label: "X2",
+                actual: fila.cuotaX2,
+                anterior: fila.cuotaX2Anterior,
+              },
+            ]}
+          />
+        ) : (
+          <span className="cuotas-tabla-sin-datos">—</span>
+        )}
+      </td>
+      <td>
+        {fila.eventIdExterno ? (
+          <MercadoCelda
+            pares={[
+              {
+                label: "+2.5",
+                actual: fila.cuotaOver25,
+                anterior: fila.cuotaOver25Anterior,
+              },
+              {
+                label: "-2.5",
+                actual: fila.cuotaUnder25,
+                anterior: fila.cuotaUnder25Anterior,
+              },
+            ]}
+          />
+        ) : (
+          <span className="cuotas-tabla-sin-datos">—</span>
+        )}
+      </td>
+      <td>
+        {fila.eventIdExterno ? (
+          <MercadoCelda
+            pares={[
+              {
+                label: "Sí",
+                actual: fila.cuotaBttsSi,
+                anterior: fila.cuotaBttsSiAnterior,
+              },
+              {
+                label: "No",
+                actual: fila.cuotaBttsNo,
+                anterior: fila.cuotaBttsNoAnterior,
+              },
+            ]}
+          />
+        ) : (
+          <span className="cuotas-tabla-sin-datos">—</span>
+        )}
+      </td>
+      <td className="cuotas-tabla-eventid">
+        {fila.eventIdExterno ? (
+          <span className="cuotas-tabla-eventid-block">
             <code className="cuotas-casa-card-event-id">
               {fila.eventIdExterno}
-            </code>{" "}
+            </code>
             <span
               className={`adm-pill adm-pill-${fila.metodoDiscovery === "MANUAL" ? "amber" : "blue"}`}
               style={{ fontSize: 9 }}
             >
               {fila.metodoDiscovery === "MANUAL" ? "manual" : "auto"}
-            </span>{" "}
-            <VincularEventIdModal
-              partidoId={partidoId}
-              casa={fila.casa}
-              casaLabel={ETIQUETAS_CASA[fila.casa]}
-              eventIdActual={fila.eventIdExterno}
-              triggerLabel="editar"
-            />
-          </>
+            </span>
+          </span>
         ) : (
-          <>
-            <span style={{ color: "var(--text-muted-d)" }}>
-              sin asignar
-            </span>{" "}
-            <VincularEventIdModal
-              partidoId={partidoId}
-              casa={fila.casa}
-              casaLabel={ETIQUETAS_CASA[fila.casa]}
-            />
-          </>
+          <span style={{ color: "var(--text-muted-d)" }}>sin asignar</span>
         )}
-      </div>
-    </div>
+      </td>
+      <td className="cuotas-tabla-acciones">
+        <RefreshCasaBtn
+          partidoId={partidoId}
+          casa={fila.casa}
+          disabled={!fila.eventIdExterno}
+        />
+        <VincularEventIdModal
+          partidoId={partidoId}
+          casa={fila.casa}
+          casaLabel={ETIQUETAS_CASA[fila.casa]}
+          eventIdActual={fila.eventIdExterno}
+          triggerLabel={fila.eventIdExterno ? "editar" : undefined}
+        />
+        {fila.estado === "ERROR" && fila.errorMensaje ? (
+          <span
+            className="cuotas-tabla-err-tip"
+            title={`${fila.intentosFallidos > 0 ? `${fila.intentosFallidos} intentos · ` : ""}${fila.errorMensaje}`}
+          >
+            ⚠
+          </span>
+        ) : null}
+      </td>
+    </tr>
   );
 }
 
@@ -299,7 +327,16 @@ export async function CapturaCuotasSection({
   if (!data.filtro1) {
     return (
       <div className="card" style={{ padding: 16, marginTop: 18 }}>
-        <h3 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 14, fontWeight: 800, color: "var(--text-dark)", textTransform: "uppercase", marginBottom: 8 }}>
+        <h3
+          style={{
+            fontFamily: "'Barlow Condensed', sans-serif",
+            fontSize: 14,
+            fontWeight: 800,
+            color: "var(--text-dark)",
+            textTransform: "uppercase",
+            marginBottom: 8,
+          }}
+        >
           Captura de cuotas
         </h3>
         <p style={{ fontSize: 12, color: "var(--text-muted-d)" }}>
@@ -316,7 +353,10 @@ export async function CapturaCuotasSection({
   const errores = data.filas.filter((f) => f.estado === "ERROR").length;
   const pillGlobal =
     completas === total
-      ? { cls: "adm-pill adm-pill-green", label: `🟢 COMPLETA (${completas}/${total})` }
+      ? {
+          cls: "adm-pill adm-pill-green",
+          label: `🟢 COMPLETA (${completas}/${total})`,
+        }
       : completas === 0
         ? { cls: "adm-pill adm-pill-red", label: `🔴 FALLIDA (0/${total})` }
         : {
@@ -351,6 +391,7 @@ export async function CapturaCuotasSection({
                 alignItems: "center",
                 gap: 8,
                 marginTop: 4,
+                flexWrap: "wrap",
               }}
             >
               <span className={pillGlobal.cls}>{pillGlobal.label}</span>
@@ -358,7 +399,7 @@ export async function CapturaCuotasSection({
               <span>
                 Última actualización:{" "}
                 {data.ultimaCapturaEn
-                  ? `${tiempoRelativo(data.ultimaCapturaEn)} (${fechaCorta(data.ultimaCapturaEn)})`
+                  ? `hace ${tiempoRelativo(data.ultimaCapturaEn)} (${fechaCorta(data.ultimaCapturaEn)})`
                   : "nunca"}
               </span>
               {stale > 0 ? <span>· {stale} STALE</span> : null}
@@ -384,15 +425,34 @@ export async function CapturaCuotasSection({
             }
             className="btn btn-ghost btn-xs"
           >
-            {verAlertas ? "Ocultar alertas" : `Ver alertas (${data.alertasNoVistas})`}
+            {verAlertas
+              ? "Ocultar alertas"
+              : `Ver alertas (${data.alertasNoVistas})`}
           </a>
         </div>
       </div>
 
-      <div className="cuotas-casa-grid">
-        {data.filas.map((fila) => (
-          <FilaCasa key={fila.casa} fila={fila} partidoId={partidoId} />
-        ))}
+      <div className="cuotas-tabla-wrap">
+        <table className="cuotas-tabla">
+          <thead>
+            <tr>
+              <th>Casa</th>
+              <th>Estado</th>
+              <th>Última</th>
+              <th>1X2</th>
+              <th>Doble Op</th>
+              <th>±2.5</th>
+              <th>BTTS</th>
+              <th>Event ID</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.filas.map((fila) => (
+              <FilaCasa key={fila.casa} fila={fila} partidoId={partidoId} />
+            ))}
+          </tbody>
+        </table>
       </div>
 
       {verAlertas ? (
