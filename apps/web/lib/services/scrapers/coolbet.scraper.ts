@@ -705,9 +705,28 @@ const coolbetScraper: Scraper = {
       );
     }
 
+    // Lote V.7: extraer nombres de equipo del payload single-event.
+    // Coolbet expone los equipos en el top-level del JSON con la misma
+    // forma que en el listado upcoming.
+    const p = payload as Record<string, unknown>;
+    let equipos: { local: string; visita: string } | undefined;
+    let local =
+      leerNombreEquipoCoolbet(p.homeName ?? p.homeTeam ?? p.home);
+    let visita =
+      leerNombreEquipoCoolbet(p.awayName ?? p.awayTeam ?? p.away);
+    if ((!local || !visita) && p.teams && typeof p.teams === "object") {
+      const t = p.teams as Record<string, unknown>;
+      if (!local) local = leerNombreEquipoCoolbet(t.home);
+      if (!visita) visita = leerNombreEquipoCoolbet(t.away);
+    }
+    if (local && visita) {
+      equipos = { local, visita };
+    }
+
     return {
       cuotas,
       fuente: { url, capturadoEn: new Date() },
+      ...(equipos ? { equipos } : {}),
     };
   },
 };

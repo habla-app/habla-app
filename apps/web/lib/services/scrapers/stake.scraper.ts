@@ -394,9 +394,28 @@ const stakeScraper: Scraper = {
       );
     }
 
+    // Lote V.7: extraer nombres de equipo del bloque `info` para que el
+    // worker alimente AliasEquipo automáticamente.
+    const info = (payload.info ?? {}) as Record<string, unknown>;
+    const teams = info.teams as unknown;
+    let equipos: { local: string; visita: string } | undefined;
+    if (teams && typeof teams === "object") {
+      const t = teams as Record<string, unknown>;
+      const local =
+        leerNombreEquipoStake(t.home ?? t.home_team ?? t.h) ||
+        leerNombreEquipoStake(info.home_team ?? info.homeTeam);
+      const visita =
+        leerNombreEquipoStake(t.away ?? t.away_team ?? t.a) ||
+        leerNombreEquipoStake(info.away_team ?? info.awayTeam);
+      if (local && visita) {
+        equipos = { local, visita };
+      }
+    }
+
     return {
       cuotas,
       fuente: { url, capturadoEn: new Date() },
+      ...(equipos ? { equipos } : {}),
     };
   },
 };
