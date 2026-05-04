@@ -352,10 +352,16 @@ async function fetchMatchesDelTorneo(
   // Te Apuesto acepta `tournament_id` como query param. La key precisa
   // varía según la versión del API; mandamos varias variantes para
   // maximizar el hit. Si la API ignora alguna, no rompe.
+  //
+  // Lote V.8.3: el diagnóstico del 04/05/2026 reveló que la API exige
+  // `language_id` (status 422 con `"The language id field is required."`).
+  // Mandamos `language_id=1` (español PE) — si en el futuro la API exige
+  // más campos, el log V.8.1 los va a expone.
   const qs = new URLSearchParams({
     tournament_id: String(tournamentId),
     tournamentId: String(tournamentId),
     sport_id: "1", // fútbol
+    language_id: "1", // V.8.3: requerido por la API.
   });
   const url = `${ENDPOINT_BASE}?${qs.toString()}`;
   const payload = await httpFetchJson<unknown>(url, {
@@ -373,9 +379,15 @@ async function fetchMatchesDelTorneo(
  * devuelve TODOS los partidos del día. Usado solo cuando la liga del
  * partido no está en `TOURNAMENT_ID_POR_LIGA` — sirve para diagnosticar
  * (V.8.1) y eventualmente para fallback productivo (V.8.2).
+ *
+ * Lote V.8.3: agregamos `language_id=1` para que la API no rechace con 422.
  */
 async function fetchMatchesSinFiltro(): Promise<TeApuestoMatchCrudo[]> {
-  const url = ENDPOINT_BASE;
+  const qs = new URLSearchParams({
+    sport_id: "1",
+    language_id: "1",
+  });
+  const url = `${ENDPOINT_BASE}?${qs.toString()}`;
   const payload = await httpFetchJson<unknown>(url, {
     source: "scrapers:te-apuesto:sin-filtro",
     headers: {
