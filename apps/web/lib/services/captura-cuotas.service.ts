@@ -40,7 +40,6 @@ import {
   iniciarCuotasWorker,
   detenerCuotasWorker,
 } from "./cuotas-worker";
-import { ejecutarDiscoveryParaPartido } from "./discovery-cuotas.service";
 import type { CasaCuotas, CuotasJobData } from "./scrapers/types";
 
 export interface ResumenIniciarCaptura {
@@ -58,16 +57,25 @@ export interface ResumenRefresh {
 
 /**
  * Inicia la captura para un partido. Llamado desde el handler que activa
- * Filtro 1 (sección 4.1 del plan).
+ * Filtro 1.
  *
- * Flujo:
+ * Lote V.9.1 — flow simplificado para Playwright universal:
  *   1. Marca `partido.estadoCaptura = INICIANDO`.
- *   2. Lee `event_ids_externos` para el partido. Cualquier casa sin ID
- *      cae al fallback manual (la vista admin del Lote V.5 mostrará el
- *      botón "Vincular manualmente").
- *   3. Encola un job por cada casa con ID resuelto.
+ *   2. Lee `EventIdExterno` para hints de URL (vinculación manual previa).
+ *   3. Encola UN JOB POR CADA UNA de las 7 casas, siempre. El worker
+ *      con Playwright hace discovery + captura en una sola pasada.
  *
- * Retorna el resumen para que el endpoint admin lo muestre al curador.
+ * Cambio vs V.6: ya NO disparamos `ejecutarDiscoveryParaPartido` previo
+ * (que iteraba HTTP — todos los endpoints están rotos). El scraper
+ * Playwright dentro del worker resuelve discovery + captura por sí mismo
+ * navegando el sportsbook real.
+ *
+ * `EventIdExterno` se mantiene como hint opcional: si tiene una URL
+ * (vinculación manual), el worker la pasa al scraper Playwright como
+ * `urlPartidoEnCasa` para skipear el listado y navegar directo. Si no
+ * tiene EventIdExterno, el scraper navega el listado de la liga.
+ *
+ * Retorna el resumen para que el endpoint admin lo muestre.
  */
 export async function iniciarCaptura(
   partidoId: string,
@@ -77,68 +85,33 @@ export async function iniciarCaptura(
     data: { estadoCaptura: "INICIANDO" },
   });
 
-  // Lote V.6: si no hay ningún EventIdExterno para el partido, ejecutamos
-  // discovery interno antes de continuar. Idempotente: respeta MANUAL,
-  // no pisa AUTOMATICO previo. Cubre boot recovery + refresh global +
-  // endpoint manual de discovery.
-  const cantidadActual = await prisma.eventIdExterno.count({
-    where: { partidoId },
-  });
-  if (cantidadActual === 0) {
-    logger.info(
-      { partidoId, source: "captura-cuotas:auto-discovery" },
-      "iniciarCaptura: tabla EventIdExterno vacía para el partido, disparando discovery interno",
-    );
-    try {
-      const r = await ejecutarDiscoveryParaPartido(partidoId);
-      logger.info(
-        {
-          partidoId,
-          resueltas: r.resueltas.length,
-          sinResolver: r.sinResolver.length,
-          fallidas: r.fallidas.length,
-          source: "captura-cuotas:auto-discovery",
-        },
-        "iniciarCaptura: discovery interno completado",
-      );
-    } catch (err) {
-      logger.error(
-        { partidoId, err, source: "captura-cuotas:auto-discovery" },
-        "iniciarCaptura: discovery interno falló — continuamos con tabla vacía",
-      );
-    }
-  }
-
   const eventIds = await prisma.eventIdExterno.findMany({
     where: { partidoId },
     select: { casa: true, eventIdExterno: true },
   });
-
-  const idsPorCasa = new Map<string, string>(
+  const hintsPorCasa = new Map<string, string>(
     eventIds.map((row) => [row.casa, row.eventIdExterno]),
   );
 
   const casasEncoladas: CasaCuotas[] = [];
-  const casasSinEventId: CasaCuotas[] = [];
+  const casasSinEventId: CasaCuotas[] = []; // se mantiene en API por compat; con Playwright ya casi no aplica.
 
   for (const casa of CUOTAS_CONFIG.CASAS) {
-    const eventId = idsPorCasa.get(casa);
-    if (!eventId) {
-      casasSinEventId.push(casa);
-      continue;
-    }
+    // Si hay vinculación manual previa, usamos esa URL/eventId como hint.
+    // Si no, pasamos "auto" como placeholder — el worker con Playwright
+    // navega el listado de la liga y resuelve solo.
+    const hint = hintsPorCasa.get(casa) ?? "auto";
     const data: CuotasJobData = {
       partidoId,
       casa,
-      eventIdExterno: eventId,
+      eventIdExterno: hint,
       esRefresh: false,
     };
     const jobId = await encolarJobCaptura(data);
     if (jobId) {
       casasEncoladas.push(casa);
     } else {
-      // Cola no disponible (sin REDIS_URL). Marcamos como sin event id
-      // para que la UI lo muestre como pendiente.
+      // Cola no disponible (sin REDIS_URL).
       casasSinEventId.push(casa);
     }
   }
@@ -147,10 +120,10 @@ export async function iniciarCaptura(
     {
       partidoId,
       encoladas: casasEncoladas.length,
-      sinEventId: casasSinEventId.length,
+      sinCola: casasSinEventId.length,
       source: "captura-cuotas",
     },
-    "iniciarCaptura",
+    `iniciarCaptura · ${casasEncoladas.length}/7 casas encoladas`,
   );
 
   return { partidoId, casasEncoladas, casasSinEventId };
@@ -188,10 +161,17 @@ export async function detenerCaptura(
 export async function encolarRefresh(
   partidoId: string,
 ): Promise<ResumenRefresh> {
+  // Lote V.9.1: el cron ahora encola las 7 casas siempre (no depende de
+  // EventIdExterno previo — Playwright resuelve discovery + captura en una
+  // sola pasada). Mantenemos `EventIdExterno` como hint de URL si hubo
+  // vinculación manual.
   const eventIds = await prisma.eventIdExterno.findMany({
     where: { partidoId },
     select: { casa: true, eventIdExterno: true },
   });
+  const hintsPorCasa = new Map<string, string>(
+    eventIds.map((row) => [row.casa, row.eventIdExterno]),
+  );
   const filasActuales = await prisma.cuotasCasa.findMany({
     where: { partidoId },
     select: { casa: true, ultimoExito: true, estado: true },
@@ -204,9 +184,9 @@ export async function encolarRefresh(
 
   let casasEncoladas = 0;
   let casasSkipeadas = 0;
-  let casasSinEventId = 0;
+  let casasSinEventId = 0; // mantenida en API por compat; con Playwright ya casi no aplica.
 
-  for (const { casa, eventIdExterno } of eventIds) {
+  for (const casa of CUOTAS_CONFIG.CASAS) {
     const ultimoOk = exitoPorCasa.get(casa);
     if (ultimoOk) {
       const horasDesdeOk = (ahora - ultimoOk.getTime()) / (60 * 60 * 1000);
@@ -216,10 +196,11 @@ export async function encolarRefresh(
       }
     }
 
+    const hint = hintsPorCasa.get(casa) ?? "auto";
     const data: CuotasJobData = {
       partidoId,
-      casa: casa as CasaCuotas,
-      eventIdExterno,
+      casa,
+      eventIdExterno: hint,
       esRefresh: true,
     };
     const jobId = await encolarJobCaptura(data);
@@ -228,12 +209,6 @@ export async function encolarRefresh(
     } else {
       casasSinEventId++;
     }
-  }
-
-  // Casas listadas en CUOTAS_CONFIG.CASAS pero sin event ID en BD.
-  const casasConId = new Set(eventIds.map((r) => r.casa));
-  for (const casa of CUOTAS_CONFIG.CASAS) {
-    if (!casasConId.has(casa)) casasSinEventId++;
   }
 
   logger.debug(
