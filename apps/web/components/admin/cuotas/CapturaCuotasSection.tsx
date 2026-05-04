@@ -23,7 +23,6 @@ import { RefreshPartidoBtn } from "./RefreshPartidoBtn";
 import { RefreshCasaBtn } from "./RefreshCasaBtn";
 import { VincularEventIdModal } from "./VincularEventIdModal";
 import { AlertasSection } from "./AlertasSection";
-import { ReDiscoveryBtn } from "./ReDiscoveryBtn";
 
 interface Props {
   partidoId: string;
@@ -416,7 +415,6 @@ export async function CapturaCuotasSection({
           }}
         >
           <RefreshPartidoBtn partidoId={partidoId} />
-          <ReDiscoveryBtn partidoId={partidoId} />
           <a
             href={
               verAlertas
