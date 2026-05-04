@@ -418,12 +418,57 @@ async function generarAnalisisEstructural(page) {
         .toLowerCase()
         .trim();
 
-    const all = document.querySelectorAll("*");
+    // Walker que recorre el DOM atravesando shadow roots. Necesario para
+    // Doradobet (VirtualSoft) — los partidos viven dentro de un microfrontend
+    // con shadow DOM, invisibles para querySelectorAll del DOM principal.
+    function querySelectorAllDeep(selector, rootNode) {
+      const out = [];
+      const visited = new WeakSet();
+      function walk(root) {
+        if (!root || visited.has(root)) return;
+        visited.add(root);
+        if (typeof root.querySelectorAll === "function") {
+          for (const el of root.querySelectorAll(selector)) {
+            out.push(el);
+          }
+          for (const el of root.querySelectorAll("*")) {
+            if (el.shadowRoot) walk(el.shadowRoot);
+          }
+        }
+      }
+      walk(rootNode || document);
+      return out;
+    }
+
+    // Contar shadow DOMs encontrados.
+    let shadowDomCount = 0;
+    const shadowHosts = [];
+    for (const el of Array.from(document.querySelectorAll("*"))) {
+      if (el.shadowRoot) {
+        shadowDomCount++;
+        // Recursar para encontrar shadow doms anidados.
+        const inside = el.shadowRoot.querySelectorAll
+          ? el.shadowRoot.querySelectorAll("*")
+          : [];
+        for (const inner of inside) {
+          if (inner.shadowRoot) shadowDomCount++;
+        }
+        if (shadowHosts.length < 10) {
+          shadowHosts.push({
+            tag: el.tagName.toLowerCase(),
+            id: el.id || "",
+            clases: el.className?.toString()?.slice(0, 100) ?? "",
+          });
+        }
+      }
+    }
+
+    const all = querySelectorAllDeep("*");
     const totalElementos = all.length;
 
     // Conteo de tags.
     const tagsMap = {};
-    for (const el of Array.from(all)) {
+    for (const el of all) {
       const tag = el.tagName.toLowerCase();
       tagsMap[tag] = (tagsMap[tag] || 0) + 1;
     }
@@ -434,7 +479,7 @@ async function generarAnalisisEstructural(page) {
 
     // Top clases.
     const claseCount = {};
-    for (const el of Array.from(document.querySelectorAll("[class]"))) {
+    for (const el of querySelectorAllDeep("[class]")) {
       const raw = el.className?.toString() ?? "";
       const classes = raw.split(/\s+/);
       for (const c of classes) {
@@ -450,7 +495,7 @@ async function generarAnalisisEstructural(page) {
 
     // Atributos data-*
     const dataAttrs = new Set();
-    for (const el of Array.from(all)) {
+    for (const el of all) {
       for (const attr of Array.from(el.attributes ?? [])) {
         if (attr.name.startsWith("data-")) {
           dataAttrs.add(attr.name);
@@ -493,7 +538,7 @@ async function generarAnalisisEstructural(page) {
     const SEL_PARTIDO =
       "a, [role='link'], [role='button'], button, li, article, " +
       "[data-event-id], [data-match-id], [data-fixture-id]";
-    for (const el of Array.from(document.querySelectorAll(SEL_PARTIDO))) {
+    for (const el of querySelectorAllDeep(SEL_PARTIDO)) {
       if (!(el instanceof HTMLElement)) continue;
       const rect = el.getBoundingClientRect();
       if (rect.width < 100 || rect.height < 30) continue;
@@ -515,6 +560,8 @@ async function generarAnalisisEstructural(page) {
 
     return {
       totalElementos,
+      shadowDomCount,
+      shadowHosts,
       tags,
       topClases,
       dataAttributos: Array.from(dataAttrs).sort(),
@@ -527,13 +574,51 @@ async function generarAnalisisEstructural(page) {
 
 /**
  * Captura el HTML del body actual, truncado a HTML_MAX_BYTES para no
- * inflar archivos. Devuelve el contenido como string.
+ * inflar archivos. Atraviesa Shadow DOMs (necesario para Doradobet/
+ * VirtualSoft que usa microfrontends con shadow DOM).
  */
 async function capturarHtmlBody(page) {
   try {
-    const html = await page.evaluate(
-      () => document.body?.outerHTML ?? "",
-    );
+    const html = await page.evaluate(() => {
+      // Reconstruye el HTML expandiendo shadow roots inline. Para cada
+      // elemento con shadowRoot, inserta su innerHTML al final del HTML
+      // del host con un comentario marcador.
+      function expandShadowDOM(root) {
+        if (!root) return "";
+        // Clonar node para modificarlo sin afectar el live DOM.
+        let html = root.outerHTML ?? "";
+        const visitados = new Set();
+        function findHosts(el, hosts) {
+          if (!el || visitados.has(el)) return;
+          visitados.add(el);
+          if (typeof el.querySelectorAll !== "function") return;
+          for (const child of el.querySelectorAll("*")) {
+            if (child.shadowRoot) hosts.push(child);
+          }
+        }
+        const hosts = [];
+        findHosts(root, hosts);
+        if (hosts.length === 0) return html;
+
+        // Construir HTML expandido. Por simplicidad, concatenamos el
+        // shadow content como texto al final del documento con un comment.
+        let extra = "\n\n<!-- ─── SHADOW DOM CONTENT (expandido) ─── -->\n";
+        for (const host of hosts) {
+          const hostId = host.id ? `id="${host.id}"` : "";
+          const hostClass = host.className
+            ? `class="${host.className.toString().slice(0, 100)}"`
+            : "";
+          extra += `\n<!-- shadow root host: <${host.tagName.toLowerCase()} ${hostId} ${hostClass}> -->\n`;
+          try {
+            extra += host.shadowRoot.innerHTML ?? "";
+          } catch (err) {
+            extra += `<!-- error leyendo shadowRoot: ${err.message} -->`;
+          }
+        }
+        return html + extra;
+      }
+      return expandShadowDOM(document.body);
+    });
     if (html.length > HTML_MAX_BYTES) {
       return (
         html.slice(0, HTML_MAX_BYTES) +
@@ -608,6 +693,27 @@ async function buscarPartidoGenerico(page, equipoLocal, equipoVisita) {
           .toLowerCase()
           .trim();
       }
+      // Walker que recorre todo el DOM atravesando shadow roots.
+      // Necesario para Doradobet (VirtualSoft) y otras casas con
+      // microfrontends en shadow DOM.
+      function querySelectorAllDeep(selector, rootNode) {
+        const out = [];
+        const visited = new WeakSet();
+        function walk(root) {
+          if (!root || visited.has(root)) return;
+          visited.add(root);
+          if (typeof root.querySelectorAll === "function") {
+            for (const el of root.querySelectorAll(selector)) {
+              out.push(el);
+            }
+            for (const el of root.querySelectorAll("*")) {
+              if (el.shadowRoot) walk(el.shadowRoot);
+            }
+          }
+        }
+        walk(rootNode || document);
+        return out;
+      }
       const tokensL = norm(local)
         .split(" ")
         .filter((t) => t.length >= 4);
@@ -620,7 +726,7 @@ async function buscarPartidoGenerico(page, equipoLocal, equipoVisita) {
         "[data-event-id], [data-match-id], [data-fixture-id], " +
         "[class*='event' i], [class*='match' i], [class*='fixture' i], " +
         "[class*='game' i]";
-      for (const el of Array.from(document.querySelectorAll(SEL))) {
+      for (const el of querySelectorAllDeep(SEL)) {
         if (!(el instanceof HTMLElement)) continue;
         const rect = el.getBoundingClientRect();
         if (rect.width < 50 || rect.height < 25) continue;
@@ -633,7 +739,7 @@ async function buscarPartidoGenerico(page, equipoLocal, equipoVisita) {
           const href =
             el instanceof HTMLAnchorElement
               ? el.href
-              : el.querySelector("a")?.href ?? null;
+              : el.querySelector?.("a")?.href ?? null;
           candidatos.push({
             textoMuestra: txt.slice(0, 200),
             href,
@@ -779,6 +885,25 @@ async function probarCasa(casaConfig) {
     timezoneId: "America/Lima",
     viewport: { width: 1366, height: 800 },
   });
+
+  // Forzar todos los Shadow DOMs a "open" mode antes de que cualquier
+  // script de la página corra. Doradobet (VirtualSoft) usa microfrontends
+  // Single-SPA con shadow DOM; sin este override, document.body.outerHTML
+  // y querySelectorAll del DOM principal no ven el contenido del
+  // sportsbook. Con este override, los shadow roots quedan accesibles
+  // via element.shadowRoot.
+  await context.addInitScript(() => {
+    try {
+      const original = Element.prototype.attachShadow;
+      Element.prototype.attachShadow = function (options) {
+        const opts = { ...(options || {}), mode: "open" };
+        return original.call(this, opts);
+      };
+    } catch {
+      /* algunos browsers pueden no permitir override — no es bloqueante */
+    }
+  });
+
   const page = await context.newPage();
 
   const resultado = {
