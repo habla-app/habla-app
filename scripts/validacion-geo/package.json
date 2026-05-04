@@ -1,0 +1,13 @@
+{
+  "name": "validacion-geo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Script local para validar que los 7 sportsbooks peruanos son accesibles desde la IP del admin con Playwright.",
+  "type": "module",
+  "scripts": {
+    "validar": "node validar-geo-test.mjs"
+  },
+  "dependencies": {
+    "playwright-chromium": "^1.49.0"
+  }
+}
