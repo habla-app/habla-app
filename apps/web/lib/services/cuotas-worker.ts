@@ -39,6 +39,10 @@ import { CapturaSinDatosError } from "./scrapers/types";
 interface BullMQWorkerLike {
   on(event: string, listener: (...args: unknown[]) => void): unknown;
   close(): Promise<void>;
+  /** Lote V.10.4: BullMQ expone `isPaused()`. */
+  isPaused?(): Promise<boolean>;
+  /** Lote V.10.4: BullMQ expone `isRunning()`. */
+  isRunning?(): boolean;
 }
 
 interface BullMQJobLike {
@@ -70,6 +74,58 @@ export function obtenerScraper(casa: CasaCuotas): Scraper | undefined {
 }
 
 let workerInstance: BullMQWorkerLike | null | undefined;
+
+// Lote V.10.4: heartbeat para diagnosticar worker que no procesa.
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
+function iniciarHeartbeatWorker(): void {
+  if (heartbeatTimer) return;
+  heartbeatTimer = setInterval(() => {
+    void (async () => {
+      try {
+        const queue = getCuotasQueue();
+        const worker = workerInstance;
+        if (!queue || !worker) {
+          logger.warn(
+            {
+              queueOk: queue !== null,
+              workerOk: worker !== null,
+              source: "cuotas-worker:heartbeat",
+            },
+            "heartbeat · queue o worker no disponibles",
+          );
+          return;
+        }
+        const counts = await queue
+          .getJobCounts("waiting", "active", "delayed", "failed", "completed")
+          .catch(() => ({}) as Record<string, number>);
+        const isPaused =
+          typeof worker.isPaused === "function"
+            ? await worker.isPaused().catch(() => null)
+            : null;
+        const isRunning =
+          typeof worker.isRunning === "function" ? worker.isRunning() : null;
+        logger.info(
+          {
+            counts,
+            isPaused,
+            isRunning,
+            source: "cuotas-worker:heartbeat",
+          },
+          `heartbeat · waiting=${counts.waiting ?? 0} active=${counts.active ?? 0} delayed=${counts.delayed ?? 0} failed=${counts.failed ?? 0} completed=${counts.completed ?? 0} · paused=${isPaused} running=${isRunning}`,
+        );
+      } catch (err) {
+        logger.warn(
+          { err: (err as Error)?.message, source: "cuotas-worker:heartbeat" },
+          "heartbeat falló",
+        );
+      }
+    })();
+  }, 60_000);
+  if (typeof (heartbeatTimer as { unref?: () => void }).unref === "function") {
+    (heartbeatTimer as { unref: () => void }).unref();
+  }
+}
 
 /**
  * Procesa un job: invoca el scraper de la casa, persiste resultado,
@@ -292,6 +348,34 @@ export function iniciarCuotasWorker(): BullMQWorkerLike | null {
       },
     );
 
+    // Lote V.10.4: listeners completos para diagnosticar por qué el
+    // worker no procesa jobs en producción. Cada evento se loggea con msg
+    // legible para que sea visible en Railway sin drill-down.
+    worker.on("active", (...args: unknown[]) => {
+      const job = args[0] as { id?: string; data?: CuotasJobData } | undefined;
+      logger.info(
+        {
+          jobId: job?.id,
+          partidoId: job?.data?.partidoId,
+          casa: job?.data?.casa,
+          source: "cuotas-worker:bullmq",
+        },
+        `BullMQ active · job ${job?.id} (${job?.data?.casa ?? "?"}) tomado por worker`,
+      );
+    });
+
+    worker.on("completed", (...args: unknown[]) => {
+      const job = args[0] as { id?: string; data?: CuotasJobData } | undefined;
+      logger.info(
+        {
+          jobId: job?.id,
+          casa: job?.data?.casa,
+          source: "cuotas-worker:bullmq",
+        },
+        `BullMQ completed · job ${job?.id} (${job?.data?.casa ?? "?"})`,
+      );
+    });
+
     worker.on("failed", (...args: unknown[]) => {
       const job = args[0] as { id?: string; data?: CuotasJobData; attemptsMade?: number } | undefined;
       const err = args[1] as Error | undefined;
@@ -302,17 +386,51 @@ export function iniciarCuotasWorker(): BullMQWorkerLike | null {
           casa: job?.data?.casa,
           attempts: job?.attemptsMade,
           err: err?.message,
-          source: "cuotas-worker",
+          source: "cuotas-worker:bullmq",
         },
-        "BullMQ — job failed",
+        `BullMQ failed · job ${job?.id} (${job?.data?.casa ?? "?"}) — ${err?.message ?? "?"}`,
+      );
+    });
+
+    worker.on("stalled", (...args: unknown[]) => {
+      const jobId = args[0] as string | undefined;
+      logger.warn(
+        { jobId, source: "cuotas-worker:bullmq" },
+        `BullMQ stalled · job ${jobId} se atascó (visibility timeout)`,
       );
     });
 
     worker.on("error", (...args: unknown[]) => {
       const err = args[0] as Error | undefined;
       logger.error(
-        { err: err?.message, source: "cuotas-worker" },
-        "BullMQ — worker error",
+        {
+          err: err?.message,
+          stack: err?.stack?.split("\n").slice(0, 5).join(" | "),
+          source: "cuotas-worker:bullmq",
+        },
+        `BullMQ error · ${err?.message ?? "?"}`,
+      );
+    });
+
+    worker.on("ready", (...args: unknown[]) => {
+      void args;
+      logger.info(
+        { source: "cuotas-worker:bullmq" },
+        "BullMQ ready · worker conectado y listo para procesar",
+      );
+    });
+
+    worker.on("closing", () => {
+      logger.warn(
+        { source: "cuotas-worker:bullmq" },
+        "BullMQ closing · worker está cerrándose",
+      );
+    });
+
+    worker.on("closed", () => {
+      logger.warn(
+        { source: "cuotas-worker:bullmq" },
+        "BullMQ closed · worker cerrado (NO va a procesar más jobs hasta restart)",
       );
     });
 
@@ -325,6 +443,11 @@ export function iniciarCuotasWorker(): BullMQWorkerLike | null {
       },
       "cuotas-worker iniciado",
     );
+
+    // Heartbeat cada 60s: confirma que el worker sigue vivo + reporta
+    // counts de la cola. Si los logs muestran "iniciado" pero no
+    // heartbeats, el event loop está saturado o el proceso murió.
+    iniciarHeartbeatWorker();
 
     return worker;
   } catch (err) {
@@ -341,6 +464,10 @@ export function iniciarCuotasWorker(): BullMQWorkerLike | null {
  * Detiene el worker y libera la conexión. Sólo en tests/shutdown explícito.
  */
 export async function detenerCuotasWorker(): Promise<void> {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
   if (workerInstance) {
     try {
       await workerInstance.close();
