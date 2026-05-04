@@ -176,15 +176,73 @@ export async function ejecutarDiscoveryParaPartido(
     casasParaDescubrir.push(casa);
   }
 
+  // Lote V.7.1: log de inicio con contexto del partido. Permite ver de un
+  // vistazo qué partido + qué casas quedaron para descubrir.
+  logger.info(
+    {
+      partidoId,
+      liga: partido.liga,
+      equipoLocal: partido.equipoLocal,
+      equipoVisita: partido.equipoVisita,
+      fechaInicio: partido.fechaInicio,
+      casasParaDescubrir,
+      skipeadasPorManual,
+      skipeadasPorAutomaticoPrevio,
+      source: "discovery-cuotas",
+    },
+    `discovery iniciando · ${partido.equipoLocal} vs ${partido.equipoVisita} (${partido.liga}) · ${casasParaDescubrir.length} casas a probar`,
+  );
+
+  // Lote V.7.1: instrumentamos cada scraper individualmente con tiempo +
+  // resultado. Permite diagnosticar en producción si un scraper termina
+  // instantáneo (catch interno silencioso, sin HTTP) vs tardó N segundos
+  // (hizo HTTP pero el matcher no encontró match único). El log se emite
+  // a INFO para que sea visible sin cambiar nivel global de logger.
   const resultados = await Promise.allSettled(
     casasParaDescubrir.map(async (casa) => {
       const scraper = SCRAPERS_POR_CASA[casa];
-      const eventId = await conTimeout(
-        scraper.buscarEventIdExterno(partido),
-        TIMEOUT_DISCOVERY_POR_CASA_MS,
-        `discovery:${casa}`,
-      );
-      return { casa, eventId };
+      const tInicio = Date.now();
+      let eventId: string | null = null;
+      let errorRecogido: string | null = null;
+      try {
+        eventId = await conTimeout(
+          scraper.buscarEventIdExterno(partido),
+          TIMEOUT_DISCOVERY_POR_CASA_MS,
+          `discovery:${casa}`,
+        );
+        return { casa, eventId };
+      } catch (err) {
+        errorRecogido =
+          err instanceof Error
+            ? err.message
+            : String(err ?? "error desconocido");
+        throw err;
+      } finally {
+        const ms = Date.now() - tInicio;
+        const resumen =
+          errorRecogido !== null
+            ? `error tras ${ms}ms: ${errorRecogido.slice(0, 120)}`
+            : eventId === null || eventId === ""
+              ? `sin match (${ms}ms)`
+              : `match ${eventId} (${ms}ms)`;
+        logger.info(
+          {
+            casa,
+            partidoId: partido.id,
+            ms,
+            resultado:
+              errorRecogido !== null
+                ? "error"
+                : eventId === null || eventId === ""
+                  ? "null"
+                  : "found",
+            eventId: eventId ?? null,
+            errorRecogido,
+            source: "discovery-cuotas:scraper",
+          },
+          `discovery scraper ${casa}: ${resumen}`,
+        );
+      }
     }),
   );
 
@@ -262,18 +320,22 @@ export async function ejecutarDiscoveryParaPartido(
     }
   }
 
+  // Lote V.7.1: incluimos el resumen humano-legible en el `msg` para que
+  // sea visible en Railway sin drill-down a structured fields.
+  const resumenMsg = `discovery completado · ${resueltas.length} resueltas · ${sinResolver.length} sin resolver · ${fallidas.length} fallidas · ${skipeadasPorManual.length} manual · ${skipeadasPorAutomaticoPrevio.length} auto-previo`;
   logger.info(
     {
       partidoId,
       resueltas: resueltas.map((r) => r.casa),
       sinResolver,
       fallidas: fallidas.map((f) => f.casa),
+      fallidasErrores: fallidas.map((f) => ({ casa: f.casa, error: f.error })),
       skipeadasPorManual,
       skipeadasPorAutomaticoPrevio,
       forzado: opciones.forzarRedescubrimiento === true,
       source: "discovery-cuotas",
     },
-    "ejecutarDiscoveryParaPartido completado",
+    resumenMsg,
   );
 
   return {
