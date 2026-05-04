@@ -43,38 +43,78 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 // ─── Config ────────────────────────────────────────────────────────────
+//
+// Cada casa tiene su perfil específico. Después de la corrida v3 quedó
+// claro que una sola heurística genérica para 7 sportsbooks es frágil —
+// cada uno tiene su propia arquitectura. Aquí cada casa declara
+// explícitamente qué necesita.
+//
+// Campos por casa:
+//   - url:                     URL del listado de Liga 1 Perú
+//   - waitExtraMs:             timeout de hidratación adicional (default 5s)
+//   - cerrarModales:           bool, default true. Stake=false porque su
+//                              cookie banner es suficiente y los intentos
+//                              de cierre risk-clickear links externos.
+//   - waitAntesDeCerrarMs:     ms a esperar ANTES del cerrarModales
+//                              (Doradobet necesita ~4s para que el modal
+//                              de "Iniciar Sesión" aparezca).
+//   - iframeRegex:             si presente, busca un frame que matchee el
+//                              regex y trabaja DENTRO de él. Apuesta Total
+//                              e Inkabet embeben el sportsbook real en
+//                              iframes externos.
+//   - waitIframeMs:            ms a esperar para que el iframe cargue
+//                              antes de buscar partidos adentro.
 
 const URLS = [
   {
     casa: "stake",
     url: "https://stake.pe/deportes/football/peru/primera-division",
+    // CRÍTICO: NO cerrar modales. El cookie banner ya cubre el caso.
+    // En la v3, cerrarModales agarró el link "X" del footer (Twitter)
+    // y navegó a x.com/PeruStake.
+    cerrarModales: false,
   },
   {
     casa: "apuesta_total",
     url: "https://www.apuestatotal.com/apuestas-deportivas/?fpath=/es-pe/spbkv3/sports/1/category?region=170&league=203110137349808128",
-    // Apuesta Total es la SPA más lenta en hidratar — duplicamos la
-    // espera para esta casa específicamente.
+    // El sportsbook real está embebido en kmianko.com (Kambi B2B).
+    iframeRegex: /kmianko\.com/i,
     waitExtraMs: 8000,
+    waitIframeMs: 6000,
   },
   {
     casa: "coolbet",
     url: "https://www.coolbet.pe/pe/deportes/futbol/per%C3%BA/primera-division-peruana",
+    // Las cuotas están en el listado mismo — no hace falta navegar al
+    // detalle. El click en match-layout-container no cambia URL.
+    extraerEnListado: true,
   },
   {
     casa: "doradobet",
     url: "https://doradobet.com/deportes/liga/4042",
+    // El modal de "Iniciar Sesión" tarda en aparecer. Esperar antes
+    // de intentar cerrarlo.
+    cerrarModales: true,
+    waitAntesDeCerrarMs: 4000,
   },
   {
     casa: "betano",
     url: "https://www.betano.pe/sport/futbol/peru/liga-1/17079/",
+    // En la v3 funcionó OK con cerrarModales default.
   },
   {
     casa: "inkabet",
     url: "https://inkabet.pe/pe/apuestas-deportivas/futbol/peru/peru-liga-1?tab=liveAndUpcoming",
+    // El iframe se llama literalmente sportsBookIframe.
+    iframeRegex: /inkabetplayground\.net/i,
+    waitIframeMs: 5000,
   },
   {
     casa: "te_apuesto",
     url: "https://www.teapuesto.pe/sport/detail/futbol/peru/liga-1-te-apuesto?id=1,476,1899",
+    // Click en oct-elmt-sport-event-container no cambia URL — el
+    // listado tiene cuotas, extraemos ahí.
+    extraerEnListado: true,
   },
 ];
 
@@ -211,14 +251,18 @@ async function cerrarModalesOverlay(page) {
           }
         }
 
-        // 3. Botón con texto X/×/✕/✗
+        // 3. Botón con texto Unicode close (×, ✕, ✗).
+        // CRÍTICO: NO incluir "X" mayúscula porque colisiona con links
+        // al perfil Twitter/X (ej. footer de Stake tiene <a> con texto
+        // "X" hacia x.com/PeruStake). Bug detectado en la v3.
+        // También excluimos <a> con href fuera del dominio actual.
         const botones = document.querySelectorAll(
-          "button, [role='button'], a, span, div",
+          "button, [role='button'], span, div",
         );
         for (const el of Array.from(botones)) {
           if (!(el instanceof HTMLElement)) continue;
           const txt = (el.innerText ?? el.textContent ?? "").trim();
-          if (txt === "×" || txt === "✕" || txt === "✗" || txt === "X") {
+          if (txt === "×" || txt === "✕" || txt === "✗") {
             const rect = el.getBoundingClientRect();
             if (rect.width > 0 && rect.height > 0 && rect.width < 60) {
               el.click();
@@ -710,7 +754,17 @@ async function extraerCuotasStake(page) {
 
 // ─── Procesamiento por casa ────────────────────────────────────────────
 
-async function probarCasa({ casa, url, waitExtraMs }) {
+async function probarCasa(casaConfig) {
+  const {
+    casa,
+    url,
+    waitExtraMs,
+    cerrarModales = true,
+    waitAntesDeCerrarMs = 0,
+    iframeRegex,
+    waitIframeMs = 4000,
+    extraerEnListado = false,
+  } = casaConfig;
   const tInicio = Date.now();
   console.log(`\n${"━".repeat(72)}`);
   console.log(`[${casa}]`);
@@ -759,6 +813,12 @@ async function probarCasa({ casa, url, waitExtraMs }) {
     msTotal: 0,
   };
 
+  // workTarget puede ser la page principal o un frame (cuando hay
+  // iframeRegex configurado). Declarado fuera del try para que la fase
+  // B pueda usarlo.
+  let workTarget = page;
+  let inFrame = false;
+
   // ── FASE A: navegación al listado ──
   try {
     console.log(`  [A] navegando: ${url}`);
@@ -778,15 +838,25 @@ async function probarCasa({ casa, url, waitExtraMs }) {
       console.log(`  [A] cookies: sin banner detectado o no se pudo clickear`);
     }
 
-    // Cerrar cualquier modal/popup que cubra el contenido (Doradobet
-    // muestra modal de "Iniciar Sesión", otras casas tienen modales
-    // promocionales similares).
-    resultado.listado.modalesCerrados = await cerrarModalesOverlay(page);
-    if (resultado.listado.modalesCerrados > 0) {
-      console.log(
-        `  [A] ${resultado.listado.modalesCerrados} modal(es) overlay cerrado(s)`,
-      );
-      await page.waitForTimeout(1500);
+    // Cerrar modales overlay solo si la config lo pide (Stake=false porque
+    // tiene un link "X" hacia Twitter que el matcher confunde con un
+    // botón close — bug detectado en v3).
+    if (cerrarModales) {
+      if (waitAntesDeCerrarMs > 0) {
+        console.log(
+          `  [A] esperando ${waitAntesDeCerrarMs}ms antes de cerrar modales (modal puede tardar en aparecer)`,
+        );
+        await page.waitForTimeout(waitAntesDeCerrarMs);
+      }
+      resultado.listado.modalesCerrados = await cerrarModalesOverlay(page);
+      if (resultado.listado.modalesCerrados > 0) {
+        console.log(
+          `  [A] ${resultado.listado.modalesCerrados} modal(es) overlay cerrado(s)`,
+        );
+        await page.waitForTimeout(1500);
+      }
+    } else {
+      console.log(`  [A] cerrarModales=false (config de la casa)`);
     }
 
     const sleepMs = waitExtraMs ?? SLEEP_HIDRATACION_DEFAULT_MS;
@@ -808,7 +878,42 @@ async function probarCasa({ casa, url, waitExtraMs }) {
       }
     }
 
-    const diag = await page.evaluate(() => {
+    // Si la config tiene iframeRegex, switchear al frame correcto para
+    // hacer el resto del flujo (búsqueda + análisis estructural). El
+    // screenshot y goto siguen sobre la page principal — solo evaluate /
+    // querySelector / waitForSelector pasan al frame.
+    if (iframeRegex) {
+      console.log(
+        `  [A] esperando ${waitIframeMs}ms para que cargue el iframe del sportsbook embebido`,
+      );
+      await page.waitForTimeout(waitIframeMs);
+      const allFrames = page.frames();
+      const sbFrame = allFrames.find(
+        (f) => f.url() && iframeRegex.test(f.url()),
+      );
+      if (sbFrame) {
+        try {
+          await sbFrame.waitForLoadState("domcontentloaded", {
+            timeout: 10_000,
+          });
+          await page.waitForTimeout(3000);
+        } catch {
+          /* el frame puede estar listo igual */
+        }
+        workTarget = sbFrame;
+        inFrame = true;
+        console.log(
+          `  [A] OK · trabajando dentro del iframe: ${sbFrame.url().slice(0, 100)}`,
+        );
+      } else {
+        console.log(
+          `  [A] iframe esperado NO encontrado · ${allFrames.length} frames totales · pattern=${iframeRegex}`,
+        );
+      }
+    }
+    resultado.listado.inFrame = inFrame;
+
+    const diag = await workTarget.evaluate(() => {
       const titulo = document.title?.slice(0, 200) ?? "";
       const urlFinal = window.location.href;
       const bodyText = document.body?.innerText ?? "";
@@ -837,7 +942,8 @@ async function probarCasa({ casa, url, waitExtraMs }) {
     );
     resultado.listado.ok = diag.bodyTextLength > 1500 && !tituloSospechoso;
 
-    // Capturar artefactos
+    // Capturar artefactos. Screenshot SIEMPRE de la page principal
+    // (no del frame). HTML y análisis desde workTarget (frame si aplica).
     await mkdir(DIR_SCREENSHOTS, { recursive: true });
     await mkdir(DIR_HTML, { recursive: true });
     await mkdir(DIR_ANALISIS, { recursive: true });
@@ -845,13 +951,13 @@ async function probarCasa({ casa, url, waitExtraMs }) {
       path: join(DIR_SCREENSHOTS, `${casa}-listado.png`),
       fullPage: false,
     });
-    const htmlListado = await capturarHtmlBody(page);
+    const htmlListado = await capturarHtmlBody(workTarget);
     await writeFile(
       join(DIR_HTML, `${casa}-listado.html`),
       htmlListado,
       "utf-8",
     );
-    const analisisListado = await generarAnalisisEstructural(page);
+    const analisisListado = await generarAnalisisEstructural(workTarget);
     await writeFile(
       join(DIR_ANALISIS, `${casa}-listado.json`),
       JSON.stringify(analisisListado, null, 2),
@@ -869,12 +975,15 @@ async function probarCasa({ casa, url, waitExtraMs }) {
   }
 
   // ── FASE B: búsqueda del partido ──
+  // Búsqueda dentro de workTarget (page principal o iframe del sportsbook).
   if (resultado.listado.ok) {
     try {
-      console.log(`  [B] buscando partido objetivo en listado`);
+      console.log(
+        `  [B] buscando partido objetivo${inFrame ? " (dentro del iframe)" : ""}`,
+      );
       if (casa === "stake") {
         const match = await buscarPartidoStake(
-          page,
+          workTarget,
           PARTIDO_OBJETIVO.equipoLocal,
           PARTIDO_OBJETIVO.equipoVisita,
         );
@@ -888,7 +997,7 @@ async function probarCasa({ casa, url, waitExtraMs }) {
         }
       } else {
         const candidatos = await buscarPartidoGenerico(
-          page,
+          workTarget,
           PARTIDO_OBJETIVO.equipoLocal,
           PARTIDO_OBJETIVO.equipoVisita,
         );
@@ -911,7 +1020,20 @@ async function probarCasa({ casa, url, waitExtraMs }) {
   }
 
   // ── FASE C: navegación al detalle ──
-  if (resultado.busqueda.candidatoElegido) {
+  // Skip si la casa tiene extraerEnListado=true (Coolbet, Te Apuesto):
+  // las cuotas están en el listado mismo, no hace falta ir al detalle.
+  if (extraerEnListado) {
+    console.log(
+      `  [C] skip navegación · extraerEnListado=true (cuotas viven en el listado)`,
+    );
+    resultado.detalle = {
+      ...resultado.detalle,
+      ok: true,
+      url: page.url(),
+      via: "extraerEnListado",
+      bodyTextLength: resultado.listado.bodyTextLength,
+    };
+  } else if (resultado.busqueda.candidatoElegido) {
     try {
       console.log(`  [C] intentando navegar al detalle`);
       const tC = Date.now();
