@@ -16,6 +16,17 @@
 // devuelven "casa pendiente de discovery" para todas hasta que V.5 active
 // el discovery automático. La estructura del flujo es la final — los
 // lotes posteriores sólo conectan piezas, no rediseñan.
+//
+// Lote V.6 (May 2026): `iniciarCaptura` se vuelve idempotente y robusto.
+// Si no hay ningún `EventIdExterno` para el partido al momento de
+// invocarse, llama internamente a `ejecutarDiscoveryParaPartido` ANTES de
+// leer la tabla y encolar jobs. Esto cubre tres casos en producción:
+//   - Recovery al boot tras un partido importado sin pasar por Filtro 1.
+//   - Botón "Forzar refresh global" sobre un partido que nunca pasó por
+//     activación de Filtro 1 (ej. import directo via cron).
+//   - Endpoint admin manual de discovery + captura.
+// Los disparos primarios (PATCH /filtros tras OFF→ON) ya cadenan
+// discovery → captura externamente, así que no caen acá.
 
 import { prisma } from "@habla/db";
 import { logger } from "./logger";
@@ -29,6 +40,7 @@ import {
   iniciarCuotasWorker,
   detenerCuotasWorker,
 } from "./cuotas-worker";
+import { ejecutarDiscoveryParaPartido } from "./discovery-cuotas.service";
 import type { CasaCuotas, CuotasJobData } from "./scrapers/types";
 
 export interface ResumenIniciarCaptura {
@@ -64,6 +76,38 @@ export async function iniciarCaptura(
     where: { id: partidoId },
     data: { estadoCaptura: "INICIANDO" },
   });
+
+  // Lote V.6: si no hay ningún EventIdExterno para el partido, ejecutamos
+  // discovery interno antes de continuar. Idempotente: respeta MANUAL,
+  // no pisa AUTOMATICO previo. Cubre boot recovery + refresh global +
+  // endpoint manual de discovery.
+  const cantidadActual = await prisma.eventIdExterno.count({
+    where: { partidoId },
+  });
+  if (cantidadActual === 0) {
+    logger.info(
+      { partidoId, source: "captura-cuotas:auto-discovery" },
+      "iniciarCaptura: tabla EventIdExterno vacía para el partido, disparando discovery interno",
+    );
+    try {
+      const r = await ejecutarDiscoveryParaPartido(partidoId);
+      logger.info(
+        {
+          partidoId,
+          resueltas: r.resueltas.length,
+          sinResolver: r.sinResolver.length,
+          fallidas: r.fallidas.length,
+          source: "captura-cuotas:auto-discovery",
+        },
+        "iniciarCaptura: discovery interno completado",
+      );
+    } catch (err) {
+      logger.error(
+        { partidoId, err, source: "captura-cuotas:auto-discovery" },
+        "iniciarCaptura: discovery interno falló — continuamos con tabla vacía",
+      );
+    }
+  }
 
   const eventIds = await prisma.eventIdExterno.findMany({
     where: { partidoId },

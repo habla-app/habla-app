@@ -33,6 +33,8 @@ import {
 import { logger } from "@/lib/services/logger";
 import { logAuditoria } from "@/lib/services/auditoria.service";
 import { generarAnalisisParaPartido } from "@/lib/services/analisis-partido-generador.service";
+import { ejecutarDiscoveryParaPartido } from "@/lib/services/discovery-cuotas.service";
+import { iniciarCaptura } from "@/lib/services/captura-cuotas.service";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -156,6 +158,7 @@ export async function PATCH(
 
     // Worker fire-and-forget: dispara generación si activamos Filtro 1.
     let generacionDisparada = false;
+    let cuotasDisparadas = false;
     if (transicionActivacion) {
       generacionDisparada = true;
       void generarAnalisisParaPartido(partido.id)
@@ -176,6 +179,45 @@ export async function PATCH(
             "filtros: generación falló post-activación",
           );
         });
+
+      // Lote V.6: cableado del motor de cuotas. Cadenamos discovery →
+      // iniciarCaptura para que la activación de Filtro 1 dispare el flujo
+      // completo. El cadenado (no paralelismo) es deliberado: iniciarCaptura
+      // lee EventIdExterno; si lo invocamos en paralelo con discovery, lee
+      // la tabla todavía vacía y todas las casas quedan como "sin event id".
+      cuotasDisparadas = true;
+      void (async () => {
+        try {
+          const r1 = await ejecutarDiscoveryParaPartido(partido.id);
+          logger.info(
+            {
+              partidoId: partido.id,
+              resueltas: r1.resueltas.length,
+              sinResolver: r1.sinResolver.length,
+              fallidas: r1.fallidas.length,
+              skipeadasPorManual: r1.skipeadasPorManual.length,
+              skipeadasPorAutomaticoPrevio: r1.skipeadasPorAutomaticoPrevio.length,
+              source: "admin:partidos:filtros:discovery",
+            },
+            "filtros: discovery automático completado",
+          );
+          const r2 = await iniciarCaptura(partido.id);
+          logger.info(
+            {
+              partidoId: partido.id,
+              casasEncoladas: r2.casasEncoladas.length,
+              casasSinEventId: r2.casasSinEventId.length,
+              source: "admin:partidos:filtros:captura",
+            },
+            "filtros: iniciarCaptura completado",
+          );
+        } catch (err) {
+          logger.error(
+            { err, partidoId: partido.id, source: "admin:partidos:filtros:cuotas" },
+            "filtros: cableado discovery+captura falló",
+          );
+        }
+      })();
     }
 
     return Response.json({
@@ -184,6 +226,7 @@ export async function PATCH(
       transicionActivacion,
       transicionDesactivacion,
       generacionDisparada,
+      cuotasDisparadas,
     });
   } catch (err) {
     logger.error(
