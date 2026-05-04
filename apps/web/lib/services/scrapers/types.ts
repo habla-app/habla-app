@@ -106,26 +106,22 @@ export interface ResultadoScraper {
  * con esta interfaz y se registra en el dispatcher del worker.
  *
  * - `nombre`: clave canónica de la casa (debe coincidir con CasaCuotas).
- * - `buscarEventIdExterno` y `capturarCuotas` (legacy V.1-V.8): flow vía
- *   API HTTP directo. Los endpoints actuales están rotos/bloqueados pero
- *   los métodos quedan en el contrato como fallback opcional.
- * - `capturarConPlaywright` (V.9): flow nuevo agnóstico de liga vía
- *   browser headless. Si está presente, el worker la prefiere sobre el
- *   par buscar+capturar HTTP. Retorna `null` cuando la casa no cubre
- *   el partido (liga no mapeada o partido no aparece en el listado);
- *   lanza Error si Playwright falla técnicamente.
+ * - `capturarConPlaywright` (V.9 → único método tras V.10.1): captura
+ *   via browser headless. Discovery + extracción en una sola pasada.
+ *   Retorna `null` cuando la casa no cubre el partido (liga no mapeada o
+ *   partido no aparece en el listado); lanza Error si Playwright falla
+ *   técnicamente. Recibe el partido completo y opcionalmente la URL
+ *   directa del partido en la casa cuando hay vinculación manual previa.
+ *
+ * Lote V.10.1 (May 2026): se eliminaron `buscarEventIdExterno` y
+ * `capturarCuotas` HTTP del contrato. Los endpoints API están rotos/
+ * bloqueados desde V.8 y nunca se invocan desde el worker (que prefiere
+ * Playwright). Mantener esos métodos era dead weight de ~3000 líneas
+ * que confundía al diagnóstico.
  */
 export interface Scraper {
   nombre: CasaCuotas;
-  buscarEventIdExterno(partido: Partido): Promise<string | null>;
-  capturarCuotas(eventIdExterno: string): Promise<ResultadoScraper>;
-  /**
-   * Lote V.9: captura via Playwright. Si está presente, el worker la usa
-   * en lugar del par HTTP. Recibe el partido completo (necesita liga +
-   * equipos para navegar el sportsbook) y opcionalmente la URL directa
-   * del partido en la casa cuando hay vinculación manual previa.
-   */
-  capturarConPlaywright?(
+  capturarConPlaywright(
     partido: Partido,
     urlPartidoEnCasa?: string | null,
   ): Promise<ResultadoScraper | null>;
