@@ -3,171 +3,161 @@
 // Apuesta Total embebe el sportsbook de Kambi via el dominio
 // `prod20392.kmianko.com`. El admin capturó via DevTools que el frontend
 // hace fetch a `/api/pulse/snapshot/events?lang=ES-PE&t=hPNI` con
-// CORS abierto (access-control-allow-credentials: true, methods GET/OPTIONS).
+// CORS abierto.
 //
-// La respuesta es ~3.93 MB sin comprimir (269 KB con gzip). Trae TODOS
-// los partidos del operador — no solo Liga 1 Perú. El frontend filtra
-// client-side. Nuestro approach: pegarle al endpoint, parsear, filtrar
-// por "Liga 1" o "Perú" en el server.
+// Primer intento (con `t=hPNI` capturado del DevTools) devolvió:
+//   HTTP 400: "querystring/t must be equal to one of the allowed values"
 //
-// Esta es la fase EXPLORATORIA: solo hacemos fetch y devolvemos
-// metadata + sample. No mapeamos a CuotasPartido todavía porque el
-// shape exacto del JSON aún no está documentado (la respuesta de
-// DevTools del admin se truncó a 1138 chars). Una vez veamos la
-// estructura completa, escribimos el parser específico.
+// Eso indica que `t` es validado contra una lista cerrada y `hPNI` quizá
+// rota por sesión o canal. Esta versión prueba varias combinaciones de
+// `t` y endpoints alternativos en paralelo, y reporta cuáles funcionan.
 
 import { logger } from "../../logger";
 
-interface SampleResultado {
+interface IntentoResultado {
+  url: string;
   ok: boolean;
-  raw: {
-    httpStatus: number | null;
-    bytes: number;
-    ms: number;
-    url: string;
-  };
-  /** Top-level keys del JSON (ej. "Participants", "Events", "BetOffers"). */
-  estructura?: {
-    topLevelKeys: string[];
-    /** Para cada key array, su length y un sample del primer elemento. */
-    samplesPorKey: Record<
-      string,
-      {
-        tipo: "array" | "object" | "primitive";
-        length?: number;
-        sampleKeys?: string[];
-        sample?: unknown;
-      }
-    >;
-  };
-  /** Conteo total de strings que matchean equipos/ligas peruanas (heuristic). */
-  matchesPeruanos?: {
-    cajamarca: number;
-    alianza: number;
-    cristal: number;
-    universitario: number;
-    melgar: number;
-    liga1: number;
-    peru: number;
-  };
-  /** Si encontramos eventos con equipos peruanos, devolvemos los primeros 3. */
-  eventosPeruanos?: unknown[];
+  httpStatus: number | null;
+  bytes: number;
+  ms: number;
   error?: string;
+  /** Top-level keys del JSON si parseó OK. */
+  topLevelKeys?: string[];
+  /** Conteo de matches peruanos en el texto crudo. */
+  matchesPeruanos?: Record<string, number>;
+  /** Primeros 3 eventos peruanos detectados, si la respuesta tiene Events array. */
+  eventosPeruanos?: unknown[];
+  /** Sample del primer participant si existe. */
+  sampleParticipant?: unknown;
 }
 
-const URL_APUESTA_TOTAL =
-  "https://prod20392.kmianko.com/api/pulse/snapshot/events?lang=ES-PE&t=hPNI";
+interface ExploracionResultado {
+  intentos: IntentoResultado[];
+  resumen: {
+    totalIntentos: number;
+    intentosOk: number;
+    primerIntentoOkIndex: number | null;
+    msTotal: number;
+  };
+}
 
-export async function fetchExploracionApuestaTotal(): Promise<SampleResultado> {
+const URL_BASE = "https://prod20392.kmianko.com";
+
+/**
+ * Lista de URLs a probar. Si encontramos UNA que devuelve 200 + JSON
+ * con partidos peruanos, hemos resuelto el problema. Si todas fallan,
+ * el endpoint requiere un parámetro dinámico que tendremos que extraer
+ * del HTML inicial.
+ */
+const URLS_A_PROBAR = [
+  // Sin parámetro t — quizá es opcional.
+  `${URL_BASE}/api/pulse/snapshot/events?lang=ES-PE`,
+  // Valores típicos de canal en sistemas Kambi.
+  `${URL_BASE}/api/pulse/snapshot/events?lang=ES-PE&t=web`,
+  `${URL_BASE}/api/pulse/snapshot/events?lang=ES-PE&t=site`,
+  `${URL_BASE}/api/pulse/snapshot/events?lang=ES-PE&t=portal`,
+  `${URL_BASE}/api/pulse/snapshot/events?lang=ES-PE&t=mobile`,
+  `${URL_BASE}/api/pulse/snapshot/events?lang=ES-PE&t=desktop`,
+  `${URL_BASE}/api/pulse/snapshot/events?lang=ES-PE&t=app`,
+  // Original capturado del DevTools (probablemente rotado por sesión).
+  `${URL_BASE}/api/pulse/snapshot/events?lang=ES-PE&t=hPNI`,
+  // Endpoint alternativo visto en la pestaña Red.
+  `${URL_BASE}/api/pulse/events?language=ES-PE&customerLevel=0&draft=false&epoEnabled=true`,
+  // Variante con language en lugar de lang.
+  `${URL_BASE}/api/pulse/snapshot/events?language=ES-PE`,
+];
+
+const HEADERS_DEFAULT = {
+  Accept: "application/json, text/plain, */*",
+  "Accept-Language": "es-PE,es;q=0.9,en;q=0.8",
+  Origin: "https://www.apuestatotal.com",
+  Referer: "https://www.apuestatotal.com/",
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+    "(KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+};
+
+const REGEX_PERUANOS =
+  /cajamarca|alianza|cristal|universitario|melgar|moquegua|cienciano|grau|huancayo|chankas|garcilaso|sport boys|deportivo/i;
+
+async function probarUrl(url: string): Promise<IntentoResultado> {
   const tInicio = Date.now();
+  const intento: IntentoResultado = {
+    url,
+    ok: false,
+    httpStatus: null,
+    bytes: 0,
+    ms: 0,
+  };
 
   let response: Response;
-  let bytes = 0;
-  let httpStatus: number | null = null;
-  let body: unknown;
-
   try {
-    response = await fetch(URL_APUESTA_TOTAL, {
+    response = await fetch(url, {
       method: "GET",
-      headers: {
-        Accept: "application/json, text/plain, */*",
-        "Accept-Language": "es-PE,es;q=0.9,en;q=0.8",
-        Origin: "https://www.apuestatotal.com",
-        Referer: "https://www.apuestatotal.com/",
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-          "(KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
-      },
+      headers: HEADERS_DEFAULT,
+      signal: AbortSignal.timeout(15_000),
     });
-    httpStatus = response.status;
+    intento.httpStatus = response.status;
   } catch (err) {
-    return {
-      ok: false,
-      raw: {
-        httpStatus: null,
-        bytes: 0,
-        ms: Date.now() - tInicio,
-        url: URL_APUESTA_TOTAL,
-      },
-      error: `fetch falló: ${(err as Error).message}`,
-    };
-  }
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    return {
-      ok: false,
-      raw: {
-        httpStatus,
-        bytes: text.length,
-        ms: Date.now() - tInicio,
-        url: URL_APUESTA_TOTAL,
-      },
-      error: `HTTP ${httpStatus}: ${text.slice(0, 300)}`,
-    };
+    intento.ms = Date.now() - tInicio;
+    intento.error = `fetch falló: ${(err as Error).message}`;
+    return intento;
   }
 
   let rawText: string;
   try {
     rawText = await response.text();
-    bytes = rawText.length;
-    body = JSON.parse(rawText);
+    intento.bytes = rawText.length;
   } catch (err) {
-    return {
-      ok: false,
-      raw: {
-        httpStatus,
-        bytes,
-        ms: Date.now() - tInicio,
-        url: URL_APUESTA_TOTAL,
-      },
-      error: `parsing JSON falló: ${(err as Error).message}`,
-    };
+    intento.ms = Date.now() - tInicio;
+    intento.error = `lectura de body falló: ${(err as Error).message}`;
+    return intento;
   }
 
-  // Análisis de la estructura.
-  const estructura: NonNullable<SampleResultado["estructura"]> = {
-    topLevelKeys: [],
-    samplesPorKey: {},
-  };
+  if (!response.ok) {
+    intento.ms = Date.now() - tInicio;
+    intento.error = `HTTP ${response.status}: ${rawText.slice(0, 200)}`;
+    return intento;
+  }
 
+  let body: unknown;
+  try {
+    body = JSON.parse(rawText);
+  } catch (err) {
+    intento.ms = Date.now() - tInicio;
+    intento.error = `parsing JSON falló: ${(err as Error).message}`;
+    return intento;
+  }
+
+  // Análisis del response.
   if (typeof body === "object" && body !== null && !Array.isArray(body)) {
     const obj = body as Record<string, unknown>;
-    estructura.topLevelKeys = Object.keys(obj);
-    for (const key of estructura.topLevelKeys) {
-      const value = obj[key];
-      if (Array.isArray(value)) {
-        const first = value[0];
-        estructura.samplesPorKey[key] = {
-          tipo: "array",
-          length: value.length,
-          sampleKeys:
-            first && typeof first === "object" && first !== null
-              ? Object.keys(first as Record<string, unknown>).slice(0, 30)
-              : [],
-          sample: first ?? null,
-        };
-      } else if (value && typeof value === "object") {
-        estructura.samplesPorKey[key] = {
-          tipo: "object",
-          sampleKeys: Object.keys(value as Record<string, unknown>).slice(
-            0,
-            30,
-          ),
-        };
-      } else {
-        estructura.samplesPorKey[key] = {
-          tipo: "primitive",
-          sample: value,
-        };
+    intento.topLevelKeys = Object.keys(obj);
+
+    // Sample del primer participant si existe.
+    const participants = obj.Participants;
+    if (Array.isArray(participants) && participants.length > 0) {
+      intento.sampleParticipant = participants[0];
+    }
+
+    // Buscar eventos peruanos.
+    const eventsKey = obj.Events ?? obj.events;
+    if (Array.isArray(eventsKey)) {
+      const peruanos: unknown[] = [];
+      for (const event of eventsKey) {
+        const eventStr = JSON.stringify(event ?? {});
+        if (REGEX_PERUANOS.test(eventStr)) {
+          peruanos.push(event);
+          if (peruanos.length >= 3) break;
+        }
       }
+      intento.eventosPeruanos = peruanos;
     }
   }
 
-  // Heurística: contar matches de palabras peruanas en el texto crudo.
-  // Más rápido que iterar el árbol JSON.
+  // Conteo de matches peruanos en el texto crudo (más rápido que iterar JSON).
   const lowerText = rawText.toLowerCase();
-  const matchesPeruanos: NonNullable<SampleResultado["matchesPeruanos"]> = {
+  intento.matchesPeruanos = {
     cajamarca: (lowerText.match(/cajamarca/g) ?? []).length,
     alianza: (lowerText.match(/alianza/g) ?? []).length,
     cristal: (lowerText.match(/cristal/g) ?? []).length,
@@ -177,46 +167,52 @@ export async function fetchExploracionApuestaTotal(): Promise<SampleResultado> {
     peru: (lowerText.match(/per[uú]/g) ?? []).length,
   };
 
-  // Si hay eventos, intentar encontrar 3 que tengan nombres de equipos
-  // peruanos para ver el shape concreto.
-  const eventosPeruanos: unknown[] = [];
-  if (
-    body !== null &&
-    typeof body === "object" &&
-    "Events" in (body as Record<string, unknown>)
-  ) {
-    const events = (body as { Events?: unknown[] }).Events;
-    if (Array.isArray(events)) {
-      const NAMES_PERUANOS_REGEX =
-        /cajamarca|alianza|cristal|universitario|melgar|moquegua|cienciano|grau|huancayo|chankas|garcilaso|sport boys|deportivo/i;
-      for (const event of events) {
-        const eventStr = JSON.stringify(event ?? {});
-        if (NAMES_PERUANOS_REGEX.test(eventStr)) {
-          eventosPeruanos.push(event);
-          if (eventosPeruanos.length >= 3) break;
-        }
-      }
-    }
-  }
+  intento.ok = true;
+  intento.ms = Date.now() - tInicio;
+  return intento;
+}
 
-  const ms = Date.now() - tInicio;
+/**
+ * Prueba múltiples variantes de URL en paralelo y devuelve los
+ * resultados de cada una. Usado para descubrir qué combinación de
+ * parámetros funciona para llamar la API de Kambi de Apuesta Total.
+ */
+export async function fetchExploracionApuestaTotal(): Promise<ExploracionResultado> {
+  const tInicio = Date.now();
+
+  // Probar todas las URLs en paralelo (Promise.allSettled para no abortar
+  // si una falla).
+  const settled = await Promise.allSettled(URLS_A_PROBAR.map(probarUrl));
+
+  const intentos: IntentoResultado[] = settled.map((s, i) => {
+    if (s.status === "fulfilled") return s.value;
+    return {
+      url: URLS_A_PROBAR[i]!,
+      ok: false,
+      httpStatus: null,
+      bytes: 0,
+      ms: 0,
+      error: `Promise rejected: ${s.reason?.message ?? String(s.reason)}`,
+    };
+  });
+
+  const intentosOk = intentos.filter((i) => i.ok).length;
+  const primerOk = intentos.findIndex((i) => i.ok);
+
+  const resumen = {
+    totalIntentos: intentos.length,
+    intentosOk,
+    primerIntentoOkIndex: primerOk >= 0 ? primerOk : null,
+    msTotal: Date.now() - tInicio,
+  };
+
   logger.info(
     {
-      bytes,
-      ms,
-      topKeys: estructura.topLevelKeys,
-      matchesPeruanos,
-      eventosPeruanosCount: eventosPeruanos.length,
+      ...resumen,
       source: "scrapers:apuesta-total-api:exploracion",
     },
-    `apuesta-total-api exploración · ${bytes} bytes en ${ms}ms · ${eventosPeruanos.length} eventos peruanos detectados`,
+    `apuesta-total exploración · ${intentosOk}/${intentos.length} URLs respondieron OK · ${resumen.msTotal}ms total`,
   );
 
-  return {
-    ok: true,
-    raw: { httpStatus, bytes, ms, url: URL_APUESTA_TOTAL },
-    estructura,
-    matchesPeruanos,
-    eventosPeruanos,
-  };
+  return { intentos, resumen };
 }
