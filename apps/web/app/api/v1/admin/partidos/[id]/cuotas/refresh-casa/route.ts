@@ -33,6 +33,7 @@ import { logger } from "@/lib/services/logger";
 import { logAuditoria } from "@/lib/services/auditoria.service";
 import { encolarJobCaptura } from "@/lib/services/cuotas-cola";
 import { CASAS_CUOTAS, type CasaCuotas } from "@/lib/services/scrapers/types";
+import { obtenerLigaIdParaPartido } from "@/lib/services/scrapers/ligas-id-map";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -68,23 +69,30 @@ export async function POST(
 
     const partido = await prisma.partido.findUnique({
       where: { id: params.id },
-      select: { id: true, equipoLocal: true, equipoVisita: true },
+      select: { id: true, equipoLocal: true, equipoVisita: true, liga: true },
     });
     if (!partido) throw new PartidoNoEncontrado(params.id);
 
-    // Lote V.10.1: con Playwright universal ya no exigimos EventIdExterno
-    // previo. Si existe (vinculación manual), lo usamos como hint de URL;
-    // si no, encolamos con "auto" y el scraper Playwright resuelve solo.
-    const eventIdRow = await prisma.eventIdExterno.findUnique({
-      where: { partidoId_casa: { partidoId: partido.id, casa } },
-      select: { eventIdExterno: true, metodoDiscovery: true },
-    });
-    const hint = eventIdRow?.eventIdExterno ?? "auto";
+    // Lote V.11: motor API-only. Resolver ligaIdCasa via mapeo central.
+    // Si no está mapeada para esa casa, devolvemos 409 con mensaje claro
+    // (admin sabe que tiene que agregar el ID en ligas-id-map.ts).
+    const resolveLiga = obtenerLigaIdParaPartido(partido.liga, casa);
+    if (!resolveLiga) {
+      return Response.json(
+        {
+          error: {
+            code: "LIGA_NO_MAPEADA",
+            message: `La liga "${partido.liga}" no tiene ID mapeado para la casa "${casa}". Agregar el ID en apps/web/lib/services/scrapers/ligas-id-map.ts.`,
+          },
+        },
+        { status: 409 },
+      );
+    }
 
     const jobId = await encolarJobCaptura({
       partidoId: partido.id,
       casa,
-      eventIdExterno: hint,
+      ligaIdCasa: resolveLiga.ligaIdCasa,
       esRefresh: true,
     });
 
@@ -116,8 +124,8 @@ export async function POST(
       resumen: `Refresh manual de cuotas (${casa}) sobre ${partido.equipoLocal} vs ${partido.equipoVisita}`,
       metadata: {
         casa,
-        eventIdExterno: hint,
-        metodoDiscovery: eventIdRow?.metodoDiscovery ?? "AUTO",
+        ligaCanonica: resolveLiga.ligaCanonica,
+        ligaIdCasa: resolveLiga.ligaIdCasa,
         jobId,
       },
     });

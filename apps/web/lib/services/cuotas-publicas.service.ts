@@ -13,7 +13,6 @@ import type { CasaCuotas } from "./scrapers/types";
 import type { CuotasV5Payload } from "@/components/mdx/CuotasGridV5";
 
 const ETIQUETAS_CASA: Record<CasaCuotas, string> = {
-  stake: "Stake",
   apuesta_total: "Apuesta Total",
   coolbet: "Coolbet",
   doradobet: "Doradobet",

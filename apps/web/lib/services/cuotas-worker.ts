@@ -28,7 +28,6 @@ import {
   recalcularEstadoCapturaPartido,
 } from "./cuotas-persistencia";
 import { aprenderAlias } from "./scrapers/alias-equipo";
-import { browserPlaywrightInicializado } from "./scrapers/playwright-browser";
 import type {
   CasaCuotas,
   CuotasJobData,
@@ -142,8 +141,8 @@ function iniciarHeartbeatWorker(): void {
         } catch {
           isRunning = null;
         }
-        // Lote V.10.7: enriquecer heartbeat con más telemetría operativa.
-        const browserVivo = browserPlaywrightInicializado();
+        // Lote V.11: heartbeat sin Playwright (motor API-only). Solo
+        // counts BullMQ + isPaused/isRunning + memoria RSS del proceso.
         const memMb =
           typeof process.memoryUsage === "function"
             ? Math.round(process.memoryUsage().rss / (1024 * 1024))
@@ -153,11 +152,10 @@ function iniciarHeartbeatWorker(): void {
             counts,
             isPaused,
             isRunning,
-            browserPlaywright: browserVivo,
             rssMb: memMb,
             source: "cuotas-worker:heartbeat",
           },
-          `heartbeat · waiting=${counts.waiting ?? 0} active=${counts.active ?? 0} delayed=${counts.delayed ?? 0} failed=${counts.failed ?? 0} completed=${counts.completed ?? 0} · paused=${isPaused} running=${isRunning} · browserPW=${browserVivo} · rss=${memMb ?? "?"}MB`,
+          `heartbeat · waiting=${counts.waiting ?? 0} active=${counts.active ?? 0} delayed=${counts.delayed ?? 0} failed=${counts.failed ?? 0} completed=${counts.completed ?? 0} · paused=${isPaused} running=${isRunning} · rss=${memMb ?? "?"}MB`,
         );
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err ?? "?");
@@ -188,18 +186,15 @@ function iniciarHeartbeatWorker(): void {
  * tests puedan llamarlo directamente sin pasar por BullMQ.
  */
 export async function procesarJobCaptura(job: BullMQJobLike): Promise<void> {
-  const { partidoId, casa, eventIdExterno } = job.data;
+  const { partidoId, casa, ligaIdCasa } = job.data;
 
   const scraper = scraperRegistry[casa];
   if (!scraper) {
-    // V.1: ningún scraper implementado todavía. No es una falla externa,
-    // sólo "todavía no hay código que cubra esta casa". Marcamos error
-    // pero no penalizamos salud (el scraper como tal no falló).
     await persistirError({
       partidoId,
       casa,
-      eventIdExterno,
-      errorMensaje: "scraper no implementado (V.1)",
+      eventIdExterno: ligaIdCasa, // legacy: el campo en BD aún se llama así
+      errorMensaje: `scraper "${casa}" no registrado`,
     });
     await recalcularEstadoCapturaPartido(partidoId);
     logger.debug(
@@ -209,18 +204,16 @@ export async function procesarJobCaptura(job: BullMQJobLike): Promise<void> {
     return;
   }
 
-  // Lote V.10.1: log explícito al arrancar el procesado. Tras la
-  // limpieza, todos los scrapers tienen `capturarConPlaywright` (es
-  // requerido en el contrato). Ya no hay rama HTTP fallback.
+  // Lote V.11: API directa, sin Playwright. Recibe ligaIdCasa.
   const tInicioJob = Date.now();
   logger.info(
     {
       partidoId,
       casa,
-      eventIdExterno,
+      ligaIdCasa,
       source: "cuotas-worker",
     },
-    `procesando job ${casa} vía playwright`,
+    `procesando job ${casa} vía API (ligaIdCasa=${ligaIdCasa})`,
   );
 
   try {
@@ -230,27 +223,21 @@ export async function procesarJobCaptura(job: BullMQJobLike): Promise<void> {
     if (!partidoEntidad) {
       throw new Error(`partido ${partidoId} no existe`);
     }
-    // Si tenemos eventIdExterno guardado y parece URL, lo pasamos como
-    // hint para que el scraper navegue directo (vinculación manual).
-    const urlHint =
-      eventIdExterno && /^https?:\/\//i.test(eventIdExterno)
-        ? eventIdExterno
-        : null;
-    const r = await scraper.capturarConPlaywright(partidoEntidad, urlHint);
+    const r = await scraper.capturarPorApi(partidoEntidad, ligaIdCasa);
     if (r === null) {
-      // Casa no cubre la liga / partido no aparece en listado.
+      // Partido no encontrado en response de la casa para esa liga.
       // No es ERROR técnico — registramos como SIN_DATOS para que el
       // próximo ciclo reintente sin penalizar salud.
       await persistirSinDatos({
         partidoId,
         casa,
-        eventIdExterno,
-        mensaje: "casa no cubre la liga o partido no encontrado en listado",
+        eventIdExterno: ligaIdCasa,
+        mensaje: "partido no encontrado en response de la API",
       });
       await recalcularEstadoCapturaPartido(partidoId);
       logger.info(
-        { partidoId, casa, source: "cuotas-worker:playwright" },
-        `${casa} playwright: sin match (liga no mapeada o partido no listado)`,
+        { partidoId, casa, ligaIdCasa, source: "cuotas-worker:api" },
+        `${casa}: partido no encontrado en response API`,
       );
       return;
     }
@@ -259,7 +246,7 @@ export async function procesarJobCaptura(job: BullMQJobLike): Promise<void> {
     const { alertasCreadas } = await persistirCuotas({
       partidoId,
       casa,
-      eventIdExterno,
+      eventIdExterno: resultado.eventIdCasa ?? ligaIdCasa,
       resultado,
     });
     await actualizarSaludScraper(casa, "OK");
@@ -321,7 +308,7 @@ export async function procesarJobCaptura(job: BullMQJobLike): Promise<void> {
       await persistirSinDatos({
         partidoId,
         casa,
-        eventIdExterno,
+        eventIdExterno: ligaIdCasa,
         mensaje,
       });
       await recalcularEstadoCapturaPartido(partidoId);
@@ -335,7 +322,7 @@ export async function procesarJobCaptura(job: BullMQJobLike): Promise<void> {
     await persistirError({
       partidoId,
       casa,
-      eventIdExterno,
+      eventIdExterno: ligaIdCasa,
       errorMensaje: mensaje,
     });
     await actualizarSaludScraper(casa, "ERROR", mensaje);

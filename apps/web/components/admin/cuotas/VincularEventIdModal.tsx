@@ -14,8 +14,11 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { authedFetch } from "@/lib/api-client";
 
+// Lote V.11: Stake removido del motor — quedan 6 casas API-only.
+// Este componente queda como vinculación manual opcional (el scraper API
+// descubre eventos por matching de equipos automáticamente, así que el
+// modal es solo un fallback histórico para admin).
 type CasaSlug =
-  | "stake"
   | "apuesta_total"
   | "coolbet"
   | "doradobet"
@@ -34,7 +37,6 @@ interface Props {
 }
 
 const PLACEHOLDERS: Record<CasaSlug, string> = {
-  stake: "https://stake.pe/deportes/futbol/.../event/25792580/...",
   apuesta_total:
     "https://www.apuestatotal.com/.../partido/123456789012345",
   coolbet: "https://www.coolbet.pe/en/sports/match/2528144",

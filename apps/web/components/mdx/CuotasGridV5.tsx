@@ -32,7 +32,6 @@ export interface CuotasV5Payload {
 }
 
 const ETIQUETAS: Record<CasaCuotas, string> = {
-  stake: "Stake",
   apuesta_total: "Apuesta Total",
   coolbet: "Coolbet",
   doradobet: "Doradobet",

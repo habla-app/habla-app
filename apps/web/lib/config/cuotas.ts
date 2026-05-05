@@ -16,10 +16,9 @@ import type { CasaCuotas } from "../services/scrapers/types";
  * "salud de scrapers" (sección 9.4 del plan).
  */
 export const CASAS_CUOTAS: readonly CasaCuotas[] = [
-  "stake",
+  "doradobet",
   "apuesta_total",
   "coolbet",
-  "doradobet",
   "betano",
   "inkabet",
   "te_apuesto",
@@ -63,13 +62,12 @@ export const CUOTAS_CONFIG = {
   /**
    * Workers procesando en paralelo.
    *
-   * Lote V.9: bajado de 7 a 3 porque cada captura ahora usa Playwright
-   * (browser singleton compartido pero N pages simultáneas). Cada page
-   * consume ~30-50MB durante la captura. 3 paralelas = ~150MB extra del
-   * browser warm (~150MB) → ~300MB total durante una corrida del cron.
-   * Manejable en Railway 1GB. Si subimos a 7, riesgo de OOM.
+   * Lote V.11: subido a 6 (= 1 por casa) porque ahora cada captura es un
+   * solo fetch HTTP server-side (sin browser headless). Memoria por job:
+   * ~5-10 MB del response JSON. Concurrencia 6 = ~30-60 MB total, muy
+   * por debajo del límite Railway 1GB.
    */
-  CONCURRENCIA_BULLMQ: 3,
+  CONCURRENCIA_BULLMQ: 6,
   /** Rate limit por worker (ms entre jobs). Reduce risk de IP bans. */
   RATE_LIMIT_POR_WORKER_MS: 1500,
   /** Retención en cola de jobs completados (count). */
