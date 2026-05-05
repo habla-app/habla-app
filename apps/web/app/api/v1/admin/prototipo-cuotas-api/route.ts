@@ -25,6 +25,7 @@ import {
   fetchCuotasDoradobet,
   CHAMP_ID_LIGA_1_PERU,
 } from "@/lib/services/scrapers/prototipo/doradobet-api";
+import { fetchExploracionApuestaTotal } from "@/lib/services/scrapers/prototipo/apuesta-total-api";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -32,8 +33,9 @@ export const maxDuration = 30;
 
 const BodySchema = z
   .object({
-    casa: z.enum(["doradobet"]),
-    /** champId de la liga en el sistema de Altenar. Default: 4042 (Liga 1 Perú). */
+    casa: z.enum(["doradobet", "apuesta-total"]),
+    /** champId de la liga en el sistema de Altenar. Default: 4042 (Liga 1 Perú).
+     *  Solo aplica a doradobet. */
     champId: z.number().int().positive().optional(),
   })
   .strict();
@@ -68,16 +70,26 @@ export async function POST(req: NextRequest): Promise<Response> {
     }
     const body = parsed.data;
 
-    const champId = body.champId ?? CHAMP_ID_LIGA_1_PERU;
-
     logger.info(
-      { ...body, champId, source: "api:prototipo-cuotas-api" },
-      `prototipo-cuotas-api: invocado para ${body.casa} champId=${champId}`,
+      { ...body, source: "api:prototipo-cuotas-api" },
+      `prototipo-cuotas-api: invocado para ${body.casa}`,
     );
 
-    const resultado = await fetchCuotasDoradobet(champId);
+    if (body.casa === "doradobet") {
+      const champId = body.champId ?? CHAMP_ID_LIGA_1_PERU;
+      const resultado = await fetchCuotasDoradobet(champId);
+      return Response.json(resultado);
+    }
 
-    return Response.json(resultado);
+    if (body.casa === "apuesta-total") {
+      // Fase exploratoria: devolvemos estructura del JSON + sample de
+      // eventos peruanos. Cuando confirmemos el shape, agregamos el
+      // parser de cuotas similar al de doradobet.
+      const resultado = await fetchExploracionApuestaTotal();
+      return Response.json(resultado);
+    }
+
+    throw new ValidacionFallida(`casa "${body.casa}" no soportada todavía`);
   } catch (err) {
     logger.error(
       { err, source: "api:prototipo-cuotas-api" },
