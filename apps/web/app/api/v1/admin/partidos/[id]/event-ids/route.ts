@@ -32,6 +32,7 @@ import { logger } from "@/lib/services/logger";
 import { logAuditoria } from "@/lib/services/auditoria.service";
 import { encolarJobCaptura } from "@/lib/services/cuotas-cola";
 import { CASAS_CUOTAS, type CasaCuotas } from "@/lib/services/scrapers/types";
+import { obtenerLigaIdParaPartido } from "@/lib/services/scrapers/ligas-id-map";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -59,10 +60,6 @@ const BodySchema = z
 function extraerEventIdDesdeURL(casa: CasaCuotas, url: string): string | null {
   const trimmed = url.trim();
   switch (casa) {
-    case "stake": {
-      const m = /\/event\/(\d+)/i.exec(trimmed);
-      return m?.[1] ?? null;
-    }
     case "apuesta_total": {
       // Patrón: cualquier tail con 15+ dígitos.
       const m = /(\d{15,})\/?(?:[?#].*)?$/.exec(trimmed);
@@ -127,7 +124,7 @@ export async function PATCH(
 
     const partido = await prisma.partido.findUnique({
       where: { id: params.id },
-      select: { id: true, equipoLocal: true, equipoVisita: true },
+      select: { id: true, equipoLocal: true, equipoVisita: true, liga: true },
     });
     if (!partido) throw new PartidoNoEncontrado(params.id);
 
@@ -156,13 +153,19 @@ export async function PATCH(
       },
     });
 
-    // Disparar job de captura inmediato post-vinculación.
-    const jobId = await encolarJobCaptura({
-      partidoId: partido.id,
-      casa,
-      eventIdExterno: eventId,
-      esRefresh: false,
-    });
+    // Lote V.11: el motor API-only descubre eventos por matching de
+    // equipos, no usa EventIdExterno como hint. Igual encolamos job
+    // post-vinculación para refresh inmediato si la liga está mapeada.
+    const resolveLiga = obtenerLigaIdParaPartido(partido.liga, casa);
+    let jobId: string | null = null;
+    if (resolveLiga) {
+      jobId = await encolarJobCaptura({
+        partidoId: partido.id,
+        casa,
+        ligaIdCasa: resolveLiga.ligaIdCasa,
+        esRefresh: false,
+      });
+    }
 
     await logAuditoria({
       actorId: session.user.id,

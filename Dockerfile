@@ -13,32 +13,14 @@ RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 # deps, que también vienen de edge — incluyendo `libpq` 18). El resto
 # del sistema queda en stable.
 #
-# Lote V (May 2026) — `chromium` + sus runtime deps los necesita
-# Playwright para el scraper Betano (fallback cuando la API directa no
-# rinde). El bundled Chromium de Playwright se compila contra glibc y no
-# corre en musl/Alpine, así que usamos el del repo de Alpine y le
-# apuntamos vía PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium.
-# Tamaño extra: ~150 MB descomprimido.
-#   - chromium / nss / freetype / harfbuzz: motor + runtime mínimo.
-#   - ttf-freefont: render de glyphs default (sin esto los logs llenan
-#     de "missing font" warnings).
-#   - dbus: requerido por algunas APIs de Chromium (D-Bus session bus).
+# Lote V.11 (May 2026) — Chromium removido. El motor de cuotas pasó a
+# API-only (HTTP fetch directo a APIs B2B de los proveedores). Sin
+# browser headless. Solo openssl + postgresql18-client@edge necesarios.
+# Ahorro: ~150 MB descomprimido.
 RUN apk add --no-cache openssl \
-        chromium \
-        nss \
-        freetype \
-        harfbuzz \
         ca-certificates \
-        ttf-freefont \
-        dbus \
     && echo "@edge https://dl-cdn.alpinelinux.org/alpine/edge/main" >> /etc/apk/repositories \
     && apk add --no-cache postgresql18-client@edge
-
-# Saltar la descarga del Chromium bundled de Playwright durante
-# `pnpm install`. Usamos el del sistema (apk add chromium arriba).
-# Ahorra ~170 MB y evita que el install falle en musl.
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
 # --- Install dependencies ---
 FROM base AS deps

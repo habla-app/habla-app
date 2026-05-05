@@ -36,13 +36,12 @@ import {
   cancelarJobsDePartido,
   getCuotasQueue,
 } from "./cuotas-cola";
-// Lote V.10.8: import explícito de getCuotasQueue para verificar empíricamente
-// que los jobs encolados son visibles desde el mismo contexto.
 import {
   iniciarCuotasWorker,
   detenerCuotasWorker,
 } from "./cuotas-worker";
 import type { CasaCuotas, CuotasJobData } from "./scrapers/types";
+import { obtenerLigaIdParaPartido } from "./scrapers/ligas-id-map";
 
 export interface ResumenIniciarCaptura {
   partidoId: string;
@@ -82,10 +81,11 @@ export interface ResumenRefresh {
 export async function iniciarCaptura(
   partidoId: string,
 ): Promise<ResumenIniciarCaptura> {
-  // Lote V.9.2: error handling robusto + logs explícitos por step para
-  // diagnosticar fallos en producción. Cada paso atrapa errores
-  // individualmente — un fallo en el update de estadoCaptura no debe
-  // impedir encolar las 7 casas.
+  // Lote V.11: motor API-only. Para cada casa:
+  //   1. Detectar liga canónica desde partido.liga.
+  //   2. Resolver ligaIdCasa via mapeo (ligas-id-map.ts).
+  //   3. Si null para esa combinación, skipear silenciosamente (no encolar).
+  //   4. Sino, encolar job con ligaIdCasa.
   try {
     await prisma.partido.update({
       where: { id: partidoId },
@@ -97,39 +97,36 @@ export async function iniciarCaptura(
       { partidoId, err: errMsg, source: "captura-cuotas" },
       `iniciarCaptura: update estadoCaptura falló — ${errMsg} (continuando)`,
     );
-    // No abortamos — el flow puede seguir.
   }
 
-  let eventIds: Array<{ casa: string; eventIdExterno: string }> = [];
-  try {
-    eventIds = await prisma.eventIdExterno.findMany({
-      where: { partidoId },
-      select: { casa: true, eventIdExterno: true },
-    });
-  } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err ?? "?");
-    logger.warn(
-      { partidoId, err: errMsg, source: "captura-cuotas" },
-      `iniciarCaptura: lectura EventIdExterno falló — ${errMsg} (continuando sin hints)`,
+  // Leer datos del partido para conocer su liga canónica.
+  const partido = await prisma.partido.findUnique({
+    where: { id: partidoId },
+    select: { liga: true },
+  });
+  if (!partido) {
+    logger.error(
+      { partidoId, source: "captura-cuotas" },
+      `iniciarCaptura: partido ${partidoId} no existe`,
     );
+    return { partidoId, casasEncoladas: [], casasSinEventId: [] };
   }
-  const hintsPorCasa = new Map<string, string>(
-    eventIds.map((row) => [row.casa, row.eventIdExterno]),
-  );
 
   const casasEncoladas: CasaCuotas[] = [];
   const casasSinEventId: CasaCuotas[] = [];
   const casasFallidas: { casa: CasaCuotas; error: string }[] = [];
+  const casasSinLigaMapeada: CasaCuotas[] = [];
 
   for (const casa of CUOTAS_CONFIG.CASAS) {
-    // Si hay vinculación manual previa, usamos esa URL/eventId como hint.
-    // Si no, pasamos "auto" como placeholder — el worker con Playwright
-    // navega el listado de la liga y resuelve solo.
-    const hint = hintsPorCasa.get(casa) ?? "auto";
+    const resolveLiga = obtenerLigaIdParaPartido(partido.liga, casa);
+    if (!resolveLiga) {
+      casasSinLigaMapeada.push(casa);
+      continue;
+    }
     const data: CuotasJobData = {
       partidoId,
       casa,
-      eventIdExterno: hint,
+      ligaIdCasa: resolveLiga.ligaIdCasa,
       esRefresh: false,
     };
     try {
@@ -137,7 +134,6 @@ export async function iniciarCaptura(
       if (jobId) {
         casasEncoladas.push(casa);
       } else {
-        // Cola no disponible (sin REDIS_URL o construcción falló).
         casasSinEventId.push(casa);
       }
     } catch (err) {
@@ -153,13 +149,15 @@ export async function iniciarCaptura(
   logger.info(
     {
       partidoId,
+      liga: partido.liga,
       encoladas: casasEncoladas.length,
       sinCola: casasSinEventId.length,
       fallidas: casasFallidas.length,
+      sinLigaMapeada: casasSinLigaMapeada,
       casasFallidas: casasFallidas.map((f) => `${f.casa}:${f.error.slice(0, 80)}`),
       source: "captura-cuotas",
     },
-    `iniciarCaptura · ${casasEncoladas.length}/7 encoladas, ${casasFallidas.length} fallaron al encolar, ${casasSinEventId.length} sin cola`,
+    `iniciarCaptura · ${casasEncoladas.length}/${CUOTAS_CONFIG.CASAS.length} encoladas, ${casasFallidas.length} fallaron, ${casasSinLigaMapeada.length} sin liga mapeada (${casasSinLigaMapeada.join(",")})`,
   );
 
   // Lote V.10.8: verificación empírica post-encolar. Lee `getJobCounts`
@@ -235,17 +233,21 @@ export async function detenerCaptura(
 export async function encolarRefresh(
   partidoId: string,
 ): Promise<ResumenRefresh> {
-  // Lote V.9.1: el cron ahora encola las 7 casas siempre (no depende de
-  // EventIdExterno previo — Playwright resuelve discovery + captura en una
-  // sola pasada). Mantenemos `EventIdExterno` como hint de URL si hubo
-  // vinculación manual.
-  const eventIds = await prisma.eventIdExterno.findMany({
-    where: { partidoId },
-    select: { casa: true, eventIdExterno: true },
+  // Lote V.11: motor API-only. Mismo flow que iniciarCaptura, con el
+  // guard "skip si OK reciente" para evitar duplicación tras boots
+  // cercanos al cron.
+  const partido = await prisma.partido.findUnique({
+    where: { id: partidoId },
+    select: { liga: true },
   });
-  const hintsPorCasa = new Map<string, string>(
-    eventIds.map((row) => [row.casa, row.eventIdExterno]),
-  );
+  if (!partido) {
+    logger.warn(
+      { partidoId, source: "captura-cuotas:refresh" },
+      `encolarRefresh: partido ${partidoId} no existe`,
+    );
+    return { partidoId, casasEncoladas: 0, casasSkipeadas: 0, casasSinEventId: 0 };
+  }
+
   const filasActuales = await prisma.cuotasCasa.findMany({
     where: { partidoId },
     select: { casa: true, ultimoExito: true, estado: true },
@@ -258,7 +260,7 @@ export async function encolarRefresh(
 
   let casasEncoladas = 0;
   let casasSkipeadas = 0;
-  let casasSinEventId = 0; // mantenida en API por compat; con Playwright ya casi no aplica.
+  let casasSinEventId = 0;
 
   for (const casa of CUOTAS_CONFIG.CASAS) {
     const ultimoOk = exitoPorCasa.get(casa);
@@ -270,11 +272,15 @@ export async function encolarRefresh(
       }
     }
 
-    const hint = hintsPorCasa.get(casa) ?? "auto";
+    const resolveLiga = obtenerLigaIdParaPartido(partido.liga, casa);
+    if (!resolveLiga) {
+      casasSinEventId++;
+      continue;
+    }
     const data: CuotasJobData = {
       partidoId,
       casa,
-      eventIdExterno: hint,
+      ligaIdCasa: resolveLiga.ligaIdCasa,
       esRefresh: true,
     };
     const jobId = await encolarJobCaptura(data);
