@@ -16,6 +16,7 @@ import {
 } from "@/lib/services/admin-partidos.service";
 import { PartidoFiltrosCells } from "@/components/admin/partidos/PartidoFiltrosCells";
 import { ReimportarApiBtn } from "@/components/admin/partidos/ReimportarApiBtn";
+import { CuotasRefreshBtn } from "@/components/admin/partidos/CuotasRefreshBtn";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Partidos · Admin Habla!" };
@@ -109,7 +110,8 @@ export default async function AdminPartidosPage({ searchParams }: PageProps) {
             <h1 className="admin-page-title">Gestión de Partidos</h1>
             <p className="admin-page-subtitle">Filtro 1: visibilidad pública · Filtro 2: elegibilidad para Liga Habla!</p>
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <CuotasRefreshBtn scope="global" partidosCount={resumen.filtro1} />
             <ReimportarApiBtn />
           </div>
         </div>
@@ -194,17 +196,20 @@ export default async function AdminPartidosPage({ searchParams }: PageProps) {
           <tr>
             <th>Liga · Hora</th>
             <th>Partido</th>
+            <th className="center" style={{ textAlign: "center" }}>
+              Cuotas<br />
+              <span style={{ fontSize: 9, fontWeight: 600 }}>5 casas</span>
+            </th>
+            <th className="center" style={{ textAlign: "center" }}>Análisis Free</th>
+            <th className="center" style={{ textAlign: "center" }}>Análisis Socios</th>
             <th className="center" style={{ textAlign: "center", background: "#EEF2FF", color: "#0052CC" }}>
               Filtro 1<br />
               <span style={{ fontSize: 9, fontWeight: 600 }}>Mostrar público</span>
             </th>
-            <th className="center" style={{ textAlign: "center" }}>Análisis Free</th>
-            <th className="center" style={{ textAlign: "center" }}>Análisis Socios</th>
             <th className="center" style={{ textAlign: "center", background: "#FFFAEB", color: "#7A4A00" }}>
               Filtro 2<br />
               <span style={{ fontSize: 9, fontWeight: 600 }}>Liga elegible</span>
             </th>
-            <th></th>
           </tr>
         </thead>
         <tbody>
@@ -215,6 +220,9 @@ export default async function AdminPartidosPage({ searchParams }: PageProps) {
               </td>
             </tr>
           )}
+          {/* Lote V.14: Las celdas Cuotas, Análisis Free, Análisis Socios,
+              Filtro 1, Filtro 2 son las 5 columnas centrales (más Liga·Hora
+              y Partido a la izquierda = 7 columnas total). */}
           {filas.map((p) => {
             const { dia } = formatHoraLima(p.fechaInicio);
             return (
@@ -249,16 +257,11 @@ export default async function AdminPartidosPage({ searchParams }: PageProps) {
                   mostrarAlPublico={p.mostrarAlPublico}
                   elegibleLiga={p.elegibleLiga}
                   estadoAnalisis={p.estadoAnalisis}
+                  estadoAnalisisSocios={p.estadoAnalisisSocios}
+                  cuotas={p.cuotas}
+                  filtro1Listo={p.filtro1Listo}
+                  filtro1Bloqueantes={p.filtro1Bloqueantes}
                 />
-                <td>
-                  {p.estadoAnalisis === "PENDIENTE" ? (
-                    <a href="/admin/picks" className="btn btn-ghost btn-xs" style={{ display: "inline-block" }}>Validar</a>
-                  ) : !p.mostrarAlPublico ? (
-                    <span className="adm-pill adm-pill-gray" style={{ fontSize: 10 }}>—</span>
-                  ) : (
-                    <a href="/admin/picks" className="btn btn-ghost btn-xs" style={{ display: "inline-block" }}>Editar</a>
-                  )}
-                </td>
               </tr>
             );
           })}

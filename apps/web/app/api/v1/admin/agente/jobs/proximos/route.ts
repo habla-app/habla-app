@@ -33,6 +33,7 @@ import { prisma } from "@habla/db";
 import { logger } from "@/lib/services/logger";
 import { getCuotasQueue } from "@/lib/services/cuotas-cola";
 import type { CuotasJobData } from "@/lib/services/scrapers/types";
+import { validarSesionAgente } from "@/lib/services/agente-sesion.service";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -63,6 +64,23 @@ export async function GET(req: NextRequest): Promise<Response> {
       ? Math.min(limitRaw, LIMIT_MAX)
       : LIMIT_DEFAULT;
 
+  // Lote V.14: si viene `?token=xxx`, validar la sesión y filtrar jobs
+  // SOLO de los partidos asociados a esa sesión. Esto permite que el
+  // agente lanzado desde la UI procese exactamente los jobs que el admin
+  // pidió, sin tomar otros que estén pendientes (ej. del cron 5am).
+  const token = url.searchParams.get("token");
+  let partidoIdsPermitidos: Set<string> | null = null;
+  if (token) {
+    const sesion = await validarSesionAgente(token);
+    if (!sesion) {
+      return Response.json(
+        { error: { code: "TOKEN_INVALIDO", message: "Token de sesión inválido o expirado." } },
+        { status: 401 },
+      );
+    }
+    partidoIdsPermitidos = new Set(sesion.partidoIds);
+  }
+
   const queue = getCuotasQueue() as {
     getJobs(
       states: string[],
@@ -83,7 +101,15 @@ export async function GET(req: NextRequest): Promise<Response> {
     );
   }
 
-  const jobs = await queue.getJobs(["waiting"], 0, limit - 1);
+  // Pedimos más jobs que el limit cuando hay filtro por token, porque
+  // algunos pueden ser de otros partidos no asociados a la sesión.
+  const fetchSize = partidoIdsPermitidos ? Math.max(limit * 5, 50) : limit;
+  const jobsRaw = await queue.getJobs(["waiting"], 0, fetchSize - 1);
+  const jobs = partidoIdsPermitidos
+    ? jobsRaw
+        .filter((j) => partidoIdsPermitidos!.has(j.data.partidoId))
+        .slice(0, limit)
+    : jobsRaw;
   if (jobs.length === 0) {
     return Response.json({ jobs: [] });
   }

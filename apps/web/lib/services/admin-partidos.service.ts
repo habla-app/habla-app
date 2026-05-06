@@ -18,6 +18,28 @@
 
 import { prisma } from "@habla/db";
 import type { EstadoAnalisis } from "@habla/db";
+import { CUOTAS_CONFIG } from "../config/cuotas";
+
+/**
+ * Resumen de captura de cuotas para una fila admin (Lote V.14).
+ *
+ * Lote V.14: la admin necesita ver el estado de captura por partido para
+ * activar Filtro 1 solo cuando todo está listo. Calculado a partir de
+ * `Partido.estadoCaptura` + count de filas `cuotas_casa` con datos completos
+ * (4/4 mercados) por casa.
+ */
+export interface CuotasResumen {
+  /** Estado agregado: COMPLETA / PARCIAL / FALLIDA / INACTIVA / etc. */
+  estado: string;
+  /** Cuántas casas tienen las 4 cuotas completas. */
+  casasCompletas: number;
+  /** Cuántas casas extrajeron al menos 1 cuota (parcial+completa). */
+  casasConDatos: number;
+  /** Total de casas activas en CUOTAS_CONFIG (siempre 5 en V.14). */
+  casasTotales: number;
+  /** ISO date del último ciclo de captura (cualquier casa). */
+  ultimaActualizacion: string | null;
+}
 
 export interface AdminPartidoFila {
   id: string;
@@ -29,6 +51,14 @@ export interface AdminPartidoFila {
   elegibleLiga: boolean;
   visibilidadOverride: "forzar_visible" | "forzar_oculto" | null;
   estadoAnalisis: EstadoAnalisis | null;
+  /** Lote V.14: análisis Socios (PickPremium) — APROBADO/PENDIENTE/null */
+  estadoAnalisisSocios: "PENDIENTE" | "APROBADO" | "RECHAZADO" | null;
+  /** Lote V.14: resumen de captura de cuotas por casa */
+  cuotas: CuotasResumen;
+  /** Lote V.14: prerequisitos para activar Filtro 1 (true = listo para activar) */
+  filtro1Listo: boolean;
+  /** Lote V.14: lista de bloqueantes si Filtro 1 NO está listo */
+  filtro1Bloqueantes: string[];
   // Tipsters compitiendo + vistas (placeholder hasta tener tracking real)
   tipsters: number;
   vistas: number;
@@ -91,7 +121,30 @@ export async function listarPartidosAdmin(opciones: ListarOpciones = {}): Promis
 
   const partidos = await prisma.partido.findMany({
     where,
-    include: { analisisPartido: { select: { estado: true } } },
+    include: {
+      analisisPartido: { select: { estado: true } },
+      // Lote V.14: cuotas por casa para calcular resumen de captura
+      cuotasCasa: {
+        select: {
+          casa: true,
+          estado: true,
+          ultimoExito: true,
+          cuotaLocal: true,
+          cuotaEmpate: true,
+          cuotaVisita: true,
+          cuota1X: true,
+          cuota12: true,
+          cuotaX2: true,
+          cuotaOver25: true,
+          cuotaUnder25: true,
+          cuotaBttsSi: true,
+          cuotaBttsNo: true,
+        },
+      },
+      // Lote V.14: análisis Socios (PickPremium) — uno o más por partido,
+      // basta con que UNO esté APROBADO para considerar el partido listo
+      picksPremium: { select: { estado: true } },
+    },
     orderBy: { fechaInicio: "asc" },
     take: 80,
   });
@@ -107,19 +160,79 @@ export async function listarPartidosAdmin(opciones: ListarOpciones = {}): Promis
     ticketsByPartido = new Map(torneos.map((t) => [t.partidoId, t.totalInscritos]));
   }
 
-  const filas: AdminPartidoFila[] = partidos.map((p) => ({
-    id: p.id,
-    liga: p.liga,
-    fechaInicio: p.fechaInicio,
-    equipoLocal: p.equipoLocal,
-    equipoVisita: p.equipoVisita,
-    mostrarAlPublico: p.mostrarAlPublico,
-    elegibleLiga: p.elegibleLiga,
-    visibilidadOverride: p.visibilidadOverride,
-    estadoAnalisis: p.analisisPartido?.estado ?? null,
-    tipsters: ticketsByPartido.get(p.id) ?? 0,
-    vistas: 0,
-  }));
+  const casasTotales = CUOTAS_CONFIG.CASAS.length;
+
+  const filas: AdminPartidoFila[] = partidos.map((p) => {
+    // Calcular resumen de cuotas
+    let casasCompletas = 0;
+    let casasConDatos = 0;
+    let ultimaActualizacion: Date | null = null;
+    for (const f of p.cuotasCasa) {
+      const tiene1x2 = f.cuotaLocal && f.cuotaEmpate && f.cuotaVisita;
+      const tieneDoble = f.cuota1X && f.cuota12 && f.cuotaX2;
+      const tieneTotal = f.cuotaOver25 && f.cuotaUnder25;
+      const tieneBtts = f.cuotaBttsSi && f.cuotaBttsNo;
+      const completos = [tiene1x2, tieneDoble, tieneTotal, tieneBtts].filter(
+        Boolean,
+      ).length;
+      if (completos === 4) casasCompletas++;
+      if (completos > 0) casasConDatos++;
+      if (f.ultimoExito && (!ultimaActualizacion || f.ultimoExito > ultimaActualizacion)) {
+        ultimaActualizacion = f.ultimoExito;
+      }
+    }
+
+    const sociosAprobado = p.picksPremium.some((pp) => pp.estado === "APROBADO");
+    const sociosPendiente = p.picksPremium.some((pp) => pp.estado === "PENDIENTE");
+    const estadoAnalisisSocios: "PENDIENTE" | "APROBADO" | "RECHAZADO" | null =
+      sociosAprobado
+        ? "APROBADO"
+        : sociosPendiente
+          ? "PENDIENTE"
+          : p.picksPremium.length > 0
+            ? "RECHAZADO"
+            : null;
+
+    // Prerequisitos Filtro 1
+    const bloqueantes: string[] = [];
+    if (p.estadoCaptura !== "COMPLETA") {
+      bloqueantes.push(`cuotas_no_completas:${p.estadoCaptura ?? "INACTIVA"}`);
+    }
+    if (p.analisisPartido?.estado !== "APROBADO") {
+      bloqueantes.push(
+        `analisis_free_no_aprobado:${p.analisisPartido?.estado ?? "INEXISTENTE"}`,
+      );
+    }
+    if (!sociosAprobado) {
+      bloqueantes.push("analisis_socios_no_aprobado");
+    }
+
+    return {
+      id: p.id,
+      liga: p.liga,
+      fechaInicio: p.fechaInicio,
+      equipoLocal: p.equipoLocal,
+      equipoVisita: p.equipoVisita,
+      mostrarAlPublico: p.mostrarAlPublico,
+      elegibleLiga: p.elegibleLiga,
+      visibilidadOverride: p.visibilidadOverride,
+      estadoAnalisis: p.analisisPartido?.estado ?? null,
+      estadoAnalisisSocios,
+      cuotas: {
+        estado: p.estadoCaptura ?? "INACTIVA",
+        casasCompletas,
+        casasConDatos,
+        casasTotales,
+        ultimaActualizacion: ultimaActualizacion
+          ? ultimaActualizacion.toISOString()
+          : null,
+      },
+      filtro1Listo: bloqueantes.length === 0,
+      filtro1Bloqueantes: bloqueantes,
+      tipsters: ticketsByPartido.get(p.id) ?? 0,
+      vistas: 0,
+    };
+  });
 
   return {
     resumen: { fuente, filtro1, filtro2 },

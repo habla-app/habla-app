@@ -1,30 +1,36 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /**
- * Agente local del motor de cuotas (Lote V.13 — May 2026).
+ * Agente local del motor de cuotas (Lote V.14 — May 2026).
  *
- * Corre en la PC del admin con Chrome real + perfil persistente. Pollea
- * el backend cada N segundos pidiendo jobs pendientes; por cada job
- * ejecuta el scraper Playwright correspondiente y reporta el resultado.
+ * Corre en la PC del admin con Chrome real + perfil "Habla" copiado
+ * (clonado durante setup desde el perfil real del user con email
+ * hablaplay@gmail.com). Pollea el backend pidiendo jobs pendientes;
+ * por cada job ejecuta el scraper Playwright correspondiente y reporta
+ * el resultado.
  *
- * Por qué local:
- *   Las casas Betano/Inkabet bloquean IPs datacenter (Railway US 403
- *   instantáneo desde WAFs Akamai/Imperva). Las APIs B2B "directas" no
- *   exponen todos los mercados que la UI muestra. La única forma
- *   confiable de capturar las 5 casas (apuesta_total/doradobet/betano/
- *   inkabet/te_apuesto) es desde una IP residencial peruana con Chrome
- *   real. Por eso el agente vive en la PC del admin.
+ * Lote V.14: el agente NO usa el perfil Default real porque Chrome solo
+ * permite UN bloqueo por User Data dir. Si el admin está viendo /admin/
+ * partidos cuando el agente arranca, su Chrome tiene el lock y el agente
+ * no podría abrir. Por eso el setup copia el perfil "Habla" a una carpeta
+ * aparte (~/.habla-agente-data/Default/) que no conflicta con el Chrome
+ * personal del user.
  *
- * Cómo correrlo (Windows PowerShell):
- *   1. Cerrá todas las ventanas de Chrome (taskkill /F /IM chrome.exe).
- *   2. Setear env vars (.env.local en apps/web/ o variables de sesión):
- *        HABLA_API_BASE = "https://hablaplay.com"
- *        HABLA_AGENTE_TOKEN = "<el mismo CRON_SECRET de Railway>"
- *   3. pnpm --filter @habla/web run agente-cuotas
+ * Modos de ejecución:
  *
- * El agente abre Chrome, queda corriendo polleando, y cierra browser
- * idle a los 15min sin trabajo (libera RAM, próximo job lo re-abre).
+ *   Modo SESIÓN (V.14, lanzado on-demand desde la UI admin):
+ *     pnpm agente-cuotas -- --token=<uuid>
+ *     - Pollea SOLO los jobs asociados a esa sesión.
+ *     - Auto-exit cuando 3 polls consecutivos devuelven 0 jobs.
+ *     - Cierra Chrome al terminar.
  *
- * Para detener: Ctrl+C. Maneja SIGINT cerrando el browser limpio.
+ *   Modo POLLING (legacy del V.13, sin token):
+ *     pnpm agente-cuotas
+ *     - Loop infinito polleando todos los jobs waiting.
+ *     - Detener con Ctrl+C.
+ *
+ * Por qué local: las casas Betano/Inkabet bloquean IPs datacenter
+ * (Railway US 403). La única forma confiable de capturar las 5 casas
+ * es desde IP residencial peruana con Chrome real.
  */
 
 import path from "node:path";
@@ -32,10 +38,6 @@ import os from "node:os";
 import fs from "node:fs";
 
 // ─── Cargar .env.local manualmente ANTES de leer process.env ─────────
-//
-// `tsx` (el ejecutor TypeScript) no carga `.env.local` por defecto.
-// Este loader manual lee el archivo y setea las env vars sin pisar las
-// que ya estuvieran seteadas en la sesión.
 function cargarEnvLocal(): void {
   const candidatos = [
     path.join(process.cwd(), ".env.local"),
@@ -77,7 +79,6 @@ import {
   type LigaCanonica,
 } from "../lib/services/scrapers/ligas-id-map";
 import type { CasaCuotas, ResultadoScraper } from "../lib/services/scrapers/types";
-import { CapturaSinDatosError } from "../lib/services/scrapers/types";
 
 import doradobetScraper from "../lib/services/scrapers/doradobet.scraper";
 import apuestaTotalScraper from "../lib/services/scrapers/apuesta-total.scraper";
@@ -91,9 +92,22 @@ chromium.use(StealthPlugin());
 
 const API_BASE = (process.env.HABLA_API_BASE ?? "").replace(/\/+$/, "");
 const TOKEN = process.env.HABLA_AGENTE_TOKEN ?? "";
-const POLL_INTERVAL_MS = 15_000;
-const POLL_INTERVAL_VACIO_MS = 60_000;
+const POLL_INTERVAL_MS = 5_000;
+const POLL_INTERVAL_VACIO_MS = 15_000;
 const LIMIT_JOBS_POR_POLL = 5;
+// Auto-exit en modo sesión: tras 3 polls consecutivos sin jobs, cerrar.
+const POLLS_VACIOS_PARA_EXIT = 3;
+
+// Parsear --token=xxx del argv (modo sesión V.14)
+function parseSesionToken(): string | null {
+  for (const arg of process.argv.slice(2)) {
+    const m = arg.match(/^--token=(.+)$/);
+    if (m && m[1]) return m[1];
+  }
+  return null;
+}
+const SESION_TOKEN = parseSesionToken();
+const MODO = SESION_TOKEN ? "sesion" : "polling";
 
 if (!API_BASE) {
   console.error("✗ HABLA_API_BASE no configurada");
@@ -155,46 +169,36 @@ function detectarChromePath(): string | undefined {
   return undefined;
 }
 
-function detectarPerfilRealChrome(): string | undefined {
-  if (process.platform === "win32") {
-    const ruta = path.join(
-      os.homedir(),
-      "AppData",
-      "Local",
-      "Google",
-      "Chrome",
-      "User Data",
-      "Default",
-    );
-    return fs.existsSync(ruta) ? ruta : undefined;
-  }
-  return undefined;
+/**
+ * Lote V.14: el agente usa una copia aislada del perfil "Habla". El setup
+ * (`setup-agente-windows.bat`) copia `User Data/Profile X/` (donde X es
+ * el perfil Habla del Chrome real del admin) → `~/.habla-agente-data/Default/`.
+ * Esto permite usar las cookies/sesiones reales SIN bloquear el Chrome
+ * personal del admin (Chrome solo permite 1 lock por User Data dir).
+ */
+function obtenerPerfilAgente(): string {
+  return path.join(os.homedir(), ".habla-agente-data");
 }
 
-// El agente reusa el browser singleton de `lib/services/scrapers/browser.ts`
-// indirectamente: cada scraper invoca `obtenerPagina()` que lo gestiona.
-// Antes de cualquier scraper, "calentamos" un browser persistente con el
-// perfil real de Chrome via globalThis (mismo trick que probar-scrapers-local).
-
-async function calentarBrowserConPerfilReal(): Promise<void> {
+async function calentarBrowser(): Promise<void> {
   const chromePath = detectarChromePath();
-  const perfilReal = detectarPerfilRealChrome();
-  const perfilUsado =
-    perfilReal ?? path.join(os.homedir(), ".habla-agente-data");
+  const perfilUsado = obtenerPerfilAgente();
+  const perfilExisteConDatos =
+    fs.existsSync(path.join(perfilUsado, "Default")) ||
+    fs.existsSync(path.join(perfilUsado, "Cookies"));
 
   console.log("─── Agente cuotas — boot ─────────────────────────────────");
+  console.log(` Modo: ${MODO}${SESION_TOKEN ? ` · token=${SESION_TOKEN.slice(0, 8)}...` : ""}`);
   console.log(` Chrome: ${chromePath ?? "(bundled)"}`);
   console.log(` Profile: ${perfilUsado}`);
-  if (perfilReal) {
-    console.log(`   ⚠ Usando tu perfil real de Chrome.`);
-    console.log(`   ⚠ Si tenés Chrome abierto, el agente va a fallar.`);
-    console.log(`     Cerrá Chrome o ejecutá: taskkill /F /IM chrome.exe`);
+  if (!perfilExisteConDatos) {
+    console.log(`   ⚠ Perfil aislado vacío (sin cookies del perfil "Habla").`);
+    console.log(`     Ejecutá apps/web/scripts/setup-agente-windows.bat para`);
+    console.log(`     copiar tu perfil Habla con cookies persistidas.`);
   }
   console.log(` API: ${API_BASE}`);
   console.log("");
 
-  // Lanzar persistent context y guardarlo en globalThis para que el
-  // singleton de `browser.ts` lo reuse en lugar de lanzar uno nuevo.
   const context = await chromium.launchPersistentContext(perfilUsado, {
     headless: false,
     executablePath: chromePath,
@@ -214,14 +218,37 @@ async function calentarBrowserConPerfilReal(): Promise<void> {
   g.__pwUltimoUsoMs = Date.now();
 }
 
+async function cerrarBrowserAgente(): Promise<void> {
+  const g = globalThis as any;
+  if (g.__pwContext?.close) {
+    try {
+      await g.__pwContext.close();
+    } catch {
+      /* ignore */
+    }
+  }
+  if (g.__pwBrowser?.close) {
+    try {
+      await g.__pwBrowser.close();
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 // ─── Cliente HTTP ─────────────────────────────────────────────────────
 
 async function fetchProximosJobs(): Promise<JobAgente[]> {
-  const url = `${API_BASE}/api/v1/admin/agente/jobs/proximos?limit=${LIMIT_JOBS_POR_POLL}`;
+  const params = new URLSearchParams({ limit: String(LIMIT_JOBS_POR_POLL) });
+  if (SESION_TOKEN) params.set("token", SESION_TOKEN);
+  const url = `${API_BASE}/api/v1/admin/agente/jobs/proximos?${params.toString()}`;
   const res = await fetch(url, {
     headers: { authorization: `Bearer ${TOKEN}` },
   });
   if (!res.ok) {
+    if (res.status === 401 && SESION_TOKEN) {
+      throw new Error("token de sesión inválido o expirado (5min TTL)");
+    }
     throw new Error(`GET proximos status=${res.status}`);
   }
   const json = (await res.json()) as { jobs: JobAgente[] };
@@ -283,15 +310,12 @@ async function procesarJob(job: JobAgente): Promise<void> {
     });
     return;
   }
-
-  // Sanity check: la liga del partido debe matchear la canónica del job.
   const ligaPartido = detectarLigaCanonica(job.partido.liga);
   if (ligaPartido && ligaPartido !== job.ligaCanonica) {
     console.log(
       `  [${job.casa}] ⚠ liga del partido (${ligaPartido}) ≠ liga del job (${job.ligaCanonica}), uso la del job`,
     );
   }
-
   const partidoEntidad = {
     id: job.partidoId,
     equipoLocal: job.partido.equipoLocal,
@@ -323,11 +347,6 @@ async function procesarJob(job: JobAgente): Promise<void> {
     await reportarResultado({ job, kind: "ok", resultado: r });
   } catch (err) {
     const mensaje = (err as Error)?.message ?? "error desconocido";
-    if (err instanceof CapturaSinDatosError) {
-      console.log(`  ⚠ ${job.casa} SIN_DATOS — ${mensaje}`);
-      await reportarResultado({ job, kind: "sin_datos", mensaje });
-      return;
-    }
     console.log(`  ✗ ${job.casa} ERROR — ${mensaje}`);
     await reportarResultado({ job, kind: "error", mensaje });
   }
@@ -336,28 +355,43 @@ async function procesarJob(job: JobAgente): Promise<void> {
 let detenido = false;
 
 async function loop(): Promise<void> {
+  let pollsVaciosConsecutivos = 0;
   while (!detenido) {
     let jobs: JobAgente[] = [];
     try {
       jobs = await fetchProximosJobs();
     } catch (err) {
-      console.log(`  [poll] falló: ${(err as Error).message}. Reintento en 30s...`);
+      const msg = (err as Error).message;
+      console.log(`  [poll] falló: ${msg}`);
+      if (SESION_TOKEN && msg.includes("token de sesión inválido")) {
+        console.log("  [poll] token expirado — saliendo en modo sesión");
+        return;
+      }
       await sleep(30_000);
       continue;
     }
     if (jobs.length === 0) {
+      pollsVaciosConsecutivos++;
+      if (
+        SESION_TOKEN &&
+        pollsVaciosConsecutivos >= POLLS_VACIOS_PARA_EXIT
+      ) {
+        console.log(
+          `  [poll] ${pollsVaciosConsecutivos} polls vacíos consecutivos · sesión completa, cerrando`,
+        );
+        return;
+      }
       await sleep(POLL_INTERVAL_VACIO_MS);
       continue;
     }
+    pollsVaciosConsecutivos = 0;
     console.log(`\n[poll] ${jobs.length} jobs recibidos`);
-    // Procesar serialmente: cada scraper abre su page, mejor no saturar el browser
     for (const job of jobs) {
       if (detenido) break;
       try {
         await procesarJob(job);
       } catch (err) {
         console.log(`  procesarJob crash: ${(err as Error).message}`);
-        // Tratar de reportar como error para liberar el job en BullMQ
         try {
           await reportarResultado({
             job,
@@ -386,21 +420,16 @@ async function main(): Promise<void> {
     detenido = true;
   });
 
-  await calentarBrowserConPerfilReal();
+  await calentarBrowser();
   await loop();
-  console.log("Agente detenido.");
-
-  const g = globalThis as any;
-  if (g.__pwContext?.close) {
-    try {
-      await g.__pwContext.close();
-    } catch {
-      /* ignore */
-    }
-  }
+  console.log("Agente detenido. Cerrando browser...");
+  await cerrarBrowserAgente();
+  console.log("Listo.");
 }
 
-main().catch((err) => {
-  console.error("✗ Fatal:", err);
-  process.exit(1);
-});
+main()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error("✗ Fatal:", err);
+    process.exit(1);
+  });
