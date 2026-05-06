@@ -92,11 +92,13 @@ chromium.use(StealthPlugin());
 
 const API_BASE = (process.env.HABLA_API_BASE ?? "").replace(/\/+$/, "");
 const TOKEN = process.env.HABLA_AGENTE_TOKEN ?? "";
-const POLL_INTERVAL_MS = 5_000;
+const POLL_INTERVAL_MS = 2_000;
 const POLL_INTERVAL_VACIO_MS = 15_000;
+// Modo sesión: polls vacíos más rápidos para cerrar en ~6s tras último job.
+const POLL_INTERVAL_VACIO_SESION_MS = 3_000;
 const LIMIT_JOBS_POR_POLL = 5;
-// Auto-exit en modo sesión: tras 3 polls consecutivos sin jobs, cerrar.
-const POLLS_VACIOS_PARA_EXIT = 3;
+// Auto-exit en modo sesión: tras 2 polls consecutivos sin jobs, cerrar.
+const POLLS_VACIOS_PARA_EXIT = 2;
 
 // Parsear --token=xxx del argv (modo sesión V.14)
 function parseSesionToken(): string | null {
@@ -377,11 +379,15 @@ async function loop(): Promise<void> {
         pollsVaciosConsecutivos >= POLLS_VACIOS_PARA_EXIT
       ) {
         console.log(
-          `  [poll] ${pollsVaciosConsecutivos} polls vacíos consecutivos · sesión completa, cerrando`,
+          `  [poll] ${pollsVaciosConsecutivos} polls vacíos · sesión completa, cerrando`,
         );
         return;
       }
-      await sleep(POLL_INTERVAL_VACIO_MS);
+      await sleep(
+        SESION_TOKEN
+          ? POLL_INTERVAL_VACIO_SESION_MS
+          : POLL_INTERVAL_VACIO_MS,
+      );
       continue;
     }
     pollsVaciosConsecutivos = 0;
@@ -428,8 +434,14 @@ async function main(): Promise<void> {
 }
 
 main()
-  .then(() => process.exit(0))
+  .then(() => {
+    // Salida explícita inmediata. En modo sesión esto es importante:
+    // Playwright a veces deja handles abiertos (FS watchers, sockets)
+    // que mantienen el event loop vivo. Sin esto el proceso queda
+    // colgado tras procesar todos los jobs.
+    setTimeout(() => process.exit(0), 500);
+  })
   .catch((err) => {
     console.error("✗ Fatal:", err);
-    process.exit(1);
+    setTimeout(() => process.exit(1), 500);
   });
