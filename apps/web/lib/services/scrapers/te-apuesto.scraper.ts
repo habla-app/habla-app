@@ -15,7 +15,12 @@ import { similitudEquipos, UMBRAL_FUZZY_DEFAULT } from "./fuzzy-match";
 import { capturarJsonsConCuotas } from "./xhr-intercept";
 import { obtenerUrlListado } from "./urls-listing";
 import { detectarLigaCanonica } from "./ligas-id-map";
-import type { CuotasCapturadas, ResultadoScraper, Scraper } from "./types";
+import {
+  mercadosFaltantes,
+  type CuotasCapturadas,
+  type ResultadoScraper,
+  type Scraper,
+} from "./types";
 
 interface CoreixOdd {
   id?: number | string;
@@ -114,6 +119,23 @@ const teApuestoScraper: Scraper = {
 
       const cuotas = mapearCuotasCoreix(mejor);
       if (Object.keys(cuotas).length === 0) continue;
+
+      // V.12.3: requerir los 4 mercados.
+      const faltan = mercadosFaltantes(cuotas);
+      if (faltan.length > 0) {
+        logger.info(
+          {
+            partidoId: partido.id,
+            eventId: mejor.id,
+            mercadosPresentes: Object.keys(cuotas),
+            mercadosFaltantes: faltan,
+            marketsEnEvento: (mejor.markets ?? []).map((m) => m.name),
+            source: "scrapers:te-apuesto",
+          },
+          `te-apuesto: cuotas parciales · faltan=[${faltan.join(",")}] (probando siguiente candidato)`,
+        );
+        continue;
+      }
 
       return {
         cuotas,

@@ -180,3 +180,27 @@ export class CapturaSinDatosError extends Error {
     this.name = "CapturaSinDatosError";
   }
 }
+
+/**
+ * Lista canónica de los 4 mercados que el motor exige para considerar
+ * una captura "completa" (Lote V.12.3 — May 2026).
+ *
+ * Decisión del producto: NO mostrar cuotas parciales en la UI admin —
+ * un partido con 3/4 mercados se ve incompleto y rompe el comparador.
+ * Si una casa no expone alguno de estos 4, persistimos como SIN_DATOS
+ * (no penaliza salud del scraper) hasta que el parser se ajuste.
+ */
+export const MERCADOS_REQUERIDOS: readonly MercadoKey[] = [
+  "1x2",
+  "doble_op",
+  "mas_menos_25",
+  "btts",
+];
+
+/**
+ * Devuelve los mercados faltantes para considerar la captura completa.
+ * Array vacío significa "todos los mercados presentes".
+ */
+export function mercadosFaltantes(cuotas: CuotasCapturadas): MercadoKey[] {
+  return MERCADOS_REQUERIDOS.filter((m) => !cuotas[m]);
+}
