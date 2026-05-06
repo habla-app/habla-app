@@ -31,6 +31,44 @@ import path from "node:path";
 import os from "node:os";
 import fs from "node:fs";
 
+// ─── Cargar .env.local manualmente ANTES de leer process.env ─────────
+//
+// `tsx` (el ejecutor TypeScript) no carga `.env.local` por defecto.
+// Este loader manual lee el archivo y setea las env vars sin pisar las
+// que ya estuvieran seteadas en la sesión.
+function cargarEnvLocal(): void {
+  const candidatos = [
+    path.join(process.cwd(), ".env.local"),
+    path.join(__dirname, "..", ".env.local"),
+    path.join(__dirname, "..", "..", ".env.local"),
+  ];
+  for (const ruta of candidatos) {
+    if (!fs.existsSync(ruta)) continue;
+    const contenido = fs.readFileSync(ruta, "utf8");
+    for (const linea of contenido.split(/\r?\n/)) {
+      const t = linea.trim();
+      if (!t || t.startsWith("#")) continue;
+      const eq = t.indexOf("=");
+      if (eq === -1) continue;
+      const key = t.slice(0, eq).trim();
+      let value = t.slice(eq + 1).trim();
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+      if (!process.env[key]) {
+        process.env[key] = value;
+      }
+    }
+    console.log(`  · .env.local cargado desde ${ruta}`);
+    return;
+  }
+  console.log("  · .env.local no encontrado (variables deben estar en la sesión)");
+}
+cargarEnvLocal();
+
 import { chromium } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 
