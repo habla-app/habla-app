@@ -6,7 +6,7 @@
 // nuestro. Sin doble nav.
 
 import { logger } from "../logger";
-import { similitudEquipos, UMBRAL_FUZZY_DEFAULT } from "./fuzzy-match";
+import { similitudEquipos, UMBRAL_FUZZY_MATCH_PARTIDO } from "./fuzzy-match";
 import {
   recolectarJsons,
   priceOk,
@@ -91,7 +91,7 @@ function parsearBetano(
         similitudEquipos(homeName, equipoLocal),
         similitudEquipos(awayName, equipoVisita),
       );
-      if (score < UMBRAL_FUZZY_DEFAULT * 0.7) continue;
+      if (score < UMBRAL_FUZZY_MATCH_PARTIDO) continue;
     } else {
       // Fallback: confiar en que el JSON contiene rastros del partido
       const txt = JSON.stringify(j.body).toLowerCase();

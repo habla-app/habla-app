@@ -17,7 +17,7 @@
 // Perú) la línea 2.5 sí está en el listing/detalle.
 
 import { logger } from "../logger";
-import { similitudEquipos, UMBRAL_FUZZY_DEFAULT } from "./fuzzy-match";
+import { similitudEquipos, UMBRAL_FUZZY_MATCH_PARTIDO } from "./fuzzy-match";
 import {
   recolectarJsons,
   priceOk,
@@ -148,7 +148,7 @@ function parsearDoradobet(
       mejorEv = ev;
     }
   }
-  if (!mejorEv || mejorScore < UMBRAL_FUZZY_DEFAULT * 0.7) return null;
+  if (!mejorEv || mejorScore < UMBRAL_FUZZY_MATCH_PARTIDO) return null;
 
   // 2) Combinar markets+odds de TODOS los JSONs Altenar (listing + detalle)
   // PREFER LISTING: el listing tiene shape completo (typeId/sv/oddIds);

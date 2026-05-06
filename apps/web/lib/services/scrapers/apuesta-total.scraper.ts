@@ -12,7 +12,10 @@
 // específicos para ML0 (1X2) y QA61 (Doble Op).
 
 import { logger } from "../logger";
-import { similitudEquipos, UMBRAL_FUZZY_DEFAULT } from "./fuzzy-match";
+import {
+  similitudEquipos,
+  UMBRAL_FUZZY_MATCH_PARTIDO,
+} from "./fuzzy-match";
 import {
   recolectarJsons,
   priceOk,
@@ -28,7 +31,7 @@ import {
 
 // Lote V.13.1: subido de 8s a 15s — paridad con script lean exitoso.
 const TIEMPO_ESPERA_MS = 15_000;
-const UMBRAL_FUZZY = UMBRAL_FUZZY_DEFAULT * 0.7;
+const UMBRAL_FUZZY = UMBRAL_FUZZY_MATCH_PARTIDO;
 
 const apuestaTotalScraper: Scraper = {
   nombre: "apuesta_total",

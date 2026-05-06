@@ -5,7 +5,7 @@
 // es self-suficiente — sin doble nav.
 
 import { logger } from "../logger";
-import { similitudEquipos, UMBRAL_FUZZY_DEFAULT } from "./fuzzy-match";
+import { similitudEquipos, UMBRAL_FUZZY_MATCH_PARTIDO } from "./fuzzy-match";
 import {
   recolectarJsons,
   priceOk,
@@ -104,7 +104,7 @@ function parsearTeApuesto(
         mejorAway = away;
       }
     }
-    if (!mejor || mejorScore < UMBRAL_FUZZY_DEFAULT * 0.7) continue;
+    if (!mejor || mejorScore < UMBRAL_FUZZY_MATCH_PARTIDO) continue;
 
     const allOdds: any[] = [];
     for (const m of mejor.markets ?? []) {
