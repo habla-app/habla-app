@@ -13,25 +13,17 @@ RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 # deps, que también vienen de edge — incluyendo `libpq` 18). El resto
 # del sistema queda en stable.
 #
-# Lote V.12 (May 2026) — Chromium re-agregado para el motor de cuotas
-# vía Playwright + interceptación XHR. El bundled Chromium de Playwright
-# se compila contra glibc y no corre en musl/Alpine, así que usamos el
-# del repo de Alpine y le apuntamos vía PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH.
-# Tamaño extra: ~150 MB descomprimido.
-RUN apk add --no-cache openssl \
-        chromium \
-        nss \
-        freetype \
-        harfbuzz \
-        ttf-freefont \
-        dbus \
-        ca-certificates \
+# Lote V.13 (May 2026) — Chromium removido del container Railway. Los
+# scrapers Playwright corren en el agente local del admin (script
+# `apps/web/scripts/agente-cuotas.ts` con Chrome real del sistema). El
+# backend en Railway solo orquesta: encola jobs + expone endpoints HTTP
+# que el agente consume vía polling. Ahorro ~150 MB de imagen.
+RUN apk add --no-cache openssl ca-certificates \
     && echo "@edge https://dl-cdn.alpinelinux.org/alpine/edge/main" >> /etc/apk/repositories \
     && apk add --no-cache postgresql18-client@edge
 
-# Skipear download del Chromium bundled — usamos el del sistema.
+# Skipear download del Chromium bundled de Playwright — el server NO lanza browser.
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
 # --- Install dependencies ---
 FROM base AS deps

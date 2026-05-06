@@ -1,20 +1,23 @@
-// Worker BullMQ del motor de captura de cuotas (Lote V — fase V.1).
+// Worker BullMQ del motor de captura de cuotas (Lote V.13 — May 2026).
 //
-// En V.1 el worker existe pero no hay scrapers registrados, así que cada
-// job entra → busca scraper en el dispatcher → no encuentra → marca el
-// resultado como ERROR con mensaje "scraper no implementado". La salud
-// del scraper no se penaliza en este caso (no fue una falla externa).
+// V.13: el processor BullMQ ya NO corre en Railway. Los WAFs de Betano +
+// Inkabet bloquean IPs datacenter (US) con 403 instantáneo, así que las
+// 5 casas se procesan desde el agente local del admin (`apps/web/scripts/
+// agente-cuotas.ts`) que abre Chrome real con perfil persistente.
 //
-// Cuando V.2/V.3/V.4 registren scrapers concretos en el `dispatcher`, el
-// worker pasa a invocarlos transparentemente — sin tocar este archivo.
+// El backend en Railway:
+//   - Mantiene la Queue BullMQ (encolar jobs sigue siendo idempotente).
+//   - NO arranca el Worker (no procesa jobs).
+//   - Expone endpoints HTTP para el agente (GET jobs/proximos, POST
+//     jobs/resultado).
+//   - El heartbeat sigue activo para diagnóstico.
+//   - `procesarJobCaptura` se exporta para que el endpoint POST resultado
+//     reuse `persistirCuotas` + `recalcularEstadoCapturaPartido` + auto-
+//     aprendizaje de aliases (idéntica lógica al processor original, solo
+//     que el `await scraper.capturarConPlaywright(...)` lo hace el agente).
 //
-// Patrón de carga: el Worker SE INICIA cuando alguien llama a
-// `iniciarCuotasWorker()` desde `instrumentation.ts`. La instancia es
-// singleton; segunda llamada retorna la existente.
-//
-// Importante: BullMQ Worker es un proceso de larga duración. En producción
-// vive el lifetime del container. En tests el caller debe llamar a
-// `detenerCuotasWorker()` para no leakear.
+// Patrón de carga: `iniciarCuotasWorker()` se llama desde
+// `instrumentation.ts` y SOLO inicia el heartbeat — no crea Worker BullMQ.
 
 import { prisma } from "@habla/db";
 import { logger } from "./logger";
@@ -30,25 +33,15 @@ import {
 import { aprenderAlias } from "./scrapers/alias-equipo";
 import type {
   CasaCuotas,
-  CuotasJobData,
   ResultadoScraper,
   Scraper,
 } from "./scrapers/types";
-import { CapturaSinDatosError } from "./scrapers/types";
 
 interface BullMQWorkerLike {
   on(event: string, listener: (...args: unknown[]) => void): unknown;
   close(): Promise<void>;
-  /** Lote V.10.4: BullMQ expone `isPaused()`. */
   isPaused?(): Promise<boolean>;
-  /** Lote V.10.4: BullMQ expone `isRunning()`. */
   isRunning?(): boolean;
-}
-
-interface BullMQJobLike {
-  id?: string;
-  data: CuotasJobData;
-  attemptsMade?: number;
 }
 
 /**
@@ -181,343 +174,144 @@ function iniciarHeartbeatWorker(): void {
 }
 
 /**
- * Procesa un job: invoca el scraper de la casa, persiste resultado,
- * actualiza salud, recalcula estado del partido. Se exporta para que
- * tests puedan llamarlo directamente sin pasar por BullMQ.
+ * Persiste el resultado de una captura ejecutada por el agente local.
+ *
+ * Lote V.13: el processor BullMQ ya no corre. El agente local ejecuta
+ * el scraper Playwright en su PC y reporta vía POST `/agente/jobs/resultado`,
+ * que invoca esta función para reusar la lógica de persistencia + auto-
+ * aprendizaje de aliases (idéntica al processor original).
+ *
+ * Casos:
+ *   - `kind="ok"`: persistirCuotas + actualizarSaludScraper + recalcular
+ *   - `kind="sin_datos"`: persistirSinDatos (no penaliza salud)
+ *   - `kind="error"`: persistirError + actualizarSaludScraper("ERROR")
  */
-export async function procesarJobCaptura(job: BullMQJobLike): Promise<void> {
-  const { partidoId, casa, ligaCanonica } = job.data;
+export async function persistirResultadoAgente(args: {
+  partidoId: string;
+  casa: CasaCuotas;
+  ligaCanonica: string;
+  kind: "ok" | "sin_datos" | "error";
+  resultado?: ResultadoScraper;
+  mensaje?: string;
+}): Promise<{ alertasCreadas: number }> {
+  const { partidoId, casa, ligaCanonica, kind, resultado, mensaje } = args;
 
-  const scraper = scraperRegistry[casa];
-  if (!scraper) {
-    await persistirError({
+  if (kind === "sin_datos") {
+    await persistirSinDatos({
       partidoId,
       casa,
-      eventIdExterno: ligaCanonica, // legacy: el campo en BD aún se llama así
-      errorMensaje: `scraper "${casa}" no registrado`,
+      eventIdExterno: ligaCanonica,
+      mensaje: mensaje ?? "partido no encontrado o variante suspendida",
     });
     await recalcularEstadoCapturaPartido(partidoId);
-    logger.debug(
-      { partidoId, casa, source: "cuotas-worker" },
-      "scraper no registrado, job marcado ERROR sin penalizar salud",
+    logger.info(
+      { partidoId, casa, mensaje, source: "cuotas-worker:agente" },
+      `${casa}: SIN_DATOS — ${mensaje ?? "?"}`,
     );
-    return;
+    return { alertasCreadas: 0 };
   }
 
-  // Lote V.12: Playwright + XHR intercept. Recibe ligaCanonica.
-  const tInicioJob = Date.now();
-  logger.info(
-    {
-      partidoId,
-      casa,
-      ligaCanonica,
-      source: "cuotas-worker",
-    },
-    `procesando job ${casa} vía Playwright (liga=${ligaCanonica})`,
-  );
-
-  try {
-    const partidoEntidad = await prisma.partido.findUnique({
-      where: { id: partidoId },
-    });
-    if (!partidoEntidad) {
-      throw new Error(`partido ${partidoId} no existe`);
-    }
-    const r = await scraper.capturarConPlaywright(
-      partidoEntidad,
-      ligaCanonica,
-    );
-    if (r === null) {
-      // Partido no encontrado en response de la casa para esa liga.
-      // No es ERROR técnico — registramos como SIN_DATOS para que el
-      // próximo ciclo reintente sin penalizar salud.
-      await persistirSinDatos({
-        partidoId,
-        casa,
-        eventIdExterno: ligaCanonica,
-        mensaje: "partido no encontrado en response de la casa",
-      });
-      await recalcularEstadoCapturaPartido(partidoId);
-      logger.info(
-        { partidoId, casa, ligaCanonica, source: "cuotas-worker:playwright" },
-        `${casa}: partido no encontrado tras navegar listing`,
-      );
-      return;
-    }
-    const resultado = r;
-
-    const { alertasCreadas } = await persistirCuotas({
-      partidoId,
-      casa,
-      eventIdExterno: resultado.eventIdCasa ?? ligaCanonica,
-      resultado,
-    });
-    await actualizarSaludScraper(casa, "OK");
-    await recalcularEstadoCapturaPartido(partidoId);
-
-    // Lote V.7: auto-aprendizaje de aliases. Si el scraper expuso
-    // los nombres de los equipos en el payload, comparamos contra el
-    // canónico del partido y persistimos el alias cuando difiere. Esto
-    // cubre el caso de vinculación MANUAL (admin pega URL → primer job
-    // corre acá → alias aprendido) sin tocar el contrato Scraper para
-    // las casas que aún no exponen `equipos`.
-    if (resultado.equipos) {
-      void (async () => {
-        try {
-          const partido = await prisma.partido.findUnique({
-            where: { id: partidoId },
-            select: { equipoLocal: true, equipoVisita: true },
-          });
-          if (partido) {
-            await Promise.all([
-              aprenderAlias(resultado.equipos!.local, casa, partido.equipoLocal),
-              aprenderAlias(resultado.equipos!.visita, casa, partido.equipoVisita),
-            ]);
-          }
-        } catch (err) {
-          logger.warn(
-            {
-              partidoId,
-              casa,
-              err: (err as Error)?.message,
-              source: "cuotas-worker:aprender-alias",
-            },
-            "auto-aprendizaje post-captura falló (no crítico)",
-          );
-        }
-      })();
-    }
-
-    const msTotalJob = Date.now() - tInicioJob;
-    logger.info(
-      {
-        partidoId,
-        casa,
-        alertasCreadas,
-        equiposEnPayload: resultado.equipos !== undefined,
-        ms: msTotalJob,
-        source: "cuotas-worker",
-      },
-      `captura OK · ${casa} (${msTotalJob}ms)`,
-    );
-  } catch (err) {
-    const mensaje = (err as Error)?.message ?? "error desconocido";
-
-    // SIN_DATOS: la casa no expone la variante canónica en este momento
-    // (ej. Inkabet con la variante regular suspendida). NO es una falla
-    // del scraper — no penaliza salud y no triggerea retry de BullMQ.
-    // El próximo ciclo del cron 24h reintenta naturalmente.
-    if (err instanceof CapturaSinDatosError) {
-      await persistirSinDatos({
-        partidoId,
-        casa,
-        eventIdExterno: ligaCanonica,
-        mensaje,
-      });
-      await recalcularEstadoCapturaPartido(partidoId);
-      logger.info(
-        { partidoId, casa, mensaje, source: "cuotas-worker" },
-        "captura sin datos — variante canónica suspendida, próximo ciclo reintenta",
-      );
-      return;
-    }
-
+  if (kind === "error") {
     await persistirError({
       partidoId,
       casa,
       eventIdExterno: ligaCanonica,
-      errorMensaje: mensaje,
+      errorMensaje: mensaje ?? "error desconocido",
     });
-    await actualizarSaludScraper(casa, "ERROR", mensaje);
+    await actualizarSaludScraper(casa, "ERROR", mensaje ?? "?");
     await recalcularEstadoCapturaPartido(partidoId);
-    const msTotalJob = Date.now() - tInicioJob;
     logger.warn(
-      {
-        partidoId,
-        casa,
-        err: mensaje,
-        ms: msTotalJob,
-        source: "cuotas-worker",
-      },
-      `captura falló · ${casa} (${msTotalJob}ms) — ${mensaje}`,
+      { partidoId, casa, err: mensaje, source: "cuotas-worker:agente" },
+      `${casa}: ERROR — ${mensaje ?? "?"}`,
     );
-    // Re-lanzar para que BullMQ aplique la política de reintentos.
-    throw err;
+    return { alertasCreadas: 0 };
   }
+
+  // kind === "ok"
+  if (!resultado) {
+    throw new Error("persistirResultadoAgente: kind=ok requiere `resultado`");
+  }
+  const { alertasCreadas } = await persistirCuotas({
+    partidoId,
+    casa,
+    eventIdExterno: resultado.eventIdCasa ?? ligaCanonica,
+    resultado,
+  });
+  await actualizarSaludScraper(casa, "OK");
+  await recalcularEstadoCapturaPartido(partidoId);
+
+  // Auto-aprendizaje de aliases (Lote V.7). Fire-and-forget.
+  if (resultado.equipos) {
+    void (async () => {
+      try {
+        const partido = await prisma.partido.findUnique({
+          where: { id: partidoId },
+          select: { equipoLocal: true, equipoVisita: true },
+        });
+        if (partido) {
+          await Promise.all([
+            aprenderAlias(resultado.equipos!.local, casa, partido.equipoLocal),
+            aprenderAlias(resultado.equipos!.visita, casa, partido.equipoVisita),
+          ]);
+        }
+      } catch (err) {
+        logger.warn(
+          {
+            partidoId,
+            casa,
+            err: (err as Error)?.message,
+            source: "cuotas-worker:aprender-alias",
+          },
+          "auto-aprendizaje post-captura falló (no crítico)",
+        );
+      }
+    })();
+  }
+
+  logger.info(
+    { partidoId, casa, alertasCreadas, source: "cuotas-worker:agente" },
+    `captura OK · ${casa}`,
+  );
+  return { alertasCreadas };
+}
+
+/** Marca un job de BullMQ como "no existe scraper". */
+export async function persistirSinScraper(args: {
+  partidoId: string;
+  casa: CasaCuotas;
+  ligaCanonica: string;
+}): Promise<void> {
+  await persistirError({
+    partidoId: args.partidoId,
+    casa: args.casa,
+    eventIdExterno: args.ligaCanonica,
+    errorMensaje: `scraper "${args.casa}" no registrado`,
+  });
+  await recalcularEstadoCapturaPartido(args.partidoId);
 }
 
 /**
- * Inicia el worker BullMQ. Idempotente: segunda llamada devuelve la
- * misma instancia. Devuelve null si Redis no está disponible (sin
- * REDIS_URL o en Edge runtime), permitiendo que el caller siga su flujo.
+ * Inicia el "worker" del motor de cuotas en Railway.
+ *
+ * Lote V.13: NO crea Worker BullMQ (los jobs los procesa el agente local
+ * via HTTP polling). Solo arranca el heartbeat para diagnóstico de la
+ * cola — útil para ver cuántos jobs están waiting cuando el agente está
+ * apagado. Devuelve null siempre (el contrato de retorno se mantiene
+ * compatible con `instrumentation.ts`).
  */
 export function iniciarCuotasWorker(): BullMQWorkerLike | null {
-  const cached = getWorkerInstance();
-  if (cached !== undefined) {
-    logger.debug(
-      {
-        moduleId: WORKER_MODULE_ID,
-        cachedFromGlobalThis:
-          globalForWorker.__cuotasWorkerModuleId !== WORKER_MODULE_ID,
-        source: "cuotas-worker",
-      },
-      "iniciarCuotasWorker: reusando worker de globalThis",
-    );
-    return cached as BullMQWorkerLike | null;
-  }
-
   if (typeof process === "undefined" || !process.versions?.node) {
-    setWorkerInstance(null);
     return null;
   }
-
-  const connection = getCuotasRedisConnection();
-  if (!connection) {
-    logger.warn(
-      "cuotas-worker — Redis no disponible, worker no se inicia",
-    );
-    setWorkerInstance(null);
-    return null;
-  }
-
-  // Forzar inicialización de la queue para que la conexión esté lista.
+  // Forzar inicialización de la queue para que el heartbeat tenga algo
+  // que medir.
   getCuotasQueue();
-
-  try {
-    const bullmqMod: {
-      Worker: new (
-        name: string,
-        processor: (job: BullMQJobLike) => Promise<void>,
-        opts: object,
-      ) => BullMQWorkerLike;
-    } = require("bullmq");
-
-    const worker = new bullmqMod.Worker(
-      CUOTAS_CONFIG.NOMBRE_COLA,
-      procesarJobCaptura,
-      {
-        connection,
-        concurrency: CUOTAS_CONFIG.CONCURRENCIA_BULLMQ,
-        limiter: {
-          max: 1,
-          duration: CUOTAS_CONFIG.RATE_LIMIT_POR_WORKER_MS,
-        },
-      },
-    );
-
-    // Lote V.10.4: listeners completos para diagnosticar por qué el
-    // worker no procesa jobs en producción. Cada evento se loggea con msg
-    // legible para que sea visible en Railway sin drill-down.
-    worker.on("active", (...args: unknown[]) => {
-      const job = args[0] as { id?: string; data?: CuotasJobData } | undefined;
-      logger.info(
-        {
-          jobId: job?.id,
-          partidoId: job?.data?.partidoId,
-          casa: job?.data?.casa,
-          source: "cuotas-worker:bullmq",
-        },
-        `BullMQ active · job ${job?.id} (${job?.data?.casa ?? "?"}) tomado por worker`,
-      );
-    });
-
-    worker.on("completed", (...args: unknown[]) => {
-      const job = args[0] as { id?: string; data?: CuotasJobData } | undefined;
-      logger.info(
-        {
-          jobId: job?.id,
-          casa: job?.data?.casa,
-          source: "cuotas-worker:bullmq",
-        },
-        `BullMQ completed · job ${job?.id} (${job?.data?.casa ?? "?"})`,
-      );
-    });
-
-    worker.on("failed", (...args: unknown[]) => {
-      const job = args[0] as { id?: string; data?: CuotasJobData; attemptsMade?: number } | undefined;
-      const err = args[1] as Error | undefined;
-      logger.warn(
-        {
-          jobId: job?.id,
-          partidoId: job?.data?.partidoId,
-          casa: job?.data?.casa,
-          attempts: job?.attemptsMade,
-          err: err?.message,
-          source: "cuotas-worker:bullmq",
-        },
-        `BullMQ failed · job ${job?.id} (${job?.data?.casa ?? "?"}) — ${err?.message ?? "?"}`,
-      );
-    });
-
-    worker.on("stalled", (...args: unknown[]) => {
-      const jobId = args[0] as string | undefined;
-      logger.warn(
-        { jobId, source: "cuotas-worker:bullmq" },
-        `BullMQ stalled · job ${jobId} se atascó (visibility timeout)`,
-      );
-    });
-
-    worker.on("error", (...args: unknown[]) => {
-      const err = args[0] as Error | undefined;
-      logger.error(
-        {
-          err: err?.message,
-          stack: err?.stack?.split("\n").slice(0, 5).join(" | "),
-          source: "cuotas-worker:bullmq",
-        },
-        `BullMQ error · ${err?.message ?? "?"}`,
-      );
-    });
-
-    worker.on("ready", (...args: unknown[]) => {
-      void args;
-      logger.info(
-        { source: "cuotas-worker:bullmq" },
-        "BullMQ ready · worker conectado y listo para procesar",
-      );
-    });
-
-    worker.on("closing", () => {
-      logger.warn(
-        { source: "cuotas-worker:bullmq" },
-        "BullMQ closing · worker está cerrándose",
-      );
-    });
-
-    worker.on("closed", () => {
-      logger.warn(
-        { source: "cuotas-worker:bullmq" },
-        "BullMQ closed · worker cerrado (NO va a procesar más jobs hasta restart)",
-      );
-    });
-
-    setWorkerInstance(worker);
-    logger.info(
-      {
-        cola: CUOTAS_CONFIG.NOMBRE_COLA,
-        concurrencia: CUOTAS_CONFIG.CONCURRENCIA_BULLMQ,
-        rateLimitMs: CUOTAS_CONFIG.RATE_LIMIT_POR_WORKER_MS,
-        moduleId: WORKER_MODULE_ID,
-        primeraVezEnGlobalThis:
-          globalForWorker.__cuotasWorkerModuleId === WORKER_MODULE_ID,
-      },
-      `cuotas-worker iniciado (moduleId=${WORKER_MODULE_ID})`,
-    );
-
-    // Heartbeat cada 60s: confirma que el worker sigue vivo + reporta
-    // counts de la cola. Si los logs muestran "iniciado" pero no
-    // heartbeats, el event loop está saturado o el proceso murió.
-    iniciarHeartbeatWorker();
-
-    return worker;
-  } catch (err) {
-    logger.error(
-      { err: (err as Error).message },
-      "cuotas-worker — fallo al iniciar",
-    );
-    setWorkerInstance(null);
-    return null;
-  }
+  iniciarHeartbeatWorker();
+  logger.info(
+    { moduleId: WORKER_MODULE_ID, source: "cuotas-worker" },
+    "cuotas-worker (V.13 sin processor — agente local consume via HTTP)",
+  );
+  return null;
 }
 
 /**
