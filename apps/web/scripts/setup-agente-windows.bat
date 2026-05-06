@@ -107,26 +107,31 @@ echo [3/3] Registrando protocolo habla-agente:// en Windows...
 set "LAUNCHER=%AGENTE_DIR%\scripts\agente-cuotas-launcher.cmd"
 
 REM Crear el launcher .cmd (Windows lo invoca pasándole la URL como %%1)
+REM IMPORTANTE: usamos expansion normal (%VAR%) en vez de delayed (!VAR!)
+REM porque el launcher se crea aqui sin enabledelayedexpansion en su scope.
 > "%LAUNCHER%" (
     echo @echo off
-    echo REM Launcher del agente — invocado por el protocolo habla-agente://
+    echo REM Launcher del agente - invocado por el protocolo habla-agente://
     echo REM El argumento %%1 es la URL completa, ej: habla-agente://run?token=xxx
-    echo setlocal
     echo.
-    echo REM Extraer el token de la URL
+    echo REM Extraer el token de la URL ^(despues del primer "="^)
     echo set "URL=%%~1"
     echo set "TOKEN="
-    echo for /f "tokens=2 delims==" %%%%T in ^("!URL!"^) do set "TOKEN=%%%%T"
-    echo REM Quitar trailing /, &, espacios del token
-    echo set "TOKEN=!TOKEN: =!"
-    echo set "TOKEN=!TOKEN:/=!"
+    echo for /f "tokens=2 delims==" %%%%T in ^("%%URL%%"^) do set "TOKEN=%%%%T"
     echo.
     echo REM Cambiar al directorio del repo
     echo cd /D "%AGENTE_DIR%"
     echo.
-    echo REM Lanzar el agente con el token
-    echo call pnpm --filter @habla/web run agente-cuotas -- --token=!TOKEN!
-    echo pause
+    echo REM Lanzar el agente con el token. Si TOKEN quedo vacio, falla
+    echo REM explicito en lugar de caer a modo polling silenciosamente.
+    echo if "%%TOKEN%%"=="" ^(
+    echo     echo [ERROR] No se pudo extraer el token de la URL: %%URL%%
+    echo     echo Re-ejecuta setup-agente-windows.bat para regenerar este launcher.
+    echo     pause
+    echo     exit /b 1
+    echo ^)
+    echo.
+    echo call pnpm --filter @habla/web run agente-cuotas -- --token=%%TOKEN%%
 )
 
 REM Registrar protocolo en HKCU (no requiere admin)
