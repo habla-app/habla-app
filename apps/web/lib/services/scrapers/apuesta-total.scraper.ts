@@ -15,7 +15,12 @@ import { similitudEquipos, UMBRAL_FUZZY_DEFAULT } from "./fuzzy-match";
 import { capturarJsonsConCuotas } from "./xhr-intercept";
 import { obtenerUrlListado } from "./urls-listing";
 import { detectarLigaCanonica } from "./ligas-id-map";
-import type { CuotasCapturadas, ResultadoScraper, Scraper } from "./types";
+import {
+  mercadosFaltantes,
+  type CuotasCapturadas,
+  type ResultadoScraper,
+  type Scraper,
+} from "./types";
 
 interface KambiParticipant {
   Name: string;
@@ -128,6 +133,25 @@ const apuestaTotalScraper: Scraper = {
           source: "scrapers:apuesta-total",
         },
         `apuesta-total: fixture matched pero sin markets extraíbles`,
+      );
+      return null;
+    }
+
+    // V.12.3: requerir los 4 mercados.
+    const faltan = mercadosFaltantes(cuotas);
+    if (faltan.length > 0) {
+      logger.info(
+        {
+          partidoId: partido.id,
+          eventId,
+          mercadosPresentes: Object.keys(cuotas),
+          mercadosFaltantes: faltan,
+          marketTypesEnResponse: Array.from(
+            new Set(markets.map((m) => m.MarketType?._id).filter(Boolean)),
+          ),
+          source: "scrapers:apuesta-total",
+        },
+        `apuesta-total: cuotas parciales · faltan=[${faltan.join(",")}] (no persiste)`,
       );
       return null;
     }

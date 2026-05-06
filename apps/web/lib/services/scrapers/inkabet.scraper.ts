@@ -13,7 +13,12 @@ import { similitudEquipos, UMBRAL_FUZZY_DEFAULT } from "./fuzzy-match";
 import { capturarJsonsConCuotas } from "./xhr-intercept";
 import { obtenerUrlListado } from "./urls-listing";
 import { detectarLigaCanonica } from "./ligas-id-map";
-import type { CuotasCapturadas, ResultadoScraper, Scraper } from "./types";
+import {
+  mercadosFaltantes,
+  type CuotasCapturadas,
+  type ResultadoScraper,
+  type Scraper,
+} from "./types";
 
 interface OBGParticipant {
   label?: string;
@@ -121,6 +126,25 @@ const inkabetScraper: Scraper = {
       const eventMarkets = markets.filter((m) => m.eventId === eventId);
       const cuotas = mapearCuotasOBG(eventMarkets, selections);
       if (Object.keys(cuotas).length === 0) continue;
+
+      // V.12.3: requerir los 4 mercados.
+      const faltan = mercadosFaltantes(cuotas);
+      if (faltan.length > 0) {
+        logger.info(
+          {
+            partidoId: partido.id,
+            eventId,
+            mercadosPresentes: Object.keys(cuotas),
+            mercadosFaltantes: faltan,
+            templatesEnEvento: Array.from(
+              new Set(eventMarkets.map((m) => m.marketTemplateId).filter(Boolean)),
+            ),
+            source: "scrapers:inkabet",
+          },
+          `inkabet: cuotas parciales · faltan=[${faltan.join(",")}] (probando siguiente candidato)`,
+        );
+        continue;
+      }
 
       return {
         cuotas,

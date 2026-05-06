@@ -1,20 +1,24 @@
-// Browser singleton de Playwright para los scrapers (Lote V.12 — May 2026).
+// Browser singleton de Playwright para los scrapers (Lote V.12.3 — May 2026).
 //
 // Versión LEAN del helper. Mantiene UNA instancia de Chromium warm
 // durante el lifetime del proceso Next.js. Cada captura abre/cierra una
 // page (cheap, ~50ms) pero reusa browser + context.
 //
+// V.12.3 agrega `playwright-extra` + `puppeteer-extra-plugin-stealth`:
+//   El stealth plugin oculta los indicadores típicos de headless que los
+//   WAFs modernos detectan (window.chrome, plugins, languages, webdriver
+//   flag, canvas/WebGL fingerprints, TLS handshake patterns). Resuelve
+//   los 403 que Coolbet/Betano/Inkabet devolvían contra nuestro headless
+//   sin stealth en V.12.
+//
 // Auto-shutdown: si pasan ≥15min sin uso y no hay pages activas, cierra
 // el browser (~150MB liberados). La próxima captura reinicia warm en ~3s.
-//
-// Por qué `playwright-chromium` y no `playwright`:
-//   `playwright` instala Chromium + Firefox + WebKit (~600MB cada uno).
-//   Sólo necesitamos Chromium → `playwright-chromium` baja un único bundle.
 //
 // Chromium en Alpine (Railway):
 //   El bundled de Playwright se compila contra glibc; Alpine usa musl.
 //   El Dockerfile instala chromium del sistema y le apuntamos vía
-//   PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium.
+//   PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium. playwright-extra
+//   solo decora; el binary sigue siendo el del sistema.
 
 import { logger } from "../logger";
 
@@ -91,8 +95,29 @@ const UA_DEFAULT =
   "(KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36";
 
 async function lanzarBrowser(): Promise<PWBrowser> {
-  const mod = require("playwright-chromium") as PWModule;
-  const browser = await mod.chromium.launch({
+  // V.12.3: usar playwright-extra + stealth plugin si están instalados.
+  // Si no, fallback a playwright-chromium directo (defensivo: cubre el
+  // caso de validar el repo en una máquina sin la dep instalada).
+  let stealthEnabled = false;
+  let chromium: PWLauncher;
+  try {
+    const playwrightExtra = require("playwright-extra") as {
+      chromium: PWLauncher & { use: (plugin: unknown) => void };
+    };
+    const StealthPluginFactory = require("puppeteer-extra-plugin-stealth") as () => unknown;
+    playwrightExtra.chromium.use(StealthPluginFactory());
+    chromium = playwrightExtra.chromium;
+    stealthEnabled = true;
+  } catch (err) {
+    logger.warn(
+      { err: (err as Error).message, source: "scrapers:browser" },
+      "playwright-extra/stealth no disponible, usando playwright-chromium plain",
+    );
+    const mod = require("playwright-chromium") as PWModule;
+    chromium = mod.chromium;
+  }
+
+  const browser = await chromium.launch({
     headless: HEADLESS,
     executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
     args: [
@@ -106,10 +131,11 @@ async function lanzarBrowser(): Promise<PWBrowser> {
   logger.info(
     {
       headless: HEADLESS,
+      stealthEnabled,
       execPath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ?? "(default)",
       source: "scrapers:browser",
     },
-    "playwright browser warm iniciado",
+    `playwright browser warm iniciado · stealth=${stealthEnabled}`,
   );
   return browser;
 }

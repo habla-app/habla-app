@@ -14,7 +14,12 @@ import { similitudEquipos, UMBRAL_FUZZY_DEFAULT } from "./fuzzy-match";
 import { capturarJsonsConCuotas } from "./xhr-intercept";
 import { obtenerUrlListado } from "./urls-listing";
 import { detectarLigaCanonica } from "./ligas-id-map";
-import type { CuotasCapturadas, ResultadoScraper, Scraper } from "./types";
+import {
+  mercadosFaltantes,
+  type CuotasCapturadas,
+  type ResultadoScraper,
+  type Scraper,
+} from "./types";
 
 interface AltenarEvent {
   id: number;
@@ -143,6 +148,22 @@ const doradobetScraper: Scraper = {
       }
 
       if (Object.keys(cuotas).length === 0) continue;
+
+      // V.12.3: requerir los 4 mercados — atomicidad para la UI admin.
+      const faltan = mercadosFaltantes(cuotas);
+      if (faltan.length > 0) {
+        logger.info(
+          {
+            partidoId: partido.id,
+            eventIdAltenar: mejor.id,
+            mercadosPresentes: Object.keys(cuotas),
+            mercadosFaltantes: faltan,
+            source: "scrapers:doradobet",
+          },
+          `doradobet: cuotas parciales · faltan=[${faltan.join(",")}] (probando siguiente candidato)`,
+        );
+        continue;
+      }
 
       const local =
         competitorsById.get(mejor.competitorIds?.[0] ?? -1)?.name ??
