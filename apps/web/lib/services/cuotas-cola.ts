@@ -292,19 +292,25 @@ export async function encolarJobCaptura(
   // Idempotente — si ya está conectado retorna inmediatamente.
   await esperarRedisReady();
 
-  // jobId determinístico por (partidoId, casa, esRefresh-or-not). BullMQ
-  // garantiza que dos jobs con el mismo `jobId` no coexisten en la cola
-  // — el segundo add se vuelve idempotente. El sufijo cambia entre el
-  // trigger admin y el cron diario para que ambos no se pisen.
+  // jobId con timestamp por captura (Lote V.12.1 — May 2026).
   //
-  // Lote V.9.3: BullMQ rechaza custom IDs con `:` (`Custom Id cannot
-  // contain :`). El bug estaba latente desde el Lote V — nunca se había
-  // notado porque el discovery HTTP fallaba siempre y se encolaban 0
-  // jobs. V.9.1 destapó el bug al encolar las 7 casas siempre.
-  // Reemplazamos `:` por `-` como separador.
+  // Diseño previo: jobId determinístico `cuotas-{partidoId}-{casa}-initial|refresh`.
+  // Bug: con `removeOnComplete: 100` y `removeOnFail: 500`, los jobs
+  // viejos quedan retenidos en BullMQ. Cuando el admin re-activa Filtro 1
+  // sobre el mismo partido (o el cron dispara de nuevo), `queue.add` ve
+  // el jobId existente en completed/failed y devuelve el job viejo
+  // sin reprocesar. Resultado: "iniciarCaptura · 6/6 encoladas" pero
+  // `waiting=0 active=0` post-encolar — los jobs son no-op.
+  //
+  // Fix lean: agregar timestamp al jobId para que cada captura sea un
+  // job nuevo. La deduplicación lógica de "no capturar 2 veces seguidas"
+  // ya la cubre `SKIP_SI_OK_MENOS_DE_HORAS` en `encolarRefresh` (a nivel
+  // orquestador), así que perder idempotencia a nivel jobId no rompe
+  // nada.
+  const ts = Date.now();
   const jobId = data.esRefresh
-    ? `cuotas-${data.partidoId}-${data.casa}-refresh`
-    : `cuotas-${data.partidoId}-${data.casa}-initial`;
+    ? `cuotas-${data.partidoId}-${data.casa}-refresh-${ts}`
+    : `cuotas-${data.partidoId}-${data.casa}-initial-${ts}`;
 
   // Lote V.10.8: log diagnóstico antes/después del add para verificar
   // que el escribe llegó al Redis correcto.
