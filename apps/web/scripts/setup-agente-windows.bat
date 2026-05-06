@@ -114,16 +114,6 @@ REM porque el launcher se crea aqui sin enabledelayedexpansion en su scope.
     echo REM Launcher del agente - invocado por el protocolo habla-agente://
     echo REM El argumento %%1 es la URL completa, ej: habla-agente://run?token=xxx
     echo.
-    echo REM Lote V.14.4: auto-minimizar la PRIMERA vez que se invoca.
-    echo REM Windows abre el launcher en una ventana visible; lo re-lanzamos
-    echo REM con start /MIN y salimos. La env var HABLA_LAUNCHER_MIN se
-    echo REM hereda al hijo via start, lo que evita loop infinito.
-    echo if not defined HABLA_LAUNCHER_MIN ^(
-    echo     set HABLA_LAUNCHER_MIN=1
-    echo     start /MIN "" "%%~f0" %%*
-    echo     exit /b
-    echo ^)
-    echo.
     echo REM Extraer el token de la URL ^(despues del primer "="^)
     echo set "URL=%%~1"
     echo set "TOKEN="
@@ -145,10 +135,12 @@ REM porque el launcher se crea aqui sin enabledelayedexpansion en su scope.
 )
 
 REM Registrar protocolo en HKCU (no requiere admin).
-REM Lote V.14.4: registro en formato simple "PATH" "%1". La minimizacion
-REM ahora vive DENTRO del launcher (auto-relanzo con start /MIN).
-REM El intento del V.14.3 de poner cmd /c start /MIN en el reg add se
-REM rompia por el escape de comillas \"\" que mangeaba el valor.
+REM Lote V.14.5: revertido a la forma V.14.2 que ya estaba probada en
+REM produccion. Los intentos V.14.3 (cmd /c start /MIN en reg add) y
+REM V.14.4 (self-minimize en el launcher) rompieron el flow por
+REM razones que no se pueden diagnosticar sin reproducir localmente.
+REM Trade-off: la PowerShell del agente queda VISIBLE durante el
+REM procesamiento. Chrome sigue minimizado por args del agente.
 reg add "HKCU\Software\Classes\habla-agente" /ve /d "URL:Habla Agente Protocol" /f >nul
 reg add "HKCU\Software\Classes\habla-agente" /v "URL Protocol" /d "" /f >nul
 reg add "HKCU\Software\Classes\habla-agente\shell" /f >nul
