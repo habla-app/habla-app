@@ -191,7 +191,6 @@ export async function listarAlertasPorPartido(
 /** Etiqueta legible por casa. Único punto que mapea slug → display. */
 export const ETIQUETAS_CASA: Record<CasaCuotas, string> = {
   apuesta_total: "Apuesta Total",
-  coolbet: "Coolbet",
   doradobet: "Doradobet",
   betano: "Betano",
   inkabet: "Inkabet",

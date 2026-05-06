@@ -41,7 +41,8 @@ import {
   detenerCuotasWorker,
 } from "./cuotas-worker";
 import type { CasaCuotas, CuotasJobData } from "./scrapers/types";
-import { obtenerLigaIdParaPartido } from "./scrapers/ligas-id-map";
+import { detectarLigaCanonica } from "./scrapers/ligas-id-map";
+import { obtenerUrlListado } from "./scrapers/urls-listing";
 
 export interface ResumenIniciarCaptura {
   partidoId: string;
@@ -117,16 +118,26 @@ export async function iniciarCaptura(
   const casasFallidas: { casa: CasaCuotas; error: string }[] = [];
   const casasSinLigaMapeada: CasaCuotas[] = [];
 
+  // Lote V.12: detectar liga canónica una vez. Cada casa decide si
+  // tiene URL listing configurada para esa liga.
+  const ligaCanonica = detectarLigaCanonica(partido.liga);
+  if (!ligaCanonica) {
+    logger.info(
+      { partidoId, liga: partido.liga, source: "captura-cuotas" },
+      `iniciarCaptura: liga "${partido.liga}" sin liga canónica detectada — skip`,
+    );
+    return { partidoId, casasEncoladas: [], casasSinEventId: [] };
+  }
+
   for (const casa of CUOTAS_CONFIG.CASAS) {
-    const resolveLiga = obtenerLigaIdParaPartido(partido.liga, casa);
-    if (!resolveLiga) {
+    if (!obtenerUrlListado(ligaCanonica, casa)) {
       casasSinLigaMapeada.push(casa);
       continue;
     }
     const data: CuotasJobData = {
       partidoId,
       casa,
-      ligaIdCasa: resolveLiga.ligaIdCasa,
+      ligaCanonica,
       esRefresh: false,
     };
     try {
@@ -262,6 +273,8 @@ export async function encolarRefresh(
   let casasSkipeadas = 0;
   let casasSinEventId = 0;
 
+  const ligaCanonica = detectarLigaCanonica(partido.liga);
+
   for (const casa of CUOTAS_CONFIG.CASAS) {
     const ultimoOk = exitoPorCasa.get(casa);
     if (ultimoOk) {
@@ -272,15 +285,14 @@ export async function encolarRefresh(
       }
     }
 
-    const resolveLiga = obtenerLigaIdParaPartido(partido.liga, casa);
-    if (!resolveLiga) {
+    if (!ligaCanonica || !obtenerUrlListado(ligaCanonica, casa)) {
       casasSinEventId++;
       continue;
     }
     const data: CuotasJobData = {
       partidoId,
       casa,
-      ligaIdCasa: resolveLiga.ligaIdCasa,
+      ligaCanonica,
       esRefresh: true,
     };
     const jobId = await encolarJobCaptura(data);

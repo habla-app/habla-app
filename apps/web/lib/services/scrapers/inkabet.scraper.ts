@@ -1,281 +1,462 @@
-// Scraper Inkabet via browser + XHR intercept (Lote V.12 — May 2026).
+// Scraper Inkabet via Playwright + XHR intercept (Lote V.12 — May 2026).
 //
-// Inkabet usa Octonovus/OBG. La página de la liga dispara XHRs a
-// `/api/sb/v1/widgets/events-table/v2` con shape:
-//   { skeleton, data: { events[], markets[], selections[] } }
-//
-// Cargamos la página en navegador → el JS pide la cantidad correcta de
-// markets sin que tengamos que setear `maxMarketCount`. Nos llega el
-// shape completo y lo parseamos.
+// Inkabet usa Octonovus/OBG. El listing dispara XHRs con `data.events[]`,
+// `data.markets[]`, `data.selections[]`. Para los detalles full hay que
+// hacer doble nav al slug del partido (ej.
+// `/pe/apuestas-deportivas/futbol/peru/peru-liga-1/utc-cajamarca-vs-fc-cajamarca`).
 
 import { logger } from "../logger";
 import { similitudEquipos, UMBRAL_FUZZY_DEFAULT } from "./fuzzy-match";
-import { capturarJsonsConCuotas } from "./xhr-intercept";
-import { obtenerUrlListado } from "./urls-listing";
-import { detectarLigaCanonica } from "./ligas-id-map";
+import {
+  recolectarJsons,
+  priceOk,
+  norm,
+  type JsonCapturado,
+  type DobleNavCtx,
+} from "./playwright-runner";
 import {
   mercadosFaltantes,
+  CapturaSinDatosError,
   type CuotasCapturadas,
   type ResultadoScraper,
   type Scraper,
 } from "./types";
 
-interface OBGParticipant {
-  label?: string;
-  side?: number;
-}
-interface OBGEvent {
-  globalId?: string;
-  competitionId?: string;
-  slug?: string;
-  participants?: OBGParticipant[];
-}
-interface OBGMarket {
-  eventId?: string;
-  marketTemplateId?: string;
-  lineValue?: string;
-  lineValueRaw?: number;
-  id?: string;
-}
-interface OBGSelection {
-  marketId?: string;
-  odds?: number;
-  alternateLabel?: string;
-  participantLabel?: string;
-  selectionTemplateId?: string;
-  isHomeTeam?: boolean;
-  isAwayTeam?: boolean;
-}
-interface OBGBody {
-  data?: {
-    events?: OBGEvent[];
-    markets?: OBGMarket[];
-    selections?: OBGSelection[];
-  };
-}
-
-const TEMPLATES_1X2 = new Set(["MW3W", "ESFMWINNER3W", "E1X2M"]);
-const TEMPLATES_DOBLE_OP = new Set(["DC", "ESFMDCHANCE"]);
-const TEMPLATES_TOTAL = new Set([
-  "MTG2W25",
-  "MTG2W",
-  "ESFMTOTAL",
-  "ESFMATOTAL",
-  "EOU25M",
-]);
-const TEMPLATES_BTTS = new Set(["BTTS", "ESFMBTS"]);
+const TIEMPO_ESPERA_MS = 8_000;
 
 const inkabetScraper: Scraper = {
   nombre: "inkabet",
 
-  async capturarPorApi(partido) {
-    const ligaCanonica = detectarLigaCanonica(partido.liga);
-    if (!ligaCanonica) return null;
-    const url = obtenerUrlListado(ligaCanonica, "inkabet");
-    if (!url) return null;
-
-    const candidatos = await capturarJsonsConCuotas(url, {
-      source: "scrapers:inkabet",
-      esperaPostLoadMs: 6_000,
+  async capturarConPlaywright(partido, ligaCanonica) {
+    const recolectado = await recolectarJsons({
+      casa: "inkabet",
+      ligaCanonica,
+      partido,
+      dobleNav: async (ctx) => dobleNavInkabet(ctx),
     });
+    if (!recolectado) return null;
 
-    const diagnostico: Array<{
-      url: string;
-      bytes: number;
-      eventos: number;
-      markets: number;
-      mejorScore: number;
-      mejorMatch?: { local: string; visita: string };
-    }> = [];
-
-    for (const c of candidatos) {
-      const body = c.body as OBGBody;
-      const events = body?.data?.events ?? [];
-      const markets = body?.data?.markets ?? [];
-      const selections = body?.data?.selections ?? [];
-
-      let mejor: OBGEvent | null = null;
-      let mejorScore = 0;
-      let mejorMatch: { local: string; visita: string } | undefined;
-      for (const e of events) {
-        const home = extractParticipant(e, 1);
-        const away = extractParticipant(e, 2);
-        if (!home || !away) continue;
-        const score = Math.min(
-          similitudEquipos(home, partido.equipoLocal),
-          similitudEquipos(away, partido.equipoVisita),
-        );
-        if (score > mejorScore) {
-          mejorScore = score;
-          mejor = e;
-          mejorMatch = { local: home, visita: away };
-        }
-      }
-      diagnostico.push({
-        url: c.url,
-        bytes: c.bytes,
-        eventos: events.length,
-        markets: markets.length,
-        mejorScore,
-        mejorMatch,
-      });
-      if (!mejor || mejorScore < UMBRAL_FUZZY_DEFAULT * 0.7) continue;
-
-      const eventId = mejor.globalId;
-      if (!eventId) continue;
-      const eventMarkets = markets.filter((m) => m.eventId === eventId);
-      const cuotas = mapearCuotasOBG(eventMarkets, selections);
-      if (Object.keys(cuotas).length === 0) continue;
-
-      // V.12.3: requerir los 4 mercados.
-      const faltan = mercadosFaltantes(cuotas);
-      if (faltan.length > 0) {
-        logger.info(
-          {
-            partidoId: partido.id,
-            eventId,
-            mercadosPresentes: Object.keys(cuotas),
-            mercadosFaltantes: faltan,
-            templatesEnEvento: Array.from(
-              new Set(eventMarkets.map((m) => m.marketTemplateId).filter(Boolean)),
-            ),
-            source: "scrapers:inkabet",
-          },
-          `inkabet: cuotas parciales · faltan=[${faltan.join(",")}] (probando siguiente candidato)`,
-        );
-        continue;
-      }
-
-      return {
-        cuotas,
-        fuente: { url: c.url, capturadoEn: new Date() },
-        eventIdCasa: eventId,
-        equipos: {
-          local: extractParticipant(mejor, 1) ?? partido.equipoLocal,
-          visita: extractParticipant(mejor, 2) ?? partido.equipoVisita,
+    const r = parsearInkabet(
+      recolectado.jsons,
+      partido.equipoLocal,
+      partido.equipoVisita,
+    );
+    if (!r) {
+      logger.info(
+        {
+          partidoId: partido.id,
+          ligaCanonica,
+          jsonsCapturados: recolectado.jsons.length,
+          source: "scrapers:inkabet",
         },
-      };
+        `inkabet: parser no encontró el partido`,
+      );
+      return null;
     }
 
-    logger.info(
-      {
-        partidoId: partido.id,
-        equipoLocal: partido.equipoLocal,
-        equipoVisita: partido.equipoVisita,
-        candidatos: candidatos.length,
-        diagnostico,
-        umbralAceptacion: UMBRAL_FUZZY_DEFAULT * 0.7,
-        source: "scrapers:inkabet",
-      },
-      `inkabet: ningún JSON candidato matcheó el partido (mejor score=${diagnostico.reduce((m, d) => Math.max(m, d.mejorScore), 0).toFixed(3)})`,
-    );
-    return null;
+    const faltan = mercadosFaltantes(r.cuotas);
+    if (faltan.length > 0) {
+      throw new CapturaSinDatosError(
+        `inkabet: cuotas parciales (faltan ${faltan.join(",")})`,
+      );
+    }
+
+    const result: ResultadoScraper = {
+      cuotas: r.cuotas,
+      fuente: { url: r.jsonUrl ?? recolectado.listingUrl, capturadoEn: new Date() },
+      eventIdCasa: r.eventoId ? String(r.eventoId) : undefined,
+      equipos: r.equipos,
+    };
+    return result;
   },
 };
 
-function extractParticipant(event: OBGEvent, side: number): string | null {
-  return (
-    event.participants?.find((p) => p.side === side)?.label ??
-    extractFromSlug(event.slug, side === 1 ? "home" : "away") ??
-    null
-  );
+// ─── Doble navegación: encontrar slug en JSONs y navegar al detalle ──
+
+async function dobleNavInkabet(ctx: DobleNavCtx): Promise<void> {
+  const slug = encontrarSlug(ctx.todosJsons, ctx.partido);
+  if (!slug) return;
+  const urlDetalle = `https://inkabet.pe/pe/apuestas-deportivas/${slug}`;
+  try {
+    await ctx.page.goto(urlDetalle, {
+      waitUntil: "domcontentloaded",
+      timeout: 30_000,
+    });
+    await ctx.page.waitForTimeout(2000);
+    await ctx.page.waitForTimeout(TIEMPO_ESPERA_MS);
+  } catch {
+    /* doble nav best-effort */
+  }
 }
 
-function extractFromSlug(slug: string | undefined, rol: "home" | "away"): string | null {
-  if (!slug) return null;
-  const last = slug.split("/").pop();
-  if (!last) return null;
-  const parts = last.split("-");
-  if (parts.length < 2) return null;
-  const mid = Math.floor(parts.length / 2);
-  return rol === "home"
-    ? parts.slice(0, mid).join(" ")
-    : parts.slice(mid).join(" ");
+function encontrarSlug(
+  jsons: JsonCapturado[],
+  partido: { equipoLocal: string; equipoVisita: string },
+): string | null {
+  const tokensL = tokensDistintivos(partido.equipoLocal);
+  const tokensV = tokensDistintivos(partido.equipoVisita);
+  for (const j of jsons) {
+    const found = walkBuscarSlug(j.body, tokensL, tokensV);
+    if (found) return found;
+  }
+  return null;
 }
 
-function mapearCuotasOBG(
-  eventMarkets: OBGMarket[],
-  allSelections: OBGSelection[],
-): CuotasCapturadas {
-  const cuotas: CuotasCapturadas = {};
+function tokensDistintivos(equipo: string): string[] {
+  return equipo
+    .toLowerCase()
+    .split(/\s+/)
+    .map((w) => w.replace(/[^\wáéíóúüñ]/g, ""))
+    .filter((w) => w.length >= 3);
+}
+
+function walkBuscarSlug(
+  obj: unknown,
+  tokensL: string[],
+  tokensV: string[],
+  depth = 0,
+): string | null {
+  if (depth > 25 || obj === null || obj === undefined) return null;
+  if (typeof obj === "string") {
+    if (obj.includes("/")) {
+      const lower = obj.toLowerCase();
+      const hayL = tokensL.some((w) => lower.includes(w));
+      const hayV = tokensV.some((w) => lower.includes(w));
+      if (hayL && hayV) {
+        const partes = obj.split("/").filter(Boolean);
+        if (partes.length >= 4) return obj;
+      }
+    }
+    return null;
+  }
+  if (typeof obj === "object") {
+    if (Array.isArray(obj)) {
+      for (const item of obj) {
+        const found = walkBuscarSlug(item, tokensL, tokensV, depth + 1);
+        if (found) return found;
+      }
+    } else {
+      const o = obj as Record<string, unknown>;
+      for (const k of ["slug", "neutralPath", "url", "path"]) {
+        if (typeof o[k] === "string") {
+          const found = walkBuscarSlug(o[k], tokensL, tokensV, depth + 1);
+          if (found) return found;
+        }
+      }
+      for (const k of Object.keys(o)) {
+        const found = walkBuscarSlug(o[k], tokensL, tokensV, depth + 1);
+        if (found) return found;
+      }
+    }
+  }
+  return null;
+}
+
+// ─── Parser ───────────────────────────────────────────────────────────
+
+interface ParserResult {
+  cuotas: CuotasCapturadas;
+  eventoId?: string;
+  jsonUrl?: string;
+  equipos?: { local: string; visita: string };
+}
+
+function extraerEventsMarketsSelections(body: any): {
+  events: any[];
+  markets: any[];
+  selections: any[];
+} {
+  const events: any[] = [];
+  const markets: any[] = [];
+  const selections: any[] = [];
+  function walk(obj: any, depth = 0): void {
+    if (depth > 20 || obj === null || obj === undefined) return;
+    if (Array.isArray(obj)) {
+      const first = obj[0];
+      if (first && typeof first === "object") {
+        if ("globalId" in first && "participants" in first) {
+          events.push(...obj);
+        } else if (
+          "marketTemplateId" in first ||
+          ("eventId" in first && "id" in first && "lineValue" in first)
+        ) {
+          markets.push(...obj);
+        } else if ("marketId" in first && "odds" in first) {
+          selections.push(...obj);
+        } else {
+          for (const item of obj) walk(item, depth + 1);
+        }
+      } else {
+        for (const item of obj) walk(item, depth + 1);
+      }
+    } else if (typeof obj === "object") {
+      if (obj.events && Array.isArray(obj.events) && obj.events[0]?.globalId) {
+        events.push(...obj.events);
+      }
+      if (
+        obj.markets &&
+        Array.isArray(obj.markets) &&
+        obj.markets[0]?.marketTemplateId
+      ) {
+        markets.push(...obj.markets);
+      }
+      if (
+        obj.selections &&
+        Array.isArray(obj.selections) &&
+        obj.selections[0]?.marketId
+      ) {
+        selections.push(...obj.selections);
+      }
+      for (const k of Object.keys(obj)) walk(obj[k], depth + 1);
+    }
+  }
+  walk(body);
+  return { events, markets, selections };
+}
+
+function parsearInkabet(
+  jsons: JsonCapturado[],
+  equipoLocal: string,
+  equipoVisita: string,
+): ParserResult | null {
+  type Candidato = {
+    url: string;
+    events: any[];
+    markets: any[];
+    selections: any[];
+  };
+  const candidatos: Candidato[] = [];
+  for (const j of jsons) {
+    const { events, markets, selections } = extraerEventsMarketsSelections(
+      j.body,
+    );
+    if (events.length > 0 || markets.length > 0) {
+      candidatos.push({ url: j.url, events, markets, selections });
+    }
+  }
+
+  const tokensL = equipoLocal
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w.length >= 3);
+  const tokensV = equipoVisita
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w.length >= 3);
+  const jsonsConToken = jsons.filter((j) => {
+    try {
+      const t = JSON.stringify(j.body).toLowerCase();
+      return tokensL.some((w) => t.includes(w)) || tokensV.some((w) => t.includes(w));
+    } catch {
+      return false;
+    }
+  });
+
+  const allEvents = candidatos.flatMap((c) => c.events);
+  const allMarkets = candidatos.flatMap((c) => c.markets);
+  const allSelections = candidatos.flatMap((c) => c.selections);
+
+  if (allEvents.length === 0 && allMarkets.length === 0) return null;
+
+  const TEMPLATES_1X2 = new Set(["MW3W", "ESFMWINNER3W", "E1X2M"]);
+  const TEMPLATES_DOBLE_OP = new Set(["DC", "ESFMDCHANCE"]);
+  const TEMPLATES_TOTAL = new Set([
+    "MTG2W25",
+    "MTG2W",
+    "ESFMTOTAL",
+    "ESFMATOTAL",
+    "EOU25M",
+  ]);
+  const TEMPLATES_BTTS = new Set(["BTTS", "ESFMBTS"]);
+
+  let mejor: any = null;
+  let mejorScore = 0;
+  let mejorHome = "";
+  let mejorAway = "";
+  for (const ev of allEvents) {
+    const home = ev.participants?.find((p: any) => p.side === 1)?.label;
+    const away = ev.participants?.find((p: any) => p.side === 2)?.label;
+    if (!home || !away) continue;
+    const score = Math.min(
+      similitudEquipos(home, equipoLocal),
+      similitudEquipos(away, equipoVisita),
+    );
+    if (score > mejorScore) {
+      mejorScore = score;
+      mejor = ev;
+      mejorHome = home;
+      mejorAway = away;
+    }
+  }
+
+  let eventMarkets: any[];
+  let eventId = "";
+  if (mejor && mejorScore >= UMBRAL_FUZZY_DEFAULT * 0.7) {
+    let id: string = mejor.globalId ?? "";
+    if (id.includes(".")) {
+      const partes = id.split(".");
+      id = partes[partes.length - 1];
+    }
+    eventId = id;
+    eventMarkets = allMarkets.filter((m: any) => m.eventId === eventId);
+  } else if (allMarkets.length > 0) {
+    let eventIdEnUrl = "";
+    for (const j of jsonsConToken) {
+      const m = j.url.match(/[?&]eventId=([^&]+)/);
+      if (m && m[1]) {
+        const raw = decodeURIComponent(m[1]);
+        let id = raw;
+        if (id.includes(".")) {
+          const partes = id.split(".");
+          id = partes[partes.length - 1];
+        }
+        eventIdEnUrl = id;
+        break;
+      }
+    }
+    if (eventIdEnUrl) {
+      eventId = eventIdEnUrl;
+      eventMarkets = allMarkets.filter((m: any) => m.eventId === eventIdEnUrl);
+      mejorHome = equipoLocal;
+      mejorAway = equipoVisita;
+    } else {
+      const idsUnicos = new Set(
+        allMarkets.map((m: any) => m.eventId).filter(Boolean),
+      );
+      if (idsUnicos.size !== 1) return null;
+      eventId = Array.from(idsUnicos)[0] as string;
+      eventMarkets = allMarkets;
+      mejorHome = equipoLocal;
+      mejorAway = equipoVisita;
+    }
+  } else {
+    return null;
+  }
+
+  if (eventMarkets.length === 0) return null;
+
   const selsParaMarket = (mid: string) =>
-    allSelections.filter((s) => s.marketId === mid);
-  const priceOk = (v: number | undefined): number | null =>
-    typeof v === "number" && v > 1 && v < 100 ? v : null;
-  const norm = (s: OBGSelection): string =>
-    (s.alternateLabel ?? s.participantLabel ?? "")
-      .normalize("NFD")
-      .replace(/[̀-ͯ]/g, "")
-      .toLowerCase()
-      .trim();
+    allSelections.filter((s: any) => s.marketId === mid);
+
+  const cuotas: CuotasCapturadas = {};
+  const sP = (v: number | undefined) => priceOk(v);
+  const normSel = (s: any): string =>
+    norm(s.alternateLabel ?? s.participantLabel ?? "");
 
   for (const m of eventMarkets) {
-    if (!cuotas["1x2"] && TEMPLATES_1X2.has(m.marketTemplateId ?? "")) {
-      const sels = selsParaMarket(m.id ?? "");
-      const l = priceOk(
-        sels.find((s) => s.selectionTemplateId === "HOME" || s.isHomeTeam)?.odds,
+    if (!cuotas["1x2"] && TEMPLATES_1X2.has(m.marketTemplateId)) {
+      const sels = selsParaMarket(m.id);
+      // Octonovus a veces solo trae HOME con selectionTemplateId completo;
+      // DRAW/AWAY vienen con templateId vacío. Fallback a sortOrder.
+      const l = sP(
+        sels.find(
+          (s: any) =>
+            s.selectionTemplateId === "HOME" ||
+            s.isHomeTeam === true ||
+            s.sortOrder === 1,
+        )?.odds,
       );
-      const e = priceOk(sels.find((s) => s.selectionTemplateId === "DRAW")?.odds);
-      const v = priceOk(
-        sels.find((s) => s.selectionTemplateId === "AWAY" || s.isAwayTeam)?.odds,
+      const e = sP(
+        sels.find(
+          (s: any) => s.selectionTemplateId === "DRAW" || s.sortOrder === 2,
+        )?.odds,
+      );
+      const v = sP(
+        sels.find(
+          (s: any) =>
+            s.selectionTemplateId === "AWAY" ||
+            s.isAwayTeam === true ||
+            s.sortOrder === 3,
+        )?.odds,
       );
       if (l && e && v) cuotas["1x2"] = { local: l, empate: e, visita: v };
     }
-    if (!cuotas.doble_op && TEMPLATES_DOBLE_OP.has(m.marketTemplateId ?? "")) {
-      const sels = selsParaMarket(m.id ?? "");
-      const x1 = priceOk(
-        sels.find((s) => s.selectionTemplateId === "HOME_OR_DRAW" || norm(s) === "1x")?.odds,
+    if (!cuotas.doble_op && TEMPLATES_DOBLE_OP.has(m.marketTemplateId)) {
+      const sels = selsParaMarket(m.id);
+      const matchTpl = (s: any, ...opts: string[]) =>
+        opts.includes((s.selectionTemplateId ?? "").toUpperCase());
+      const x1 = sP(
+        sels.find(
+          (s: any) =>
+            matchTpl(s, "HOME_OR_DRAW", "HOMEORDRAW", "1X") ||
+            normSel(s) === "1x" ||
+            normSel(s) === "1 o x",
+        )?.odds,
       );
-      const x12 = priceOk(
-        sels.find((s) => s.selectionTemplateId === "HOME_OR_AWAY" || norm(s) === "12")?.odds,
+      const x12 = sP(
+        sels.find(
+          (s: any) =>
+            matchTpl(s, "HOME_OR_AWAY", "HOMEORAWAY", "12") ||
+            normSel(s) === "12" ||
+            normSel(s) === "1 o 2",
+        )?.odds,
       );
-      const xx2 = priceOk(
-        sels.find((s) => s.selectionTemplateId === "DRAW_OR_AWAY" || norm(s) === "x2")?.odds,
+      const xx2 = sP(
+        sels.find(
+          (s: any) =>
+            matchTpl(s, "DRAW_OR_AWAY", "DRAWORAWAY", "X2") ||
+            normSel(s) === "x2" ||
+            normSel(s) === "x o 2",
+        )?.odds,
       );
       if (x1 && x12 && xx2) cuotas.doble_op = { x1, x12, xx2 };
     }
-    if (!cuotas.mas_menos_25 && TEMPLATES_TOTAL.has(m.marketTemplateId ?? "")) {
+    if (!cuotas.mas_menos_25 && TEMPLATES_TOTAL.has(m.marketTemplateId)) {
       const lineOk =
         m.marketTemplateId === "MTG2W25" ||
         m.marketTemplateId === "EOU25M" ||
         m.lineValue === "2.5" ||
         m.lineValueRaw === 2.5;
       if (lineOk) {
-        const sels = selsParaMarket(m.id ?? "");
-        const over = priceOk(
-          sels.find((s) => {
+        const sels = selsParaMarket(m.id);
+        const over = sP(
+          sels.find((s: any) => {
             const t = (s.selectionTemplateId ?? "").toUpperCase();
-            return t.includes("OVER") || norm(s).includes("mas") || norm(s).includes("over");
+            return (
+              t.includes("OVER") ||
+              normSel(s).includes("mas") ||
+              normSel(s).includes("over")
+            );
           })?.odds,
         );
-        const under = priceOk(
-          sels.find((s) => {
+        const under = sP(
+          sels.find((s: any) => {
             const t = (s.selectionTemplateId ?? "").toUpperCase();
-            return t.includes("UNDER") || norm(s).includes("menos") || norm(s).includes("under");
+            return (
+              t.includes("UNDER") ||
+              normSel(s).includes("menos") ||
+              normSel(s).includes("under")
+            );
           })?.odds,
         );
         if (over && under) cuotas.mas_menos_25 = { over, under };
       }
     }
-    if (!cuotas.btts && TEMPLATES_BTTS.has(m.marketTemplateId ?? "")) {
-      const sels = selsParaMarket(m.id ?? "");
-      const si = priceOk(
-        sels.find((s) => {
+    if (!cuotas.btts && TEMPLATES_BTTS.has(m.marketTemplateId)) {
+      const sels = selsParaMarket(m.id);
+      const si = sP(
+        sels.find((s: any) => {
           const t = (s.selectionTemplateId ?? "").toUpperCase();
-          return t === "YES" || norm(s) === "si" || norm(s) === "sí";
+          return t === "YES" || normSel(s) === "si" || normSel(s) === "sí";
         })?.odds,
       );
-      const no = priceOk(
-        sels.find((s) => {
+      const no = sP(
+        sels.find((s: any) => {
           const t = (s.selectionTemplateId ?? "").toUpperCase();
-          return t === "NO" || norm(s) === "no";
+          return t === "NO" || normSel(s) === "no";
         })?.odds,
       );
       if (si && no) cuotas.btts = { si, no };
     }
   }
 
-  return cuotas;
+  if (Object.keys(cuotas).length === 0) return null;
+  return {
+    cuotas,
+    eventoId: eventId,
+    jsonUrl: candidatos[0]?.url ?? "",
+    equipos: { local: mejorHome, visita: mejorAway },
+  };
 }
 
 export default inkabetScraper;

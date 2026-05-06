@@ -1,26 +1,31 @@
-// Tipos compartidos del motor de captura de cuotas (Lote V.11 — May 2026).
+// Tipos compartidos del motor de captura de cuotas (Lote V.12 — May 2026).
 //
-// Reescritura completa del approach: ahora cada scraper hace fetch HTTP
-// directo a la API B2B del proveedor de la casa (Altenar / Kambi /
-// Coreix / Octonovus / Danae / propio Coolbet) en lugar de scrapeo via
-// Playwright headless. Resultado: motor server-side puro, sin browser,
-// con latencias <2s en lugar de 12-22s.
+// V.12 reemplaza el approach API-only de V.11 por scraping headless con
+// browser real (Playwright + XHR intercept). Razón: las APIs B2B B2C de
+// algunas casas (Doradobet, Apuesta Total, Inkabet) NO publican todos los
+// mercados que la UI muestra — los frontend SPAs construyen URLs detalle
+// que disparan XHRs adicionales con líneas alternativas. Cargar la URL
+// listing/detalle en Chromium + interceptar las XHRs es la única forma
+// confiable de capturar lo mismo que ve un usuario humano.
 //
-// Stake fue removido del motor en este lote — quedó como referencia en
-// `scripts/validacion-geo/` por si en el futuro se reactiva con un
-// approach específico (Playwright stealth en Railway o agente local).
+// 5 casas activas (Stake removido por aliases cortos no fuzzy-matcheables;
+// Coolbet removido por WAF Imperva agresivo desde Railway US):
+//   - doradobet (Altenar widget — click Shadow DOM al detalle)
+//   - apuesta_total (Kambi — URL detalle derivada de SportName/RegionName)
+//   - betano (Danae — listing trae 1 evento per-event)
+//   - inkabet (Octonovus — slug-based double nav)
+//   - te_apuesto (Coreix — listing único)
 
 import type { Partido } from "@habla/db";
+import type { LigaCanonica } from "./ligas-id-map";
 
 /**
- * Casas peruanas cubiertas por el motor de captura. Lote V.11 reduce de
- * 7 a 6 casas (Stake removido). Cada casa tiene API HTTP directa
- * confirmada el 2026-05-05 desde Railway US sin geo-block.
+ * Casas peruanas cubiertas por el motor de captura. Lote V.12 reduce a 5
+ * casas (Coolbet removido por WAF, Stake removido por aliases cortos).
  */
 export const CASAS_CUOTAS = [
   "doradobet",
   "apuesta_total",
-  "coolbet",
   "betano",
   "inkabet",
   "te_apuesto",
@@ -78,12 +83,8 @@ export interface CuotasCapturadas {
 
 /**
  * Resultado completo de un ciclo de scraping. `fuente` permite trazar
- * desde dónde se leyó (URL del endpoint API) y cuándo, lo que alimenta
+ * desde dónde se leyó (URL del JSON capturado) y cuándo, lo que alimenta
  * tanto el debug como la UI admin "última captura".
- *
- * Lote V.11: el campo `equipos` opcional sigue presente para que el
- * worker alimente `AliasEquipo` automáticamente cuando los nombres en
- * el JSON de la casa difieran del canónico de api-football.
  */
 export interface ResultadoScraper {
   cuotas: CuotasCapturadas;
@@ -98,17 +99,18 @@ export interface ResultadoScraper {
  * Contrato uniforme del scraper. Cada casa expone un módulo que cumple
  * con esta interfaz y se registra en el dispatcher del worker.
  *
- * Lote V.11: único método `capturarPorApi`. Recibe el ID interno de la
- * liga en la casa (resuelto por `ligas-id-map.ts`). Si la liga no está
- * mapeada para esa casa, el orquestador NO encola job. Si el scraper
- * llega y no encuentra el partido, retorna null (no es ERROR técnico).
- * Si falla técnicamente (timeout, 5xx, JSON inválido), lanza Error.
+ * Lote V.12: único método `capturarConPlaywright`. Recibe el partido +
+ * la liga canónica detectada (`detectarLigaCanonica(partido.liga)`).
+ * El scraper resuelve la URL listing via `obtenerUrlListado(liga, casa)`,
+ * abre la página en Chromium, intercepta XHRs JSON con cuotas, y parsea
+ * los 4 mercados. Si no encuentra el partido, retorna null (no es ERROR
+ * técnico). Si falla técnicamente (timeout, geo-block), lanza Error.
  */
 export interface Scraper {
   nombre: CasaCuotas;
-  capturarPorApi(
+  capturarConPlaywright(
     partido: Partido,
-    ligaIdCasa: string,
+    ligaCanonica: LigaCanonica,
   ): Promise<ResultadoScraper | null>;
 }
 
@@ -116,13 +118,13 @@ export interface Scraper {
  * Payload que viaja por la cola BullMQ. Se serializa como JSON, así que
  * sólo primitivos + strings — nada de Date, Map, RegExp, etc.
  *
- * Lote V.11: `eventIdExterno` (legacy) reemplazado por `ligaIdCasa`
- * (ID interno de la liga en la casa, calculado por el mapeo).
+ * Lote V.12: `ligaCanonica` reemplaza a `ligaIdCasa`. El scraper resuelve
+ * internamente la URL del listing, no necesitamos hardcodear IDs.
  */
 export interface CuotasJobData {
   partidoId: string;
   casa: CasaCuotas;
-  ligaIdCasa: string;
+  ligaCanonica: LigaCanonica;
   /** true si viene del cron diario, false si es trigger admin (Filtro 1 ON). */
   esRefresh: boolean;
 }
@@ -142,7 +144,7 @@ export type EstadoCapturaPartido =
 /**
  * Estados de captura por casa que viven en la fila de `cuotas_casa`.
  * Más granular que `EstadoCapturaPartido` — el de partido se calcula
- * agregando los 6 estados por casa.
+ * agregando los 5 estados por casa.
  */
 export type EstadoCuotasCasa =
   | "OK"
@@ -183,7 +185,7 @@ export class CapturaSinDatosError extends Error {
 
 /**
  * Lista canónica de los 4 mercados que el motor exige para considerar
- * una captura "completa" (Lote V.12.3 — May 2026).
+ * una captura "completa".
  *
  * Decisión del producto: NO mostrar cuotas parciales en la UI admin —
  * un partido con 3/4 mercados se ve incompleto y rompe el comparador.

@@ -1,199 +1,291 @@
-// Scraper Doradobet via browser + XHR intercept (Lote V.12 — May 2026).
+// Scraper Doradobet via Playwright + XHR intercept (Lote V.12 — May 2026).
 //
-// Doradobet usa Altenar como backend B2B. En vez de hacer HTTP directo,
-// cargamos su página de la liga en Chromium headless, interceptamos las
-// XHRs y agarramos la respuesta de Altenar (`/api/widget/GetEvents`).
+// Doradobet embebe el widget Altenar (`sb2frontend-altenar2.biahosted.com`).
+// El listing trae 6 markets por evento con la línea "principal" de Total
+// (ej. 4.5 para favoritos claros como Bayern @1.58). Para acceder a las
+// líneas alternativas (incluyendo 2.5) hay que hacer click en el partido
+// en el listing, lo que dispara el endpoint Altenar `GetEventDetails` con
+// 322 markets + 1060 childMarkets. Doradobet usa Shadow DOM in-page (no
+// iframe), así que `querySelectorAll` no penetra; sí lo hace Playwright
+// `getByText`/`locator`.
 //
-// Mapeo typeId del MERCADO Altenar:
-//   1=1X2, 10=Doble Op, 18=Total (sv=línea), 29=BTTS
-// Mapeo typeId de la SELECCIÓN:
-//   1/2/3=Local/Empate/Visita; 9/10/11=1X/12/X2; 12/13=Más/Menos; 74/76=Sí/No
+// Limitación conocida: las líneas alternativas de Total goles puro
+// (typeId=18 con sv distinto al principal) NO viajan por XHR HTTP — viven
+// en WebSocket del endpoint `sb2integration-altenar2`. Para partidos con
+// favorito muy claro donde la línea principal no es 2.5, el motor reporta
+// PARCIAL (faltando mas_menos_25). Para partidos parejos (típicos de Liga 1
+// Perú) la línea 2.5 sí está en el listing/detalle.
 
 import { logger } from "../logger";
 import { similitudEquipos, UMBRAL_FUZZY_DEFAULT } from "./fuzzy-match";
-import { capturarJsonsConCuotas } from "./xhr-intercept";
-import { obtenerUrlListado } from "./urls-listing";
-import { detectarLigaCanonica } from "./ligas-id-map";
+import {
+  recolectarJsons,
+  priceOk,
+  type JsonCapturado,
+  type DobleNavCtx,
+} from "./playwright-runner";
 import {
   mercadosFaltantes,
+  CapturaSinDatosError,
   type CuotasCapturadas,
   type ResultadoScraper,
   type Scraper,
 } from "./types";
 
-interface AltenarEvent {
-  id: number;
-  name: string;
-  startDate: string;
-  marketIds: number[];
-  competitorIds: number[];
-  champId?: number;
-}
-interface AltenarMarket {
-  id: number;
-  typeId: number;
-  oddIds: number[];
-  name: string;
-  sv?: string;
-}
-interface AltenarOdd {
-  id: number;
-  typeId: number;
-  price: number;
-  name: string;
-}
-interface AltenarCompetitor {
-  id: number;
-  name: string;
-}
-interface AltenarBody {
-  events?: AltenarEvent[];
-  markets?: AltenarMarket[];
-  odds?: AltenarOdd[];
-  competitors?: AltenarCompetitor[];
-}
+const TIEMPO_ESPERA_MS = 8_000;
 
 const doradobetScraper: Scraper = {
   nombre: "doradobet",
 
-  async capturarPorApi(partido) {
-    const ligaCanonica = detectarLigaCanonica(partido.liga);
-    if (!ligaCanonica) return null;
-    const url = obtenerUrlListado(ligaCanonica, "doradobet");
-    if (!url) return null;
-
-    const candidatos = await capturarJsonsConCuotas(url, {
-      source: "scrapers:doradobet",
+  async capturarConPlaywright(partido, ligaCanonica) {
+    const recolectado = await recolectarJsons({
+      casa: "doradobet",
+      ligaCanonica,
+      partido,
+      dobleNav: async (ctx) => dobleNavDoradobet(ctx),
     });
+    if (!recolectado) return null;
 
-    const diagnostico: Array<{
-      url: string;
-      bytes: number;
-      shapeOk: boolean;
-      eventos: number;
-      mejorScore: number;
-      mejorMatch?: { local: string; visita: string };
-    }> = [];
-
-    for (const c of candidatos) {
-      const body = c.body as AltenarBody;
-      const shapeOk = !!(body?.events && body?.markets && body?.odds);
-      if (!shapeOk) {
-        diagnostico.push({ url: c.url, bytes: c.bytes, shapeOk: false, eventos: 0, mejorScore: 0 });
-        continue;
-      }
-
-      const competitorsById = new Map<number, AltenarCompetitor>();
-      for (const cmp of body.competitors ?? []) competitorsById.set(cmp.id, cmp);
-
-      let mejor: AltenarEvent | null = null;
-      let mejorScore = 0;
-      let mejorMatch: { local: string; visita: string } | undefined;
-      for (const ev of body.events!) {
-        const local = competitorsById.get(ev.competitorIds?.[0] ?? -1)?.name;
-        const visita = competitorsById.get(ev.competitorIds?.[1] ?? -1)?.name;
-        if (!local || !visita) continue;
-        const score = Math.min(
-          similitudEquipos(local, partido.equipoLocal),
-          similitudEquipos(visita, partido.equipoVisita),
-        );
-        if (score > mejorScore) {
-          mejorScore = score;
-          mejor = ev;
-          mejorMatch = { local, visita };
-        }
-      }
-      diagnostico.push({
-        url: c.url,
-        bytes: c.bytes,
-        shapeOk: true,
-        eventos: body.events!.length,
-        mejorScore,
-        mejorMatch,
-      });
-      if (!mejor || mejorScore < UMBRAL_FUZZY_DEFAULT * 0.7) continue;
-
-      const marketsById = new Map<number, AltenarMarket>();
-      for (const m of body.markets ?? []) marketsById.set(m.id, m);
-      const oddsById = new Map<number, AltenarOdd>();
-      for (const o of body.odds ?? []) oddsById.set(o.id, o);
-
-      const cuotas: CuotasCapturadas = {};
-      for (const mid of mejor.marketIds ?? []) {
-        const m = marketsById.get(mid);
-        if (!m) continue;
-        const odds = (m.oddIds ?? [])
-          .map((id) => oddsById.get(id))
-          .filter((o): o is AltenarOdd => o !== undefined);
-
-        if (m.typeId === 1) {
-          const l = odds.find((o) => o.typeId === 1)?.price;
-          const e = odds.find((o) => o.typeId === 2)?.price;
-          const v = odds.find((o) => o.typeId === 3)?.price;
-          if (l && e && v) cuotas["1x2"] = { local: l, empate: e, visita: v };
-        } else if (m.typeId === 10) {
-          const x1 = odds.find((o) => o.typeId === 9)?.price;
-          const x12 = odds.find((o) => o.typeId === 10)?.price;
-          const xx2 = odds.find((o) => o.typeId === 11)?.price;
-          if (x1 && x12 && xx2) cuotas.doble_op = { x1, x12, xx2 };
-        } else if (m.typeId === 18 && m.sv === "2.5") {
-          const over = odds.find((o) => o.typeId === 12)?.price;
-          const under = odds.find((o) => o.typeId === 13)?.price;
-          if (over && under) cuotas.mas_menos_25 = { over, under };
-        } else if (m.typeId === 29) {
-          const si = odds.find((o) => o.typeId === 74)?.price;
-          const no = odds.find((o) => o.typeId === 76)?.price;
-          if (si && no) cuotas.btts = { si, no };
-        }
-      }
-
-      if (Object.keys(cuotas).length === 0) continue;
-
-      // V.12.3: requerir los 4 mercados — atomicidad para la UI admin.
-      const faltan = mercadosFaltantes(cuotas);
-      if (faltan.length > 0) {
-        logger.info(
-          {
-            partidoId: partido.id,
-            eventIdAltenar: mejor.id,
-            mercadosPresentes: Object.keys(cuotas),
-            mercadosFaltantes: faltan,
-            source: "scrapers:doradobet",
-          },
-          `doradobet: cuotas parciales · faltan=[${faltan.join(",")}] (probando siguiente candidato)`,
-        );
-        continue;
-      }
-
-      const local =
-        competitorsById.get(mejor.competitorIds?.[0] ?? -1)?.name ??
-        partido.equipoLocal;
-      const visita =
-        competitorsById.get(mejor.competitorIds?.[1] ?? -1)?.name ??
-        partido.equipoVisita;
-
-      return {
-        cuotas,
-        fuente: { url: c.url, capturadoEn: new Date() },
-        eventIdCasa: String(mejor.id),
-        equipos: { local, visita },
-      };
+    const r = parsearDoradobet(
+      recolectado.jsons,
+      partido.equipoLocal,
+      partido.equipoVisita,
+    );
+    if (!r) {
+      logger.info(
+        {
+          partidoId: partido.id,
+          ligaCanonica,
+          jsonsCapturados: recolectado.jsons.length,
+          source: "scrapers:doradobet",
+        },
+        `doradobet: parser no encontró el partido`,
+      );
+      return null;
     }
 
-    logger.info(
-      {
-        partidoId: partido.id,
-        equipoLocal: partido.equipoLocal,
-        equipoVisita: partido.equipoVisita,
-        candidatos: candidatos.length,
-        diagnostico,
-        umbralAceptacion: UMBRAL_FUZZY_DEFAULT * 0.7,
-        source: "scrapers:doradobet",
-      },
-      `doradobet: ningún JSON candidato matcheó el partido (mejor score=${diagnostico.reduce((m, d) => Math.max(m, d.mejorScore), 0).toFixed(3)})`,
-    );
-    return null;
+    const faltan = mercadosFaltantes(r.cuotas);
+    if (faltan.length > 0) {
+      throw new CapturaSinDatosError(
+        `doradobet: cuotas parciales (faltan ${faltan.join(",")})`,
+      );
+    }
+
+    const result: ResultadoScraper = {
+      cuotas: r.cuotas,
+      fuente: { url: r.jsonUrl ?? recolectado.listingUrl, capturadoEn: new Date() },
+      eventIdCasa: r.eventoId ? String(r.eventoId) : undefined,
+      equipos: r.equipos,
+    };
+    return result;
   },
 };
+
+// ─── Doble nav: click Shadow DOM en el partido del listing ──────────
+
+async function dobleNavDoradobet(ctx: DobleNavCtx): Promise<void> {
+  const pageAny = ctx.page as any;
+  // Click via getByText (penetra Shadow DOM del widget Altenar)
+  const candidatosLocator: any[] = [];
+  if (typeof pageAny.getByText === "function") {
+    candidatosLocator.push(
+      pageAny.getByText(ctx.partido.equipoLocal, { exact: false }),
+    );
+    candidatosLocator.push(
+      pageAny.getByText(ctx.partido.equipoVisita, { exact: false }),
+    );
+  }
+  candidatosLocator.push(
+    pageAny.locator(`text=${ctx.partido.equipoLocal}`),
+    pageAny.locator(`text=${ctx.partido.equipoVisita}`),
+  );
+  for (const loc of candidatosLocator) {
+    try {
+      const first = loc.first();
+      if (await first.isVisible({ timeout: 2500 })) {
+        await first.click({ timeout: 5000 });
+        await ctx.page.waitForTimeout(3000);
+        await ctx.page.waitForTimeout(TIEMPO_ESPERA_MS);
+        return;
+      }
+    } catch {
+      /* probar siguiente */
+    }
+  }
+}
+
+// ─── Parser Altenar ─────────────────────────────────────────────────
+
+interface ParserResult {
+  cuotas: CuotasCapturadas;
+  eventoId?: string | number;
+  jsonUrl?: string;
+  equipos?: { local: string; visita: string };
+}
+
+function parsearDoradobet(
+  jsons: JsonCapturado[],
+  equipoLocal: string,
+  equipoVisita: string,
+): ParserResult | null {
+  // 1) Identificar el evento matched en /widget/GetEvents (listing)
+  const jListing = jsons.find(
+    (x) =>
+      x.url.includes("/widget/GetEvents") &&
+      Array.isArray((x.body as any)?.events),
+  );
+  if (!jListing) return null;
+
+  const bodyListing: any = jListing.body;
+  const competitorsById = new Map<number, any>();
+  for (const c of bodyListing.competitors ?? []) competitorsById.set(c.id, c);
+
+  let mejorEv: any = null;
+  let mejorScore = 0;
+  for (const ev of bodyListing.events ?? []) {
+    const local = competitorsById.get(ev.competitorIds?.[0])?.name;
+    const visita = competitorsById.get(ev.competitorIds?.[1])?.name;
+    if (!local || !visita) continue;
+    const score = Math.min(
+      similitudEquipos(local, equipoLocal),
+      similitudEquipos(visita, equipoVisita),
+    );
+    if (score > mejorScore) {
+      mejorScore = score;
+      mejorEv = ev;
+    }
+  }
+  if (!mejorEv || mejorScore < UMBRAL_FUZZY_DEFAULT * 0.7) return null;
+
+  // 2) Combinar markets+odds de TODOS los JSONs Altenar (listing + detalle)
+  // PREFER LISTING: el listing tiene shape completo (typeId/sv/oddIds);
+  // el detalle sobrescribe con shape distinto si comparte ids.
+  const marketsById = new Map<number, any>();
+  const oddsById = new Map<number, any>();
+  // Pasada 1: listing
+  for (const x of jsons) {
+    const b: any = x.body;
+    if (
+      !b ||
+      typeof b !== "object" ||
+      !Array.isArray(b.events) ||
+      !Array.isArray(b.markets)
+    ) {
+      continue;
+    }
+    for (const m of b.markets) {
+      if (m && typeof m.id === "number") marketsById.set(m.id, m);
+    }
+    if (Array.isArray(b.odds)) {
+      for (const o of b.odds) {
+        if (o && typeof o.id === "number") oddsById.set(o.id, o);
+      }
+    }
+  }
+  // Pasada 2: detalle (GetEventDetails con markets + childMarkets)
+  for (const x of jsons) {
+    const b: any = x.body;
+    if (!b || typeof b !== "object") continue;
+    if (Array.isArray(b.events) && Array.isArray(b.markets)) continue;
+    if (Array.isArray(b.markets)) {
+      for (const m of b.markets) {
+        if (m && typeof m.id === "number" && !marketsById.has(m.id)) {
+          marketsById.set(m.id, m);
+        }
+      }
+    }
+    if (Array.isArray(b.childMarkets)) {
+      for (const m of b.childMarkets) {
+        if (m && typeof m.id === "number" && !marketsById.has(m.id)) {
+          marketsById.set(m.id, m);
+        }
+      }
+    }
+    if (Array.isArray(b.odds)) {
+      for (const o of b.odds) {
+        if (o && typeof o.id === "number" && !oddsById.has(o.id)) {
+          oddsById.set(o.id, o);
+        }
+      }
+    }
+  }
+
+  // 3) Resolver marketIds del evento:
+  //    a) marketIds del mejorEv (listing)
+  //    b) markets con eventId === mejorEv.id (detalle con field eventId)
+  //    c) markets de un body GetEventDetails cuyo body.id === mejorEv.id
+  //       (cada market en ese body NO tiene eventId — body entero es del evento)
+  const marketIdsDelEvento = new Set<number>(
+    Array.isArray(mejorEv.marketIds) ? mejorEv.marketIds : [],
+  );
+  for (const m of marketsById.values()) {
+    if (m.eventId === mejorEv.id) marketIdsDelEvento.add(m.id);
+  }
+  for (const x of jsons) {
+    const b: any = x.body;
+    if (!b || typeof b !== "object" || Array.isArray(b)) continue;
+    const bodyEvtId = b.id ?? b.feedEventId;
+    if (bodyEvtId !== mejorEv.id) continue;
+    for (const arr of [b.markets, b.childMarkets]) {
+      if (!Array.isArray(arr)) continue;
+      for (const m of arr) {
+        if (m && typeof m.id === "number") marketIdsDelEvento.add(m.id);
+      }
+    }
+  }
+
+  // 4) Índice inverso oddsByMarketId (GetEventDetails trae market.oddIds=[]
+  // vacío; las odds tienen `marketId` que apunta al market).
+  const oddsByMarketId = new Map<number, any[]>();
+  for (const o of oddsById.values()) {
+    if (typeof o.marketId === "number") {
+      const arr = oddsByMarketId.get(o.marketId) ?? [];
+      arr.push(o);
+      oddsByMarketId.set(o.marketId, arr);
+    }
+  }
+
+  // 5) Extraer cuotas
+  const cuotas: CuotasCapturadas = {};
+  for (const mid of marketIdsDelEvento) {
+    const m = marketsById.get(mid);
+    if (!m) continue;
+    let odds = (m.oddIds ?? [])
+      .map((id: number) => oddsById.get(id))
+      .filter(Boolean);
+    if (odds.length === 0) {
+      odds = oddsByMarketId.get(m.id) ?? [];
+    }
+
+    if (m.typeId === 1 && !cuotas["1x2"]) {
+      const l = priceOk(odds.find((o: any) => o.typeId === 1)?.price);
+      const e = priceOk(odds.find((o: any) => o.typeId === 2)?.price);
+      const v = priceOk(odds.find((o: any) => o.typeId === 3)?.price);
+      if (l && e && v) cuotas["1x2"] = { local: l, empate: e, visita: v };
+    } else if (m.typeId === 10 && !cuotas.doble_op) {
+      const x1 = priceOk(odds.find((o: any) => o.typeId === 9)?.price);
+      const x12 = priceOk(odds.find((o: any) => o.typeId === 10)?.price);
+      const xx2 = priceOk(odds.find((o: any) => o.typeId === 11)?.price);
+      if (x1 && x12 && xx2) cuotas.doble_op = { x1, x12, xx2 };
+    } else if (m.typeId === 18 && m.sv === "2.5" && !cuotas.mas_menos_25) {
+      const over = priceOk(odds.find((o: any) => o.typeId === 12)?.price);
+      const under = priceOk(odds.find((o: any) => o.typeId === 13)?.price);
+      if (over && under) cuotas.mas_menos_25 = { over, under };
+    } else if (m.typeId === 29 && !cuotas.btts) {
+      const si = priceOk(odds.find((o: any) => o.typeId === 74)?.price);
+      const no = priceOk(odds.find((o: any) => o.typeId === 76)?.price);
+      if (si && no) cuotas.btts = { si, no };
+    }
+  }
+
+  const local = competitorsById.get(mejorEv.competitorIds?.[0])?.name;
+  const visita = competitorsById.get(mejorEv.competitorIds?.[1])?.name;
+  return {
+    cuotas,
+    eventoId: mejorEv.id,
+    jsonUrl: jListing.url,
+    equipos: local && visita ? { local, visita } : undefined,
+  };
+}
 
 export default doradobetScraper;

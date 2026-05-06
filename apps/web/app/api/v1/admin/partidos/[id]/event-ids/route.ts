@@ -32,7 +32,8 @@ import { logger } from "@/lib/services/logger";
 import { logAuditoria } from "@/lib/services/auditoria.service";
 import { encolarJobCaptura } from "@/lib/services/cuotas-cola";
 import { CASAS_CUOTAS, type CasaCuotas } from "@/lib/services/scrapers/types";
-import { obtenerLigaIdParaPartido } from "@/lib/services/scrapers/ligas-id-map";
+import { detectarLigaCanonica } from "@/lib/services/scrapers/ligas-id-map";
+import { obtenerUrlListado } from "@/lib/services/scrapers/urls-listing";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -63,10 +64,6 @@ function extraerEventIdDesdeURL(casa: CasaCuotas, url: string): string | null {
     case "apuesta_total": {
       // Patrón: cualquier tail con 15+ dígitos.
       const m = /(\d{15,})\/?(?:[?#].*)?$/.exec(trimmed);
-      return m?.[1] ?? null;
-    }
-    case "coolbet": {
-      const m = /\/match\/(\d+)/i.exec(trimmed);
       return m?.[1] ?? null;
     }
     case "doradobet": {
@@ -153,16 +150,17 @@ export async function PATCH(
       },
     });
 
-    // Lote V.11: el motor API-only descubre eventos por matching de
-    // equipos, no usa EventIdExterno como hint. Igual encolamos job
-    // post-vinculación para refresh inmediato si la liga está mapeada.
-    const resolveLiga = obtenerLigaIdParaPartido(partido.liga, casa);
+    // Lote V.12: el motor Playwright descubre eventos por matching de
+    // equipos via XHR intercept, no usa EventIdExterno como hint. Igual
+    // encolamos job post-vinculación para refresh inmediato si la liga
+    // tiene URL listing configurada.
+    const ligaCanonica = detectarLigaCanonica(partido.liga);
     let jobId: string | null = null;
-    if (resolveLiga) {
+    if (ligaCanonica && obtenerUrlListado(ligaCanonica, casa)) {
       jobId = await encolarJobCaptura({
         partidoId: partido.id,
         casa,
-        ligaIdCasa: resolveLiga.ligaIdCasa,
+        ligaCanonica,
         esRefresh: false,
       });
     }

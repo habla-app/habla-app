@@ -29,15 +29,13 @@ import { logger } from "@/lib/services/logger";
 import { CASAS_CUOTAS } from "@/lib/services/scrapers/types";
 import { obtenerScraper } from "@/lib/services/cuotas-worker";
 import {
-  obtenerLigaIdParaPartido,
-  obtenerLigaIdParaCasa,
   detectarLigaCanonica,
   LIGAS_CANONICAS,
 } from "@/lib/services/scrapers/ligas-id-map";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 90;
 
 const BodySchema = z
   .object({
@@ -116,7 +114,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       };
     }
 
-    // Resolver ligaIdCasa.
+    // Resolver liga canónica.
     const ligaCanonica =
       body.ligaCanonica ?? detectarLigaCanonica(partido.liga);
     if (!ligaCanonica) {
@@ -124,20 +122,6 @@ export async function POST(req: NextRequest): Promise<Response> {
         ok: false,
         casa: body.casa,
         error: `liga "${partido.liga}" no se pudo mapear a canónica`,
-        partido: {
-          id: partido.id,
-          liga: partido.liga,
-          equipos: [partido.equipoLocal, partido.equipoVisita],
-        },
-      });
-    }
-    const ligaIdCasa = obtenerLigaIdParaCasa(ligaCanonica, body.casa);
-    if (!ligaIdCasa) {
-      return Response.json({
-        ok: false,
-        casa: body.casa,
-        ligaCanonica,
-        error: `casa "${body.casa}" no tiene ID mapeado para liga "${ligaCanonica}". Editar ligas-id-map.ts.`,
         partido: {
           id: partido.id,
           liga: partido.liga,
@@ -159,21 +143,21 @@ export async function POST(req: NextRequest): Promise<Response> {
       {
         casa: body.casa,
         ligaCanonica,
-        ligaIdCasa,
         partidoId: partido.id,
         source: "api:diagnostico-api",
       },
-      `diagnostico-api: invocando ${body.casa} para liga ${ligaCanonica} (id=${ligaIdCasa})`,
+      `diagnostico-api: invocando ${body.casa} para liga ${ligaCanonica}`,
     );
 
     const tInicio = Date.now();
-    let resultado: Awaited<ReturnType<typeof scraper.capturarPorApi>> | null =
-      null;
+    let resultado:
+      | Awaited<ReturnType<typeof scraper.capturarConPlaywright>>
+      | null = null;
     let errorMsg: string | null = null;
     try {
-      resultado = await scraper.capturarPorApi(
-        partido as Parameters<typeof scraper.capturarPorApi>[0],
-        ligaIdCasa,
+      resultado = await scraper.capturarConPlaywright(
+        partido as Parameters<typeof scraper.capturarConPlaywright>[0],
+        ligaCanonica,
       );
     } catch (err) {
       errorMsg = (err as Error).message;
@@ -184,7 +168,6 @@ export async function POST(req: NextRequest): Promise<Response> {
       ok: !errorMsg,
       casa: body.casa,
       ligaCanonica,
-      ligaIdCasa,
       partido: {
         id: partido.id,
         liga: partido.liga,

@@ -91,7 +91,6 @@ const LIGAS_ID_POR_CASA: Record<
   "Liga 1 Perú": {
     doradobet: "4042",
     apuesta_total: "203110137349808128",
-    coolbet: "127",
     betano: "17079",
     inkabet: "22988",
     te_apuesto: "1899",
