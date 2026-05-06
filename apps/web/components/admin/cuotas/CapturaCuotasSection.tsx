@@ -73,13 +73,50 @@ function variacion(actual: number | null, anterior: number | null): {
   };
 }
 
-function pillEstado(estado: CapturaCuotasFila["estado"]): {
+/**
+ * Cuenta cuántos mercados (de los 4 canónicos) tienen sus cuotas
+ * completas. Lote V.14: con cuotas parciales persistidas, los mercados
+ * con valores `null` se contabilizan como faltantes.
+ */
+function mercadosCompletos(fila: CapturaCuotasFila): {
+  completos: number;
+  total: number;
+  faltantes: string[];
+} {
+  const tiene1x2 = !!(fila.cuotaLocal && fila.cuotaEmpate && fila.cuotaVisita);
+  const tieneDoble = !!(fila.cuota1X && fila.cuota12 && fila.cuotaX2);
+  const tieneTotal = !!(fila.cuotaOver25 && fila.cuotaUnder25);
+  const tieneBtts = !!(fila.cuotaBttsSi && fila.cuotaBttsNo);
+  const completos = [tiene1x2, tieneDoble, tieneTotal, tieneBtts].filter(
+    Boolean,
+  ).length;
+  const faltantes: string[] = [];
+  if (!tiene1x2) faltantes.push("1X2");
+  if (!tieneDoble) faltantes.push("Doble Op");
+  if (!tieneTotal) faltantes.push("±2.5");
+  if (!tieneBtts) faltantes.push("BTTS");
+  return { completos, total: 4, faltantes };
+}
+
+function pillEstado(fila: CapturaCuotasFila): {
   cls: string;
   label: string;
+  title?: string;
 } {
+  const estado = fila.estado;
+  // Lote V.14: si estado=OK pero tiene mercados faltantes, mostrar PARCIAL.
+  if (estado === "OK") {
+    const m = mercadosCompletos(fila);
+    if (m.completos === m.total) {
+      return { cls: "adm-pill adm-pill-green", label: `🟢 OK ${m.completos}/${m.total}` };
+    }
+    return {
+      cls: "adm-pill adm-pill-amber",
+      label: `⚠ PARCIAL ${m.completos}/${m.total}`,
+      title: `Faltan: ${m.faltantes.join(", ")}`,
+    };
+  }
   switch (estado) {
-    case "OK":
-      return { cls: "adm-pill adm-pill-green", label: "🟢 OK" };
     case "STALE":
       return { cls: "adm-pill adm-pill-amber", label: "⚠️ STALE" };
     case "ERROR":
@@ -152,7 +189,7 @@ function FilaCasa({
   fila: CapturaCuotasFila;
   partidoId: string;
 }) {
-  const pill = pillEstado(fila.estado);
+  const pill = pillEstado(fila);
   const tiempoTxt =
     fila.estado === "STALE" && fila.ultimoExito
       ? `OK hace ${tiempoRelativo(fila.ultimoExito)}`
@@ -174,7 +211,9 @@ function FilaCasa({
     <tr className={rowCls}>
       <td className="cuotas-tabla-casa">{ETIQUETAS_CASA[fila.casa]}</td>
       <td className="cuotas-tabla-estado">
-        <span className={pill.cls}>{pill.label}</span>
+        <span className={pill.cls} title={pill.title}>
+          {pill.label}
+        </span>
       </td>
       <td className="cuotas-tabla-tiempo" title={fechaCorta(fila.capturadoEn)}>
         {tiempoTxt}

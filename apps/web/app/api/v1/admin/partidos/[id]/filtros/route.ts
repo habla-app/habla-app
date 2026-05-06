@@ -81,7 +81,12 @@ export async function PATCH(
 
     const partido = await prisma.partido.findUnique({
       where: { id: params.id },
-      include: { analisisPartido: true },
+      include: {
+        analisisPartido: true,
+        cuotasCasa: { select: { casa: true, estado: true } },
+        // Picks Socios (PickPremium) aprobados — Lote V.14 prereq Filtro 1.
+        picksPremium: { select: { id: true, estado: true } },
+      },
     });
     if (!partido) throw new PartidoNoEncontrado(params.id);
 
@@ -91,6 +96,49 @@ export async function PATCH(
       body.mostrarAlPublico !== undefined ? body.mostrarAlPublico : filtro1Antes;
     const transicionActivacion = !filtro1Antes && filtro1Nuevo;
     const transicionDesactivacion = filtro1Antes && !filtro1Nuevo;
+
+    // Lote V.14: prerequisitos para activar Filtro 1.
+    // Antes de mostrar un partido al público, exigimos las 3 piezas listas:
+    //   1. Captura de cuotas COMPLETA (las 5 casas con estado OK).
+    //   2. Análisis Free APROBADO.
+    //   3. Análisis Socios (PickPremium) APROBADO.
+    // Si falta alguna, devolvemos 409 con `bloqueantes` para que la UI
+    // muestre el detalle al admin.
+    if (transicionActivacion) {
+      const bloqueantes: string[] = [];
+      if (partido.estadoCaptura !== "COMPLETA") {
+        bloqueantes.push(
+          `cuotas_no_completas:${partido.estadoCaptura ?? "INACTIVA"}`,
+        );
+      }
+      if (
+        !partido.analisisPartido ||
+        partido.analisisPartido.estado !== "APROBADO"
+      ) {
+        bloqueantes.push(
+          `analisis_free_no_aprobado:${partido.analisisPartido?.estado ?? "INEXISTENTE"}`,
+        );
+      }
+      const tieneSociosAprobado = partido.picksPremium.some(
+        (p) => p.estado === "APROBADO",
+      );
+      if (!tieneSociosAprobado) {
+        bloqueantes.push("analisis_socios_no_aprobado");
+      }
+      if (bloqueantes.length > 0) {
+        return Response.json(
+          {
+            error: {
+              code: "FILTRO_1_PRE_NO_OK",
+              message:
+                "No se puede activar Filtro 1: faltan prerrequisitos. Completar Cuotas (5/5) + Análisis Free aprobado + Análisis Socios aprobado.",
+              bloqueantes,
+            },
+          },
+          { status: 409 },
+        );
+      }
+    }
 
     // Update transaccional:
     //   1. Mutar flags.

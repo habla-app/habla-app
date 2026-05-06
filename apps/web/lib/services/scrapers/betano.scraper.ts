@@ -13,8 +13,6 @@ import {
   type JsonCapturado,
 } from "./playwright-runner";
 import {
-  mercadosFaltantes,
-  CapturaSinDatosError,
   type CuotasCapturadas,
   type ResultadoScraper,
   type Scraper,
@@ -49,13 +47,7 @@ const betanoScraper: Scraper = {
       return null;
     }
 
-    const faltan = mercadosFaltantes(r.cuotas);
-    if (faltan.length > 0) {
-      throw new CapturaSinDatosError(
-        `betano: cuotas parciales (faltan ${faltan.join(",")})`,
-      );
-    }
-
+    // Lote V.14: persistir parciales en vez de descartarlos.
     const result: ResultadoScraper = {
       cuotas: r.cuotas,
       fuente: { url: r.jsonUrl ?? recolectado.listingUrl, capturadoEn: new Date() },
