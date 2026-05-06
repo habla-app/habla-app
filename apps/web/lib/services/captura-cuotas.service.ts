@@ -1,32 +1,21 @@
 // Servicio orquestador del motor de captura de cuotas (Lote V).
 //
 // API pública mínima usada por:
-//   - Endpoints admin (PATCH /admin/partidos/[id]/filtros, etc.) → iniciar/detener
+//   - Endpoints admin (PATCH /admin/partidos/[id]/filtros, sesion/iniciar)
+//     → iniciar/detener
 //   - Cron diario (instrumentation.ts Job V) → encolarRefresh
 //   - Recovery al boot (instrumentation.ts) → encolarRefresh para huérfanos
 //
 // El orquestador:
-//   1. Resuelve event IDs por casa (lee `EventIdExterno` ya guardados; el
-//      discovery automático llega en V.5 con cada scraper exponiendo
-//      `buscarEventIdExterno`).
-//   2. Encola N jobs en BullMQ (uno por casa con event ID resuelto).
-//   3. Registra estado del partido (INICIANDO al iniciar, DETENIDA al detener).
+//   1. Detecta liga canónica del partido + valida que cada casa tenga URL
+//      de listing configurada en `urls-listing.ts`.
+//   2. Encola un job en BullMQ por cada casa con URL configurada (1-5
+//      jobs por partido, una entrada por casa).
+//   3. Registra estado del partido (INICIANDO al iniciar, DETENIDA al
+//      detener).
 //
-// V.1 deja la implementación funcional pero sin scrapers; las llamadas
-// devuelven "casa pendiente de discovery" para todas hasta que V.5 active
-// el discovery automático. La estructura del flujo es la final — los
-// lotes posteriores sólo conectan piezas, no rediseñan.
-//
-// Lote V.6 (May 2026): `iniciarCaptura` se vuelve idempotente y robusto.
-// Si no hay ningún `EventIdExterno` para el partido al momento de
-// invocarse, llama internamente a `ejecutarDiscoveryParaPartido` ANTES de
-// leer la tabla y encolar jobs. Esto cubre tres casos en producción:
-//   - Recovery al boot tras un partido importado sin pasar por Filtro 1.
-//   - Botón "Forzar refresh global" sobre un partido que nunca pasó por
-//     activación de Filtro 1 (ej. import directo via cron).
-//   - Endpoint admin manual de discovery + captura.
-// Los disparos primarios (PATCH /filtros tras OFF→ON) ya cadenan
-// discovery → captura externamente, así que no caen acá.
+// Los jobs encolados quedan en `waiting` hasta que el agente local del
+// admin los consuma vía `GET /agente/jobs/proximos?token=X` (V.13+).
 
 import { prisma } from "@habla/db";
 import { logger } from "./logger";
@@ -58,35 +47,23 @@ export interface ResumenRefresh {
 }
 
 /**
- * Inicia la captura para un partido. Llamado desde el handler que activa
- * Filtro 1.
+ * Inicia la captura para un partido. Llamado desde el endpoint
+ * `/agente/sesion/iniciar` (botón "↻ Actualizar cuotas") y desde el
+ * handler que activa Filtro 1.
  *
- * Lote V.9.1 — flow simplificado para Playwright universal:
  *   1. Marca `partido.estadoCaptura = INICIANDO`.
- *   2. Lee `EventIdExterno` para hints de URL (vinculación manual previa).
- *   3. Encola UN JOB POR CADA UNA de las 7 casas, siempre. El worker
- *      con Playwright hace discovery + captura en una sola pasada.
+ *   2. Detecta liga canónica desde `partido.liga`.
+ *   3. Por cada casa que tenga URL de listing configurada para esa liga,
+ *      encola un job. Casas sin URL skipean silenciosamente.
  *
- * Cambio vs V.6: ya NO disparamos `ejecutarDiscoveryParaPartido` previo
- * (que iteraba HTTP — todos los endpoints están rotos). El scraper
- * Playwright dentro del worker resuelve discovery + captura por sí mismo
- * navegando el sportsbook real.
- *
- * `EventIdExterno` se mantiene como hint opcional: si tiene una URL
- * (vinculación manual), el worker la pasa al scraper Playwright como
- * `urlPartidoEnCasa` para skipear el listado y navegar directo. Si no
- * tiene EventIdExterno, el scraper navega el listado de la liga.
- *
- * Retorna el resumen para que el endpoint admin lo muestre.
+ * Los jobs quedan en `waiting` en BullMQ hasta que el agente local los
+ * consuma. El agente abre Chrome real con el perfil persistido del admin
+ * y ejecuta el scraper Playwright que navega el sportsbook + captura
+ * cuotas + reporta vía `POST /agente/jobs/resultado`.
  */
 export async function iniciarCaptura(
   partidoId: string,
 ): Promise<ResumenIniciarCaptura> {
-  // Lote V.11: motor API-only. Para cada casa:
-  //   1. Detectar liga canónica desde partido.liga.
-  //   2. Resolver ligaIdCasa via mapeo (ligas-id-map.ts).
-  //   3. Si null para esa combinación, skipear silenciosamente (no encolar).
-  //   4. Sino, encolar job con ligaIdCasa.
   try {
     await prisma.partido.update({
       where: { id: partidoId },
@@ -244,9 +221,8 @@ export async function detenerCaptura(
 export async function encolarRefresh(
   partidoId: string,
 ): Promise<ResumenRefresh> {
-  // Lote V.11: motor API-only. Mismo flow que iniciarCaptura, con el
-  // guard "skip si OK reciente" para evitar duplicación tras boots
-  // cercanos al cron.
+  // Mismo flow que iniciarCaptura + guard "skip si OK reciente" para
+  // evitar duplicación tras boots cercanos al cron.
   const partido = await prisma.partido.findUnique({
     where: { id: partidoId },
     select: { liga: true },

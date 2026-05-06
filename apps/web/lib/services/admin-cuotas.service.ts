@@ -1,9 +1,8 @@
 // Servicio de lectura para la sección "Captura de cuotas" del admin
 // /admin/partidos/[id] (Lote V fase V.5).
 //
-// Consolida los 4 datasets que la vista necesita por partido:
-//   - 7 filas CuotasCasa (una por casa, presentes o no)
-//   - EventIdExterno por casa (si fue resuelto, manual o auto)
+// Consolida los 3 datasets que la vista necesita por partido:
+//   - 5 filas CuotasCasa (una por casa, presentes o no)
 //   - Estado agregado del partido (COMPLETA/PARCIAL/FALLIDA/...)
 //   - Conteo de alertas no vistas para ese partido
 //
@@ -46,7 +45,6 @@ export interface CapturaCuotasFila extends CuotasMercadoActual {
   capturadoEn: Date | null;
 
   eventIdExterno: string | null;
-  metodoDiscovery: "AUTOMATICO" | "MANUAL" | null;
 }
 
 export interface CapturaCuotasPartido {
@@ -87,23 +85,17 @@ export async function obtenerCapturaCuotasPartido(
   });
   if (!partido) return null;
 
-  const [cuotas, eventIds, alertasNoVistas] = await Promise.all([
+  const [cuotas, alertasNoVistas] = await Promise.all([
     prisma.cuotasCasa.findMany({ where: { partidoId } }),
-    prisma.eventIdExterno.findMany({
-      where: { partidoId },
-      select: { casa: true, eventIdExterno: true, metodoDiscovery: true },
-    }),
     prisma.alertaCuota.count({
       where: { partidoId, vistaPorAdmin: false },
     }),
   ]);
 
   const cuotaPorCasa = new Map(cuotas.map((c) => [c.casa, c]));
-  const eventIdPorCasa = new Map(eventIds.map((e) => [e.casa, e]));
 
   const filas: CapturaCuotasFila[] = CUOTAS_CONFIG.CASAS.map((casa) => {
     const c = cuotaPorCasa.get(casa);
-    const eId = eventIdPorCasa.get(casa);
     const fila: CapturaCuotasFila = {
       casa,
       estado: (c?.estado as EstadoCuotasCasa | undefined) ?? null,
@@ -112,9 +104,7 @@ export async function obtenerCapturaCuotasPartido(
       errorMensaje: c?.errorMensaje ?? null,
       intentosFallidos: c?.intentosFallidos ?? 0,
       capturadoEn: c?.capturadoEn ?? null,
-      eventIdExterno: eId?.eventIdExterno ?? c?.eventIdExterno ?? null,
-      metodoDiscovery:
-        (eId?.metodoDiscovery as "AUTOMATICO" | "MANUAL" | undefined) ?? null,
+      eventIdExterno: c?.eventIdExterno ?? null,
 
       cuotaLocal: dec(c?.cuotaLocal),
       cuotaLocalAnterior: dec(c?.cuotaLocalAnterior),
