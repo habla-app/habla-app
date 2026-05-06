@@ -134,12 +134,17 @@ REM porque el launcher se crea aqui sin enabledelayedexpansion en su scope.
     echo call pnpm --filter @habla/web run agente-cuotas -- --token=%%TOKEN%%
 )
 
-REM Registrar protocolo en HKCU (no requiere admin)
+REM Registrar protocolo en HKCU (no requiere admin).
+REM Lote V.14.3: el comando lanza el launcher MINIMIZADO via cmd /c start /MIN.
+REM Asi la PowerShell del agente no estorba al admin durante el procesamiento.
+REM Sintaxis: cmd /c start /MIN "" "C:\path\launcher.cmd" "%1"
+REM   - El primer "" es el titulo de la ventana (vacio).
+REM   - /MIN abre minimizada.
 reg add "HKCU\Software\Classes\habla-agente" /ve /d "URL:Habla Agente Protocol" /f >nul
 reg add "HKCU\Software\Classes\habla-agente" /v "URL Protocol" /d "" /f >nul
 reg add "HKCU\Software\Classes\habla-agente\shell" /f >nul
 reg add "HKCU\Software\Classes\habla-agente\shell\open" /f >nul
-reg add "HKCU\Software\Classes\habla-agente\shell\open\command" /ve /d "\"%LAUNCHER%\" \"%%1\"" /f >nul
+reg add "HKCU\Software\Classes\habla-agente\shell\open\command" /ve /d "cmd.exe /c start /MIN \"\" \"%LAUNCHER%\" \"%%1\"" /f >nul
 
 echo Protocolo registrado OK.
 echo.

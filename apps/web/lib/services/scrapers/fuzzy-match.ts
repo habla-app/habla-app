@@ -34,6 +34,20 @@
 export const UMBRAL_FUZZY_DEFAULT = 0.88;
 
 /**
+ * Umbral más laxo para matching de partidos en scrapers (Lote V.14.3).
+ *
+ * Antes los scrapers usaban `UMBRAL_FUZZY_DEFAULT * 0.7 = 0.616`. En
+ * ligas internacionales con nombres más variables (ej. "Atletico Torque"
+ * vs "Atlético Torque", "Bayern de Múnich" vs "Bayern München"), el
+ * umbral 0.616 dejaba algunos partidos sin matchear. Bajamos a 0.5 para
+ * ser más permisivos. El filtro adicional por liga + fecha implícito en
+ * cada scraper (solo procesamos eventos del listing de la liga buscada)
+ * compensa la mayor permisividad — falsos positivos casi imposibles
+ * porque solo hay ~10-20 partidos por listing.
+ */
+export const UMBRAL_FUZZY_MATCH_PARTIDO = 0.5;
+
+/**
  * Score de baja confianza (>= UMBRAL_FUZZY_DEFAULT pero < esto). Los
  * matches en este rango se loggean para revisión manual durante las
  * primeras semanas. Por encima de este score, el match se considera

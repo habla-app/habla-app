@@ -19,9 +19,7 @@ import {
   ETIQUETAS_CASA,
   type CapturaCuotasFila,
 } from "@/lib/services/admin-cuotas.service";
-import { RefreshPartidoBtn } from "./RefreshPartidoBtn";
-import { RefreshCasaBtn } from "./RefreshCasaBtn";
-import { VincularEventIdModal } from "./VincularEventIdModal";
+import { CuotasRefreshBtn } from "../partidos/CuotasRefreshBtn";
 import { AlertasSection } from "./AlertasSection";
 import { EditarCuotasManualModal } from "./EditarCuotasManualModal";
 
@@ -327,11 +325,12 @@ function FilaCasa({
         )}
       </td>
       <td className="cuotas-tabla-acciones">
-        <RefreshCasaBtn
-          partidoId={partidoId}
-          casa={fila.casa}
-          disabled={!fila.eventIdExterno}
-        />
+        {/* Lote V.14.3: dejamos solo el botón "✏ manual" por casa.
+            El refresh por casa individual + el "Vincular Event ID" se
+            removieron — el refresh global del partido (con todas las
+            casas en una sola sesión del agente) está arriba en el
+            header y cubre el caso. La edición manual se mantiene como
+            fallback cuando el motor no captura algún mercado. */}
         <EditarCuotasManualModal
           partidoId={partidoId}
           casa={fila.casa}
@@ -348,13 +347,6 @@ function FilaCasa({
             cuotaBttsSi: fila.cuotaBttsSi,
             cuotaBttsNo: fila.cuotaBttsNo,
           }}
-        />
-        <VincularEventIdModal
-          partidoId={partidoId}
-          casa={fila.casa}
-          casaLabel={ETIQUETAS_CASA[fila.casa]}
-          eventIdActual={fila.eventIdExterno}
-          triggerLabel={fila.eventIdExterno ? "editar" : undefined}
         />
         {fila.estado === "ERROR" && fila.errorMensaje ? (
           <span
@@ -454,7 +446,16 @@ export async function CapturaCuotasSection({
             flexWrap: "wrap",
           }}
         >
-          <RefreshPartidoBtn partidoId={partidoId} />
+          {/* Lote V.14.3: el botón "Forzar refresh ahora" es ahora
+              idéntico al "↻" de la lista de partidos — dispara el
+              agente local on-demand vía Custom URL Protocol con auto-
+              polling de progreso + auto-refresh al terminar. */}
+          <CuotasRefreshBtn
+            scope="partido"
+            partidoId={partidoId}
+            label="↻ Forzar refresh ahora"
+            compact={false}
+          />
           <a
             href={
               verAlertas

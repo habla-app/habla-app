@@ -207,7 +207,17 @@ async function calentarBrowser(): Promise<void> {
     viewport: { width: 1366, height: 800 },
     locale: "es-PE",
     timezoneId: "America/Lima",
-    args: ["--disable-blink-features=AutomationControlled"],
+    args: [
+      "--disable-blink-features=AutomationControlled",
+      // Lote V.14.3: ventana Chrome arranca minimizada para no estorbar
+      // al admin durante el procesamiento. La SPA igual hidrata bien
+      // (Playwright fuerza el viewport via JS, no depende del tamaño
+      // visible de la ventana).
+      "--start-minimized",
+      // Mover fuera de la pantalla principal como fallback si --start-minimized
+      // se ignora en alguna versión de Chrome.
+      "--window-position=10000,10000",
+    ],
   });
   const browser = (context as any).browser?.();
   if (!browser) {
