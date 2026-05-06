@@ -23,6 +23,7 @@ import { RefreshPartidoBtn } from "./RefreshPartidoBtn";
 import { RefreshCasaBtn } from "./RefreshCasaBtn";
 import { VincularEventIdModal } from "./VincularEventIdModal";
 import { AlertasSection } from "./AlertasSection";
+import { EditarCuotasManualModal } from "./EditarCuotasManualModal";
 
 interface Props {
   partidoId: string;
@@ -331,6 +332,23 @@ function FilaCasa({
           casa={fila.casa}
           disabled={!fila.eventIdExterno}
         />
+        <EditarCuotasManualModal
+          partidoId={partidoId}
+          casa={fila.casa}
+          casaLabel={ETIQUETAS_CASA[fila.casa]}
+          cuotasActuales={{
+            cuotaLocal: fila.cuotaLocal,
+            cuotaEmpate: fila.cuotaEmpate,
+            cuotaVisita: fila.cuotaVisita,
+            cuota1X: fila.cuota1X,
+            cuota12: fila.cuota12,
+            cuotaX2: fila.cuotaX2,
+            cuotaOver25: fila.cuotaOver25,
+            cuotaUnder25: fila.cuotaUnder25,
+            cuotaBttsSi: fila.cuotaBttsSi,
+            cuotaBttsNo: fila.cuotaBttsNo,
+          }}
+        />
         <VincularEventIdModal
           partidoId={partidoId}
           casa={fila.casa}
@@ -362,28 +380,11 @@ export async function CapturaCuotasSection({
 }: Props & { searchParams?: SearchParams }) {
   const data = await obtenerCapturaCuotasPartido(partidoId);
   if (!data) return null;
-  if (!data.filtro1) {
-    return (
-      <div className="card" style={{ padding: 16, marginTop: 18 }}>
-        <h3
-          style={{
-            fontFamily: "'Barlow Condensed', sans-serif",
-            fontSize: 14,
-            fontWeight: 800,
-            color: "var(--text-dark)",
-            textTransform: "uppercase",
-            marginBottom: 8,
-          }}
-        >
-          Captura de cuotas
-        </h3>
-        <p style={{ fontSize: 12, color: "var(--text-muted-d)" }}>
-          Activá Filtro 1 sobre este partido para empezar a capturar cuotas
-          desde las 7 casas.
-        </p>
-      </div>
-    );
-  }
+  // Lote V.14.1: ya no gateamos por Filtro 1. La sección se muestra
+  // siempre con el botón de refresh + edición manual disponibles, así
+  // el admin puede ver y completar cuotas ANTES de activar Filtro 1
+  // (que requiere captura COMPLETA + análisis aprobados como
+  // prerequisitos).
 
   const completas = data.filas.filter((f) => f.estado === "OK").length;
   const total = data.filas.length;
