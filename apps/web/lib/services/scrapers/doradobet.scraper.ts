@@ -61,16 +61,30 @@ const doradobetScraper: Scraper = {
       source: "scrapers:doradobet",
     });
 
+    const diagnostico: Array<{
+      url: string;
+      bytes: number;
+      shapeOk: boolean;
+      eventos: number;
+      mejorScore: number;
+      mejorMatch?: { local: string; visita: string };
+    }> = [];
+
     for (const c of candidatos) {
       const body = c.body as AltenarBody;
-      if (!body?.events || !body?.markets || !body?.odds) continue;
+      const shapeOk = !!(body?.events && body?.markets && body?.odds);
+      if (!shapeOk) {
+        diagnostico.push({ url: c.url, bytes: c.bytes, shapeOk: false, eventos: 0, mejorScore: 0 });
+        continue;
+      }
 
       const competitorsById = new Map<number, AltenarCompetitor>();
       for (const cmp of body.competitors ?? []) competitorsById.set(cmp.id, cmp);
 
       let mejor: AltenarEvent | null = null;
       let mejorScore = 0;
-      for (const ev of body.events) {
+      let mejorMatch: { local: string; visita: string } | undefined;
+      for (const ev of body.events!) {
         const local = competitorsById.get(ev.competitorIds?.[0] ?? -1)?.name;
         const visita = competitorsById.get(ev.competitorIds?.[1] ?? -1)?.name;
         if (!local || !visita) continue;
@@ -81,14 +95,23 @@ const doradobetScraper: Scraper = {
         if (score > mejorScore) {
           mejorScore = score;
           mejor = ev;
+          mejorMatch = { local, visita };
         }
       }
+      diagnostico.push({
+        url: c.url,
+        bytes: c.bytes,
+        shapeOk: true,
+        eventos: body.events!.length,
+        mejorScore,
+        mejorMatch,
+      });
       if (!mejor || mejorScore < UMBRAL_FUZZY_DEFAULT * 0.7) continue;
 
       const marketsById = new Map<number, AltenarMarket>();
-      for (const m of body.markets) marketsById.set(m.id, m);
+      for (const m of body.markets ?? []) marketsById.set(m.id, m);
       const oddsById = new Map<number, AltenarOdd>();
-      for (const o of body.odds) oddsById.set(o.id, o);
+      for (const o of body.odds ?? []) oddsById.set(o.id, o);
 
       const cuotas: CuotasCapturadas = {};
       for (const mid of mejor.marketIds ?? []) {
@@ -139,10 +162,14 @@ const doradobetScraper: Scraper = {
     logger.info(
       {
         partidoId: partido.id,
+        equipoLocal: partido.equipoLocal,
+        equipoVisita: partido.equipoVisita,
         candidatos: candidatos.length,
+        diagnostico,
+        umbralAceptacion: UMBRAL_FUZZY_DEFAULT * 0.7,
         source: "scrapers:doradobet",
       },
-      `doradobet: ningún JSON candidato matcheó el partido`,
+      `doradobet: ningún JSON candidato matcheó el partido (mejor score=${diagnostico.reduce((m, d) => Math.max(m, d.mejorScore), 0).toFixed(3)})`,
     );
     return null;
   },

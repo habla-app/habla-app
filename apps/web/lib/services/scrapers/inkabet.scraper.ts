@@ -74,15 +74,24 @@ const inkabetScraper: Scraper = {
       esperaPostLoadMs: 6_000,
     });
 
+    const diagnostico: Array<{
+      url: string;
+      bytes: number;
+      eventos: number;
+      markets: number;
+      mejorScore: number;
+      mejorMatch?: { local: string; visita: string };
+    }> = [];
+
     for (const c of candidatos) {
       const body = c.body as OBGBody;
       const events = body?.data?.events ?? [];
-      if (events.length === 0) continue;
       const markets = body?.data?.markets ?? [];
       const selections = body?.data?.selections ?? [];
 
       let mejor: OBGEvent | null = null;
       let mejorScore = 0;
+      let mejorMatch: { local: string; visita: string } | undefined;
       for (const e of events) {
         const home = extractParticipant(e, 1);
         const away = extractParticipant(e, 2);
@@ -94,8 +103,17 @@ const inkabetScraper: Scraper = {
         if (score > mejorScore) {
           mejorScore = score;
           mejor = e;
+          mejorMatch = { local: home, visita: away };
         }
       }
+      diagnostico.push({
+        url: c.url,
+        bytes: c.bytes,
+        eventos: events.length,
+        markets: markets.length,
+        mejorScore,
+        mejorMatch,
+      });
       if (!mejor || mejorScore < UMBRAL_FUZZY_DEFAULT * 0.7) continue;
 
       const eventId = mejor.globalId;
@@ -118,10 +136,14 @@ const inkabetScraper: Scraper = {
     logger.info(
       {
         partidoId: partido.id,
+        equipoLocal: partido.equipoLocal,
+        equipoVisita: partido.equipoVisita,
         candidatos: candidatos.length,
+        diagnostico,
+        umbralAceptacion: UMBRAL_FUZZY_DEFAULT * 0.7,
         source: "scrapers:inkabet",
       },
-      `inkabet: ningún JSON candidato matcheó el partido`,
+      `inkabet: ningún JSON candidato matcheó el partido (mejor score=${diagnostico.reduce((m, d) => Math.max(m, d.mejorScore), 0).toFixed(3)})`,
     );
     return null;
   },

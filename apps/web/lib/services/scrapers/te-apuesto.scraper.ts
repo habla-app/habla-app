@@ -66,18 +66,28 @@ const teApuestoScraper: Scraper = {
       esperaPostLoadMs: 6_000,
     });
 
+    const diagnostico: Array<{
+      url: string;
+      bytes: number;
+      tournaments: number;
+      eventos: number;
+      mejorScore: number;
+      mejorMatch?: { local: string; visita: string };
+    }> = [];
+
     for (const c of candidatos) {
       const body = c.body as CoreixBody;
       const tournaments = body?.data?.tournaments;
-      if (!tournaments) continue;
       const events: CoreixEvent[] = [];
-      for (const t of Object.values(tournaments)) {
-        if (t.events) events.push(...t.events);
+      if (tournaments) {
+        for (const t of Object.values(tournaments)) {
+          if (t.events) events.push(...t.events);
+        }
       }
-      if (events.length === 0) continue;
 
       let mejor: CoreixEvent | null = null;
       let mejorScore = 0;
+      let mejorMatch: { local: string; visita: string } | undefined;
       for (const e of events) {
         const home = extractCompetitor(e, "home");
         const away = extractCompetitor(e, "away");
@@ -89,8 +99,17 @@ const teApuestoScraper: Scraper = {
         if (score > mejorScore) {
           mejorScore = score;
           mejor = e;
+          mejorMatch = { local: home, visita: away };
         }
       }
+      diagnostico.push({
+        url: c.url,
+        bytes: c.bytes,
+        tournaments: tournaments ? Object.keys(tournaments).length : 0,
+        eventos: events.length,
+        mejorScore,
+        mejorMatch,
+      });
       if (!mejor || mejorScore < UMBRAL_FUZZY_DEFAULT * 0.7) continue;
 
       const cuotas = mapearCuotasCoreix(mejor);
@@ -110,10 +129,14 @@ const teApuestoScraper: Scraper = {
     logger.info(
       {
         partidoId: partido.id,
+        equipoLocal: partido.equipoLocal,
+        equipoVisita: partido.equipoVisita,
         candidatos: candidatos.length,
+        diagnostico,
+        umbralAceptacion: UMBRAL_FUZZY_DEFAULT * 0.7,
         source: "scrapers:te-apuesto",
       },
-      `te-apuesto: ningún JSON candidato matcheó el partido`,
+      `te-apuesto: ningún JSON candidato matcheó el partido (mejor score=${diagnostico.reduce((m, d) => Math.max(m, d.mejorScore), 0).toFixed(3)})`,
     );
     return null;
   },

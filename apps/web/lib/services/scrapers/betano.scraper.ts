@@ -58,12 +58,20 @@ const betanoScraper: Scraper = {
       esperaPostLoadMs: 6_000,
     });
 
+    const diagnostico: Array<{
+      url: string;
+      bytes: number;
+      eventos: number;
+      mejorScore: number;
+      mejorMatch?: { local: string; visita: string };
+    }> = [];
+
     for (const c of candidatos) {
       const events = extractEvents(c.body);
-      if (events.length === 0) continue;
 
       let mejor: DanaeEvent | null = null;
       let mejorScore = 0;
+      let mejorMatch: { local: string; visita: string } | undefined;
       for (const e of events) {
         const home = extractHome(e);
         const away = extractAway(e);
@@ -75,8 +83,16 @@ const betanoScraper: Scraper = {
         if (score > mejorScore) {
           mejorScore = score;
           mejor = e;
+          mejorMatch = { local: home, visita: away };
         }
       }
+      diagnostico.push({
+        url: c.url,
+        bytes: c.bytes,
+        eventos: events.length,
+        mejorScore,
+        mejorMatch,
+      });
       if (!mejor || mejorScore < UMBRAL_FUZZY_DEFAULT * 0.7) continue;
 
       const cuotas = mapearCuotasDanae(mejor, c.body);
@@ -96,10 +112,14 @@ const betanoScraper: Scraper = {
     logger.info(
       {
         partidoId: partido.id,
+        equipoLocal: partido.equipoLocal,
+        equipoVisita: partido.equipoVisita,
         candidatos: candidatos.length,
+        diagnostico,
+        umbralAceptacion: UMBRAL_FUZZY_DEFAULT * 0.7,
         source: "scrapers:betano",
       },
-      `betano: ningún JSON candidato matcheó el partido`,
+      `betano: ningún JSON candidato matcheó el partido (mejor score=${diagnostico.reduce((m, d) => Math.max(m, d.mejorScore), 0).toFixed(3)})`,
     );
     return null;
   },
