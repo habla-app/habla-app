@@ -1,9 +1,10 @@
-// Registro central de scrapers del motor de captura de cuotas (Lote V.11).
+// Registro central de scrapers del motor de captura de cuotas (Lote V.12).
 //
-// Lote V.11 (May 2026): reescritura del motor a API-only.
-//   - 6 scrapers HTTP directos contra APIs B2B de los proveedores.
+// Lote V.12 (May 2026): motor con Playwright headless + interceptación XHR.
+//   - 6 scrapers que cargan la página de la liga en cada casa con
+//     Chromium headless y capturan los JSONs que el frontend pide.
+//   - Doradobet incluido en el flow universal (uniformidad).
 //   - Stake removido (queda como referencia en scripts/validacion-geo/).
-//   - Cero Playwright. Cero browser headless.
 
 import { logger } from "../logger";
 import { registrarScraper } from "../cuotas-worker";
@@ -18,9 +19,9 @@ import teApuestoScraper from "./te-apuesto.scraper";
 let yaRegistrados = false;
 
 /**
- * Registra los 6 scrapers API del Lote V.11. Idempotente: segunda
- * llamada no-op (con log debug). Llamado desde `instrumentation.ts`
- * después de `iniciarMotorCuotas()`.
+ * Registra los 6 scrapers del Lote V.12 (Playwright + XHR intercept).
+ * Idempotente: segunda llamada no-op (con log debug). Llamado desde
+ * `instrumentation.ts` después de `iniciarMotorCuotas()`.
  */
 export function registrarScrapersV2(): void {
   if (yaRegistrados) {
@@ -48,7 +49,7 @@ export function registrarScrapersV2(): void {
       ],
       source: "scrapers:registry",
     },
-    "scrapers V.11 API-only registrados (6 casas)",
+    "scrapers V.12 (Playwright + XHR intercept) registrados (6 casas)",
   );
 }
 

@@ -62,12 +62,14 @@ export const CUOTAS_CONFIG = {
   /**
    * Workers procesando en paralelo.
    *
-   * Lote V.11: subido a 6 (= 1 por casa) porque ahora cada captura es un
-   * solo fetch HTTP server-side (sin browser headless). Memoria por job:
-   * ~5-10 MB del response JSON. Concurrencia 6 = ~30-60 MB total, muy
-   * por debajo del límite Railway 1GB.
+   * Lote V.12: bajado a 2 porque ahora cada captura usa Playwright headless
+   * (browser warm + page activa). Memoria por captura: ~50 MB de RAM
+   * adicional sobre el browser warm (~150 MB). Concurrencia 2 = ~250 MB
+   * total, manejable en Railway 1 GB. Tiempo total esperado para todo el
+   * ciclo (12 partidos × 5 casas con browser + Doradobet via browser):
+   * ~5 min con cron 1×/día, aceptable.
    */
-  CONCURRENCIA_BULLMQ: 6,
+  CONCURRENCIA_BULLMQ: 2,
   /** Rate limit por worker (ms entre jobs). Reduce risk de IP bans. */
   RATE_LIMIT_POR_WORKER_MS: 1500,
   /** Retención en cola de jobs completados (count). */
