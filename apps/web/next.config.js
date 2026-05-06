@@ -20,7 +20,18 @@ const nextConfig = {
     // desde `lib/services/scrapers/playwright-browser.ts`. Esta lista hace
     // que Next emita el require como literal y lo resuelva contra
     // `node_modules` en runtime, sin pasar por webpack.
-    serverComponentsExternalPackages: ["playwright-chromium", "playwright-core"],
+    //
+    // Lote V.12.4 — playwright-extra y puppeteer-extra-plugin-stealth
+    // arrastran clone-deep + merge-deep + puppeteer-extra-plugin que usan
+    // `require()` dinámico que webpack no puede analizar estáticamente
+    // ("Cannot statically analyse require(…, …)"). Excluirlos del bundle
+    // hace que Next los emita como require runtime contra node_modules.
+    serverComponentsExternalPackages: [
+      "playwright-chromium",
+      "playwright-core",
+      "playwright-extra",
+      "puppeteer-extra-plugin-stealth",
+    ],
   },
   webpack: (config, { isServer, nextRuntime }) => {
     if (isServer) {
@@ -44,7 +55,17 @@ const nextConfig = {
         // webpack intente bundlear sus dependencias opcionales (electron,
         // chromium-bidi, recorder assets), las cuales rompen el build con
         // Module not found / Module parse failed.
-        serverExternals.push("playwright-chromium", "playwright-core");
+        //
+        // Lote V.12.4 — playwright-extra + puppeteer-extra-plugin-stealth
+        // mismo problema: clone-deep/merge-deep usan require() dinámico que
+        // webpack no analiza. External => runtime require contra
+        // node_modules.
+        serverExternals.push(
+          "playwright-chromium",
+          "playwright-core",
+          "playwright-extra",
+          "puppeteer-extra-plugin-stealth",
+        );
       }
       config.externals = [...externals, ...serverExternals];
     }
@@ -101,10 +122,15 @@ const nextConfig = {
       // playwright-chromium/playwright-core arrastran chromium-bidi (peer
       // opcional no instalada), electron (peer opcional no instalada) y
       // assets binarios del recorder — alias false corta el subárbol.
+      // Lote V.12.4 — playwright-extra + puppeteer-extra-plugin-stealth
+      // tampoco se ejecutan en Edge/client; alias false corta sus deps
+      // (clone-deep, merge-deep) que usan require() dinámico.
       config.resolve.alias = {
         ...(config.resolve.alias || {}),
         "playwright-chromium": false,
         "playwright-core": false,
+        "playwright-extra": false,
+        "puppeteer-extra-plugin-stealth": false,
       };
 
       config.resolve.fallback = {
