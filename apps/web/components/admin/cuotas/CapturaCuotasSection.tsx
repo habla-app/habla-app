@@ -8,7 +8,7 @@
 // densa (.cuotas-tabla) con 1 fila por casa. Permite comparar cuotas
 // entre casas de un solo vistazo (ej. ver qué casa tiene el mejor 1
 // para el local). Las columnas son: Casa, Estado, Última, 1X2, Doble Op,
-// ±2.5, BTTS, Event ID, Acciones.
+// ±2.5, BTTS, Acciones.
 //
 // Cero clases Tailwind utility — usa clases nominadas del mockup
 // (`adm-pill`, `card`, `section-bar`, `btn`, etc) y CSS específico del
@@ -218,7 +218,7 @@ function FilaCasa({
         {tiempoTxt}
       </td>
       <td>
-        {fila.eventIdExterno ? (
+        {fila.cuotaLocal || fila.cuotaEmpate || fila.cuotaVisita ? (
           <MercadoCelda
             pares={[
               {
@@ -243,7 +243,7 @@ function FilaCasa({
         )}
       </td>
       <td>
-        {fila.eventIdExterno ? (
+        {fila.cuota1X || fila.cuota12 || fila.cuotaX2 ? (
           <MercadoCelda
             pares={[
               {
@@ -268,7 +268,7 @@ function FilaCasa({
         )}
       </td>
       <td>
-        {fila.eventIdExterno ? (
+        {fila.cuotaOver25 || fila.cuotaUnder25 ? (
           <MercadoCelda
             pares={[
               {
@@ -288,7 +288,7 @@ function FilaCasa({
         )}
       </td>
       <td>
-        {fila.eventIdExterno ? (
+        {fila.cuotaBttsSi || fila.cuotaBttsNo ? (
           <MercadoCelda
             pares={[
               {
@@ -305,23 +305,6 @@ function FilaCasa({
           />
         ) : (
           <span className="cuotas-tabla-sin-datos">—</span>
-        )}
-      </td>
-      <td className="cuotas-tabla-eventid">
-        {fila.eventIdExterno ? (
-          <span className="cuotas-tabla-eventid-block">
-            <code className="cuotas-casa-card-event-id">
-              {fila.eventIdExterno}
-            </code>
-            <span
-              className={`adm-pill adm-pill-${fila.metodoDiscovery === "MANUAL" ? "amber" : "blue"}`}
-              style={{ fontSize: 9 }}
-            >
-              {fila.metodoDiscovery === "MANUAL" ? "manual" : "auto"}
-            </span>
-          </span>
-        ) : (
-          <span style={{ color: "var(--text-muted-d)" }}>sin asignar</span>
         )}
       </td>
       <td className="cuotas-tabla-acciones">
@@ -482,7 +465,6 @@ export async function CapturaCuotasSection({
               <th>Doble Op</th>
               <th>±2.5</th>
               <th>BTTS</th>
-              <th>Event ID</th>
               <th>Acciones</th>
             </tr>
           </thead>

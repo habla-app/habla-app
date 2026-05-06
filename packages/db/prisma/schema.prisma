@@ -162,7 +162,6 @@ model Partido {
   picksPremium     PickPremium[]
   analisisPartido  AnalisisPartido?
   cuotasCasa       CuotasCasa[]
-  eventIdsExternos EventIdExterno[]
   alertasCuota     AlertaCuota[]
 
   @@map("partidos")
@@ -1303,34 +1302,6 @@ model CuotasCasa {
   @@index([partidoId])
   @@index([casa, estado])
   @@map("cuotas_casa")
-}
-
-model EventIdExterno {
-  id             String  @id @default(cuid())
-  partidoId      String
-  partido        Partido @relation(fields: [partidoId], references: [id], onDelete: Cascade)
-  casa           String
-  eventIdExterno String
-
-  metodoDiscovery String // "AUTOMATICO" | "MANUAL"
-  resueltoPor     String? // userId si fue manual
-  resueltoEn      DateTime @default(now())
-
-  @@unique([partidoId, casa])
-  @@index([partidoId])
-  @@map("event_ids_externos")
-}
-
-model AliasEquipo {
-  id                   String  @id @default(cuid())
-  alias                String
-  casa                 String? // null = aplica a todas las casas
-  equipoCanonicoNombre String // ej. "FBC Melgar" (sin FK porque no hay tabla Equipo)
-
-  @@unique([alias, casa])
-  @@index([alias])
-  @@index([equipoCanonicoNombre])
-  @@map("alias_equipos")
 }
 
 model AlertaCuota {
