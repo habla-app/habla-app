@@ -1,18 +1,38 @@
-// Scraper Betano via API directa Danae (Lote V.11 — May 2026).
+// Scraper Betano via API directa Danae/Kaizen (Lote V.11.1 — May 2026).
 //
-// Betano usa Danae como backend B2B (proveedor de Stoiximan/Kaizen).
-// Validado el 2026-05-05 que el endpoint:
-//   https://www.betano.pe/danae-webapi/api/live/overview/latest
-// responde con todos los partidos. El user dijo "trae todo, hay que filtrar".
+// Betano usa Danae (Kaizen Group) como backend B2B. Validado el 2026-05-08
+// con JSON real (urls2.txt) que el endpoint:
+//   https://www.betano.pe/api/betbuilderplus/event?id={eventId}&sportCode=FOOT
+// responde por evento con shape:
+//   {
+//     data: {
+//       marketIdList: [...],
+//       markets: { "id": { selectionIdList[], type, typeId, name, ... } },
+//       selections: { "id": { price, typeId, shortName, name, handicap?, ... } }
+//     }
+//   }
 //
-// El listado del frontend usa /api/live/overview pero EXISTE un endpoint
-// análogo para prematch — conviene buscarlo en una segunda iteración. Por
-// ahora intentamos `prematch/overview/latest` como variante natural; si
-// no existe, fallback a `live/overview/latest` filtrando solo prematch.
+// El endpoint provisto es PER-EVENT (no listing). Para cubrir captura
+// automática sin manual-link, probamos en cascada:
 //
-// Estructura del JSON: inferida por patrones B2B (Kaizen Group). El
-// parser maneja shape flexible. Si el real difiere, ajustamos via
-// endpoint diagnóstico.
+//   1) `/api/betbuilderplus/event-list?competitionId={ligaIdCasa}` (intento)
+//   2) `/danae-webapi/api/prematch/overview/latest` (legacy probe)
+//   3) Si los listings fallan: log explícito + null.
+//
+// Vinculación manual (admin pega URL Betano vía /event-ids) sigue siendo
+// la ruta confiable hasta que descubramos el listing endpoint.
+//
+// MarketType (campo `type` o `typeId` de Kaizen):
+//   - "MRES" / typeId 1   → Resultado del partido (1X2)
+//   - "DBLC" / typeId 9   → Doble Oportunidad
+//   - "BTSC" / typeId 15  → Ambos equipos anotan
+//   - "HCTG" / typeId 13  → Goles totales Más/Menos (con handicap)
+//
+// Selection.typeId (cuando aplica):
+//   1 / 2 / 3        → Local / Empate / Visita
+//   28 / 30 / 29     → 1X / 12 / X2
+//   39 / 40          → Más / Menos (con campo handicap=2.5)
+//   43 / 44          → Sí / No (BTTS)
 
 import { logger } from "../logger";
 import { httpFetchJson } from "./http";
@@ -21,67 +41,66 @@ import type { CuotasCapturadas, ResultadoScraper, Scraper } from "./types";
 
 const URL_BASE = "https://www.betano.pe";
 
-interface BetanoSelection {
-  selectionId?: number | string;
+interface DanaeSelection {
   id?: number | string;
-  selnId?: number | string;
-  name?: string;
-  shortName?: string;
   price?: number;
-  decimalOdds?: number;
-  odds?: number;
-}
-
-interface BetanoMarket {
-  marketId?: number | string;
-  id?: number | string;
-  name?: string;
+  typeId?: number;
   shortName?: string;
-  type?: string;
-  marketType?: string;
-  selections?: BetanoSelection[];
-  outcomes?: BetanoSelection[];
-  specifiers?: Record<string, string>;
-  line?: string | number;
+  name?: string;
+  fullName?: string;
+  handicap?: number;
 }
 
-interface BetanoEvent {
-  eventId?: number | string;
+interface DanaeMarket {
   id?: number | string;
+  selectionIdList?: (number | string)[];
+  type?: string;
+  typeId?: number;
   name?: string;
+}
+
+interface DanaeEventListItem {
+  id?: number | string;
+  eventId?: number | string;
+  name?: string;
+  description?: string;
   homeName?: string;
   awayName?: string;
-  participants?: { name: string; type: string }[];
+  participants?: { name: string; type?: string }[];
   competitionId?: number | string;
   leagueId?: number | string;
   tournamentId?: number | string;
   startTime?: string | number;
-  markets?: BetanoMarket[];
+  marketIdList?: (number | string)[];
+  markets?: Record<string, DanaeMarket> | DanaeMarket[];
+  selections?: Record<string, DanaeSelection> | DanaeSelection[];
 }
 
-interface BetanoResponse {
-  events?: BetanoEvent[];
-  data?: { events?: BetanoEvent[] };
-  matches?: BetanoEvent[];
+interface DanaeListResponse {
+  data?: {
+    events?: DanaeEventListItem[];
+    markets?: Record<string, DanaeMarket>;
+    selections?: Record<string, DanaeSelection>;
+  };
+  events?: DanaeEventListItem[];
 }
 
-const URLS_A_PROBAR = [
-  // Prematch específico (preferido — solo trae lo relevante).
+const URLS_LISTADO = (ligaIdCasa: string) => [
+  `${URL_BASE}/api/betbuilderplus/event-list?competitionId=${ligaIdCasa}&sportCode=FOOT`,
+  `${URL_BASE}/api/sportscompo/v1/competition/${ligaIdCasa}/events?sportCode=FOOT`,
   `${URL_BASE}/danae-webapi/api/prematch/overview/latest?includeVirtuals=false&queryLanguageId=8&queryOperatorId=12`,
-  // Live overview (fallback — trae más data pero filtramos).
-  `${URL_BASE}/danae-webapi/api/live/overview/latest?includeVirtuals=false&queryLanguageId=8&queryOperatorId=12`,
 ];
 
 const betanoScraper: Scraper = {
   nombre: "betano",
 
   async capturarPorApi(partido, ligaIdCasa) {
-    let body: BetanoResponse | BetanoEvent[] | null = null;
+    let body: DanaeListResponse | null = null;
     let urlUsado: string | null = null;
 
-    for (const url of URLS_A_PROBAR) {
+    for (const url of URLS_LISTADO(ligaIdCasa)) {
       try {
-        body = await httpFetchJson<BetanoResponse | BetanoEvent[]>(url, {
+        body = await httpFetchJson<DanaeListResponse>(url, {
           headers: {
             Origin: URL_BASE,
             Referer: `${URL_BASE}/sport/futbol/peru/liga-1/${ligaIdCasa}/`,
@@ -103,54 +122,45 @@ const betanoScraper: Scraper = {
     }
 
     if (!body || !urlUsado) {
-      throw new Error("betano: ninguna URL de la lista respondió");
+      logger.info(
+        {
+          partidoId: partido.id,
+          ligaIdCasa,
+          source: "scrapers:betano",
+        },
+        `betano: ningún listing endpoint respondió. Captura automática no disponible — usar /event-ids manual con URL Betano del partido.`,
+      );
+      return null;
     }
 
-    // Recolectar events del shape posible.
-    let events: BetanoEvent[] = [];
-    if (Array.isArray(body)) {
-      events = body;
-    } else if (body.events) {
-      events = body.events;
-    } else if (body.data?.events) {
-      events = body.data.events;
-    } else if (body.matches) {
-      events = body.matches;
-    }
+    const events = body.data?.events ?? body.events ?? [];
 
     if (events.length === 0) {
       logger.warn(
         {
           partidoId: partido.id,
           ligaIdCasa,
-          shape: Array.isArray(body) ? "array" : Object.keys(body ?? {}),
+          urlUsado,
+          shape: Object.keys(body ?? {}),
           source: "scrapers:betano",
         },
-        `betano: response no contiene eventos reconocibles`,
+        `betano: response no contiene eventos`,
       );
       return null;
     }
 
-    // Filtrar por liga primero (cuando el campo está disponible) y
-    // después matchear por nombres.
+    // Filtrar por liga primero cuando el campo está disponible.
     const eventosLiga = events.filter((e) => {
-      const ligaCampo =
-        e.competitionId ?? e.leagueId ?? e.tournamentId;
+      const ligaCampo = e.competitionId ?? e.leagueId ?? e.tournamentId;
       return ligaCampo !== undefined && String(ligaCampo) === ligaIdCasa;
     });
     const candidatos = eventosLiga.length > 0 ? eventosLiga : events;
 
-    let mejor: BetanoEvent | null = null;
+    let mejor: DanaeEventListItem | null = null;
     let mejorScore = 0;
     for (const event of candidatos) {
-      const home =
-        event.homeName ??
-        event.participants?.find((p) => p.type === "home")?.name ??
-        extractHome(event.name);
-      const away =
-        event.awayName ??
-        event.participants?.find((p) => p.type === "away")?.name ??
-        extractAway(event.name);
+      const home = extractHome(event);
+      const away = extractAway(event);
       if (!home || !away) continue;
       const sLocal = similitudEquipos(home, partido.equipoLocal);
       const sVisita = similitudEquipos(away, partido.equipoVisita);
@@ -178,143 +188,184 @@ const betanoScraper: Scraper = {
       return null;
     }
 
-    const cuotas = mapearCuotasBetano(mejor);
+    // Mapear cuotas: el evento puede traer markets/selections inline
+    // (formato listing) o referenciar IDs (formato indexed). En el último
+    // caso resolvemos contra los maps top-level.
+    const cuotas = mapearCuotasDanae(mejor, body);
 
     if (Object.keys(cuotas).length === 0) {
       logger.warn(
         {
           partidoId: partido.id,
-          eventId: mejor.eventId ?? mejor.id,
-          markets: mejor.markets?.length ?? 0,
+          eventId: mejor.id ?? mejor.eventId,
           source: "scrapers:betano",
         },
-        `betano: evento encontrado pero sin mercados extraíbles. Revisar shape.`,
+        `betano: evento encontrado pero sin mercados extraíbles. Revisar shape via /diagnostico-api.`,
       );
       return null;
     }
 
-    const home =
-      mejor.homeName ??
-      mejor.participants?.find((p) => p.type === "home")?.name ??
-      extractHome(mejor.name) ??
-      partido.equipoLocal;
-    const away =
-      mejor.awayName ??
-      mejor.participants?.find((p) => p.type === "away")?.name ??
-      extractAway(mejor.name) ??
-      partido.equipoVisita;
-
     return {
       cuotas,
       fuente: { url: urlUsado, capturadoEn: new Date() },
-      eventIdCasa: String(mejor.eventId ?? mejor.id ?? ""),
-      equipos: { local: home, visita: away },
+      eventIdCasa: String(mejor.id ?? mejor.eventId ?? ""),
+      equipos: {
+        local: extractHome(mejor) ?? partido.equipoLocal,
+        visita: extractAway(mejor) ?? partido.equipoVisita,
+      },
     };
   },
 };
 
-function extractHome(name?: string): string | null {
-  if (!name) return null;
-  const parts = name.split(/\s+vs\.?\s+|\s+-\s+/i);
-  return parts[0]?.trim() ?? null;
-}
-function extractAway(name?: string): string | null {
-  if (!name) return null;
-  const parts = name.split(/\s+vs\.?\s+|\s+-\s+/i);
-  return parts[1]?.trim() ?? null;
+function extractHome(event: DanaeEventListItem): string | null {
+  if (event.homeName) return event.homeName;
+  const home = event.participants?.find((p) => p.type === "home" || p.type === "1");
+  if (home?.name) return home.name;
+  const name = event.name ?? event.description;
+  if (name) {
+    const parts = name.split(/\s+vs\.?\s+|\s+-\s+/i);
+    return parts[0]?.trim() ?? null;
+  }
+  return null;
 }
 
-function mapearCuotasBetano(event: BetanoEvent): CuotasCapturadas {
+function extractAway(event: DanaeEventListItem): string | null {
+  if (event.awayName) return event.awayName;
+  const away = event.participants?.find((p) => p.type === "away" || p.type === "2");
+  if (away?.name) return away.name;
+  const name = event.name ?? event.description;
+  if (name) {
+    const parts = name.split(/\s+vs\.?\s+|\s+-\s+/i);
+    return parts[1]?.trim() ?? null;
+  }
+  return null;
+}
+
+function mapearCuotasDanae(
+  event: DanaeEventListItem,
+  body: DanaeListResponse,
+): CuotasCapturadas {
   const cuotas: CuotasCapturadas = {};
-  const norm = (s: string | undefined): string =>
-    (s ?? "")
-      .normalize("NFD")
-      .replace(/[̀-ͯ]/g, "")
-      .toLowerCase()
-      .trim();
-  const getPrice = (s: BetanoSelection): number | null => {
-    const v = s.price ?? s.decimalOdds ?? s.odds;
+
+  // Resolver markets para este evento. Pueden venir:
+  //   a) Inline: event.markets como object {id: market} o array
+  //   b) Top-level indexed: body.data.markets {id: market} + event.marketIdList
+  let markets: DanaeMarket[] = [];
+  if (event.markets) {
+    markets = Array.isArray(event.markets)
+      ? event.markets
+      : Object.values(event.markets);
+  } else if (event.marketIdList && body.data?.markets) {
+    const mkRoot = body.data.markets;
+    markets = event.marketIdList
+      .map((id) => mkRoot[String(id)])
+      .filter((m): m is DanaeMarket => Boolean(m));
+  }
+
+  // Map para resolver selections.
+  let selectionsRoot: Record<string, DanaeSelection> = {};
+  if (event.selections) {
+    if (Array.isArray(event.selections)) {
+      for (const s of event.selections) {
+        if (s.id !== undefined) selectionsRoot[String(s.id)] = s;
+      }
+    } else {
+      selectionsRoot = event.selections;
+    }
+  } else if (body.data?.selections) {
+    selectionsRoot = body.data.selections;
+  }
+
+  const resolverSelections = (m: DanaeMarket): DanaeSelection[] => {
+    if (!m.selectionIdList) return [];
+    return m.selectionIdList
+      .map((id) => selectionsRoot[String(id)])
+      .filter((s): s is DanaeSelection => Boolean(s));
+  };
+
+  const priceOk = (s: DanaeSelection | undefined): number | null => {
+    const v = s?.price;
     return typeof v === "number" && v > 1 && v < 100 ? v : null;
   };
 
-  for (const market of event.markets ?? []) {
-    const tipo = norm(
-      market.name ?? market.shortName ?? market.type ?? market.marketType,
-    );
-    const selections = market.selections ?? market.outcomes ?? [];
+  for (const market of markets) {
+    const tipo = market.type ?? "";
+    const typeId = market.typeId;
 
-    if (
-      (tipo.includes("1x2") ||
-        tipo === "match result" ||
-        tipo === "resultado") &&
-      !cuotas["1x2"]
-    ) {
-      const local = selections.find(
-        (s) =>
-          norm(s.shortName ?? s.name) === "1" ||
-          norm(s.shortName ?? s.name) === "local",
-      );
-      const empate = selections.find(
-        (s) =>
-          norm(s.shortName ?? s.name) === "x" ||
-          norm(s.shortName ?? s.name) === "empate",
-      );
-      const visita = selections.find(
-        (s) =>
-          norm(s.shortName ?? s.name) === "2" ||
-          norm(s.shortName ?? s.name) === "visitante",
-      );
-      const lP = local && getPrice(local);
-      const eP = empate && getPrice(empate);
-      const vP = visita && getPrice(visita);
+    // 1X2: type="MRES" o typeId=1
+    if ((tipo === "MRES" || typeId === 1) && !cuotas["1x2"]) {
+      const sels = resolverSelections(market);
+      const local = sels.find((s) => s.typeId === 1 || s.shortName === "1");
+      const empate = sels.find((s) => s.typeId === 2 || s.shortName === "X");
+      const visita = sels.find((s) => s.typeId === 3 || s.shortName === "2");
+      const lP = priceOk(local);
+      const eP = priceOk(empate);
+      const vP = priceOk(visita);
       if (lP && eP && vP) cuotas["1x2"] = { local: lP, empate: eP, visita: vP };
-    } else if (
-      (tipo.includes("doble") || tipo === "double chance") &&
-      !cuotas.doble_op
-    ) {
-      const x1 = selections.find((s) => norm(s.shortName ?? s.name) === "1x");
-      const x12 = selections.find((s) => norm(s.shortName ?? s.name) === "12");
-      const xx2 = selections.find((s) => norm(s.shortName ?? s.name) === "x2");
-      const x1P = x1 && getPrice(x1);
-      const x12P = x12 && getPrice(x12);
-      const xx2P = xx2 && getPrice(xx2);
+    }
+
+    // Doble Op: type="DBLC" o typeId=9
+    else if ((tipo === "DBLC" || typeId === 9) && !cuotas.doble_op) {
+      const sels = resolverSelections(market);
+      const x1 = sels.find(
+        (s) => s.typeId === 28 || s.shortName === "1X" || s.shortName === "1 ó X",
+      );
+      const x12 = sels.find(
+        (s) => s.typeId === 30 || s.shortName === "12" || s.shortName === "1 ó 2",
+      );
+      const xx2 = sels.find(
+        (s) => s.typeId === 29 || s.shortName === "X2" || s.shortName === "X ó 2",
+      );
+      const x1P = priceOk(x1);
+      const x12P = priceOk(x12);
+      const xx2P = priceOk(xx2);
       if (x1P && x12P && xx2P) {
         cuotas.doble_op = { x1: x1P, x12: x12P, xx2: xx2P };
       }
-    } else if (
-      (tipo.includes("total") ||
-        tipo.includes("over/under") ||
-        tipo.includes("mas/menos") ||
-        tipo.includes("goles")) &&
-      !cuotas.mas_menos_25 &&
-      (String(market.line ?? market.specifiers?.total ?? "") === "2.5" ||
-        tipo.includes("2.5"))
-    ) {
-      const over = selections.find((s) => {
-        const n = norm(s.shortName ?? s.name);
-        return n.includes("mas") || n.includes("over") || n === "+";
-      });
-      const under = selections.find((s) => {
-        const n = norm(s.shortName ?? s.name);
-        return n.includes("menos") || n.includes("under") || n === "-";
-      });
-      const oP = over && getPrice(over);
-      const uP = under && getPrice(under);
-      if (oP && uP) cuotas.mas_menos_25 = { over: oP, under: uP };
-    } else if (
-      (tipo.includes("ambos") ||
-        tipo.includes("btts") ||
-        tipo.includes("both teams")) &&
-      !cuotas.btts
-    ) {
-      const si = selections.find((s) => {
-        const n = norm(s.shortName ?? s.name);
-        return n === "si" || n === "yes" || n === "sí";
-      });
-      const no = selections.find((s) => norm(s.shortName ?? s.name) === "no");
-      const sP = si && getPrice(si);
-      const nP = no && getPrice(no);
+    }
+
+    // BTTS: type="BTSC" o typeId=15
+    else if ((tipo === "BTSC" || typeId === 15) && !cuotas.btts) {
+      const sels = resolverSelections(market);
+      const si = sels.find(
+        (s) =>
+          s.typeId === 43 ||
+          (s.shortName ?? "").toLowerCase() === "sí" ||
+          (s.shortName ?? "").toLowerCase() === "si" ||
+          (s.shortName ?? "").toLowerCase() === "yes",
+      );
+      const no = sels.find(
+        (s) =>
+          s.typeId === 44 || (s.shortName ?? "").toLowerCase() === "no",
+      );
+      const sP = priceOk(si);
+      const nP = priceOk(no);
       if (sP && nP) cuotas.btts = { si: sP, no: nP };
+    }
+
+    // Total goles: type="HCTG" o typeId=13 — filtrar handicap=2.5 en
+    // selections. Cada market HCTG suele cubrir UN line; hay múltiples
+    // markets HCTG con líneas distintas (0.5, 1.5, 2.5, 3.5, ...). Sólo
+    // tomamos el de 2.5.
+    else if ((tipo === "HCTG" || typeId === 13) && !cuotas.mas_menos_25) {
+      const sels = resolverSelections(market);
+      const over = sels.find(
+        (s) =>
+          (s.typeId === 39 ||
+            (s.shortName ?? "").toLowerCase().startsWith("más") ||
+            (s.shortName ?? "").toLowerCase().startsWith("over")) &&
+          s.handicap === 2.5,
+      );
+      const under = sels.find(
+        (s) =>
+          (s.typeId === 40 ||
+            (s.shortName ?? "").toLowerCase().startsWith("menos") ||
+            (s.shortName ?? "").toLowerCase().startsWith("under")) &&
+          s.handicap === 2.5,
+      );
+      const oP = priceOk(over);
+      const uP = priceOk(under);
+      if (oP && uP) cuotas.mas_menos_25 = { over: oP, under: uP };
     }
   }
 

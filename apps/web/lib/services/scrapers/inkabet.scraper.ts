@@ -1,25 +1,32 @@
-// Scraper Inkabet via API directa Octonovus (Lote V.11 — May 2026).
+// Scraper Inkabet via API directa Octonovus/OBG (Lote V.11.1 — May 2026).
 //
-// Inkabet embebe el sportsbook de Octonovus via inkabetplayground.net.
-// Validado el 2026-05-05 que el endpoint:
+// Inkabet embebe el sportsbook de Octonovus/OBG via inkabetplayground.net.
+// Validado el 2026-05-08 con JSON real provisto por admin (urls2.txt) que
+// el endpoint:
 //   https://d-cf.inkabetplayground.net/api/sb/v1/widgets/events-table/v2
-// responde con partidos de Liga 1 Perú filtrados por competitionIds.
+// responde con shape `{ skeleton, topics, data: { events[], markets[],
+// selections[] }}` donde:
+//   - data.events[]  : metadatos del partido (participants, slug, fechas)
+//   - data.markets[] : eventos × tipos de mercado (eventId + marketTemplateId)
+//   - data.selections[]: cuotas por outcome (marketId + odds + selectionTemplateId)
 //
-// Parámetros descubiertos del query:
-//   - categoryIds=1: deporte (1 = fútbol)
-//   - competitionIds={id}: ID de la liga (Liga 1 Perú = 22988)
-//   - eventPhase=Prematch: solo partidos pre-match (no en vivo)
-//   - eventSortBy=StartDate
-//   - includeSkeleton=true
-//   - maxMarketCount=1 (en el query observado — subimos para traer todos)
-//   - pageNumber=1
-//   - startsBefore / startsOnOrAfter: ventana de fechas (ISO 8601 UTC)
-//   - priceFormats=1 (decimal)
+// Las tres colecciones son arrays separados; se cruzan por `eventId` (en
+// markets) y `marketId` (en selections).
 //
-// El user mencionó "salía en un link aparte por la fecha" — la API
-// devuelve los eventos del rango, una request por rango si quiere paginar
-// por día. Para este lote: ventana ancha (próximos 14 días) en una sola
-// request.
+// MarketTemplateIds relevantes (del skeleton del response):
+//   - "MW3W" / "ESFMWINNER3W" / "E1X2M"          → 1X2 (Ganador del Partido)
+//   - "MTG2W25" / "MTG2W" / "EOU25M"             → Total de Goles (line 2.5)
+//   - "BTTS" / "ESFMBTS"                         → Ambos Equipos Anotan
+//   - "DC" / "ESFMDCHANCE"                       → Doble Oportunidad
+//
+// SelectionTemplateIds dentro de cada market:
+//   - 1X2: "HOME" / "DRAW" / "AWAY"
+//   - Doble Op: "HOME_OR_DRAW" / "HOME_OR_AWAY" / "DRAW_OR_AWAY"
+//   - Total: "OVER" / "UNDER" (con lineValue="2.5")
+//   - BTTS: "YES" / "NO"
+//
+// Lote V.11 usaba `maxMarketCount=10` — bumpeado a `50` para no perder
+// templates secundarios (Doble Op estaba siendo truncado).
 
 import { logger } from "../logger";
 import { httpFetchJson } from "./http";
@@ -28,44 +35,52 @@ import type { CuotasCapturadas, ResultadoScraper, Scraper } from "./types";
 
 const URL_BASE = "https://d-cf.inkabetplayground.net";
 
-interface OctonovusOutcome {
-  id?: number | string;
-  outcomeId?: number | string;
-  name?: string;
-  shortName?: string;
-  price?: number;
-  decimalPrice?: number;
-}
-
-interface OctonovusMarket {
-  id?: number | string;
-  marketId?: number | string;
-  name?: string;
-  shortName?: string;
-  type?: string;
-  marketType?: string;
-  outcomes?: OctonovusOutcome[];
-  specifiers?: Record<string, string>;
-  line?: string | number;
+interface OctonovusParticipant {
+  label?: string;
+  id?: string;
+  side?: number;
+  sortOrder?: number;
 }
 
 interface OctonovusEvent {
-  id?: number | string;
-  eventId?: number | string;
-  name?: string;
-  homeTeam?: { name: string };
-  awayTeam?: { name: string };
-  competitors?: { name: string; type?: string }[];
-  participants?: { name: string; venueRole?: string }[];
-  startDate?: string;
-  startTime?: string;
-  competitionId?: number | string;
-  markets?: OctonovusMarket[];
+  nodeIdentifier?: string;
+  globalId?: string;
+  competitionId?: string;
+  competitionName?: string;
+  slug?: string;
+  participants?: OctonovusParticipant[];
+  startsAt?: string;
+}
+
+interface OctonovusMarket {
+  eventId?: string;
+  marketTemplateId?: string;
+  lineValue?: string;
+  lineValueRaw?: number;
+  status?: string;
+  id?: string;
+}
+
+interface OctonovusSelection {
+  marketId?: string;
+  odds?: number;
+  alternateLabel?: string;
+  participantLabel?: string;
+  selectionTemplateId?: string;
+  participant?: string;
+  label?: string;
+  id?: string;
+  isHomeTeam?: boolean;
+  isAwayTeam?: boolean;
 }
 
 interface OctonovusResponse {
-  events?: OctonovusEvent[];
-  data?: { events?: OctonovusEvent[] };
+  skeleton?: unknown;
+  data?: {
+    events?: OctonovusEvent[];
+    markets?: OctonovusMarket[];
+    selections?: OctonovusSelection[];
+  };
 }
 
 const inkabetScraper: Scraper = {
@@ -86,39 +101,31 @@ const inkabetScraper: Scraper = {
         eventPhase: "Prematch",
         eventSortBy: "StartDate",
         includeSkeleton: "true",
-        maxMarketCount: "10",
+        maxMarketCount: "50",
         pageNumber: "1",
         startsBefore,
         startsOnOrAfter,
         priceFormats: "1",
       });
 
-    const body = await httpFetchJson<OctonovusResponse | OctonovusEvent[]>(
-      url,
-      {
-        headers: {
-          Origin: URL_BASE,
-          Referer: `${URL_BASE}/`,
-        },
-        source: "scrapers:inkabet",
+    const body = await httpFetchJson<OctonovusResponse>(url, {
+      headers: {
+        Origin: URL_BASE,
+        Referer: `${URL_BASE}/`,
       },
-    );
+      source: "scrapers:inkabet",
+    });
 
-    let events: OctonovusEvent[] = [];
-    if (Array.isArray(body)) {
-      events = body;
-    } else if (body.events) {
-      events = body.events;
-    } else if (body.data?.events) {
-      events = body.data.events;
-    }
+    const events = body?.data?.events ?? [];
+    const allMarkets = body?.data?.markets ?? [];
+    const allSelections = body?.data?.selections ?? [];
 
     if (events.length === 0) {
       logger.warn(
         {
           partidoId: partido.id,
           ligaIdCasa,
-          shape: Array.isArray(body) ? "array" : Object.keys(body ?? {}),
+          shape: Object.keys(body ?? {}),
           source: "scrapers:inkabet",
         },
         `inkabet: response no contiene eventos`,
@@ -126,11 +133,12 @@ const inkabetScraper: Scraper = {
       return null;
     }
 
+    // Buscar el evento que matchea con el partido.
     let mejor: OctonovusEvent | null = null;
     let mejorScore = 0;
     for (const event of events) {
-      const home = extractHomeOctonovus(event);
-      const away = extractAwayOctonovus(event);
+      const home = extractParticipant(event, "home");
+      const away = extractParticipant(event, "away");
       if (!home || !away) continue;
       const sLocal = similitudEquipos(home, partido.equipoLocal);
       const sVisita = similitudEquipos(away, partido.equipoVisita);
@@ -157,14 +165,30 @@ const inkabetScraper: Scraper = {
       return null;
     }
 
-    const cuotas = mapearCuotasOctonovus(mejor);
+    const eventGlobalId = mejor.globalId;
+    if (!eventGlobalId) {
+      logger.warn(
+        {
+          partidoId: partido.id,
+          source: "scrapers:inkabet",
+        },
+        `inkabet: evento matched pero sin globalId`,
+      );
+      return null;
+    }
+
+    // Filtrar markets de este evento; selections se filtran por marketId.
+    const eventMarkets = allMarkets.filter((m) => m.eventId === eventGlobalId);
+    const cuotas = mapearCuotasOctonovus(eventMarkets, allSelections);
 
     if (Object.keys(cuotas).length === 0) {
       logger.warn(
         {
           partidoId: partido.id,
-          eventId: mejor.eventId ?? mejor.id,
-          markets: mejor.markets?.length ?? 0,
+          eventGlobalId,
+          totalEventMarkets: eventMarkets.length,
+          marketTemplates: eventMarkets.map((m) => m.marketTemplateId),
+          totalSelections: allSelections.length,
           source: "scrapers:inkabet",
         },
         `inkabet: evento encontrado pero sin mercados extraíbles. Revisar shape.`,
@@ -175,141 +199,169 @@ const inkabetScraper: Scraper = {
     return {
       cuotas,
       fuente: { url, capturadoEn: new Date() },
-      eventIdCasa: String(mejor.eventId ?? mejor.id ?? ""),
+      eventIdCasa: eventGlobalId,
       equipos: {
-        local: extractHomeOctonovus(mejor) ?? partido.equipoLocal,
-        visita: extractAwayOctonovus(mejor) ?? partido.equipoVisita,
+        local: extractParticipant(mejor, "home") ?? partido.equipoLocal,
+        visita: extractParticipant(mejor, "away") ?? partido.equipoVisita,
       },
     };
   },
 };
 
-function extractHomeOctonovus(event: OctonovusEvent): string | null {
+function extractParticipant(
+  event: OctonovusEvent,
+  rol: "home" | "away",
+): string | null {
+  const participants = event.participants ?? [];
+  // OBG usa `side: 1` para home y `side: 2` para away.
+  const sideTarget = rol === "home" ? 1 : 2;
   return (
-    event.homeTeam?.name ??
-    event.competitors?.find((c) => c.type === "home")?.name ??
-    event.participants?.find((p) => p.venueRole === "Home")?.name ??
-    extractHomeFromName(event.name) ??
+    participants.find((p) => p.side === sideTarget)?.label ??
+    extractFromSlug(event.slug, rol) ??
     null
   );
-}
-function extractAwayOctonovus(event: OctonovusEvent): string | null {
-  return (
-    event.awayTeam?.name ??
-    event.competitors?.find((c) => c.type === "away")?.name ??
-    event.participants?.find((p) => p.venueRole === "Away")?.name ??
-    extractAwayFromName(event.name) ??
-    null
-  );
-}
-function extractHomeFromName(name?: string): string | null {
-  if (!name) return null;
-  const parts = name.split(/\s+vs\.?\s+|\s+-\s+/i);
-  return parts[0]?.trim() ?? null;
-}
-function extractAwayFromName(name?: string): string | null {
-  if (!name) return null;
-  const parts = name.split(/\s+vs\.?\s+|\s+-\s+/i);
-  return parts[1]?.trim() ?? null;
 }
 
-function mapearCuotasOctonovus(event: OctonovusEvent): CuotasCapturadas {
+function extractFromSlug(slug: string | undefined, rol: "home" | "away"): string | null {
+  if (!slug) return null;
+  // Slug pattern: "futbol/peru/peru-liga-1/utc-fc-cajamarca"
+  const last = slug.split("/").pop();
+  if (!last) return null;
+  // Heurística: dividir en dos por el guión central. No siempre funciona
+  // si los nombres tienen guiones internos — mejor confiar en participants.
+  const parts = last.split("-");
+  if (parts.length < 2) return null;
+  const mid = Math.floor(parts.length / 2);
+  return rol === "home"
+    ? parts.slice(0, mid).join(" ")
+    : parts.slice(mid).join(" ");
+}
+
+const TEMPLATES_1X2 = new Set(["MW3W", "ESFMWINNER3W", "E1X2M"]);
+const TEMPLATES_DOBLE_OP = new Set(["DC", "ESFMDCHANCE"]);
+const TEMPLATES_TOTAL = new Set([
+  "MTG2W25",
+  "MTG2W",
+  "ESFMTOTAL",
+  "ESFMATOTAL",
+  "EOU25M",
+]);
+const TEMPLATES_BTTS = new Set(["BTTS", "ESFMBTS"]);
+
+function mapearCuotasOctonovus(
+  eventMarkets: OctonovusMarket[],
+  allSelections: OctonovusSelection[],
+): CuotasCapturadas {
   const cuotas: CuotasCapturadas = {};
-  const norm = (s: string | undefined): string =>
-    (s ?? "")
-      .normalize("NFD")
-      .replace(/[̀-ͯ]/g, "")
-      .toLowerCase()
-      .trim();
-  const getPrice = (o: OctonovusOutcome): number | null => {
-    const v = o.price ?? o.decimalPrice;
-    return typeof v === "number" && v > 1 && v < 100 ? v : null;
-  };
 
-  for (const market of event.markets ?? []) {
-    const tipo = norm(
-      market.name ?? market.shortName ?? market.type ?? market.marketType,
-    );
-    const outcomes = market.outcomes ?? [];
+  const selectionsParaMarket = (marketId: string) =>
+    allSelections.filter((s) => s.marketId === marketId);
 
+  // 1X2
+  for (const market of eventMarkets) {
+    if (!cuotas["1x2"] && TEMPLATES_1X2.has(market.marketTemplateId ?? "")) {
+      const sels = selectionsParaMarket(market.id ?? "");
+      const home = sels.find((s) => s.selectionTemplateId === "HOME" || s.isHomeTeam);
+      const draw = sels.find((s) => s.selectionTemplateId === "DRAW");
+      const away = sels.find((s) => s.selectionTemplateId === "AWAY" || s.isAwayTeam);
+      const localP = priceOk(home?.odds);
+      const empateP = priceOk(draw?.odds);
+      const visitaP = priceOk(away?.odds);
+      if (localP && empateP && visitaP) {
+        cuotas["1x2"] = { local: localP, empate: empateP, visita: visitaP };
+      }
+    }
+  }
+
+  // Doble Oportunidad
+  for (const market of eventMarkets) {
     if (
-      (tipo.includes("ganador del partido") ||
-        tipo.includes("1x2") ||
-        tipo === "match result" ||
-        tipo === "resultado") &&
-      !cuotas["1x2"]
+      !cuotas.doble_op &&
+      TEMPLATES_DOBLE_OP.has(market.marketTemplateId ?? "")
     ) {
-      const local = outcomes.find(
-        (o) =>
-          norm(o.shortName ?? o.name) === "1" ||
-          norm(o.shortName ?? o.name) === "local",
+      const sels = selectionsParaMarket(market.id ?? "");
+      const x1 = sels.find(
+        (s) => s.selectionTemplateId === "HOME_OR_DRAW" || normSel(s) === "1x",
       );
-      const empate = outcomes.find(
-        (o) =>
-          norm(o.shortName ?? o.name) === "x" ||
-          norm(o.shortName ?? o.name) === "empate",
+      const x12 = sels.find(
+        (s) => s.selectionTemplateId === "HOME_OR_AWAY" || normSel(s) === "12",
       );
-      const visita = outcomes.find(
-        (o) =>
-          norm(o.shortName ?? o.name) === "2" ||
-          norm(o.shortName ?? o.name) === "visita" ||
-          norm(o.shortName ?? o.name) === "visitante",
+      const xx2 = sels.find(
+        (s) => s.selectionTemplateId === "DRAW_OR_AWAY" || normSel(s) === "x2",
       );
-      const lP = local && getPrice(local);
-      const eP = empate && getPrice(empate);
-      const vP = visita && getPrice(visita);
-      if (lP && eP && vP) cuotas["1x2"] = { local: lP, empate: eP, visita: vP };
-    } else if (
-      (tipo.includes("doble oportunidad") || tipo.includes("double chance")) &&
-      !cuotas.doble_op
-    ) {
-      const x1 = outcomes.find((o) => norm(o.shortName ?? o.name) === "1x");
-      const x12 = outcomes.find((o) => norm(o.shortName ?? o.name) === "12");
-      const xx2 = outcomes.find((o) => norm(o.shortName ?? o.name) === "x2");
-      const x1P = x1 && getPrice(x1);
-      const x12P = x12 && getPrice(x12);
-      const xx2P = xx2 && getPrice(xx2);
+      const x1P = priceOk(x1?.odds);
+      const x12P = priceOk(x12?.odds);
+      const xx2P = priceOk(xx2?.odds);
       if (x1P && x12P && xx2P) {
         cuotas.doble_op = { x1: x1P, x12: x12P, xx2: xx2P };
       }
-    } else if (
-      (tipo.includes("total") ||
-        tipo.includes("over/under") ||
-        tipo.includes("mas/menos") ||
-        tipo.includes("goles")) &&
+    }
+  }
+
+  // Total goles 2.5
+  for (const market of eventMarkets) {
+    if (
       !cuotas.mas_menos_25 &&
-      (String(market.line ?? market.specifiers?.total ?? "") === "2.5" ||
-        tipo.includes("2.5"))
+      TEMPLATES_TOTAL.has(market.marketTemplateId ?? "")
     ) {
-      const over = outcomes.find((o) => {
-        const n = norm(o.shortName ?? o.name);
-        return n.includes("mas") || n.includes("over") || n.startsWith("+");
+      // Algunos templates ya implican 2.5 ("MTG2W25"); otros traen el line
+      // explícito en lineValue.
+      const lineOk =
+        market.marketTemplateId === "MTG2W25" ||
+        market.marketTemplateId === "EOU25M" ||
+        market.lineValue === "2.5" ||
+        market.lineValueRaw === 2.5;
+      if (!lineOk) continue;
+      const sels = selectionsParaMarket(market.id ?? "");
+      const over = sels.find((s) => {
+        const t = (s.selectionTemplateId ?? "").toUpperCase();
+        return t === "OVER" || t.includes("OVER") || normSel(s).includes("mas") || normSel(s).includes("over");
       });
-      const under = outcomes.find((o) => {
-        const n = norm(o.shortName ?? o.name);
-        return n.includes("menos") || n.includes("under") || n.startsWith("-");
+      const under = sels.find((s) => {
+        const t = (s.selectionTemplateId ?? "").toUpperCase();
+        return t === "UNDER" || t.includes("UNDER") || normSel(s).includes("menos") || normSel(s).includes("under");
       });
-      const oP = over && getPrice(over);
-      const uP = under && getPrice(under);
-      if (oP && uP) cuotas.mas_menos_25 = { over: oP, under: uP };
-    } else if (
-      (tipo.includes("ambos") ||
-        tipo.includes("btts") ||
-        tipo.includes("both teams")) &&
-      !cuotas.btts
-    ) {
-      const si = outcomes.find((o) => {
-        const n = norm(o.shortName ?? o.name);
-        return n === "si" || n === "yes" || n === "sí";
+      const oP = priceOk(over?.odds);
+      const uP = priceOk(under?.odds);
+      if (oP && uP) {
+        cuotas.mas_menos_25 = { over: oP, under: uP };
+      }
+    }
+  }
+
+  // BTTS
+  for (const market of eventMarkets) {
+    if (!cuotas.btts && TEMPLATES_BTTS.has(market.marketTemplateId ?? "")) {
+      const sels = selectionsParaMarket(market.id ?? "");
+      const si = sels.find((s) => {
+        const t = (s.selectionTemplateId ?? "").toUpperCase();
+        return t === "YES" || normSel(s) === "si" || normSel(s) === "sí";
       });
-      const no = outcomes.find((o) => norm(o.shortName ?? o.name) === "no");
-      const sP = si && getPrice(si);
-      const nP = no && getPrice(no);
-      if (sP && nP) cuotas.btts = { si: sP, no: nP };
+      const no = sels.find((s) => {
+        const t = (s.selectionTemplateId ?? "").toUpperCase();
+        return t === "NO" || normSel(s) === "no";
+      });
+      const sP = priceOk(si?.odds);
+      const nP = priceOk(no?.odds);
+      if (sP && nP) {
+        cuotas.btts = { si: sP, no: nP };
+      }
     }
   }
 
   return cuotas;
+}
+
+function priceOk(v: number | undefined | null): number | null {
+  return typeof v === "number" && v > 1 && v < 100 ? v : null;
+}
+
+function normSel(s: OctonovusSelection): string {
+  return (s.alternateLabel ?? s.participantLabel ?? s.label ?? s.participant ?? "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim();
 }
 
 export default inkabetScraper;
