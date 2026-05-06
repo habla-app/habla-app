@@ -35,9 +35,16 @@ export interface DobleNavCtx {
 export type DobleNavHook = (ctx: DobleNavCtx) => Promise<void>;
 
 const TIMEOUT_GOTO_MS = 35_000;
-const ESPERA_POST_LOAD_MS = 8_000;
+// Lote V.13.1: subido de 8s a 15s para paridad con script lean exitoso.
+// El run productivo del agente con 8s mostró regresiones (Doradobet
+// captura 1 JSON en lugar de 33, Inkabet timeouts, etc.). Trade-off:
+// cada job tarda ~21-40s en lugar de 14-26s.
+const ESPERA_POST_LOAD_MS = 15_000;
 const MIN_BYTES = 500;
-const MAX_JSONS_CAPTURADOS = 100;
+// Lote V.13.1: subido de 100 a 200. Inkabet con muchos endpoints de
+// liga compleja (Champions, Sudamericana) supera 100 JSONs y se trunca
+// mid-flight, dejando markets parciales en memoria.
+const MAX_JSONS_CAPTURADOS = 200;
 
 /**
  * Recolecta todos los JSONs candidatos navegando la URL listing de la liga
