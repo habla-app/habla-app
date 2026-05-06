@@ -114,6 +114,16 @@ REM porque el launcher se crea aqui sin enabledelayedexpansion en su scope.
     echo REM Launcher del agente - invocado por el protocolo habla-agente://
     echo REM El argumento %%1 es la URL completa, ej: habla-agente://run?token=xxx
     echo.
+    echo REM Lote V.14.4: auto-minimizar la PRIMERA vez que se invoca.
+    echo REM Windows abre el launcher en una ventana visible; lo re-lanzamos
+    echo REM con start /MIN y salimos. La env var HABLA_LAUNCHER_MIN se
+    echo REM hereda al hijo via start, lo que evita loop infinito.
+    echo if not defined HABLA_LAUNCHER_MIN ^(
+    echo     set HABLA_LAUNCHER_MIN=1
+    echo     start /MIN "" "%%~f0" %%*
+    echo     exit /b
+    echo ^)
+    echo.
     echo REM Extraer el token de la URL ^(despues del primer "="^)
     echo set "URL=%%~1"
     echo set "TOKEN="
@@ -135,16 +145,15 @@ REM porque el launcher se crea aqui sin enabledelayedexpansion en su scope.
 )
 
 REM Registrar protocolo en HKCU (no requiere admin).
-REM Lote V.14.3: el comando lanza el launcher MINIMIZADO via cmd /c start /MIN.
-REM Asi la PowerShell del agente no estorba al admin durante el procesamiento.
-REM Sintaxis: cmd /c start /MIN "" "C:\path\launcher.cmd" "%1"
-REM   - El primer "" es el titulo de la ventana (vacio).
-REM   - /MIN abre minimizada.
+REM Lote V.14.4: registro en formato simple "PATH" "%1". La minimizacion
+REM ahora vive DENTRO del launcher (auto-relanzo con start /MIN).
+REM El intento del V.14.3 de poner cmd /c start /MIN en el reg add se
+REM rompia por el escape de comillas \"\" que mangeaba el valor.
 reg add "HKCU\Software\Classes\habla-agente" /ve /d "URL:Habla Agente Protocol" /f >nul
 reg add "HKCU\Software\Classes\habla-agente" /v "URL Protocol" /d "" /f >nul
 reg add "HKCU\Software\Classes\habla-agente\shell" /f >nul
 reg add "HKCU\Software\Classes\habla-agente\shell\open" /f >nul
-reg add "HKCU\Software\Classes\habla-agente\shell\open\command" /ve /d "cmd.exe /c start /MIN \"\" \"%LAUNCHER%\" \"%%1\"" /f >nul
+reg add "HKCU\Software\Classes\habla-agente\shell\open\command" /ve /d "\"%LAUNCHER%\" \"%%1\"" /f >nul
 
 echo Protocolo registrado OK.
 echo.
