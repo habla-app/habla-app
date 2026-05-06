@@ -35,7 +35,7 @@ import {
 } from "@/lib/services/errors";
 import { logger } from "@/lib/services/logger";
 import { crearSesionAgente } from "@/lib/services/agente-sesion.service";
-import { encolarRefresh } from "@/lib/services/captura-cuotas.service";
+import { iniciarCaptura } from "@/lib/services/captura-cuotas.service";
 import { logAuditoria } from "@/lib/services/auditoria.service";
 
 export const dynamic = "force-dynamic";
@@ -111,13 +111,18 @@ export async function POST(req: NextRequest): Promise<Response> {
       }
     }
 
-    // Encolar jobs en BullMQ para cada partido
+    // Encolar jobs en BullMQ para cada partido.
+    //
+    // Lote V.14.2: usamos `iniciarCaptura` (fuerza las 5 casas siempre)
+    // en lugar de `encolarRefresh` (skipea casas con OK reciente <22h).
+    // El botón manual del admin debe forzar la actualización completa —
+    // si quería solo las que faltan, usaría el cron 5am.
     let jobsTotales = 0;
     const erroresEncolar: string[] = [];
     for (const pid of partidoIds) {
       try {
-        const r = await encolarRefresh(pid);
-        jobsTotales += r.casasEncoladas;
+        const r = await iniciarCaptura(pid);
+        jobsTotales += r.casasEncoladas.length;
       } catch (err) {
         erroresEncolar.push(`${pid}: ${(err as Error).message.slice(0, 80)}`);
       }
