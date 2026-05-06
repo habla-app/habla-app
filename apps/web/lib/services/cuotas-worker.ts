@@ -186,14 +186,14 @@ function iniciarHeartbeatWorker(): void {
  * tests puedan llamarlo directamente sin pasar por BullMQ.
  */
 export async function procesarJobCaptura(job: BullMQJobLike): Promise<void> {
-  const { partidoId, casa, ligaIdCasa } = job.data;
+  const { partidoId, casa, ligaCanonica } = job.data;
 
   const scraper = scraperRegistry[casa];
   if (!scraper) {
     await persistirError({
       partidoId,
       casa,
-      eventIdExterno: ligaIdCasa, // legacy: el campo en BD aún se llama así
+      eventIdExterno: ligaCanonica, // legacy: el campo en BD aún se llama así
       errorMensaje: `scraper "${casa}" no registrado`,
     });
     await recalcularEstadoCapturaPartido(partidoId);
@@ -204,16 +204,16 @@ export async function procesarJobCaptura(job: BullMQJobLike): Promise<void> {
     return;
   }
 
-  // Lote V.11: API directa, sin Playwright. Recibe ligaIdCasa.
+  // Lote V.12: Playwright + XHR intercept. Recibe ligaCanonica.
   const tInicioJob = Date.now();
   logger.info(
     {
       partidoId,
       casa,
-      ligaIdCasa,
+      ligaCanonica,
       source: "cuotas-worker",
     },
-    `procesando job ${casa} vía API (ligaIdCasa=${ligaIdCasa})`,
+    `procesando job ${casa} vía Playwright (liga=${ligaCanonica})`,
   );
 
   try {
@@ -223,7 +223,10 @@ export async function procesarJobCaptura(job: BullMQJobLike): Promise<void> {
     if (!partidoEntidad) {
       throw new Error(`partido ${partidoId} no existe`);
     }
-    const r = await scraper.capturarPorApi(partidoEntidad, ligaIdCasa);
+    const r = await scraper.capturarConPlaywright(
+      partidoEntidad,
+      ligaCanonica,
+    );
     if (r === null) {
       // Partido no encontrado en response de la casa para esa liga.
       // No es ERROR técnico — registramos como SIN_DATOS para que el
@@ -231,13 +234,13 @@ export async function procesarJobCaptura(job: BullMQJobLike): Promise<void> {
       await persistirSinDatos({
         partidoId,
         casa,
-        eventIdExterno: ligaIdCasa,
-        mensaje: "partido no encontrado en response de la API",
+        eventIdExterno: ligaCanonica,
+        mensaje: "partido no encontrado en response de la casa",
       });
       await recalcularEstadoCapturaPartido(partidoId);
       logger.info(
-        { partidoId, casa, ligaIdCasa, source: "cuotas-worker:api" },
-        `${casa}: partido no encontrado en response API`,
+        { partidoId, casa, ligaCanonica, source: "cuotas-worker:playwright" },
+        `${casa}: partido no encontrado tras navegar listing`,
       );
       return;
     }
@@ -246,7 +249,7 @@ export async function procesarJobCaptura(job: BullMQJobLike): Promise<void> {
     const { alertasCreadas } = await persistirCuotas({
       partidoId,
       casa,
-      eventIdExterno: resultado.eventIdCasa ?? ligaIdCasa,
+      eventIdExterno: resultado.eventIdCasa ?? ligaCanonica,
       resultado,
     });
     await actualizarSaludScraper(casa, "OK");
@@ -308,7 +311,7 @@ export async function procesarJobCaptura(job: BullMQJobLike): Promise<void> {
       await persistirSinDatos({
         partidoId,
         casa,
-        eventIdExterno: ligaIdCasa,
+        eventIdExterno: ligaCanonica,
         mensaje,
       });
       await recalcularEstadoCapturaPartido(partidoId);
@@ -322,7 +325,7 @@ export async function procesarJobCaptura(job: BullMQJobLike): Promise<void> {
     await persistirError({
       partidoId,
       casa,
-      eventIdExterno: ligaIdCasa,
+      eventIdExterno: ligaCanonica,
       errorMensaje: mensaje,
     });
     await actualizarSaludScraper(casa, "ERROR", mensaje);

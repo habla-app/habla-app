@@ -33,7 +33,8 @@ import { logger } from "@/lib/services/logger";
 import { logAuditoria } from "@/lib/services/auditoria.service";
 import { encolarJobCaptura } from "@/lib/services/cuotas-cola";
 import { CASAS_CUOTAS, type CasaCuotas } from "@/lib/services/scrapers/types";
-import { obtenerLigaIdParaPartido } from "@/lib/services/scrapers/ligas-id-map";
+import { detectarLigaCanonica } from "@/lib/services/scrapers/ligas-id-map";
+import { obtenerUrlListado } from "@/lib/services/scrapers/urls-listing";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -73,16 +74,14 @@ export async function POST(
     });
     if (!partido) throw new PartidoNoEncontrado(params.id);
 
-    // Lote V.11: motor API-only. Resolver ligaIdCasa via mapeo central.
-    // Si no está mapeada para esa casa, devolvemos 409 con mensaje claro
-    // (admin sabe que tiene que agregar el ID en ligas-id-map.ts).
-    const resolveLiga = obtenerLigaIdParaPartido(partido.liga, casa);
-    if (!resolveLiga) {
+    // Lote V.12: detectar liga canónica + verificar URL listing.
+    const ligaCanonica = detectarLigaCanonica(partido.liga);
+    if (!ligaCanonica || !obtenerUrlListado(ligaCanonica, casa)) {
       return Response.json(
         {
           error: {
             code: "LIGA_NO_MAPEADA",
-            message: `La liga "${partido.liga}" no tiene ID mapeado para la casa "${casa}". Agregar el ID en apps/web/lib/services/scrapers/ligas-id-map.ts.`,
+            message: `La liga "${partido.liga}" no tiene URL configurada para la casa "${casa}". Agregar la URL en apps/web/lib/services/scrapers/urls-listing.ts.`,
           },
         },
         { status: 409 },
@@ -92,7 +91,7 @@ export async function POST(
     const jobId = await encolarJobCaptura({
       partidoId: partido.id,
       casa,
-      ligaIdCasa: resolveLiga.ligaIdCasa,
+      ligaCanonica,
       esRefresh: true,
     });
 
@@ -124,8 +123,7 @@ export async function POST(
       resumen: `Refresh manual de cuotas (${casa}) sobre ${partido.equipoLocal} vs ${partido.equipoVisita}`,
       metadata: {
         casa,
-        ligaCanonica: resolveLiga.ligaCanonica,
-        ligaIdCasa: resolveLiga.ligaIdCasa,
+        ligaCanonica,
         jobId,
       },
     });

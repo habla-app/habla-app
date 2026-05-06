@@ -1,17 +1,19 @@
 // Registro central de scrapers del motor de captura de cuotas (Lote V.12).
 //
-// Lote V.12 (May 2026): motor con Playwright headless + interceptación XHR.
-//   - 6 scrapers que cargan la página de la liga en cada casa con
-//     Chromium headless y capturan los JSONs que el frontend pide.
-//   - Doradobet incluido en el flow universal (uniformidad).
-//   - Stake removido (queda como referencia en scripts/validacion-geo/).
+// 5 scrapers Playwright + XHR intercept:
+//   - doradobet (Altenar — click Shadow DOM al detalle)
+//   - apuesta_total (Kambi — URL detalle derivada del fixture)
+//   - betano (Danae — listing per-event)
+//   - inkabet (Octonovus — slug-based double nav)
+//   - te_apuesto (Coreix — listing único)
+//
+// Coolbet removido (WAF Imperva), Stake removido (aliases cortos).
 
 import { logger } from "../logger";
 import { registrarScraper } from "../cuotas-worker";
 
 import doradobetScraper from "./doradobet.scraper";
 import apuestaTotalScraper from "./apuesta-total.scraper";
-import coolbetScraper from "./coolbet.scraper";
 import betanoScraper from "./betano.scraper";
 import inkabetScraper from "./inkabet.scraper";
 import teApuestoScraper from "./te-apuesto.scraper";
@@ -19,7 +21,7 @@ import teApuestoScraper from "./te-apuesto.scraper";
 let yaRegistrados = false;
 
 /**
- * Registra los 6 scrapers del Lote V.12 (Playwright + XHR intercept).
+ * Registra los 5 scrapers del Lote V.12 (Playwright + XHR intercept).
  * Idempotente: segunda llamada no-op (con log debug). Llamado desde
  * `instrumentation.ts` después de `iniciarMotorCuotas()`.
  */
@@ -32,7 +34,6 @@ export function registrarScrapersV2(): void {
 
   registrarScraper(doradobetScraper);
   registrarScraper(apuestaTotalScraper);
-  registrarScraper(coolbetScraper);
   registrarScraper(betanoScraper);
   registrarScraper(inkabetScraper);
   registrarScraper(teApuestoScraper);
@@ -42,14 +43,13 @@ export function registrarScrapersV2(): void {
       casas: [
         doradobetScraper.nombre,
         apuestaTotalScraper.nombre,
-        coolbetScraper.nombre,
         betanoScraper.nombre,
         inkabetScraper.nombre,
         teApuestoScraper.nombre,
       ],
       source: "scrapers:registry",
     },
-    "scrapers V.12 (Playwright + XHR intercept) registrados (6 casas)",
+    "scrapers V.12 (Playwright + XHR intercept) registrados (5 casas)",
   );
 }
 
@@ -57,7 +57,6 @@ export function registrarScrapersV2(): void {
 export {
   doradobetScraper,
   apuestaTotalScraper,
-  coolbetScraper,
   betanoScraper,
   inkabetScraper,
   teApuestoScraper,

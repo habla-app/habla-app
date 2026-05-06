@@ -18,7 +18,6 @@ import type { CasaCuotas } from "../services/scrapers/types";
 export const CASAS_CUOTAS: readonly CasaCuotas[] = [
   "doradobet",
   "apuesta_total",
-  "coolbet",
   "betano",
   "inkabet",
   "te_apuesto",
@@ -62,14 +61,15 @@ export const CUOTAS_CONFIG = {
   /**
    * Workers procesando en paralelo.
    *
-   * Lote V.12: bajado a 2 porque ahora cada captura usa Playwright headless
-   * (browser warm + page activa). Memoria por captura: ~50 MB de RAM
-   * adicional sobre el browser warm (~150 MB). Concurrencia 2 = ~250 MB
-   * total, manejable en Railway 1 GB. Tiempo total esperado para todo el
-   * ciclo (12 partidos × 5 casas con browser + Doradobet via browser):
-   * ~5 min con cron 1×/día, aceptable.
+   * Lote V.12: 3 con Playwright headless. Cada captura abre una page
+   * sobre el browser warm singleton (~150 MB) + ~50 MB por page activa.
+   * 3 concurrentes = ~300 MB total, holgado en Railway 1 GB.
+   *
+   * Throughput esperado: cada job ~30-50s (Playwright + doble-nav en
+   * Doradobet/Apuesta Total/Inkabet). Para 50 partidos × 5 casas = 250
+   * jobs / 3 paralelos / 40s avg = ~55 min de cron — aceptable a las 5am.
    */
-  CONCURRENCIA_BULLMQ: 2,
+  CONCURRENCIA_BULLMQ: 3,
   /** Rate limit por worker (ms entre jobs). Reduce risk de IP bans. */
   RATE_LIMIT_POR_WORKER_MS: 1500,
   /** Retención en cola de jobs completados (count). */
