@@ -63,16 +63,32 @@ const apuestaTotalScraper: Scraper = {
     });
 
     // Buscar fixtures en cualquier candidato.
+    const diagnostico: Array<{
+      url: string;
+      bytes: number;
+      fixtures: number;
+      mejorScore: number;
+      mejorMatch?: { local: string; visita: string };
+    }> = [];
     let fixture: KambiFixture | null = null;
     let fixtureUrl: string | null = null;
     for (const c of candidatos) {
       const fixtures = extractFixtures(c.body);
-      if (fixtures.length === 0) continue;
-      const matched = matchearFixture(fixtures, partido.equipoLocal, partido.equipoVisita);
-      if (matched) {
+      const { matched, mejorScore, mejorMatch } = matchearFixtureConDiagnostico(
+        fixtures,
+        partido.equipoLocal,
+        partido.equipoVisita,
+      );
+      diagnostico.push({
+        url: c.url,
+        bytes: c.bytes,
+        fixtures: fixtures.length,
+        mejorScore,
+        mejorMatch,
+      });
+      if (matched && !fixture) {
         fixture = matched;
         fixtureUrl = c.url;
-        break;
       }
     }
 
@@ -80,10 +96,14 @@ const apuestaTotalScraper: Scraper = {
       logger.info(
         {
           partidoId: partido.id,
+          equipoLocal: partido.equipoLocal,
+          equipoVisita: partido.equipoVisita,
           candidatos: candidatos.length,
+          diagnostico,
+          umbralAceptacion: UMBRAL_FUZZY_DEFAULT * 0.7,
           source: "scrapers:apuesta-total",
         },
-        `apuesta-total: ningún candidato contiene el fixture buscado`,
+        `apuesta-total: ningún candidato contiene el fixture buscado (mejor score=${diagnostico.reduce((m, d) => Math.max(m, d.mejorScore), 0).toFixed(3)})`,
       );
       return null;
     }
@@ -153,13 +173,18 @@ function extractMarkets(body: unknown): KambiMarket[] {
   return [];
 }
 
-function matchearFixture(
+function matchearFixtureConDiagnostico(
   fixtures: KambiFixture[],
   equipoLocal: string,
   equipoVisita: string,
-): KambiFixture | null {
+): {
+  matched: KambiFixture | null;
+  mejorScore: number;
+  mejorMatch?: { local: string; visita: string };
+} {
   let mejor: KambiFixture | null = null;
   let mejorScore = 0;
+  let mejorMatch: { local: string; visita: string } | undefined;
   for (const f of fixtures) {
     const home = f.Participants?.find((p) => p.VenueRole === "Home")?.Name;
     const away = f.Participants?.find((p) => p.VenueRole === "Away")?.Name;
@@ -171,10 +196,11 @@ function matchearFixture(
     if (score > mejorScore) {
       mejorScore = score;
       mejor = f;
+      mejorMatch = { local: home, visita: away };
     }
   }
-  if (mejorScore < UMBRAL_FUZZY_DEFAULT * 0.7) return null;
-  return mejor;
+  const matched = mejorScore >= UMBRAL_FUZZY_DEFAULT * 0.7 ? mejor : null;
+  return { matched, mejorScore, mejorMatch };
 }
 
 function mapearCuotasKambi(markets: KambiMarket[]): CuotasCapturadas {

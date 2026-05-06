@@ -60,12 +60,20 @@ const coolbetScraper: Scraper = {
       esperaPostLoadMs: 6_000,
     });
 
+    const diagnostico: Array<{
+      url: string;
+      bytes: number;
+      matches: number;
+      mejorScore: number;
+      mejorMatch?: { local: string; visita: string };
+    }> = [];
+
     for (const c of candidatos) {
       const matches = extractMatches(c.body);
-      if (matches.length === 0) continue;
 
       let mejor: CoolbetMatch | null = null;
       let mejorScore = 0;
+      let mejorMatch: { local: string; visita: string } | undefined;
       for (const m of matches) {
         const home = m.homeName ?? m.homeTeam ?? extractHomeFromName(m.name);
         const away = m.awayName ?? m.awayTeam ?? extractAwayFromName(m.name);
@@ -77,8 +85,16 @@ const coolbetScraper: Scraper = {
         if (score > mejorScore) {
           mejorScore = score;
           mejor = m;
+          mejorMatch = { local: home, visita: away };
         }
       }
+      diagnostico.push({
+        url: c.url,
+        bytes: c.bytes,
+        matches: matches.length,
+        mejorScore,
+        mejorMatch,
+      });
       if (!mejor || mejorScore < UMBRAL_FUZZY_DEFAULT * 0.7) continue;
 
       const cuotas = mapearCuotasCoolbet(mejor);
@@ -103,10 +119,14 @@ const coolbetScraper: Scraper = {
     logger.info(
       {
         partidoId: partido.id,
+        equipoLocal: partido.equipoLocal,
+        equipoVisita: partido.equipoVisita,
         candidatos: candidatos.length,
+        diagnostico,
+        umbralAceptacion: UMBRAL_FUZZY_DEFAULT * 0.7,
         source: "scrapers:coolbet",
       },
-      `coolbet: ningún JSON candidato matcheó el partido con cuotas`,
+      `coolbet: ningún JSON candidato matcheó el partido con cuotas (mejor score=${diagnostico.reduce((m, d) => Math.max(m, d.mejorScore), 0).toFixed(3)})`,
     );
     return null;
   },
